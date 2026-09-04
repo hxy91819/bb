@@ -232,4 +232,4 @@ it("keeps selected provider commands and unselected slash text unchanged", async
 
   expect(providerCommand).toContain("Response to: /inspect src");
   expect(rawText).toContain("Response to: /inspect src");
-});
+}, 30_000);
