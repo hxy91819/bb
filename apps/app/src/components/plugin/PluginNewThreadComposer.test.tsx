@@ -406,6 +406,7 @@ const CHECKOUT_PROVIDER: SystemEnvironmentProvider = {
   icon: "Laptop",
   logoUrl: null,
   pluginId: "environment-project-checkout",
+  presentation: null,
   acceptsEmptyInputs: true,
   availability: null,
   requires: {
@@ -426,6 +427,7 @@ const PERSONAL_WORKSPACE_PROVIDER: SystemEnvironmentProvider = {
   icon: "Folder",
   logoUrl: null,
   pluginId: "environment-personal-workspace",
+  presentation: null,
   acceptsEmptyInputs: true,
   availability: null,
   requires: {
@@ -443,6 +445,7 @@ const MANAGED_WORKTREE_SUGAR_PROVIDER: SystemEnvironmentProvider = {
   icon: "GitBranch",
   logoUrl: null,
   pluginId: "environment-git-worktree",
+  presentation: null,
   acceptsEmptyInputs: false,
   availability: null,
   requires: {
@@ -1343,6 +1346,7 @@ const SANDBOX_PROVIDER: SystemEnvironmentProvider = {
   icon: "Container",
   logoUrl: null,
   pluginId: "docker-sandbox",
+  presentation: null,
   acceptsEmptyInputs: false,
   availability: null,
   requires: {
@@ -1364,6 +1368,7 @@ const OPTIONAL_INPUTS_PROVIDER: SystemEnvironmentProvider = {
   icon: "Container",
   logoUrl: null,
   pluginId: "optional-sandbox",
+  presentation: null,
   acceptsEmptyInputs: true,
   availability: null,
   requires: {
@@ -1384,6 +1389,7 @@ const BRANCH_PROVIDER: SystemEnvironmentProvider = {
   icon: "GitBranch",
   logoUrl: null,
   pluginId: "branchy",
+  presentation: null,
   acceptsEmptyInputs: true,
   availability: null,
   requires: {
@@ -1401,6 +1407,7 @@ const HOST_PROVIDER: SystemEnvironmentProvider = {
   icon: "Server",
   logoUrl: null,
   pluginId: "hosted",
+  presentation: null,
   acceptsEmptyInputs: true,
   availability: null,
   requires: {

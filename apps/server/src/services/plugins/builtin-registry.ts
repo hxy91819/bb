@@ -154,10 +154,12 @@ export const BUILTIN_PLUGINS = [
     pluginId: "workflows",
     defaultEnabled: false,
   },
-].map((plugin): BundledPluginDefinition => ({
-  ...plugin,
-  autoInstall: true,
-}));
+].map(
+  (plugin): BundledPluginDefinition => ({
+    ...plugin,
+    autoInstall: true,
+  }),
+);
 
 export const OFFICIAL_PLUGINS = [
   {
@@ -173,6 +175,11 @@ export const OFFICIAL_PLUGINS = [
   {
     name: "machine-digitalocean",
     pluginId: "machine-digitalocean",
+    defaultEnabled: true,
+  },
+  {
+    name: "environment-rift",
+    pluginId: "environment-rift",
     defaultEnabled: true,
   },
   {
@@ -210,10 +217,12 @@ export const OFFICIAL_PLUGINS = [
     pluginId: "theme-preview",
     defaultEnabled: true,
   },
-].map((plugin): BundledPluginDefinition => ({
-  ...plugin,
-  autoInstall: false,
-}));
+].map(
+  (plugin): BundledPluginDefinition => ({
+    ...plugin,
+    autoInstall: false,
+  }),
+);
 
 export const BUNDLED_PLUGINS: readonly BundledPluginDefinition[] = [
   ...BUILTIN_PLUGINS,

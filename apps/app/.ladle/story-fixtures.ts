@@ -296,6 +296,7 @@ export const STORY_ENVIRONMENT_PROVIDERS: readonly SystemEnvironmentProvider[] =
       icon: "Laptop",
       logoUrl: null,
       pluginId: "environment-project-checkout",
+      presentation: null,
       acceptsEmptyInputs: true,
       availability: null,
       requires: {
@@ -312,6 +313,7 @@ export const STORY_ENVIRONMENT_PROVIDERS: readonly SystemEnvironmentProvider[] =
       icon: "GitBranch",
       logoUrl: null,
       pluginId: "environment-git-worktree",
+      presentation: null,
       acceptsEmptyInputs: true,
       availability: null,
       requires: {
@@ -328,6 +330,7 @@ export const STORY_ENVIRONMENT_PROVIDERS: readonly SystemEnvironmentProvider[] =
       icon: "Folder",
       logoUrl: null,
       pluginId: "environment-personal-workspace",
+      presentation: null,
       acceptsEmptyInputs: true,
       availability: null,
       requires: {

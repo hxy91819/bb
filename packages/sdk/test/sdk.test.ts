@@ -761,6 +761,7 @@ describe("@bb/sdk", () => {
           projectless: false,
         },
         inputs: null,
+        presentation: null,
         acceptsEmptyInputs: true,
         availability: { status: "available" as const },
       },

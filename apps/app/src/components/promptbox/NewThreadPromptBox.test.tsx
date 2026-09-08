@@ -37,6 +37,7 @@ describe("ProjectlessMachineSlot", () => {
     icon: "Folder",
     logoUrl: null,
     pluginId: "environment-personal-workspace",
+    presentation: null,
     acceptsEmptyInputs: true,
     availability: null,
     requires: {
@@ -178,6 +179,7 @@ describe("ProjectlessEnvSlot", () => {
     icon: "Folder",
     logoUrl: null,
     pluginId: "environment-personal-workspace",
+    presentation: null,
     acceptsEmptyInputs: true,
     availability: null,
     requires: {
@@ -195,6 +197,7 @@ describe("ProjectlessEnvSlot", () => {
     icon: "Cloud",
     logoUrl: null,
     pluginId: "environment-modal-sandbox",
+    presentation: null,
     acceptsEmptyInputs: true,
     availability: null,
     requires: {

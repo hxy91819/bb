@@ -402,6 +402,7 @@ export function registerSystemRoutes(
                 pluginId: record.pluginId,
                 requires: record.provider.requires,
                 inputs: record.provider.inputsJsonSchema,
+                presentation: record.provider.presentation,
                 acceptsEmptyInputs:
                   await environmentProviderAcceptsEmptyInputs(record),
                 availability,

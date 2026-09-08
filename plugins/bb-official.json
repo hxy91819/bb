@@ -153,5 +153,9 @@
   "machine-manual": {
     "category": "environments",
     "screenshots": []
+  },
+  "environment-rift": {
+    "category": "environments",
+    "screenshots": []
   }
 }

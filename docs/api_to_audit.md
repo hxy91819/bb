@@ -2828,3 +2828,6 @@ review of recoverable failures and account changes. Planned rotation cannot prot
 against a server outage spanning vendor expiry without independent storage/watchdogs.
 
 Restore setup hooks use the same recorded core hook path as creation and receive the shared core machine environment contributions. Hook output redacts contributed secrets across stream boundaries. PR 2 protocol 193 supplies the shared hook environment and stream redaction. Modal uses protocol 194 because it adds `workspace.readiness.inspect` and `host.readiness.probe` requests and responses; a protocol 193 daemon cannot execute those readiness commands. Enrolled machines update before use. Failed restore hooks block readiness.
+### Environment provider presentation
+
+`PluginEnvironmentProviderDefinition.presentation` (SDK 0.4.56) optionally declares `{ groupsThreads: boolean; kindLabel?: string }`. Sidebar grouping defaults to the real `isWorktree` fact when absent; kindLabel changes the info label. This does not change Git semantics or ownership. Audit third-party copy providers and fallback behavior before stabilization.

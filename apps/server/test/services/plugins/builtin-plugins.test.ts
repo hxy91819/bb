@@ -212,6 +212,7 @@ describe("builtin plugin reconciliation", () => {
       "environment-ssh-machine",
       "machine-tailscale",
       "machine-digitalocean",
+      "environment-rift",
       "browser-automation",
       "environment-modal-sandbox",
       "github",
