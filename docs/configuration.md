@@ -1248,3 +1248,14 @@ SDK parity: `sdk.system.machineEnvironment()`,
 `sdk.system.setMachineEnvironment({ name, value, secret, note })`, and
 `sdk.system.unsetMachineEnvironment(name)`. Secret list rows have `value: null`.
 `bb settings show --json` exposes the built-in readiness as `machineGit`.
+
+## Tailscale machine access
+
+The `machine-tailscale` plugin validates a dedicated HTTPS Tailscale Serve
+endpoint with `bb tailscale configure <port>` and persists its port/authority
+in plugin storage. `bb tailscale status` shows the required loopback target.
+It never changes Serve configuration. Use General `defaultMachineAccess:
+"tailscale"` for already-networked machines, or the Tailscale picker’s explicit
+access choice. `machineServerUrl` may be empty for this provider. Machine
+inputs are `deviceId`, `username`, optional absolute `nodeDirectory`, and
+`accessProviderId` (`tailscale` or `default`). See the plugin’s skill and README.
