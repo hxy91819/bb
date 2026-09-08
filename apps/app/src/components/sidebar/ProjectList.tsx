@@ -175,7 +175,8 @@ interface ProjectListSearchThreadsActionProps {
 }
 
 interface ProjectListActionButtonsProps
-  extends ProjectListNewThreadActionProps,
+  extends
+    ProjectListNewThreadActionProps,
     ProjectListSearchThreadsActionProps {}
 
 interface ProjectListShellProps {
@@ -912,7 +913,6 @@ interface ProjectModeSectionsProps extends BuiltInSectionRenderState {
   compareThreads: ThreadComparator;
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
-  isReady: boolean;
   onCreateProjectThread: (projectId: string) => void;
   onProjectSelect?: () => void;
   onToggleEnvironmentCollapsed: ToggleCollapsedId;
@@ -934,7 +934,6 @@ function ProjectModeSections({
   compareThreads,
   draftThreadIds,
   effectivePinnedThreadIds,
-  isReady,
   isSectionDisplayOptionsOpen,
   onCreateProjectThread,
   onProjectSelect,
@@ -950,8 +949,7 @@ function ProjectModeSections({
   threads,
   threadsSection,
 }: ProjectModeSectionsProps) {
-  const progressiveDisclosureEnabled =
-    useSidebarProgressiveDisclosureEnabled();
+  const progressiveDisclosureEnabled = useSidebarProgressiveDisclosureEnabled();
   const [collapsedProjectIdList, setCollapsedProjectIdList] = useAtom(
     collapsedProjectIdsAtom,
   );
@@ -1057,7 +1055,6 @@ function ProjectModeSections({
     entitySectionIds: projectSectionIds,
     hasThreadsSection: personalThreads.length > 0 || projectRows.length === 0,
     showPinnedSection,
-    isReady,
   });
   const reorderDisabled = order.length < 2;
   const builtInSections: BuiltInSidebarSectionOptionsById = {
@@ -1141,7 +1138,6 @@ interface SectionModeSectionsProps extends BuiltInSectionRenderState {
   collapsedThreadIds: Set<string>;
   compareThreads: ThreadComparator;
   sections: readonly SidebarSectionDefinition[];
-  isReady: boolean;
   onCreateThreadInSection: (sectionId: string) => void;
   onProjectSelect?: () => void;
   onRemoveSection: (section: SidebarSectionDefinition) => void;
@@ -1172,7 +1168,6 @@ function SectionModeSections({
   compareThreads,
   effectivePinnedThreadIds,
   sections,
-  isReady,
   onCreateThreadInSection,
   onProjectSelect,
   onRemoveSection,
@@ -1210,7 +1205,6 @@ function SectionModeSections({
     mode: "chronological",
     entitySectionIds: threadSectionIds,
     showPinnedSection,
-    isReady,
   });
 
   return (
@@ -1249,7 +1243,6 @@ interface MachineModeSectionsProps extends BuiltInSectionRenderState {
   compareThreads: ThreadComparator;
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
-  isReady: boolean;
   onProjectSelect?: () => void;
   onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
@@ -1269,7 +1262,6 @@ export function MachineModeSections({
   compareThreads,
   draftThreadIds,
   effectivePinnedThreadIds,
-  isReady,
   isSectionDisplayOptionsOpen,
   onProjectSelect,
   onToggleCollapsed,
@@ -1283,8 +1275,7 @@ export function MachineModeSections({
   threads,
   threadsSection,
 }: MachineModeSectionsProps) {
-  const progressiveDisclosureEnabled =
-    useSidebarProgressiveDisclosureEnabled();
+  const progressiveDisclosureEnabled = useSidebarProgressiveDisclosureEnabled();
   const { data: hosts } = useHosts();
   const [collapsedMachineKeyList, setCollapsedMachineKeyList] = useAtom(
     sidebarCollapsedMachinesAtom,
@@ -1349,7 +1340,6 @@ export function MachineModeSections({
     entitySectionIds: machineSectionIds,
     hasThreadsSection: machineSections.length === 0,
     showPinnedSection,
-    isReady,
   });
   const reorderDisabled = order.length < 2;
   const builtInSections: BuiltInSidebarSectionOptionsById = {
@@ -1941,7 +1931,6 @@ function ProjectListComponent({
               pinnedSidebarState.effectivePinnedThreadIds
             }
             status={projectsState.status}
-            isReady={Boolean(sidebarNavigation)}
             showPinnedSection={hasPinnedSection}
             pinnedSection={pinnedSection}
             threadsSection={threadsSection}
@@ -1966,7 +1955,6 @@ function ProjectListComponent({
                 pinnedSidebarState.effectivePinnedThreadIds
               }
               status={projectsState.status}
-              isReady={Boolean(sidebarNavigation)}
               showPinnedSection={hasPinnedSection}
               sections={sections}
               pinnedSection={pinnedSection}
@@ -2012,7 +2000,6 @@ function ProjectListComponent({
                 pinnedSidebarState.effectivePinnedThreadIds
               }
               status={projectsState.status}
-              isReady={Boolean(sidebarNavigation)}
               showPinnedSection={hasPinnedSection}
               pinnedSection={pinnedSection}
               threadsSection={threadsSection}

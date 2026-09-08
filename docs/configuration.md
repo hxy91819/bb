@@ -603,13 +603,11 @@ a transient failure.
 
 ## Sidebar preferences
 
-Sidebar layout preferences have a keyed registry on the server that the CLI
-and SDK read and write. Each key has a typed schema, a default, and a revision
-that increments on every write. Writes name the revision they expect and
-receive `409 ui_preference_conflict` when another client wrote first, so a
-stale writer cannot silently clobber a newer value. The app still keeps its
-own copy of these values in the browser; a follow-up makes the sidebar read
-and write the server registry.
+Sidebar layout preferences are stored on the server in a keyed registry so
+every window, device, and the CLI read the same value. Each key has a typed
+schema, a default, and a revision that increments on every write. Writes name
+the revision they expect and receive `409 ui_preference_conflict` when another
+client wrote first, so a stale window cannot silently clobber a newer value.
 
 | Key                               | Value                                                        |
 | --------------------------------- | ------------------------------------------------------------ |
@@ -647,6 +645,14 @@ operations as `sdk.system.uiPreferences.list()`, `.set({ key, value,
 expectedRevision })`, and `.reset({ key })` over `GET /preferences/ui`,
 `PUT /preferences/ui/:key`, and `DELETE /preferences/ui/:key`. Every write
 broadcasts a `ui-preferences-changed` system change to connected clients.
+
+The app keeps a copy of each value in the browser so the sidebar paints before
+the server answers and keeps working offline. When the server answers, its
+value wins; the first client to reach a server that has never stored a key
+uploads its local value once so an existing layout survives the upgrade. A
+change on one device reaches every other connected window through the
+`ui-preferences-changed` broadcast without a reload. Collapsed rows and
+sections still live in the browser and move to the server in a follow-up.
 
 Sidebar width and open state stay in the browser because they depend on the
 window size.

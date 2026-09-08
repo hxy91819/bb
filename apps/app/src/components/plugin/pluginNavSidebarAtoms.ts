@@ -1,8 +1,8 @@
-import { atomWithStorage } from "jotai/utils";
 import {
   createJsonLocalStorage,
   type SyncStorage,
 } from "@/lib/browser-storage";
+import { createSyncedPreferenceAtom } from "@/lib/ui-preferences/synced-preference-atom";
 import { AUTOMATIONS_PLUGIN_ID } from "@/lib/route-paths";
 import {
   BUILT_IN_SIDEBAR_NAVIGATION_KEYS,
@@ -10,8 +10,7 @@ import {
 } from "./pluginNavSidebarOrder";
 
 const PLUGIN_NAV_PANEL_ORDER_STORAGE_KEY = "bb.sidebar.pluginPanelOrder";
-const VISIBLE_PLUGIN_NAV_PANELS_STORAGE_KEY =
-  "bb.sidebar.visiblePluginPanels";
+const VISIBLE_PLUGIN_NAV_PANELS_STORAGE_KEY = "bb.sidebar.visiblePluginPanels";
 const HIDDEN_PLUGIN_NAV_PANELS_STORAGE_KEY = "bb.sidebar.hiddenPluginPanels";
 const LEGACY_EXTENSIONS_NAV_PANEL_KEY = "__builtin__/tools";
 
@@ -51,9 +50,7 @@ function migrateLegacyPluginNavPreferences(
     HIDDEN_PLUGIN_NAV_PANELS_STORAGE_KEY,
     null,
   );
-  const legacyHidden = normalizeSidebarNavigationKeys(
-    legacyHiddenValue,
-  );
+  const legacyHidden = normalizeSidebarNavigationKeys(legacyHiddenValue);
   const migrated = migrateLegacyHiddenPluginNavPanelOrder(
     normalizedOrder,
     legacyHidden,
@@ -133,16 +130,14 @@ function createPluginNavVisiblePanelKeysStorage(): SyncStorage<
   };
 }
 
-export const pluginNavPanelOrderAtom = atomWithStorage<string[]>(
-  PLUGIN_NAV_PANEL_ORDER_STORAGE_KEY,
-  [],
-  createPluginNavPanelOrderStorage(),
-  { getOnInit: true },
-);
+export const pluginNavPanelOrderAtom = createSyncedPreferenceAtom({
+  key: "sidebar.pluginPanelOrder",
+  storage: createPluginNavPanelOrderStorage(),
+  storageKey: PLUGIN_NAV_PANEL_ORDER_STORAGE_KEY,
+});
 
-export const pluginNavVisiblePanelKeysAtom = atomWithStorage<string[] | null>(
-  VISIBLE_PLUGIN_NAV_PANELS_STORAGE_KEY,
-  null,
-  createPluginNavVisiblePanelKeysStorage(),
-  { getOnInit: true },
-);
+export const pluginNavVisiblePanelKeysAtom = createSyncedPreferenceAtom({
+  key: "sidebar.visiblePluginPanels",
+  storage: createPluginNavVisiblePanelKeysStorage(),
+  storageKey: VISIBLE_PLUGIN_NAV_PANELS_STORAGE_KEY,
+});

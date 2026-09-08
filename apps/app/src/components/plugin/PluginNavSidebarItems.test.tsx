@@ -738,8 +738,9 @@ describe("PluginNavSidebarItems", () => {
     });
 
     expect(visibleRowKeys()).toEqual(["__bb__/new-thread", "docs/main"]);
-    expect(store.get(pluginNavVisiblePanelKeysAtom)).toEqual([
-      "__bb__/new-thread",
+    expect(store.get(pluginNavVisiblePanelKeysAtom)).toEqual(["docs/main"]);
+    expect(store.get(pluginNavPanelOrderAtom)).toEqual([
+      "tasks/main",
       "docs/main",
     ]);
   });
@@ -755,13 +756,11 @@ describe("PluginNavSidebarItems", () => {
 
     expect(visibleRowKeys()).toEqual(["__bb__/new-thread", "tasks/main"]);
     expect(store.get(pluginNavVisiblePanelKeysAtom)).toEqual([
-      "tasks/main",
       "__bb__/new-thread",
     ]);
     expect(store.get(pluginNavPanelOrderAtom)).toEqual([
       "__bb__/new-thread",
       "docs/main",
-      "tasks/main",
     ]);
   });
 

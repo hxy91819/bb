@@ -216,11 +216,11 @@ metadata and machine-readable results.
 
 Server-backed sidebar preferences
 
-The server keeps a keyed, revisioned registry of sidebar layout preferences
-that the CLI and SDK read and write: organization mode, chronological sort,
+Sidebar layout lives on the server in a keyed, revisioned registry so every
+window, device, and the CLI share it: organization mode, chronological sort,
 section orders, collapsed rows and sections, navigation entry order and
-visibility, and the navigation and thread-list provider pickers. The app still
-keeps its own browser copy until a follow-up wires the sidebar to it.
+visibility, and the navigation and thread-list provider pickers. The app keeps
+a browser copy so the sidebar paints before the server answers.
 
   bb settings ui list [--json]
   bb settings ui get <key> [--json]

@@ -1,5 +1,6 @@
 import { atomWithStorage } from "jotai/utils";
 import { createJsonLocalStorage } from "@/lib/browser-storage";
+import { createSyncedPreferenceAtom } from "@/lib/ui-preferences/synced-preference-atom";
 import {
   resolveReplacement,
   type ResolvedReplacement,
@@ -27,6 +28,17 @@ export function createReplacementPreferenceAtom(storageKey: string) {
     createJsonLocalStorage<string>(),
     { getOnInit: true },
   );
+}
+
+export function createSyncedReplacementPreferenceAtom(
+  storageKey: string,
+  key: "sidebar.navigationProvider" | "sidebar.threadListProvider",
+) {
+  return createSyncedPreferenceAtom({
+    key,
+    storage: createJsonLocalStorage<string>(),
+    storageKey,
+  });
 }
 
 export function resolvePreferredReplacement<
