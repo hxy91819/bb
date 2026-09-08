@@ -1225,8 +1225,8 @@ export function SettingsView() {
           <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-subtle-foreground [&::-webkit-details-marker]:hidden">
             Advanced settings
             <Icon
-              name="ChevronDown"
-              className="size-3.5 transition-transform group-open:rotate-180"
+              name="ChevronRight"
+              className="size-3.5 transition-transform group-open:rotate-90"
             />
           </summary>
           <MachineAccessSettings />
