@@ -1,6 +1,8 @@
 import { defaultUiPreferences, UI_PREFERENCE_KEYS } from "@bb/domain";
 import { describe, expect, it, vi } from "vitest";
+import { createThreadSection } from "@bb/db";
 import { readJson } from "../helpers/json.js";
+import { seedThreadFixture } from "../helpers/seed.js";
 import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
 
 async function listPreferences(harness: TestAppHarness): Promise<Response> {
@@ -169,6 +171,97 @@ describe("public ui preferences", () => {
         value: "project",
       });
       expect(listed.preferences["sidebar.unknownKey"]).toBeUndefined();
+    });
+  });
+
+  it("drops ids of entities that no longer exist from collapsed lists", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, project, thread } = seedThreadFixture(harness);
+      const section = createThreadSection(harness.db, harness.hub, {
+        name: "Alpha",
+      });
+      if (section.status !== "created") throw new Error("section not created");
+      harness.db.$client
+        .prepare("UPDATE threads SET deleted_at = 1 WHERE id = ?")
+        .run(thread.id);
+
+      const projects = await putPreference(
+        harness,
+        "sidebar.collapsedProjects",
+        {
+          expectedRevision: 0,
+          value: [project.id, "proj_gone"],
+        },
+      );
+      expect(await readJson(projects)).toEqual({
+        key: "sidebar.collapsedProjects",
+        revision: 1,
+        value: [project.id],
+      });
+
+      const threads = await putPreference(harness, "sidebar.collapsedThreads", {
+        expectedRevision: 0,
+        value: [thread.id, "thr_gone"],
+      });
+      expect(await readJson(threads)).toEqual({
+        key: "sidebar.collapsedThreads",
+        revision: 1,
+        value: [],
+      });
+
+      const environments = await putPreference(
+        harness,
+        "sidebar.collapsedEnvironments",
+        { expectedRevision: 0, value: ["env_gone", environment.id] },
+      );
+      expect(await readJson(environments)).toEqual({
+        key: "sidebar.collapsedEnvironments",
+        revision: 1,
+        value: [environment.id],
+      });
+
+      const sections = await putPreference(
+        harness,
+        "sidebar.collapsedThreadSections",
+        {
+          expectedRevision: 0,
+          value: [
+            `${project.id}::${section.section.id}`,
+            `${project.id}::sec_gone`,
+            "legacy-key-without-separator",
+          ],
+        },
+      );
+      expect(await readJson(sections)).toEqual({
+        key: "sidebar.collapsedThreadSections",
+        revision: 1,
+        value: [
+          `${project.id}::${section.section.id}`,
+          "legacy-key-without-separator",
+        ],
+      });
+
+      const machines = await putPreference(
+        harness,
+        "sidebar.collapsedMachines",
+        {
+          expectedRevision: 0,
+          value: ["host_gone", "no-machine"],
+        },
+      );
+      expect(await readJson(machines)).toEqual({
+        key: "sidebar.collapsedMachines",
+        revision: 1,
+        value: ["host_gone", "no-machine"],
+      });
+
+      const listed = (await readJson(await listPreferences(harness))) as {
+        preferences: Record<string, { revision: number; value: unknown }>;
+      };
+      expect(listed.preferences["sidebar.collapsedProjects"]).toEqual({
+        revision: 1,
+        value: [project.id],
+      });
     });
   });
 });

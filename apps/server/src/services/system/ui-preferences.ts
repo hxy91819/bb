@@ -1,4 +1,5 @@
 import {
+  listExistingSidebarEntityIds,
   listStoredUiPreferences,
   overwriteStoredUiPreference,
   replaceStoredUiPreference,
@@ -59,6 +60,88 @@ function assignEntry<Key extends UiPreferenceKey>(
   entries[key] = entry as UiPreferenceEntries[Key];
 }
 
+const SECTION_KEY_SEPARATOR = "::";
+
+function threadSectionIdFromKey(sectionKey: string): string | null {
+  const separatorIndex = sectionKey.lastIndexOf(SECTION_KEY_SEPARATOR);
+  if (separatorIndex === -1) return null;
+  const sectionId = sectionKey.slice(
+    separatorIndex + SECTION_KEY_SEPARATOR.length,
+  );
+  return sectionId.length > 0 ? sectionId : null;
+}
+
+function pruneCollapsedIds(
+  ids: readonly string[],
+  keep: (id: string) => boolean,
+): string[] {
+  const pruned = ids.filter(keep);
+  return pruned.length === ids.length ? [...ids] : pruned;
+}
+
+export function pruneUiPreferenceValue<Key extends UiPreferenceKey>(
+  deps: Pick<AppDeps, "db">,
+  key: Key,
+  value: UiPreferenceValue<Key>,
+): UiPreferenceValue<Key> {
+  switch (key) {
+    case "sidebar.collapsedProjects": {
+      const ids = value as string[];
+      const existing = listExistingSidebarEntityIds(deps.db, {
+        environmentIds: [],
+        projectIds: ids,
+        threadIds: [],
+        threadSectionIds: [],
+      });
+      return pruneCollapsedIds(ids, (id) =>
+        existing.projectIds.has(id),
+      ) as UiPreferenceValue<Key>;
+    }
+    case "sidebar.collapsedThreads": {
+      const ids = value as string[];
+      const existing = listExistingSidebarEntityIds(deps.db, {
+        environmentIds: [],
+        projectIds: [],
+        threadIds: ids,
+        threadSectionIds: [],
+      });
+      return pruneCollapsedIds(ids, (id) =>
+        existing.threadIds.has(id),
+      ) as UiPreferenceValue<Key>;
+    }
+    case "sidebar.collapsedEnvironments": {
+      const ids = value as string[];
+      const existing = listExistingSidebarEntityIds(deps.db, {
+        environmentIds: ids,
+        projectIds: [],
+        threadIds: [],
+        threadSectionIds: [],
+      });
+      return pruneCollapsedIds(ids, (id) =>
+        existing.environmentIds.has(id),
+      ) as UiPreferenceValue<Key>;
+    }
+    case "sidebar.collapsedThreadSections": {
+      const keys = value as string[];
+      const sectionIds = keys
+        .map(threadSectionIdFromKey)
+        .filter((id): id is string => id !== null);
+      const existing = listExistingSidebarEntityIds(deps.db, {
+        environmentIds: [],
+        projectIds: [],
+        threadIds: [],
+        threadSectionIds: sectionIds,
+      });
+      return pruneCollapsedIds(keys, (sectionKey) => {
+        const sectionId = threadSectionIdFromKey(sectionKey);
+        return sectionId === null || existing.threadSectionIds.has(sectionId);
+      }) as UiPreferenceValue<Key>;
+    }
+    default:
+      return value;
+  }
+}
+
 export type WriteUiPreferenceResult<Key extends UiPreferenceKey> =
   | { outcome: "updated"; entry: UiPreferenceEntry<Key> }
   | { outcome: "conflict"; revision: number };
@@ -67,10 +150,11 @@ export function writeUiPreference<Key extends UiPreferenceKey>(
   deps: AppDeps,
   args: { expectedRevision: number; key: Key; value: UiPreferenceValue<Key> },
 ): WriteUiPreferenceResult<Key> {
+  const value = pruneUiPreferenceValue(deps, args.key, args.value);
   const result = replaceStoredUiPreference(deps.db, {
     expectedRevision: args.expectedRevision,
     key: args.key,
-    valueJson: JSON.stringify(args.value),
+    valueJson: JSON.stringify(value),
   });
   if (result.outcome === "conflict") {
     return { outcome: "conflict", revision: result.revision };
@@ -78,7 +162,7 @@ export function writeUiPreference<Key extends UiPreferenceKey>(
   deps.hub.notifySystem(["ui-preferences-changed"]);
   return {
     outcome: "updated",
-    entry: { revision: result.revision, value: args.value },
+    entry: { revision: result.revision, value },
   };
 }
 

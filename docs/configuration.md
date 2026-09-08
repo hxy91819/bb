@@ -651,8 +651,10 @@ the server answers and keeps working offline. When the server answers, its
 value wins; the first client to reach a server that has never stored a key
 uploads its local value once so an existing layout survives the upgrade. A
 change on one device reaches every other connected window through the
-`ui-preferences-changed` broadcast without a reload. Collapsed rows and
-sections still live in the browser and move to the server in a follow-up.
+`ui-preferences-changed` broadcast without a reload. Collapse toggles are
+batched for a moment before they are written, and the server drops ids of
+projects, threads, environments, and thread sections that no longer exist from
+the collapsed lists when it stores them.
 
 Sidebar width and open state stay in the browser because they depend on the
 window size.

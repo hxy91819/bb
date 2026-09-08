@@ -125,10 +125,13 @@ export {
 export { getStoredThreadTabs, replaceStoredThreadTabs } from "./thread-tabs.js";
 export {
   getStoredUiPreference,
+  listExistingSidebarEntityIds,
   listStoredUiPreferences,
   overwriteStoredUiPreference,
   replaceStoredUiPreference,
+  type ExistingSidebarEntityIds,
   type ReplaceUiPreferenceResult,
+  type SidebarEntityIdLists,
   type StoredUiPreference,
 } from "./ui-preferences.js";
 export { getExperiments, setExperiments } from "./experiments.js";

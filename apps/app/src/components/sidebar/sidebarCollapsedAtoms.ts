@@ -1,4 +1,3 @@
-import { atomWithStorage } from "jotai/utils";
 import type { CollapsibleSidebarSectionId } from "@bb/client-core";
 import type {
   SidebarChronologicalSort,
@@ -98,35 +97,35 @@ const collapsedThreadSectionsStorage = createLegacyMigratingStringArrayStorage(
   (item) => item,
 );
 
-export const collapsedProjectIdsAtom = atomWithStorage<string[]>(
-  COLLAPSED_PROJECTS_STORAGE_KEY,
-  [],
-  createJsonLocalStorage<string[]>(),
-  { getOnInit: true },
-);
+const COLLAPSED_SET_WRITE_DEBOUNCE_MS = 300;
 
-export const collapsedThreadIdsAtom = atomWithStorage<string[]>(
-  COLLAPSED_THREADS_STORAGE_KEY,
-  [],
-  createJsonLocalStorage<string[]>(),
-  { getOnInit: true },
-);
+export const collapsedProjectIdsAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedProjects",
+  storage: createJsonLocalStorage<string[]>(),
+  storageKey: COLLAPSED_PROJECTS_STORAGE_KEY,
+});
 
-export const collapsedEnvironmentIdsAtom = atomWithStorage<string[]>(
-  COLLAPSED_ENVIRONMENTS_STORAGE_KEY,
-  [],
-  createJsonLocalStorage<string[]>(),
-  { getOnInit: true },
-);
+export const collapsedThreadIdsAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedThreads",
+  storage: createJsonLocalStorage<string[]>(),
+  storageKey: COLLAPSED_THREADS_STORAGE_KEY,
+});
 
-export const collapsedSidebarSectionIdsAtom = atomWithStorage<
-  CollapsibleSidebarSectionId[]
->(
-  COLLAPSED_SIDEBAR_SECTIONS_STORAGE_KEY,
-  [],
-  createJsonLocalStorage<CollapsibleSidebarSectionId[]>(),
-  { getOnInit: true },
-);
+export const collapsedEnvironmentIdsAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedEnvironments",
+  storage: createJsonLocalStorage<string[]>(),
+  storageKey: COLLAPSED_ENVIRONMENTS_STORAGE_KEY,
+});
+
+export const collapsedSidebarSectionIdsAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedSections",
+  storage: createJsonLocalStorage<CollapsibleSidebarSectionId[]>(),
+  storageKey: COLLAPSED_SIDEBAR_SECTIONS_STORAGE_KEY,
+});
 
 export const sidebarSectionOrderAtom = createSyncedPreferenceAtom({
   key: "sidebar.sectionOrder",
@@ -158,16 +157,16 @@ export const sidebarChronologicalSortAtom = createSyncedPreferenceAtom({
   storageKey: CHRONOLOGICAL_SORT_STORAGE_KEY,
 });
 
-export const sidebarCollapsedThreadSectionsAtom = atomWithStorage<string[]>(
-  COLLAPSED_THREAD_SECTIONS_STORAGE_KEY,
-  [],
-  collapsedThreadSectionsStorage,
-  { getOnInit: true },
-);
+export const sidebarCollapsedThreadSectionsAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedThreadSections",
+  storage: collapsedThreadSectionsStorage,
+  storageKey: COLLAPSED_THREAD_SECTIONS_STORAGE_KEY,
+});
 
-export const sidebarCollapsedMachinesAtom = atomWithStorage<string[]>(
-  COLLAPSED_MACHINES_STORAGE_KEY,
-  [],
-  createJsonLocalStorage<string[]>(),
-  { getOnInit: true },
-);
+export const sidebarCollapsedMachinesAtom = createSyncedPreferenceAtom({
+  debounceMs: COLLAPSED_SET_WRITE_DEBOUNCE_MS,
+  key: "sidebar.collapsedMachines",
+  storage: createJsonLocalStorage<string[]>(),
+  storageKey: COLLAPSED_MACHINES_STORAGE_KEY,
+});

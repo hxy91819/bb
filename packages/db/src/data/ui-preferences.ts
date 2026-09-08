@@ -1,6 +1,12 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { DbConnection, DbQueryConnection } from "../connection.js";
-import { uiPreferences } from "../schema.js";
+import {
+  environments,
+  projects,
+  threadSections,
+  threads,
+  uiPreferences,
+} from "../schema.js";
 
 export interface StoredUiPreference {
   key: string;
@@ -103,4 +109,77 @@ export function overwriteStoredUiPreference(
     });
     return { revision };
   });
+}
+
+export interface SidebarEntityIdLists {
+  environmentIds: readonly string[];
+  projectIds: readonly string[];
+  threadIds: readonly string[];
+  threadSectionIds: readonly string[];
+}
+
+export interface ExistingSidebarEntityIds {
+  environmentIds: ReadonlySet<string>;
+  projectIds: ReadonlySet<string>;
+  threadIds: ReadonlySet<string>;
+  threadSectionIds: ReadonlySet<string>;
+}
+
+export function listExistingSidebarEntityIds(
+  db: DbConnection,
+  ids: SidebarEntityIdLists,
+): ExistingSidebarEntityIds {
+  const projectIds =
+    ids.projectIds.length === 0
+      ? []
+      : db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(
+            and(
+              inArray(projects.id, [...ids.projectIds]),
+              isNull(projects.deletedAt),
+            ),
+          )
+          .all();
+  const threadIds =
+    ids.threadIds.length === 0
+      ? []
+      : db
+          .select({ id: threads.id })
+          .from(threads)
+          .where(
+            and(
+              inArray(threads.id, [...ids.threadIds]),
+              isNull(threads.deletedAt),
+            ),
+          )
+          .all();
+  const environmentIds =
+    ids.environmentIds.length === 0
+      ? []
+      : db
+          .select({ id: environments.id })
+          .from(environments)
+          .where(
+            and(
+              inArray(environments.id, [...ids.environmentIds]),
+              ne(environments.status, "destroyed"),
+            ),
+          )
+          .all();
+  const threadSectionIds =
+    ids.threadSectionIds.length === 0
+      ? []
+      : db
+          .select({ id: threadSections.id })
+          .from(threadSections)
+          .where(inArray(threadSections.id, [...ids.threadSectionIds]))
+          .all();
+  return {
+    environmentIds: new Set(environmentIds.map((row) => row.id)),
+    projectIds: new Set(projectIds.map((row) => row.id)),
+    threadIds: new Set(threadIds.map((row) => row.id)),
+    threadSectionIds: new Set(threadSectionIds.map((row) => row.id)),
+  };
 }
