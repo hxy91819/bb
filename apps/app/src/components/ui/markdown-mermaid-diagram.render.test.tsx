@@ -19,9 +19,10 @@ const mermaidRender = vi.hoisted(() =>
     bindFunctions: undefined,
   })),
 );
+const mermaidInitialize = vi.hoisted(() => vi.fn());
 vi.mock("./markdown-mermaid-loader.js", () => ({
   loadMermaid: async () => ({
-    initialize: () => undefined,
+    initialize: mermaidInitialize,
     render: mermaidRender,
   }),
 }));
@@ -82,6 +83,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
   observers.length = 0;
+  mermaidInitialize.mockClear();
   mermaidRender.mockClear();
   clearMermaidRenderCache();
 });
@@ -117,6 +119,12 @@ describe("MarkdownMermaidDiagram render gating", () => {
     });
     await flushRenders();
     expect(mermaidRender).toHaveBeenCalledTimes(1);
+    expect(mermaidInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: "elk",
+        securityLevel: "strict",
+      }),
+    );
     expect(mermaidRender.mock.calls[0]?.[1]).toBe("graph TD; A-->B");
     expect(
       first.container.querySelector('svg[data-source="graph TD; A-->B"]'),
