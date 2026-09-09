@@ -1,6 +1,7 @@
 # 本机聚合网页服务维护
 
-本说明适用于把 `local/aggregate` 作为本机 Tailnet 网页服务运行的场景。
+本说明适用于把 `local/aggregate` 作为本机网页服务运行的场景。入口由本机决定
+（例如 Tailnet 反向代理、loopback 端口经 SSH 隧道访问），以本机 JSON 为准。
 它是本地运维资料：可以在本地 Git 提交。只有在明确授权后才可推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
 
 ## 文件与保密边界
@@ -9,7 +10,7 @@
 | --- | --- | --- |
 | `docs/local-aggregate-web-maintenance.md` | 提交 | 通用维护步骤与安全边界 |
 | `config/local-aggregate-web.example.json` | 提交 | 脱敏的配置结构示例 |
-| `config/local-aggregate-web.json` | 忽略 | 本机路径、内部 Tailnet 地址和端口 |
+| `config/local-aggregate-web.json` | 忽略 | 本机路径、端口和网页入口地址；Tailscale 字段仅适用于配置了 Tailscale 的机器，其余机器可为 `null` |
 
 在新机器上复制模板：
 
@@ -29,7 +30,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 - systemd 服务从聚合 worktree 启动 `scripts/start-bb.mjs`。
 - 服务使用既有数据目录；升级代码不会迁移或复制该目录。
-- Tailscale Serve 仅反向代理 loopback 的网页端口。保持 Tailnet-only，绝不使用 Funnel。
+- 网页入口以本机 JSON 与既有部署为准（例如 loopback 端口经 SSH 访问，或 Tailscale Serve 反向代理）。使用 Tailscale Serve 时仅代理 loopback 的网页端口，保持 Tailnet-only，绝不使用 Funnel。
 - `scripts/bb-dev-app current` 使用隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
 - 同一数据目录在任意时刻只能由一个 bb 服务实例使用。
 
@@ -39,8 +40,8 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 首次配置
 
-1. 安装 Node 22.19 或更高的 Node 22 运行时，并把绝对二进制路径写进本机 JSON。systemd 不会加载交互 shell 的 `nvm`，因此不要让单元依赖 `nvm use` 或 `/tmp` 下的运行时。
-2. 在 Node 的 `bin` 目录为项目锁定的 pnpm 启用 Corepack：
+1. 确认本机有持久化的 Node 运行时，并把绝对二进制路径写进本机 JSON（版本以本机 JSON 与项目实际兼容性为准，不强制特定大版本）。systemd 不会加载交互 shell 的 `nvm`，因此单元必须使用绝对路径，不要依赖 `nvm use` 或 `/tmp` 下的运行时。
+2. 在该 Node 的 `bin` 目录为项目锁定的 pnpm 启用 Corepack：
 
    ```bash
    <node-bin-directory>/corepack enable --install-directory <node-bin-directory>
@@ -71,12 +72,14 @@ git check-ignore -v config/local-aggregate-web.json
    sudo systemctl enable --now <systemdUnit>
    ```
 
-6. 让 Tailscale Serve 指向 JSON 中的 `serveTarget`，并核验其为 Tailnet-only：
+6. （可选，仅当本机使用 Tailscale Serve 作为入口）让 Tailscale Serve 指向 JSON 中的 `serveTarget`，并核验其为 Tailnet-only；不使用 Funnel：
 
    ```bash
    tailscale serve --bg --https=443 <serveTarget>
    tailscale serve status
    ```
+
+   若本机不使用 Tailscale（例如入口是 loopback 端口经 SSH 访问），跳过此步，保持既有入口不变。
 
 ## 日常升级
 
@@ -107,8 +110,9 @@ git check-ignore -v config/local-aggregate-web.json
 
    ```bash
    curl --fail http://<bindHost>:<serverPort>/
-   tailscale serve status
    ```
+
+   若本机使用 Tailscale Serve，另核验 `tailscale serve status` 的目标正确。
 
    在浏览器强制刷新一次，以加载新的带 hash 前端 bundle。对重要项目再打开一个既有会话，确认数据可见。
 
@@ -120,7 +124,8 @@ git check-ignore -v config/local-aggregate-web.json
 
 ```bash
 sudo journalctl -u <systemdUnit> -n 200 --no-pager
-tailscale serve status
 ```
+
+若本机使用 Tailscale Serve，另核验 `tailscale serve status`。
 
 确认服务、端口和数据目录后再处理问题；不要将故障日志中可能出现的令牌或项目内容提交到 Git。
