@@ -55,3 +55,24 @@
 - Use [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md): root cause, change, verification that demonstrates the fix, and `Fixes #N` when applicable.
 - End every agent-created issue and PR body with `> AGENT GENERATED`.
 - Ground debugging in observed state: logs, database queries, server APIs, or CLI output. For dev ports, data directories, entity IDs, and the local QA launcher, see [docs/debugging-and-qa.md](docs/debugging-and-qa.md).
+
+## 本地聚合分支
+
+此 worktree 的 `local/aggregate` 是仅供本地打包和体验的集成分支。它以
+`origin/main` 为基线，承载多个独立功能分支的已验证提交；不要从它创建上游
+PR，也不要把聚合分支推送到远端。
+
+当前纳入的独立改动如下：
+
+| 独立分支 | 引入提交 | 目的 |
+| --- | --- | --- |
+| `review/recent-project-activity` | `3eb295888` | 按项目最近会话活动排序 |
+| `fix/mobile-display-options` | `30f71b335` | 让项目标题行的布局设置可在触控移动端使用 |
+
+维护规则：
+
+1. 每项改动始终在自己的 `feature/*`、`fix/*` 或现有独立分支上开发、测试、提交和发布；聚合分支只通过 `git cherry-pick -x <commit>` 引入已验证提交。
+2. 每次引入或移除改动时，更新上表，并保留 `-x` 的来源行以便追溯。
+3. 在开始上游同步前，检查 `git status --short` 和 `git worktree list`；先运行 `git fetch origin --prune`，再从干净的聚合分支执行 `git rebase --no-autostash origin/main`。冲突只在聚合层解决，不改写独立分支的历史。
+4. 本地体验、构建或打包必须从此 worktree 启动，验证通过后才可替换本机正在运行的 source 服务。不要把独立功能 worktree 直接当作日常体验版本。
+5. 聚合层出现问题时，优先在相应独立分支修复并以新的提交重新引入；不要在聚合分支写无法回流的产品代码。
