@@ -37,6 +37,9 @@ function thread(overrides: Partial<ThreadListEntry> = {}): ThreadListEntry {
     environmentHostId: null,
     environmentName: null,
     environmentBranchName: null,
+    environmentPath: null,
+    environmentProviderId: null,
+    environmentIsWorktree: null,
     environmentWorkspaceDisplayKind: "other",
     runtime: {
       displayStatus: "idle",
