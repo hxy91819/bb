@@ -66,7 +66,7 @@ PR，也不要把聚合分支推送到远端。
 
 | 独立分支 | 引入提交 | 目的 |
 | --- | --- | --- |
-| `review/recent-project-activity` | `3eb295888` | 按项目最近会话活动排序 |
+| `feature/recent-project-activity-main` | `871e71a2a` | 按项目最近会话活动排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
 | `fix/mobile-display-options` | `30f71b335` | 让项目标题行的布局设置可在触控移动端使用 |
 
 维护规则：
