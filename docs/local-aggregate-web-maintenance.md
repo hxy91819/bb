@@ -35,6 +35,8 @@ git check-ignore -v config/local-aggregate-web.json
 
 实际服务名、路径、端口和 Tailnet 地址以本机 `config/local-aggregate-web.json` 为准。
 
+在另一台机器上交给 Agent 执行切换时，直接使用[远端 Agent 切换提示词](local-aggregate-remote-agent-prompt.md)。
+
 ## 首次配置
 
 1. 安装 Node 22.19 或更高的 Node 22 运行时，并把绝对二进制路径写进本机 JSON。systemd 不会加载交互 shell 的 `nvm`，因此不要让单元依赖 `nvm use` 或 `/tmp` 下的运行时。
