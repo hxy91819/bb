@@ -64,10 +64,10 @@ PR，也不要把聚合分支推送到远端。
 
 当前纳入的独立改动如下：
 
-| 独立分支 | 引入提交 | 目的 |
-| --- | --- | --- |
-| `feature/recent-project-activity-main` | `871e71a2a` | 按项目最近会话活动排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
-| `fix/mobile-display-options` | `30f71b335` | 让项目标题行的布局设置可在触控移动端使用 |
+| 独立分支 | 源分支提交 | 聚合层提交 | 目的 |
+| --- | --- | --- | --- |
+| `feature/recent-project-activity-main` | `871e71a2a` | `cfe8bfb2b`、`688531c4b` | 按项目最近会话活动排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
+| `fix/mobile-display-options` | `30f71b335` | `29d8af766` | 让项目标题行的布局设置可在触控移动端使用 |
 
 维护规则：
 
