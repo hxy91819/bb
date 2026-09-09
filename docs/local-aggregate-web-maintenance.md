@@ -1,7 +1,7 @@
 # 本机聚合网页服务维护
 
 本说明适用于把 `local/aggregate` 作为本机 Tailnet 网页服务运行的场景。
-它是本地运维资料：可以在本地 Git 提交，但不要推送到任何远端。
+它是本地运维资料：可以在本地 Git 提交。只有在明确授权后才可推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
 
 ## 文件与保密边界
 
@@ -78,12 +78,13 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 日常升级
 
-1. 检查现场并在 `local/aggregate` 完成聚合；不 push：
+1. 检查现场并在 `local/aggregate` 完成聚合。默认不 push；若已明确授权，只推送到个人 fork：
 
    ```bash
    git status --short
    git worktree list
    git branch --show-current
+   git push fork local/aggregate:refs/heads/local/aggregate
    ```
 
 2. 用 JSON 所指 Node 22 安装并构建：
