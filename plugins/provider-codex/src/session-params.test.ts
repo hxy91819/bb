@@ -719,7 +719,7 @@ describe("toCodexReasoningEffort", () => {
 });
 
 describe("toCodexServiceTier", () => {
-  it("forwards only the fast tier", () => {
+  it("distinguishes enabling, clearing, and inheriting the service tier", () => {
     expect(toCodexServiceTier("fast")).toBe("fast");
     expect(toCodexServiceTier("default")).toBeNull();
     expect(toCodexServiceTier(undefined)).toBeUndefined();

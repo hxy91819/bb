@@ -246,6 +246,14 @@ vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
   }),
 }));
 
+vi.mock("@/hooks/mutations/thread-service-tier-mutation", () => ({
+  useUpdateThreadServiceTier: () => ({
+    isPending: false,
+    variables: undefined,
+    mutate: vi.fn(),
+  }),
+}));
+
 vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
   useProjectDisplayName: () => null,
 }));
