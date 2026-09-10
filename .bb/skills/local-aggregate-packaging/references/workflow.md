@@ -63,6 +63,5 @@ git cherry-pick -x <source-commit>
 
 - `config/local-aggregate-features.json`：每个已纳入分支的 `lastPackaged` 与 `upstreamIssues`；只有完整重建并采用新上游时才更新 `aggregate.lastIntegratedUpstreamCommit`；
 - `AGENTS.md`：人工可读的分支、最后源提交和最后聚合提交；
-- `aggregate.lastIntegratedUpstreamCommit`：本次聚合的上游基线。
 
 从项目根目录运行与变更相称的 Turbo 测试与类型检查。准备更新服务时，再遵循 [本机聚合网页服务维护](../../../../docs/local-aggregate-web-maintenance.md)；它读取本机忽略的 JSON 配置，先使用其中锁定的 Node 22 `pnpm install --frozen-lockfile` 和 `pnpm build`，再重启 systemd 并以 loopback health check 和 `tailscale serve status` 验证。没有用户明确要求更新本机服务时，不读取私有配置，不构建或重启服务。
