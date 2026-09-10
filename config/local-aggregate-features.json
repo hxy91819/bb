@@ -51,7 +51,10 @@
     },
     {
       "branch": "fix/vite-cve-2026-39363",
-      "lastPackaged": null,
+      "lastPackaged": {
+        "sourceCommit": "abe95aefe02d11250060ad81d9a3f74d3494e556",
+        "aggregateCommit": "acecb1cb2d0c5342277c4b462da7098830d5a4ea"
+      },
       "upstreamIssues": [
         {
           "repository": "get-bb/bb",

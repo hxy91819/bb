@@ -73,12 +73,7 @@
 | `feature/recent-project-activity-main` | `8e97b5048` | `6b7e2565c` | [#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177) | 按项目最近用户发起的工作排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
 | `feature/mermaid-elk-layout` | `dfa62783f` | `fc7b99d64` | [#3382](https://github.com/get-bb/bb/issues/3382) | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
 | `fix/mobile-display-options` | `30f71b335` | `29d8af766` | [#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327) | 让项目标题行的布局设置可在触控移动端使用 |
-
-待打包但默认纳入的改动：
-
-| 独立分支 | 上游回馈 | 状态 |
-| --- | --- | --- |
-| `fix/vite-cve-2026-39363` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 已提交，等待下一次聚合打包 |
+| `fix/vite-cve-2026-39363` | `abe95aefe` | `acecb1cb2` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 将 `@ladle/react` 与 Vitest 3 的传递 Vite 解析固定到 6.4.3 |
 
 维护规则：
 
