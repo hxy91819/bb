@@ -206,10 +206,6 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     telemetry,
     terminalSessions,
   };
-  await runStartupRecoverySweep(sweepDeps).catch((error) => {
-    logger.error({ err: error }, "Startup recovery sweep failed");
-  });
-
   if (!isLoopbackHostname(serverConfig.BB_SERVER_BIND_HOST)) {
     logger.warn(
       { bindHost: serverConfig.BB_SERVER_BIND_HOST },
@@ -232,6 +228,10 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     "Server listening",
   );
   telemetry.capture({ name: "app_started" });
+
+  void runStartupRecoverySweep(sweepDeps).catch((error) => {
+    logger.error({ err: error }, "Startup recovery sweep failed");
+  });
 
   pluginService.bindSdk({
     baseUrl: `http://127.0.0.1:${serverConfig.BB_SERVER_PORT}`,
