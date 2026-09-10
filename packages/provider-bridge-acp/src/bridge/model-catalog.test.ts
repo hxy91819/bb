@@ -499,6 +499,22 @@ describe("acp configOptions model catalog", () => {
     expect(acpNativeReasoningLevelToValue("max", thoughtLevel)).toBe("max");
   });
 
+  it("maps ACP off to bb none", () => {
+    const thoughtLevel = {
+      id: "reasoning_effort",
+      category: "thought_level",
+      type: "select",
+      currentValue: "off",
+      options: [{ value: "off", name: "Off" }, { value: "high" }],
+    };
+    const support = buildAcpNativeReasoningSupport(thoughtLevel);
+    expect(support.defaultReasoningEffort).toBe("none");
+    expect(
+      support.supportedReasoningEfforts.map((e) => e.reasoningEffort),
+    ).toEqual(["none", "high"]);
+    expect(acpNativeReasoningLevelToValue("none", thoughtLevel)).toBe("off");
+  });
+
   it("uses Hermes minimal as bb low when ACP does not advertise low", () => {
     const thoughtLevel = {
       id: "reasoning_effort",

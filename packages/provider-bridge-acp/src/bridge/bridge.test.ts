@@ -697,6 +697,31 @@ describe("acp bridge", () => {
     });
   });
 
+  it("discovers ACP-native models from grouped configOptions", async () => {
+    const modelListId = sendModelList({
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+        FAKE_ACP_GROUPED_MODEL_CONFIG: "1",
+        FAKE_ACP_THOUGHT_LEVEL_CONFIG: "1",
+      },
+    });
+
+    expect((await waitForResponse(modelListId)).result).toMatchObject({
+      models: [
+        {
+          id: "fake/default",
+          displayName: "Fake Default",
+          isDefault: true,
+        },
+        {
+          id: "fake/strong",
+          displayName: "Fake Strong",
+          isDefault: false,
+        },
+      ],
+    });
+  });
+
   it("advertises Cursor's parameterized model picker during discovery", async () => {
     const requestLog = join(workspaceDir, "cursor-discovery-requests.jsonl");
     const modelListId = sendModelList({
@@ -2833,6 +2858,131 @@ describe("acp bridge", () => {
     startedProviderThreadIds.push(first.providerThreadId);
   });
 
+  it("resumes via session/resume when the agent advertises it", async () => {
+    const requestLog = join(workspaceDir, "resume-session.jsonl");
+    const first = await startThread({
+      envVars: {
+        FAKE_ACP_RESUME_SESSION: "1",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+      },
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeLog = join(workspaceDir, "resume-session-restore.jsonl");
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_RESUME_SESSION: "1",
+              FAKE_ACP_REQUEST_LOG: resumeLog,
+            },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    const response = await waitForResponse(resumeId);
+    expect(response.result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).toContain("session/resume");
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).not.toContain("session/load");
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).not.toContain("session/new");
+    expect(threadEventsOfType("provider/warning")).toHaveLength(0);
+    startedProviderThreadIds.push(first.providerThreadId);
+  });
+
+  it("prefers session/resume over session/load when both are advertised", async () => {
+    const first = await startThread({
+      envVars: {
+        FAKE_ACP_LOAD_SESSION: "1",
+        FAKE_ACP_RESUME_SESSION: "1",
+      },
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeLog = join(workspaceDir, "prefer-resume.jsonl");
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_LOAD_SESSION: "1",
+              FAKE_ACP_RESUME_SESSION: "1",
+              FAKE_ACP_REQUEST_LOG: resumeLog,
+            },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    const response = await waitForResponse(resumeId);
+    expect(response.result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).toContain("session/resume");
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).not.toContain("session/load");
+    startedProviderThreadIds.push(first.providerThreadId);
+  });
+
+  it("falls back to session/load when session/resume fails", async () => {
+    const first = await startThread({
+      envVars: { FAKE_ACP_LOAD_SESSION: "1" },
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeLog = join(workspaceDir, "resume-then-load.jsonl");
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_FAIL_RESUME: "1",
+              FAKE_ACP_LOAD_SESSION: "1",
+              FAKE_ACP_REQUEST_LOG: resumeLog,
+            },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    const response = await waitForResponse(resumeId);
+    expect(response.result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(
+      loggedAcpRequests(resumeLog).map((request) => request.method),
+    ).toEqual(expect.arrayContaining(["session/resume", "session/load"]));
+    expect(threadEventsOfType("provider/warning")).toHaveLength(0);
+    startedProviderThreadIds.push(first.providerThreadId);
+  });
+
   it("emits session.reset after identity at every construction (start, resume, fork)", async () => {
     const resetIndexesFor = (threadId: string): number[] =>
       output.messages.flatMap((message, index) => {
@@ -2984,6 +3134,46 @@ describe("acp bridge", () => {
     expect(contextWindowDeltasFor(forkThreadId)).toEqual([
       { used: 12_345, size: 200_000 },
     ]);
+  });
+
+  it("forwards context usage reported during session/resume", async () => {
+    const first = await startThread({
+      envVars: { FAKE_ACP_RESUME_SESSION: "1" },
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_RESUME_SESSION: "1",
+              FAKE_ACP_USAGE_ON_LOAD: "1",
+            },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    const response = await waitForResponse(resumeId);
+    expect(response.result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(
+      threadEventsOfType("thread/contextWindowUsage/updated").at(-1),
+    ).toMatchObject({
+      contextWindowUsage: {
+        usedTokens: 24_000,
+        modelContextWindow: 128_000,
+        estimated: false,
+      },
+    });
+    startedProviderThreadIds.push(first.providerThreadId);
   });
 
   it("forwards context usage reported during session/load", async () => {

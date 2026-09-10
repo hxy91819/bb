@@ -2,7 +2,7 @@ Use one bb workspace with the coding agents you already run on your machine. Thi
 
 ## What you get
 
-- Ready-made providers for Cursor, opencode, omp, Grok Build, and Hermes Agent.
+- Ready-made providers for Cursor, opencode, omp, Grok Build, Hermes Agent, and DeepSeek Harness.
 - A `Custom agents` setting. Add any other ACP agent as a JSON array with an `id`, a `displayName`, and a `command`.
 - Permission modes `accept-edits` and `full` for every ACP provider.
 - Reasoning levels and a model picker where the agent reports them.
@@ -14,6 +14,6 @@ The plugin launches the agent command on the host machine and talks to it over A
 
 ## Requirements
 
-- Install the agent CLI on the host: `cursor-agent`, `opencode`, `omp`, `grok`, or `hermes`.
+- Install the agent CLI on the host: `cursor-agent`, `opencode`, `omp`, `grok`, `hermes`, or `dsh`.
 - Sign in with the agent's own command, for example `cursor-agent login` or `opencode auth login`.
 - A custom agent needs a command that starts an ACP server on stdio.

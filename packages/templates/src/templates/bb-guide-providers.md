@@ -85,12 +85,12 @@ the Chrome extension and a claude.ai login. A change restarts the thread's
 Claude process before its next turn and keeps the conversation.
 
 Known ACP agents can appear automatically when their CLI is installed on the
-host. For example, opencode, omp, Grok Build's grok CLI, or Hermes' hermes CLI
-on PATH appears as provider acp-opencode, acp-omp, acp-grok, or
-acp-hermes-agent.
+host. For example, opencode, omp, Grok Build's grok CLI, Hermes' hermes CLI,
+or DeepSeek Harness' dsh CLI on PATH appears as provider acp-opencode,
+acp-omp, acp-grok, acp-hermes-agent, or acp-dsh.
 
 bb indexes the native user and project skill roots for Codex, Claude Code, Pi,
-Cursor, OpenCode, omp, Grok Build, and Hermes Agent. This includes compatibility
+Cursor, OpenCode, omp, Grok Build, Hermes Agent, and DeepSeek Harness. This includes compatibility
 roots such as .agents/skills and .claude/skills when the provider supports them.
 It also includes project ancestor roots for providers that search to the Git
 repository root. Configured Pi, omp, Grok, and Hermes directories are included.
@@ -129,7 +129,7 @@ JSON array. Set it with bb plugin config provider-acp set customAgents '[...]'.
 Each entry needs id (lowercase letters, digits and dashes), displayName, and
 command. bb derives provider id acp-<id> from the slug id. The id is permanent.
 The id cursor is reserved because bb always lists that agent. The ids opencode,
-omp, grok and hermes-agent are not reserved, so an entry with one of those ids
+omp, grok, hermes-agent and dsh are not reserved, so an entry with one of those ids
 replaces the shipped agent. Use args, env, and cwd for the launch, modelCli
 for CLI model listing/selection, reasoningCli for launch-time reasoning flags,
 nativeReasoning for ACP session/set_config_option reasoning, permissionCli for

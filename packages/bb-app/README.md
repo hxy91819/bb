@@ -165,9 +165,10 @@ bb uses whichever providers you have configured. Common providers:
 | `opencode`     | Install [opencode](https://opencode.ai/) and authenticate per its docs.                                                                                                                   |
 | `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                               |
 | `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.    |
+| `dsh`          | Install [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`npm install -g @deepseek-ai/dsh`) and configure credentials per its docs. BB launches `dsh --profile acp`. |
 
 BB indexes the documented native skill roots for Codex, Claude Code, Pi,
-Cursor, OpenCode, omp, Grok Build, and Hermes Agent. It includes user roots,
+Cursor, OpenCode, omp, Grok Build, Hermes Agent, and DeepSeek Harness. It includes user roots,
 project roots, and compatibility roots such as `.agents/skills`. These skills
 appear in the selected provider's `/` command menu. The Skills page and
 `bb skill list` show native skills for Claude Code, Codex, and Cursor. BB also
