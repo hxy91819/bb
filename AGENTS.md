@@ -62,6 +62,9 @@
 它以 `origin/main` 为基线，承载多个独立功能分支的已验证提交；不要从它创建
 上游 PR，也不要把聚合分支推送到远端。
 
+上游回馈的背景、方案、fork 引用、验证与截图状态见
+[docs/local-aggregate-upstream-feedback.md](docs/local-aggregate-upstream-feedback.md)。
+
 当前纳入的独立改动如下：
 
 | 独立分支 | 源分支提交 | 聚合层提交 | 目的 |
