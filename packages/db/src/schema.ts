@@ -520,6 +520,7 @@ export const threads = sqliteTable(
     }),
     providerId: text("provider_id").notNull(),
     modelOverride: text("model_override"),
+    serviceTierOverride: text("service_tier_override").$type<ServiceTier>(),
     reasoningLevelOverride: text(
       "reasoning_level_override",
     ).$type<ReasoningLevel>(),
