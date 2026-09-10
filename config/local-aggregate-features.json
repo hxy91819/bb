@@ -62,6 +62,17 @@
           "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
         }
       ]
+    },
+    {
+      "branch": "fix/codex-fast-mode-toggle",
+      "lastPackaged": null,
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3401,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199"
+        }
+      ]
     }
   ]
 }
