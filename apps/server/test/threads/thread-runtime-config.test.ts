@@ -328,6 +328,22 @@ describe("thread runtime config", () => {
       providerId: "acp-hermes-agent",
       requestedModel: "acp-default",
     },
+    {
+      expectedSpec: {
+        displayName: "DeepSeek Harness",
+        command: "dsh",
+        args: ["--profile", "acp"],
+        env: {},
+        nativeReasoning: {
+          configId: "reasoning_effort",
+          supportedLevels: ["none", "low", "high", "max"],
+          levelValues: { none: "off" },
+          defaultLevel: "high",
+        },
+      },
+      providerId: "acp-dsh",
+      requestedModel: "acp-default",
+    },
   ])(
     "carries plugin-declared ACP launch specs for $providerId in bridge options",
     async ({ expectedSpec, providerId, requestedModel }) => {

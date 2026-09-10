@@ -375,6 +375,11 @@ describe("buildPluginProviderRegistration", () => {
         logoUrl: "/api/v1/system/providers/acp-hermes-agent/logo",
         icon: undefined,
       },
+      {
+        id: "acp-dsh",
+        logoUrl: "/api/v1/system/providers/acp-dsh/logo",
+        icon: undefined,
+      },
     ]);
   });
 });
