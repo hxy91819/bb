@@ -1,5 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { ThreadListEntry, ThreadWithRuntime } from "@bb/domain";
+import type {
+  ResolvedThreadExecutionOptions,
+  ThreadListEntry,
+  ThreadWithRuntime,
+} from "@bb/domain";
+import { threadDefaultExecutionOptionsQueryKey } from "../queries/thread-default-execution-options-query";
+import {
+  threadExecutionOptionsCacheKey,
+  writeCachedThreadExecutionOptions,
+} from "@/lib/thread-execution-options-cache";
 import type {
   ProjectResponse,
   ReorderPinnedThreadRequest,
@@ -247,6 +256,24 @@ export function applyThreadUpdateResult({
     thread,
   );
   invalidateThreadListQueries({ queryClient });
+}
+
+export async function applyThreadServiceTierResult({
+  queryClient,
+  threadId,
+  executionOptions,
+}: ThreadIdCacheArgs & {
+  executionOptions: ResolvedThreadExecutionOptions | null;
+}): Promise<void> {
+  const queryKey = threadDefaultExecutionOptionsQueryKey(threadId);
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData(queryKey, executionOptions);
+  if (executionOptions !== null) {
+    writeCachedThreadExecutionOptions(
+      threadExecutionOptionsCacheKey(threadId),
+      executionOptions,
+    );
+  }
 }
 
 interface OptimisticThreadFieldTransactionArgs extends ThreadIdCacheArgs {
