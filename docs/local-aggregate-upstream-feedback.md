@@ -38,12 +38,12 @@ This document records the upstream feedback associated with independently mainta
 - **Validation:** the focused project-row interaction test file (12 tests) and app typecheck passed.
 - **Screenshot:** the upstream bug report already contains reproducible DOM/CSS evidence; no additional screenshot was created during this aggregate pass.
 
-## Codex Fast mode persistence (pending integration)
+## Codex Fast mode persistence
 
-- **Upstream feedback:** [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199); added reproduction and the focused service-tier implementation to the existing issue.
-- **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`0e41dc3a3`](https://github.com/hxy91819/bb/commit/0e41dc3a3b0b36dbed01a489fea9b259935ac48d), published and verified; not yet cherry-picked or packaged into the local aggregate.
+- **Upstream feedback:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) is the primary bug tracker. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) is retained only as historical context: it is a closed, not-planned SDK feature request rather than the bug's tracking issue.
+- **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`0e41dc3a3`](https://github.com/hxy91819/bb/commit/0e41dc3a3b0b36dbed01a489fea9b259935ac48d), adapted on [fix/codex-fast-mode-toggle-aggregate-compat](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle-aggregate-compat) at [`b613a8b73`](https://github.com/hxy91819/bb/commit/b613a8b73a024fdae2033fe627b7a60594bc3f79) to preserve the aggregate's migration lineage without importing unrelated upstream commits.
 - **Background:** disabling Fast without sending another message only changed the main composer's local selection. Returning to the thread restored the saved fast tier. The Codex adapter also omitted the explicit reset for the default tier.
 - **Change:** persist the toggle through the thread-update API, SDK and CLI; refresh execution-option subscribers; send explicit `serviceTier: null` to Codex for the default tier.
-- **Validation:** focused app/server/CLI/contract/provider tests and typechecks passed. In an isolated source web app, disable, navigation without sending, reload and re-enable passed. A real follow-up completed with explicit null in both resume and turn-start provider requests. Secret scans of changed files and the new commit passed.
+- **Validation:** focused app/server/CLI/contract/provider tests and typechecks passed on the source fix. The aggregate-compatible source passed the focused database migration (62), app (103), server (94), and Codex provider (39) tests. In an isolated source web app, disable, navigation without sending, reload and re-enable passed. A real follow-up completed with explicit null in both resume and turn-start provider requests. Secret scans of changed files and the new commit passed.
 - **Screenshot:** browser screenshots and raw bridge recordings remain local because they include machine paths and model-catalog details; the upstream comment includes sanitized wire evidence.
-- **Integration status:** registered for the next aggregate maintenance pass. Contributor approval is still absent, so feedback links the fork commit without opening an upstream PR.
+- **Integration status:** cherry-picked into `local/aggregate` as `ef60100bce75a5a4597aaa9748eb58dd6a5cdf47`; this pass does not create an upstream PR.

@@ -65,12 +65,29 @@
     },
     {
       "branch": "fix/codex-fast-mode-toggle",
-      "lastPackaged": null,
+      "lastPackaged": {
+        "sourceCommit": "0e41dc3a3b0b36dbed01a489fea9b259935ac48d",
+        "aggregateCommit": "ef60100bce75a5a4597aaa9748eb58dd6a5cdf47"
+      },
       "upstreamIssues": [
         {
           "repository": "get-bb/bb",
-          "number": 3401,
-          "feedbackUrl": "https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199"
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/codex-fast-mode-toggle-aggregate-compat",
+      "lastPackaged": {
+        "sourceCommit": "b613a8b73a024fdae2033fe627b7a60594bc3f79",
+        "aggregateCommit": "ef60100bce75a5a4597aaa9748eb58dd6a5cdf47"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
         }
       ]
     }

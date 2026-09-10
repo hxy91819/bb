@@ -75,7 +75,8 @@
 | `feature/mermaid-elk-layout` | `dfa62783f` | `fc7b99d64` | [#3382](https://github.com/get-bb/bb/issues/3382) | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
 | `fix/mobile-display-options` | `30f71b335` | `29d8af766` | [#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327) | 让项目标题行的布局设置可在触控移动端使用 |
 | `fix/vite-cve-2026-39363` | `abe95aefe` | `acecb1cb2` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 将 `@ladle/react` 与 Vitest 3 的传递 Vite 解析固定到 6.4.3 |
-| `fix/codex-fast-mode-toggle` | 待打包 | 待打包 | [#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) | 保存 Fast 开关并显式关闭 Codex fast tier；已验证源提交 `0e41dc3a3`，尚未集成 |
+| `fix/codex-fast-mode-toggle` | `0e41dc3a3` | `ef60100bc` | [#3403](https://github.com/get-bb/bb/issues/3403) | 保存 Fast 开关并显式关闭 Codex fast tier；以聚合基线兼容迁移后打包 |
+| `fix/codex-fast-mode-toggle-aggregate-compat` | `b613a8b73` | `ef60100bc` | [#3403](https://github.com/get-bb/bb/issues/3403) | 将 Fast 修复的迁移编号适配到未引入无关上游提交的本地聚合基线 |
 
 维护规则：
 
