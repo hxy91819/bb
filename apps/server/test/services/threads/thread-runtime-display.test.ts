@@ -225,6 +225,7 @@ function createThreadListEntry(
   return {
     ...args.thread,
     modelOverride: null,
+    serviceTierOverride: null,
     reasoningLevelOverride: null,
     environmentBranchName: null,
     environmentPath: null,

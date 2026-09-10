@@ -1427,50 +1427,53 @@ describe("createRealtimeCacheEffects", () => {
     effects.dispose();
   });
 
-  it("refetches active thread default execution options when a thread environment changes", async () => {
-    vi.useFakeTimers();
-    const { effects, queryClient } = createRealtimeEffectsTestContext();
-    const defaultOptionsKey = threadDefaultExecutionOptionsQueryKey("thr_1");
-    const initialDefaults = {
-      model: "gpt-5",
-      permissionMode: "auto",
-      reasoningLevel: "medium",
-      serviceTier: "default",
-      source: "client/turn/requested",
-    };
-    const nextDefaults = {
-      model: "gpt-5.5",
-      permissionMode: "accept-edits",
-      reasoningLevel: "high",
-      serviceTier: "default",
-      source: "client/turn/requested",
-    };
-    queryClient.setQueryData(defaultOptionsKey, initialDefaults);
-    const defaultOptionsQueryFn = vi.fn(async () => nextDefaults);
-    const defaultOptionsObserver = new QueryObserver(queryClient, {
-      queryKey: defaultOptionsKey,
-      queryFn: defaultOptionsQueryFn,
-      staleTime: Infinity,
-    });
-    const unsubscribeDefaultOptions = defaultOptionsObserver.subscribe(
-      () => {},
-    );
-    defaultOptionsQueryFn.mockClear();
+  it.each(["environment-changed", "execution-options-changed"] as const)(
+    "refetches active thread defaults after %s",
+    async (change) => {
+      vi.useFakeTimers();
+      const { effects, queryClient } = createRealtimeEffectsTestContext();
+      const defaultOptionsKey = threadDefaultExecutionOptionsQueryKey("thr_1");
+      const initialDefaults = {
+        model: "gpt-5",
+        permissionMode: "auto",
+        reasoningLevel: "medium",
+        serviceTier: "default",
+        source: "client/turn/requested",
+      };
+      const nextDefaults = {
+        model: "gpt-5.5",
+        permissionMode: "accept-edits",
+        reasoningLevel: "high",
+        serviceTier: "default",
+        source: "client/turn/requested",
+      };
+      queryClient.setQueryData(defaultOptionsKey, initialDefaults);
+      const defaultOptionsQueryFn = vi.fn(async () => nextDefaults);
+      const defaultOptionsObserver = new QueryObserver(queryClient, {
+        queryKey: defaultOptionsKey,
+        queryFn: defaultOptionsQueryFn,
+        staleTime: Infinity,
+      });
+      const unsubscribeDefaultOptions = defaultOptionsObserver.subscribe(
+        () => {},
+      );
+      defaultOptionsQueryFn.mockClear();
 
-    effects.handleChanged({
-      type: "changed",
-      entity: "thread",
-      id: "thr_1",
-      changes: ["environment-changed"],
-    });
-    await vi.advanceTimersByTimeAsync(0);
+      effects.handleChanged({
+        type: "changed",
+        entity: "thread",
+        id: "thr_1",
+        changes: [change],
+      });
+      await vi.advanceTimersByTimeAsync(0);
 
-    expect(defaultOptionsQueryFn).toHaveBeenCalledTimes(1);
-    expect(queryClient.getQueryData(defaultOptionsKey)).toEqual(nextDefaults);
+      expect(defaultOptionsQueryFn).toHaveBeenCalledTimes(1);
+      expect(queryClient.getQueryData(defaultOptionsKey)).toEqual(nextDefaults);
 
-    unsubscribeDefaultOptions();
-    effects.dispose();
-  });
+      unsubscribeDefaultOptions();
+      effects.dispose();
+    },
+  );
 
   it("does not invalidate timeline queries for status-only thread changes", () => {
     const { effects, queryClient } = createRealtimeEffectsTestContext();
