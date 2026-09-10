@@ -7,6 +7,8 @@ import type { ProjectResponse } from "@bb/server-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectModeSections } from "./ProjectList";
 import {
+  promoteSidebarProjectActivityAtom,
+  sidebarProjectActivityPromotionsAtom,
   sidebarProjectOrderAtom,
   sidebarSectionOrderAtom,
   type SidebarSectionId,
@@ -139,7 +141,24 @@ function assertDocumentOrder(elements: HTMLElement[]) {
   }
 }
 
-function renderProjectMode(store: ReturnType<typeof createStore>) {
+const initialThreads = [
+  thread({ id: "old", latestAttentionAt: 10 }),
+  thread({
+    id: "new",
+    projectId: "project_new",
+    latestAttentionAt: 20,
+  }),
+  thread({
+    id: "personal",
+    projectId: PERSONAL_PROJECT_ID,
+    latestAttentionAt: 30,
+  }),
+];
+
+function renderProjectMode(
+  store: ReturnType<typeof createStore>,
+  threads: ThreadListEntry[] = initialThreads,
+) {
   return render(
     <JotaiProvider store={store}>
       <ProjectModeSections
@@ -147,19 +166,7 @@ function renderProjectMode(store: ReturnType<typeof createStore>) {
           project("project_old", "Old project"),
           project("project_new", "New project"),
         ]}
-        threads={[
-          thread({ id: "old", latestAttentionAt: 10 }),
-          thread({
-            id: "new",
-            projectId: "project_new",
-            latestAttentionAt: 20,
-          }),
-          thread({
-            id: "personal",
-            projectId: PERSONAL_PROJECT_ID,
-            latestAttentionAt: 30,
-          }),
-        ]}
+        threads={threads}
         draftThreadIds={new Set()}
         effectivePinnedThreadIds={new Set()}
         status="ready"
@@ -200,6 +207,11 @@ describe("ProjectModeSections project order", () => {
     ];
     store.set(sidebarSectionOrderAtom, manualOrder);
     store.set(sidebarProjectOrderAtom, "manual");
+    store.set(sidebarProjectActivityPromotionsAtom, {
+      promotions: {},
+      sequence: 0,
+      version: 1,
+    });
 
     renderProjectMode(store);
 
@@ -225,9 +237,9 @@ describe("ProjectModeSections project order", () => {
     await waitFor(() => {
       assertDocumentOrder([
         screen.getByText("Pinned content"),
+        screen.getByTestId("project:project_old"),
         screen.getByText("Threads"),
         screen.getByTestId("project:project_new"),
-        screen.getByTestId("project:project_old"),
       ]);
     });
     expect(mockUseSidebarSortable).toHaveBeenCalledWith({
@@ -241,6 +253,19 @@ describe("ProjectModeSections project order", () => {
     expect(mockProjectRows.get("project:project_old")).toBe(true);
     expect(mockProjectRows.get("project:project_new")).toBe(true);
     expect(store.get(sidebarSectionOrderAtom)).toEqual(manualOrder);
+
+    act(() =>
+      store.set(promoteSidebarProjectActivityAtom, "project_new"),
+    );
+
+    await waitFor(() => {
+      assertDocumentOrder([
+        screen.getByText("Pinned content"),
+        screen.getByTestId("project:project_new"),
+        screen.getByTestId("project:project_old"),
+        screen.getByText("Threads"),
+      ]);
+    });
 
     mockUseSidebarSortable.mockClear();
     mockProjectRows.clear();
@@ -265,5 +290,80 @@ describe("ProjectModeSections project order", () => {
     expect(mockProjectRows.get("project:project_old")).toBe(false);
     expect(mockProjectRows.get("project:project_new")).toBe(false);
     expect(store.get(sidebarSectionOrderAtom)).toEqual(manualOrder);
+  });
+
+  it("does not reorder promoted projects for passive thread lifecycle changes", () => {
+    const store = createStore();
+    store.set(sidebarSectionOrderAtom, [
+      "project:project_old",
+      "threads",
+      "project:project_new",
+      "pinned",
+    ]);
+    store.set(sidebarProjectOrderAtom, "recent");
+    store.set(sidebarProjectActivityPromotionsAtom, {
+      promotions: { project_new: 1 },
+      sequence: 1,
+      version: 1,
+    });
+    const lifecycleUpdates = [
+      initialThreads.map((entry) =>
+        entry.id === "new"
+          ? {
+              ...entry,
+              latestAttentionAt: 10_000,
+              runtime: { ...entry.runtime, displayStatus: "error" as const },
+              status: "error" as const,
+            }
+          : { ...entry, status: "active" as const },
+      ),
+      initialThreads.map((entry) =>
+        entry.id === "new"
+          ? {
+              ...entry,
+              runtime: {
+                ...entry.runtime,
+                displayStatus: "host-reconnecting" as const,
+              },
+              status: "active" as const,
+            }
+          : entry,
+      ),
+      [
+        ...initialThreads.map((entry) =>
+          entry.id === "old"
+            ? {
+                ...entry,
+                latestAttentionAt: 20_000,
+                title: "Renamed after completion",
+                updatedAt: 20_000,
+              }
+            : entry,
+        ),
+        thread({
+          id: "child-started-and-finished",
+          projectId: "project_old",
+          parentThreadId: "old",
+          status: "active",
+          latestAttentionAt: 30_000,
+        }),
+        thread({
+          id: "new-empty-thread",
+          projectId: "project_old",
+          latestAttentionAt: 40_000,
+        }),
+      ],
+    ];
+
+    for (const threads of lifecycleUpdates) {
+      const rendered = renderProjectMode(store, threads);
+      assertDocumentOrder([
+        screen.getByText("Pinned content"),
+        screen.getByTestId("project:project_new"),
+        screen.getByTestId("project:project_old"),
+        screen.getByText("Threads"),
+      ]);
+      rendered.unmount();
+    }
   });
 });

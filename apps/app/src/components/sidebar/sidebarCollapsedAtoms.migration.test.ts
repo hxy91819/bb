@@ -47,4 +47,63 @@ describe("sidebar section preference migration", () => {
       window.localStorage.getItem("bb.sidebar.collapsedFolders"),
     ).toBeNull();
   });
+
+  it("restores and advances versioned recent-activity promotions", async () => {
+    window.localStorage.setItem(
+      "bb.sidebar.projectActivityPromotions",
+      JSON.stringify({
+        promotions: { "project-existing": 4 },
+        sequence: 4,
+        version: 1,
+      }),
+    );
+
+    const {
+      promoteSidebarProjectActivityAtom,
+      sidebarProjectActivityPromotionsAtom,
+    } = await import("./sidebarCollapsedAtoms");
+    const store = createStore();
+
+    expect(store.get(sidebarProjectActivityPromotionsAtom)).toEqual({
+      promotions: { "project-existing": 4 },
+      sequence: 4,
+      version: 1,
+    });
+
+    store.set(promoteSidebarProjectActivityAtom, "project-next");
+
+    expect(store.get(sidebarProjectActivityPromotionsAtom)).toEqual({
+      promotions: { "project-existing": 4, "project-next": 5 },
+      sequence: 5,
+      version: 1,
+    });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("bb.sidebar.projectActivityPromotions") ??
+          "",
+      ),
+    ).toEqual({
+      promotions: { "project-existing": 4, "project-next": 5 },
+      sequence: 5,
+      version: 1,
+    });
+  });
+
+  it("ignores malformed recent-activity promotions", async () => {
+    window.localStorage.setItem(
+      "bb.sidebar.projectActivityPromotions",
+      JSON.stringify({ promotions: { "project-a": -1 }, sequence: 1 }),
+    );
+
+    const { sidebarProjectActivityPromotionsAtom } = await import(
+      "./sidebarCollapsedAtoms"
+    );
+    const store = createStore();
+
+    expect(store.get(sidebarProjectActivityPromotionsAtom)).toEqual({
+      promotions: {},
+      sequence: 0,
+      version: 1,
+    });
+  });
 });

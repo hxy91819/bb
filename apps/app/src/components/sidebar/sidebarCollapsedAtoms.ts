@@ -1,3 +1,4 @@
+import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type { CollapsibleSidebarSectionId } from "@bb/client-core";
 import {
@@ -21,6 +22,8 @@ export const SIDEBAR_ORGANIZATION_MODE_STORAGE_KEY =
   "bb.sidebar.organizationMode";
 const CHRONOLOGICAL_SORT_STORAGE_KEY = "bb.sidebar.chronologicalSort";
 export const SIDEBAR_PROJECT_ORDER_STORAGE_KEY = "bb.sidebar.projectOrder";
+export const SIDEBAR_PROJECT_ACTIVITY_PROMOTIONS_STORAGE_KEY =
+  "bb.sidebar.projectActivityPromotions";
 const COLLAPSED_THREAD_SECTIONS_STORAGE_KEY =
   "bb.sidebar.collapsedThreadSections";
 const LEGACY_COLLAPSED_FOLDERS_STORAGE_KEY = "bb.sidebar.collapsedFolders";
@@ -34,6 +37,12 @@ export type {
 export type SidebarOrganizationMode = "project" | "chronological" | "machine";
 export type SidebarChronologicalSort = "updated" | "created" | "alpha" | "none";
 export type SidebarProjectOrder = "recent" | "manual";
+
+export interface SidebarProjectActivityPromotions {
+  promotions: Record<string, number>;
+  sequence: number;
+  version: 1;
+}
 
 const DEFAULT_SIDEBAR_SECTION_ORDER: readonly string[] = [
   "pinned",
@@ -174,11 +183,111 @@ function isSidebarProjectOrder(value: string): value is SidebarProjectOrder {
   return value === "recent" || value === "manual";
 }
 
+function isSidebarProjectActivityPromotions(
+  value: unknown,
+): value is SidebarProjectActivityPromotions {
+  const candidate = value as {
+    promotions?: unknown;
+    sequence?: unknown;
+    version?: unknown;
+  };
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    candidate.version !== 1 ||
+    typeof candidate.sequence !== "number" ||
+    !Number.isSafeInteger(candidate.sequence) ||
+    candidate.sequence < 0 ||
+    typeof candidate.promotions !== "object" ||
+    candidate.promotions === null ||
+    Array.isArray(candidate.promotions)
+  ) {
+    return false;
+  }
+
+  const sequenceLimit = candidate.sequence;
+  const promotions = candidate.promotions;
+  return Object.entries(promotions).every(
+    ([projectId, sequence]) =>
+      projectId.length > 0 &&
+      Number.isSafeInteger(sequence) &&
+      sequence > 0 &&
+      sequence <= sequenceLimit,
+  );
+}
+
+const INITIAL_SIDEBAR_PROJECT_ACTIVITY_PROMOTIONS: SidebarProjectActivityPromotions =
+  {
+    promotions: {},
+    sequence: 0,
+    version: 1,
+  };
+
+function compactSidebarProjectActivityPromotions(
+  current: SidebarProjectActivityPromotions,
+  projectId: string,
+): SidebarProjectActivityPromotions {
+  const promotions = Object.fromEntries(
+    Object.entries(current.promotions)
+      .filter(([id]) => id !== projectId)
+      .sort(
+        ([leftId, leftSequence], [rightId, rightSequence]) =>
+          leftSequence - rightSequence ||
+          (leftId < rightId ? -1 : leftId > rightId ? 1 : 0),
+      )
+      .map(([id], index) => [id, index + 1]),
+  );
+  const sequence = Object.keys(promotions).length + 1;
+  return {
+    promotions: { ...promotions, [projectId]: sequence },
+    sequence,
+    version: 1,
+  };
+}
+
+export function promoteSidebarProjectActivity(
+  current: SidebarProjectActivityPromotions,
+  projectId: string,
+): SidebarProjectActivityPromotions {
+  if (!projectId) return current;
+  if (current.sequence === Number.MAX_SAFE_INTEGER) {
+    return compactSidebarProjectActivityPromotions(current, projectId);
+  }
+  const sequence = current.sequence + 1;
+  return {
+    promotions: { ...current.promotions, [projectId]: sequence },
+    sequence,
+    version: 1,
+  };
+}
+
 export const sidebarProjectOrderAtom = atomWithStorage<SidebarProjectOrder>(
   SIDEBAR_PROJECT_ORDER_STORAGE_KEY,
   "manual",
   createLocalStorageEnumStorage(isSidebarProjectOrder),
   { getOnInit: true },
+);
+
+export const sidebarProjectActivityPromotionsAtom =
+  atomWithStorage<SidebarProjectActivityPromotions>(
+    SIDEBAR_PROJECT_ACTIVITY_PROMOTIONS_STORAGE_KEY,
+    INITIAL_SIDEBAR_PROJECT_ACTIVITY_PROMOTIONS,
+    createJsonLocalStorage(isSidebarProjectActivityPromotions),
+    { getOnInit: true },
+  );
+
+export const promoteSidebarProjectActivityAtom = atom(
+  null,
+  (get, set, projectId: string) => {
+    set(
+      sidebarProjectActivityPromotionsAtom,
+      promoteSidebarProjectActivity(
+        get(sidebarProjectActivityPromotionsAtom),
+        projectId,
+      ),
+    );
+  },
 );
 export const sidebarCollapsedThreadSectionsAtom = atomWithStorage<string[]>(
   COLLAPSED_THREAD_SECTIONS_STORAGE_KEY,

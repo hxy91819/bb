@@ -1,60 +1,42 @@
+import { compareCodepoint } from "@bb/client-core";
 import {
-  compareCodepoint,
-  compareStandardThreads,
-  isSidebarProjectThread,
-} from "@bb/client-core";
-import type { ThreadListEntry } from "@bb/domain";
-import {
+  type SidebarProjectActivityPromotions,
   type SidebarProjectOrder,
   type SidebarSectionId,
 } from "./sidebarCollapsedAtoms";
 
 export interface ProjectActivityGroup {
   id: SidebarSectionId;
-  threads: readonly ThreadListEntry[];
+  projectId: string;
 }
 
 interface GetProjectModeSectionOrderArgs {
-  effectivePinnedThreadIds: ReadonlySet<string>;
   groups: readonly ProjectActivityGroup[];
   manualOrder: readonly SidebarSectionId[];
   orderMode: SidebarProjectOrder;
+  promotions: SidebarProjectActivityPromotions["promotions"];
   showPinnedSection: boolean;
 }
 
 interface RankedProjectActivityGroup {
   group: ProjectActivityGroup;
-  highestRankedThread: ThreadListEntry | null;
   manualPosition: number;
+  promotionSequence: number | null;
 }
 
-function findHighestRankedThread(
-  threads: readonly ThreadListEntry[],
-  effectivePinnedThreadIds: ReadonlySet<string>,
-): ThreadListEntry | null {
-  let highestRankedThread: ThreadListEntry | null = null;
-  for (const thread of threads) {
-    if (
-      !isSidebarProjectThread(thread) ||
-      effectivePinnedThreadIds.has(thread.id)
-    ) {
-      continue;
-    }
-    if (
-      highestRankedThread === null ||
-      compareStandardThreads(thread, highestRankedThread) < 0
-    ) {
-      highestRankedThread = thread;
-    }
-  }
-  return highestRankedThread;
+function getPromotionSequence(
+  promotions: SidebarProjectActivityPromotions["promotions"],
+  projectId: string,
+): number | null {
+  const sequence = promotions[projectId];
+  return Number.isSafeInteger(sequence) && sequence > 0 ? sequence : null;
 }
 
 export function getProjectModeSectionOrder({
-  effectivePinnedThreadIds,
   groups,
   manualOrder,
   orderMode,
+  promotions,
   showPinnedSection,
 }: GetProjectModeSectionOrderArgs): SidebarSectionId[] {
   if (orderMode === "manual") {
@@ -66,22 +48,23 @@ export function getProjectModeSectionOrder({
   );
   const rankedGroups: RankedProjectActivityGroup[] = groups.map((group) => ({
     group,
-    highestRankedThread: findHighestRankedThread(
-      group.threads,
-      effectivePinnedThreadIds,
-    ),
     manualPosition: manualPositions.get(group.id) ?? Number.POSITIVE_INFINITY,
+    promotionSequence: getPromotionSequence(promotions, group.projectId),
   }));
 
   rankedGroups.sort((left, right) => {
-    if (left.highestRankedThread && right.highestRankedThread) {
-      return compareStandardThreads(
-        left.highestRankedThread,
-        right.highestRankedThread,
-      );
+    if (
+      left.promotionSequence !== null &&
+      right.promotionSequence !== null
+    ) {
+      if (left.promotionSequence !== right.promotionSequence) {
+        return right.promotionSequence - left.promotionSequence;
+      }
+    } else if (left.promotionSequence !== null) {
+      return -1;
+    } else if (right.promotionSequence !== null) {
+      return 1;
     }
-    if (left.highestRankedThread) return -1;
-    if (right.highestRankedThread) return 1;
 
     if (left.manualPosition !== right.manualPosition) {
       return left.manualPosition - right.manualPosition;

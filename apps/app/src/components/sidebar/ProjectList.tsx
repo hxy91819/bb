@@ -114,6 +114,7 @@ import {
   sidebarCollapsedThreadSectionsAtom,
   sidebarCollapsedMachinesAtom,
   sidebarOrganizationModeAtom,
+  sidebarProjectActivityPromotionsAtom,
   sidebarProjectOrderAtom,
   type SidebarChronologicalSort,
   type CollapsibleSidebarSectionId,
@@ -1027,31 +1028,22 @@ export function ProjectModeSections({
     [localSourceTargets],
   );
   const pathExistence = useHostPathExistence(workHostId, localPaths);
-  const { activityThreadsByProject, threadsByProject } = useMemo(() => {
-    const activityGroups = new Map<string, ThreadListEntry[]>();
+  const threadsByProject = useMemo(() => {
     const displayGroups = new Map<string, ThreadListEntry[]>();
-    const append = (
-      groups: Map<string, ThreadListEntry[]>,
-      projectId: string,
-      thread: ThreadListEntry,
-    ) => {
-      const group = groups.get(projectId);
+    const append = (projectId: string, thread: ThreadListEntry) => {
+      const group = displayGroups.get(projectId);
       if (group) group.push(thread);
-      else groups.set(projectId, [thread]);
+      else displayGroups.set(projectId, [thread]);
     };
     const resolveSidebarProjectId = createSidebarProjectIdResolver(
       new Map(threads.map((thread) => [thread.id, thread])),
     );
     for (const thread of threads) {
       const sidebarProjectId = resolveSidebarProjectId(thread);
-      append(activityGroups, sidebarProjectId, thread);
       if (effectivePinnedThreadIds.has(thread.id)) continue;
-      append(displayGroups, sidebarProjectId, thread);
+      append(sidebarProjectId, thread);
     }
-    return {
-      activityThreadsByProject: activityGroups,
-      threadsByProject: displayGroups,
-    };
+    return displayGroups;
   }, [effectivePinnedThreadIds, threads]);
   const projectRows = useMemo<ProjectListRowModel[]>(
     () =>
@@ -1100,32 +1092,35 @@ export function ProjectModeSections({
     isReady,
   });
   const projectOrder = useAtomValue(sidebarProjectOrderAtom);
+  const projectActivityPromotions = useAtomValue(
+    sidebarProjectActivityPromotionsAtom,
+  );
   const activityGroups = useMemo(
     () => [
       ...projectRows.map((row) => ({
         id: buildSidebarEntitySectionId("project", row.project.id),
-        threads: activityThreadsByProject.get(row.project.id) ?? [],
+        projectId: row.project.id,
       })),
       {
         id: "threads" as const,
-        threads: activityThreadsByProject.get(PERSONAL_PROJECT_ID) ?? [],
+        projectId: PERSONAL_PROJECT_ID,
       },
     ],
-    [activityThreadsByProject, projectRows],
+    [projectRows],
   );
   const displayOrder = useMemo(
     () =>
       getProjectModeSectionOrder({
-        effectivePinnedThreadIds,
         groups: activityGroups,
         manualOrder: order,
         orderMode: projectOrder,
+        promotions: projectActivityPromotions.promotions,
         showPinnedSection,
       }),
     [
       activityGroups,
-      effectivePinnedThreadIds,
       order,
+      projectActivityPromotions.promotions,
       projectOrder,
       showPinnedSection,
     ],
