@@ -56,6 +56,7 @@
 - End every agent-created issue and PR body with `> AGENT GENERATED`.
 - Ground debugging in observed state: logs, database queries, server APIs, or CLI output. For dev ports, data directories, entity IDs, and the local QA launcher, see [docs/debugging-and-qa.md](docs/debugging-and-qa.md).
 
+<!-- open-source-fork-maintenance:start -->
 ## 本地聚合分支
 
 当前 bb 项目根目录检出的 `local/aggregate` 是仅供本地打包和体验的集成分支。
@@ -85,6 +86,7 @@
 2. 每项后续功能或修复（包括其测试）开始前，必须创建或复用一个独立的 `feature/*` 或 `fix/*` 分支，并为该分支创建独立 worktree；不得在项目根目录实施。
 3. 独立 worktree 负责开发、测试、提交和发布；聚合分支只通过 `git cherry-pick -x <commit>` 引入已验证提交。
 4. 每个本地 `feature/*`、`fix/*` worktree 默认纳入聚合，并在 [config/local-aggregate-features.json](config/local-aggregate-features.json) 记录其上游回馈 issue。每次引入或移除改动时，更新上表和登记表，并保留 `-x` 的来源行以便追溯。该登记表是每个特性上次打包源提交、聚合提交和上游回馈的权威记录。
-5. 上游同步和本地打包必须调用 [local-aggregate-packaging](.bb/skills/local-aggregate-packaging/SKILL.md)：先检查新增分支、源提交变化、上游变化及每个回馈 issue 的采纳信号，向用户呈现维护建议并请求决定。默认先在独立 worktree rebase 受影响的 feature/fix 分支并验证，再重建聚合；若用户明确不 rebase，可以继续以当前本地基线增量打包，并保留未同步上游的状态。
+5. 上游同步和本地打包必须调用 [open-source-fork-maintenance](.bb/skills/open-source-fork-maintenance/SKILL.md)：先检查新增分支、源提交变化、上游变化及每个回馈 issue 的采纳信号，向用户呈现维护建议并请求决定。默认先在独立 worktree rebase 受影响的 feature/fix 分支并验证，再重建聚合；若用户明确不 rebase，可以继续以当前本地基线增量打包，并保留未同步上游的状态。
 6. 本地体验、构建或打包必须从当前项目根目录启动，验证通过后才可替换本机正在运行的 source 服务。不要把独立功能 worktree 直接当作日常体验版本。
 7. 聚合层出现问题时，优先在相应独立分支修复并以新的提交重新引入；不要在聚合分支写无法回流的产品代码。
+<!-- open-source-fork-maintenance:end -->
