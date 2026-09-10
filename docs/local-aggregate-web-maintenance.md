@@ -46,11 +46,11 @@ git check-ignore -v config/local-aggregate-web.json
    <node-bin-directory>/corepack enable --install-directory <node-bin-directory>
    ```
 
-3. 在目标 worktree 安装与构建：
+3. 在目标 worktree 安装依赖并执行运行时预构建：
 
    ```bash
    <node-22-bin-directory>/pnpm install --frozen-lockfile
-   <node-22-bin-directory>/pnpm build
+   <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
    ```
 
 4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值：
@@ -80,6 +80,11 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 日常升级
 
+本机聚合打包与服务替换以
+[local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)
+为唯一流程入口；它负责低内存预构建、持久检查点、切换门禁与回退边界。
+本节保留服务模型和本机配置的背景，不重复该技能的部署步骤。
+
 1. 检查现场并在 `local/aggregate` 完成聚合。默认不 push；若已明确授权，只推送到个人 fork：
 
    ```bash
@@ -89,28 +94,9 @@ git check-ignore -v config/local-aggregate-web.json
    git push fork local/aggregate:refs/heads/local/aggregate
    ```
 
-2. 用 JSON 所指 Node 22 安装并构建：
+2. 按该技能执行预构建、重启及服务健康验证。它不以全仓库构建替代运行时门禁。
 
-   ```bash
-   <node-22-bin-directory>/pnpm install --frozen-lockfile
-   <node-22-bin-directory>/pnpm build
-   ```
-
-3. 重启服务。systemd 会先停止旧实例，再以相同数据目录启动聚合版：
-
-   ```bash
-   sudo systemctl restart <systemdUnit>
-   sudo systemctl status <systemdUnit> --no-pager
-   ```
-
-4. 验证服务、入口和数据都仍可用：
-
-   ```bash
-   curl --fail http://<bindHost>:<serverPort>/
-   tailscale serve status
-   ```
-
-   在浏览器强制刷新一次，以加载新的带 hash 前端 bundle。对重要项目再打开一个既有会话，确认数据可见。
+3. 对重要项目在浏览器强制刷新一次，以加载新的带 hash 前端 bundle，并打开一个既有会话确认数据可见。
 
 ## 回退
 
