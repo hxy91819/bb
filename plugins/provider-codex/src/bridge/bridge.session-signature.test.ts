@@ -150,6 +150,6 @@ it("explicitly disables fast mode for the next turn in an existing session", asy
   expect(
     requests.find((request) => request.method === "turn/start"),
   ).toMatchObject({
-    params: { serviceTier: null },
+    params: { serviceTier: "default" },
   });
 }, 30_000);
