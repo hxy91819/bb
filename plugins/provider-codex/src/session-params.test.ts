@@ -719,9 +719,9 @@ describe("toCodexReasoningEffort", () => {
 });
 
 describe("toCodexServiceTier", () => {
-  it("distinguishes enabling, clearing, and inheriting the service tier", () => {
+  it("distinguishes enabling, disabling, and inheriting the service tier", () => {
     expect(toCodexServiceTier("fast")).toBe("fast");
-    expect(toCodexServiceTier("default")).toBeNull();
+    expect(toCodexServiceTier("default")).toBe("default");
     expect(toCodexServiceTier(undefined)).toBeUndefined();
   });
 });
