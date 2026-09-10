@@ -85,6 +85,7 @@ import {
   useStopThread,
 } from "@/hooks/mutations/thread-runtime-mutations";
 import { useUnarchiveThread } from "@/hooks/mutations/thread-state-mutations";
+import { useUpdateThreadServiceTier } from "@/hooks/mutations/thread-service-tier-mutation";
 import {
   getLatestPendingInteraction,
   useThreadQueuedMessages,
@@ -448,6 +449,7 @@ export function ThreadDetailPromptArea({
   const cancelThreadPlan = useCancelThreadPlan();
   const clearThreadGoal = useClearThreadGoal();
   const unarchiveThread = useUnarchiveThread();
+  const updateServiceTier = useUpdateThreadServiceTier(thread.id);
   const projectName = useProjectDisplayName(
     thread.projectId === PERSONAL_PROJECT_ID ? undefined : thread.projectId,
   );
@@ -600,8 +602,7 @@ export function ThreadDetailPromptArea({
     selectedProviderComposerActions,
     selectedModel,
     setSelectedModel,
-    serviceTier,
-    setServiceTier,
+    serviceTier: selectedServiceTier,
     reasoningLevel,
     setReasoningLevel,
     permissionMode,
@@ -636,6 +637,18 @@ export function ThreadDetailPromptArea({
   const fallbackIdentity = modelFallback
     ? `${thread.id}:${modelFallback.sourceSeq}`
     : null;
+  const serviceTier =
+    updateServiceTier.isPending &&
+    updateServiceTier.variables?.threadId === thread.id
+      ? updateServiceTier.variables.serviceTier
+      : selectedServiceTier;
+  const { mutate: saveServiceTier } = updateServiceTier;
+  const handleServiceTierChange = useCallback(
+    (value: typeof selectedServiceTier) => {
+      saveServiceTier({ threadId: thread.id, serviceTier: value ?? "default" });
+    },
+    [saveServiceTier, thread.id],
+  );
   const [overriddenFallbackIdentity, setOverriddenFallbackIdentity] = useState<
     string | null
   >(null);
@@ -1141,7 +1154,7 @@ export function ThreadDetailPromptArea({
       },
       serviceTier: {
         value: serviceTier,
-        onChange: setServiceTier,
+        onChange: handleServiceTierChange,
         supported: supportsServiceTier,
         supportByProvider: serviceTierSupportByProvider,
         fastLabel: serviceTierFastLabel,
@@ -1175,7 +1188,7 @@ export function ThreadDetailPromptArea({
       serviceTier,
       serviceTierSupportByProvider,
       setReasoningLevel,
-      setServiceTier,
+      handleServiceTierChange,
       supportsServiceTier,
       serviceTierFastLabel,
     ],

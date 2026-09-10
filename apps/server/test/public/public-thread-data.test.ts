@@ -2338,6 +2338,58 @@ describe("public thread data routes", () => {
     });
   });
 
+  it("persists fast mode changes without sending another message", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedThreadFixture(harness, {
+        thread: { providerId: "codex" },
+      });
+      seedEvent(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        sequence: 1,
+        type: "client/turn/requested",
+        scope: threadScope(),
+        data: {
+          direction: "outbound",
+          requestId: encodeClientTurnRequestIdNumber({ value: 205 }),
+          input: [{ type: "text", text: "Initial request" }],
+          target: { kind: "new-turn" },
+          execution: {
+            model: "gpt-5-mini",
+            reasoningLevel: "high",
+            permissionMode: "full",
+            serviceTier: "fast",
+            source: "client/turn/requested",
+          },
+          initiator: "user",
+          senderThreadId: null,
+          request: { method: "turn/start", params: {} },
+          source: "tell",
+        },
+      });
+
+      for (const serviceTier of ["default", "fast", "default", null]) {
+        const updated = await harness.app.request(
+          `/api/v1/threads/${thread.id}`,
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ serviceTier }),
+          },
+        );
+        expect(updated.status).toBe(200);
+        const defaults = await harness.app.request(
+          `/api/v1/threads/${thread.id}/default-execution-options`,
+        );
+        expect(await readJson(defaults)).toMatchObject({
+          model: "gpt-5-mini",
+          reasoningLevel: "high",
+          serviceTier: serviceTier ?? "fast",
+        });
+      }
+    });
+  });
+
   it("returns null default execution options for stale stored provider capabilities", async () => {
     await withTestHarness(async (harness) => {
       const { environment, thread } = seedThreadFixture(harness, {
