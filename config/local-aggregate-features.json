@@ -90,6 +90,20 @@
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
         }
       ]
+    },
+    {
+      "branch": "fix/local-aggregate-server-startup",
+      "lastPackaged": {
+        "sourceCommit": "5d2d3c1cc86b8e82610a78cf371713510a4144c6",
+        "aggregateCommit": "07443ddfce39d1a4230a36187c3eb8d604c30656"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
     }
   ]
 }
