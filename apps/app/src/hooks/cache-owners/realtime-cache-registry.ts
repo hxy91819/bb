@@ -410,6 +410,10 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
       dirtyThreadStorageQueriesForThread,
     ],
   },
+  "execution-options-changed": {
+    flush: "immediate",
+    dirty: [dirtyThreadDefaultExecutionOptionsQueries],
+  },
   "read-state-changed": {
     flush: "debounced",
     dirty: [markThreadDetailQueryStale, markThreadListQueriesStale],

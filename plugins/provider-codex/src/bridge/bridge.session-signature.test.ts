@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,4 +108,48 @@ it("keeps an auto-reviewed session when only escalation intent changes", async (
   expect(
     harness.messages.filter((message) => message.method === "session/replaced"),
   ).toEqual([]);
+}, 30_000);
+
+it("explicitly disables fast mode for the next turn in an existing session", async () => {
+  const requestLogPath = join(workspaceDir, "requests.ndjson");
+  const scriptPath = join(workspaceDir, "script.json");
+  writeFileSync(scriptPath, JSON.stringify({ requestLogPath }));
+  vi.stubEnv(
+    "BB_CODEX_BRIDGE_APP_SERVER_ARGS",
+    JSON.stringify([fakeAppServerPath, scriptPath]),
+  );
+  harness.sendRequest(1, "thread/start", {
+    threadId: THREAD_ID,
+    cwd: workspaceDir,
+    instructionMode: "append",
+    options: { ...sessionOptions, serviceTier: "fast" },
+  });
+  const started = await harness.waitForResponse(1);
+  expect(started.error).toBeUndefined();
+  const providerThreadId = (started.result as { providerThreadId: string })
+    .providerThreadId;
+
+  harness.sendRequest(2, "turn/start", {
+    threadId: THREAD_ID,
+    providerThreadId,
+    clientRequestId: "creq_fast234567",
+    input: [{ type: "text", text: "say hello", mentions: [] }],
+    options: { ...sessionOptions, serviceTier: "default" },
+  });
+  const turn = await harness.waitForResponse(2);
+  expect(turn.error).toBeUndefined();
+  const requests = readFileSync(requestLogPath, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(
+    requests.find((request) => request.method === "thread/start"),
+  ).toMatchObject({
+    params: { serviceTier: "fast" },
+  });
+  expect(
+    requests.find((request) => request.method === "turn/start"),
+  ).toMatchObject({
+    params: { serviceTier: null },
+  });
 }, 30_000);
