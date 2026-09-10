@@ -2,6 +2,10 @@
 
 ## Coordinating Work
 
+- Use `bb thread update <id> --service-tier default` to disable Fast mode, or
+  `--service-tier fast` to enable it. The setting is saved immediately and applies
+  to subsequent turns. The SDK equivalent is
+  `threads.update({ threadId, serviceTier })`; `null` clears the override.
 - Use one clear owner per task.
 - Spawn independent tasks separately when parallel work is useful.
 - Let threads work after spawning. Do not poll with shell sleeps, repeated log
