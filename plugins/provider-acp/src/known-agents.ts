@@ -211,6 +211,32 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
     },
     nativeRootsResolver: resolveHermesNativeRoots,
   },
+  {
+    id: "acp-dsh",
+    displayName: "DeepSeek Harness",
+    icon: declaredIcon("dsh"),
+    iconTint: { light: "#4D6BFE", dark: "#4D6BFE" },
+    installUrl: "https://github.com/deepseek-ai/deepseek-harness",
+    visibility: "installed",
+    fork: "none",
+    reasoningLevels: ["none", "low", "high", "max"],
+    launch: {
+      displayName: "DeepSeek Harness",
+      command: "dsh",
+      args: ["--profile", "acp"],
+      env: {},
+      nativeReasoning: {
+        configId: "reasoning_effort",
+        supportedLevels: ["none", "low", "high", "max"],
+        levelValues: { none: "off" },
+        defaultLevel: "high",
+      },
+      nativeSkillRoots: {
+        user: [".agents/skills"],
+        project: ancestorRoots([".agents/skills"]),
+      },
+    },
+  },
 ];
 
 export const RESERVED_ACP_PROVIDER_IDS: ReadonlySet<string> = new Set(

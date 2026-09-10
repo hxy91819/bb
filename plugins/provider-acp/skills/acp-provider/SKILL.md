@@ -6,8 +6,9 @@ description: "Configure or troubleshoot ACP agent discovery, custom models, skil
 # ACP providers
 
 Known agents can be discovered automatically when their CLI is installed on the
-host: `opencode`, `omp`, `grok`, and `hermes` appear as `acp-opencode`, `acp-omp`,
-`acp-grok`, and `acp-hermes-agent`. Inspect the target host's catalog with
+host: `opencode`, `omp`, `grok`, `hermes`, and `dsh` appear as `acp-opencode`,
+`acp-omp`, `acp-grok`, `acp-hermes-agent`, and `acp-dsh`. Inspect the target host's
+catalog with
 `bb provider list` and `bb provider models <provider-id>` using its environment
 or machine selector.
 
