@@ -66,7 +66,7 @@
 
 | 独立分支 | 源分支提交 | 聚合层提交 | 目的 |
 | --- | --- | --- | --- |
-| `feature/recent-project-activity-main` | `871e71a2a` | `cfe8bfb2b`、`688531c4b` | 按项目最近会话活动排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
+| `feature/recent-project-activity-main` | `871e71a2a`、`8e97b5048` | `cfe8bfb2b`、`688531c4b`、`6b7e2565c` | 按项目最近用户发起的工作排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
 | `feature/mermaid-elk-layout` | `dfa62783f` | `fc7b99d64` | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
 | `fix/mobile-display-options` | `30f71b335` | `29d8af766` | 让项目标题行的布局设置可在触控移动端使用 |
 
