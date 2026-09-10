@@ -7,12 +7,15 @@
 - 每个登记分支自上次打包以来的提交；
 - 最新稳定版及其相对记录基线的提交、`origin/main` 自记录基线以来的提交（若找不到稳定版标签，明确说明）；
 - 每个上游变更对现有特性的可能影响；
+- 每个特性上游回馈 issue 的状态、反馈后的回复、关联 PR 状态及维护建议；
 - 新发现 `feature/*`、`fix/*` 分支及其 worktree 状态；
 - 已跟踪修改会阻止任何 rebase、cherry-pick、重建或部署。
 
-所有本地 `feature/*`、`fix/*` worktree 默认纳入。不要询问是否纳入；在用户确认打包阶段后，为每个已提交且验证通过的新分支建立登记并打包。存在未提交改动、进行中的 rebase/cherry-pick 或验证未完成时，不触碰该 worktree，标记为未就绪并在最终结果说明。
+所有本地 `feature/*`、`fix/*` worktree 默认纳入。不要询问是否纳入；在用户确认打包阶段后，为每个已提交且验证通过的新分支建立登记并打包。新分支必须先有上游 issue 或现有 issue 的反馈评论，并将链接记录进 `upstreamIssues`。存在未提交改动、进行中的 rebase/cherry-pick 或验证未完成时，不触碰该 worktree，标记为未就绪并在最终结果说明。
 
-有上游变化时，推荐用户选择“逐分支同步并重建”。如果没有上游变化而只有源分支新增提交，推荐“直接增量打包”。必须先获得用户确认；一次确认只覆盖明确列出的分支和阶段。
+逐一阅读每个 `upstreamIssues` 的完整 issue、反馈后回复和关联 PR。issue 已关闭或 PR 已合并只是采纳候选，不等于功能已经等价：比较上游实现与本地分支的用户可见行为、数据和同步语义、边界条件及验证覆盖。然后给出一个明确建议：上游已完整覆盖时建议在验证上游版本后退役本地分支；部分覆盖或替代方案未成熟时建议保留或改造分支；没有采纳信号时建议继续维护。不要自动删除分支、撤销聚合提交或关闭 issue。
+
+有上游变化时，推荐用户选择“逐分支同步并重建”。用户若明确选择不 rebase，可选择“基于当前本地基线继续增量打包”；结果必须保留 `lastIntegratedUpstreamCommit` 不变，并列出未同步上游提交。如果没有上游变化而只有源分支新增提交，推荐“直接增量打包”。必须先获得用户确认；一次确认只覆盖明确列出的分支和阶段。
 
 ## 2. 逐分支同步
 
@@ -34,7 +37,7 @@ git -C <feature-worktree> push --force-with-lease fork <branch>
 
 ## 3. 增量打包
 
-只有满足以下条件才可增量打包：源分支的记录提交仍是当前 HEAD 的祖先、根工作区位于 `local/aggregate`、并且没有已跟踪修改。
+只有满足以下条件才可增量打包：源分支的记录提交仍是当前 HEAD 的祖先、根工作区位于 `local/aggregate`、并且没有已跟踪修改。用户明确不 rebase 时，即使上游已有新提交也可走此路径；聚合仍以现有本地基线为准。
 
 在根工作区逐个 cherry-pick 每个已确认分支的 `lastPackagedSourceCommit..HEAD`，保留 `-x`：
 
@@ -43,6 +46,8 @@ git cherry-pick -x <source-commit>
 ```
 
 一个功能有多个提交时按其拓扑顺序逐个 pick。冲突意味着产品修复应回到源 worktree；中止 cherry-pick，修复并验证独立分支后重试。不要只在聚合层修复后继续。
+
+首次打包的分支没有 `lastPackaged`。在根工作区以 `git merge-base local/aggregate <branch>` 找到共同基线，按拓扑顺序 cherry-pick 该基线到分支 HEAD 的提交；成功后再写入该分支首个 `lastPackaged` 记录。不要把当前 `origin/main` 的新提交误记为首次打包范围。
 
 ## 4. 完整重建
 
@@ -56,7 +61,7 @@ git cherry-pick -x <source-commit>
 
 每次成功增量打包或完整重建都更新。新发现并已打包的本地 `feature/*`、`fix/*` 分支在此时加入登记表：
 
-- `config/local-aggregate-features.json`：每个已纳入分支的 `lastPackagedSourceCommit` 与对应 `lastPackagedAggregateCommit`；
+- `config/local-aggregate-features.json`：每个已纳入分支的 `lastPackaged` 与 `upstreamIssues`；只有完整重建并采用新上游时才更新 `aggregate.lastIntegratedUpstreamCommit`；
 - `AGENTS.md`：人工可读的分支、最后源提交和最后聚合提交；
 - `aggregate.lastIntegratedUpstreamCommit`：本次聚合的上游基线。
 

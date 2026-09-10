@@ -7,11 +7,11 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = resolve(repositoryRoot, "config/local-aggregate-features.json");
 const outputJson = process.argv.includes("--json");
 
-function git(args) {
+function run(command, args) {
   try {
     return {
       ok: true,
-      output: execFileSync("git", args, {
+      output: execFileSync(command, args, {
         cwd: repositoryRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -24,6 +24,14 @@ function git(args) {
       error: error.stderr?.toString().trim() ?? error.message,
     };
   }
+}
+
+function git(args) {
+  return run("git", args);
+}
+
+function gh(args) {
+  return run("gh", args);
 }
 
 function commitExists(commit) {
@@ -72,6 +80,19 @@ function inspectRevision(recordedCommit, currentRef) {
     return { state: "behind-recorded", currentCommit, commits: [] };
   }
   return { state: "rewritten", currentCommit, commits: [] };
+}
+
+function inspectUnpackagedBranch(branch, upstreamRef) {
+  const currentCommit = revision(branch);
+  if (!currentCommit) {
+    return { state: "missing-ref", currentCommit: null, commits: [] };
+  }
+  const base = git(["merge-base", upstreamRef, branch]);
+  return {
+    state: "unpackaged",
+    currentCommit,
+    commits: base.ok ? commitsBetween(base.output, branch) : [],
+  };
 }
 
 function worktreesByBranch() {
@@ -128,12 +149,15 @@ function describeCommit(commit) {
   return result.ok ? result.output : "无法读取提交说明";
 }
 
-function aggregateMappingValid(feature) {
-  if (!commitExists(feature.lastPackagedAggregateCommit)) {
+function aggregateMappingValid(lastPackaged) {
+  if (!lastPackaged) {
+    return null;
+  }
+  if (!commitExists(lastPackaged.aggregateCommit)) {
     return false;
   }
-  const body = git(["show", "-s", "--format=%B", feature.lastPackagedAggregateCommit]);
-  return body.ok && body.output.includes(feature.lastPackagedSourceCommit);
+  const body = git(["show", "-s", "--format=%B", lastPackaged.aggregateCommit]);
+  return body.ok && body.output.includes(lastPackaged.sourceCommit);
 }
 
 function latestStableRelease(aggregate) {
@@ -164,6 +188,109 @@ function latestStableRelease(aggregate) {
   return { tag, commit, state: "diverged", commits: [] };
 }
 
+function summarize(value) {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}…` : normalized;
+}
+
+function relatedPullRequestReferences(issue, comments) {
+  const references = new Map();
+  const pattern = /https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/pull\/(\d+)/gu;
+  for (const text of [issue.body ?? "", ...comments.map((comment) => comment.body ?? "")]) {
+    for (const match of text.matchAll(pattern)) {
+      references.set(`${match[1]}#${match[2]}`, {
+        repository: match[1],
+        number: Number(match[2]),
+      });
+    }
+  }
+  return [...references.values()];
+}
+
+function inspectPullRequest(reference) {
+  const result = gh([
+    "pr",
+    "view",
+    String(reference.number),
+    "--repo",
+    reference.repository,
+    "--json",
+    "number,title,state,mergedAt,closedAt,updatedAt,url",
+  ]);
+  if (!result.ok) {
+    return { ...reference, state: "unavailable" };
+  }
+  try {
+    const pullRequest = JSON.parse(result.output);
+    return {
+      repository: reference.repository,
+      number: pullRequest.number,
+      title: pullRequest.title,
+      state: pullRequest.state,
+      mergedAt: pullRequest.mergedAt,
+      closedAt: pullRequest.closedAt,
+      updatedAt: pullRequest.updatedAt,
+      url: pullRequest.url,
+    };
+  } catch {
+    return { ...reference, state: "unavailable" };
+  }
+}
+
+function inspectUpstreamIssue(reference) {
+  const result = gh([
+    "issue",
+    "view",
+    String(reference.number),
+    "--repo",
+    reference.repository,
+    "--json",
+    "number,title,state,stateReason,closedAt,updatedAt,url,body,comments",
+  ]);
+  if (!result.ok) {
+    return {
+      ...reference,
+      state: "unavailable",
+      newerReplies: [],
+      relatedPullRequests: [],
+    };
+  }
+  try {
+    const issue = JSON.parse(result.output);
+    const comments = issue.comments ?? [];
+    const hasCommentAnchor = reference.feedbackUrl.includes("#issuecomment-");
+    const feedbackIndex = comments.findIndex((comment) => comment.url === reference.feedbackUrl);
+    const replies = hasCommentAnchor && feedbackIndex >= 0 ? comments.slice(feedbackIndex + 1) : comments;
+    const relatedPullRequests = relatedPullRequestReferences(issue, comments).map(inspectPullRequest);
+    return {
+      repository: reference.repository,
+      number: issue.number,
+      feedbackUrl: reference.feedbackUrl,
+      title: issue.title,
+      state: issue.state,
+      stateReason: issue.stateReason,
+      closedAt: issue.closedAt,
+      updatedAt: issue.updatedAt,
+      url: issue.url,
+      feedbackFound: !hasCommentAnchor || feedbackIndex >= 0,
+      newerReplies: replies.map((reply) => ({
+        author: reply.author?.login ?? "unknown",
+        createdAt: reply.createdAt,
+        url: reply.url,
+        summary: summarize(reply.body ?? ""),
+      })),
+      relatedPullRequests,
+    };
+  } catch {
+    return {
+      ...reference,
+      state: "unavailable",
+      newerReplies: [],
+      relatedPullRequests: [],
+    };
+  }
+}
+
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
 function nonEmptyString(value) {
@@ -174,8 +301,8 @@ function assertManifest(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("local aggregate manifest must be an object");
   }
-  if (value.version !== 1) {
-    throw new Error("local aggregate manifest version must be 1");
+  if (value.version !== 2) {
+    throw new Error("local aggregate manifest version must be 2");
   }
   if (
     !value.aggregate ||
@@ -192,12 +319,30 @@ function assertManifest(value) {
   }
   const branches = new Set();
   for (const feature of value.features) {
+    const lastPackagedValid =
+      feature?.lastPackaged === null ||
+      (feature?.lastPackaged &&
+        typeof feature.lastPackaged === "object" &&
+        nonEmptyString(feature.lastPackaged.sourceCommit) &&
+        nonEmptyString(feature.lastPackaged.aggregateCommit));
+    const upstreamIssuesValid =
+      Array.isArray(feature?.upstreamIssues) &&
+      feature.upstreamIssues.length > 0 &&
+      feature.upstreamIssues.every(
+        (issue) =>
+          issue &&
+          typeof issue === "object" &&
+          nonEmptyString(issue.repository) &&
+          Number.isInteger(issue.number) &&
+          issue.number > 0 &&
+          nonEmptyString(issue.feedbackUrl),
+      );
     if (
       !feature ||
       typeof feature !== "object" ||
       !nonEmptyString(feature.branch) ||
-      !nonEmptyString(feature.lastPackagedSourceCommit) ||
-      !nonEmptyString(feature.lastPackagedAggregateCommit) ||
+      !lastPackagedValid ||
+      !upstreamIssuesValid ||
       branches.has(feature.branch)
     ) {
       throw new Error("local aggregate manifest feature is invalid");
@@ -213,9 +358,12 @@ const registeredBranches = new Set(manifest.features.map((feature) => feature.br
 const featureStatuses = manifest.features.map((feature) => ({
   ...feature,
   worktree: worktrees.get(feature.branch) ?? null,
-  source: inspectRevision(feature.lastPackagedSourceCommit, feature.branch),
-  aggregateCommitPresent: commitExists(feature.lastPackagedAggregateCommit),
-  aggregateMappingValid: aggregateMappingValid(feature),
+  source: feature.lastPackaged
+    ? inspectRevision(feature.lastPackaged.sourceCommit, feature.branch)
+    : inspectUnpackagedBranch(feature.branch, manifest.aggregate.upstreamRef),
+  aggregateCommitPresent: feature.lastPackaged ? commitExists(feature.lastPackaged.aggregateCommit) : null,
+  aggregateMappingValid: aggregateMappingValid(feature.lastPackaged),
+  upstreamIssues: feature.upstreamIssues.map(inspectUpstreamIssue),
 }));
 const upstream = inspectRevision(
   manifest.aggregate.lastIntegratedUpstreamCommit,
@@ -252,6 +400,7 @@ if (outputJson) {
 
 const sourceStateLabel = {
   packaged: "与上次打包一致",
+  unpackaged: "尚未打包，默认纳入",
   advanced: "有待打包提交",
   rewritten: "历史已重写，须重建聚合",
   "behind-recorded": "落后于已打包提交",
@@ -270,6 +419,17 @@ const stableReleaseStateLabel = {
   "included-in-baseline": "已包含在上次聚合基线中",
   "released-after-baseline": "有稳定版待评估提交",
   diverged: "与上次聚合基线分叉",
+};
+const issueStateLabel = {
+  OPEN: "开放",
+  CLOSED: "已关闭，需分析关闭原因",
+  unavailable: "无法读取",
+};
+const pullRequestStateLabel = {
+  OPEN: "开放候选",
+  CLOSED: "已关闭候选",
+  MERGED: "已合并候选",
+  unavailable: "无法读取",
 };
 
 console.log("# 本地聚合状态");
@@ -300,10 +460,25 @@ console.log("");
 console.log("## 已登记特性");
 console.log("");
 for (const feature of featureStatuses) {
-  console.log(`- \`${feature.branch}\`：${sourceStateLabel[feature.source.state]}；源 \`${short(feature.lastPackagedSourceCommit)}\` → \`${short(feature.source.currentCommit)}\`；聚合 \`${short(feature.lastPackagedAggregateCommit)}\`${feature.aggregateCommitPresent && feature.aggregateMappingValid ? "" : "（映射无效）"}`);
+  const sourceCommit = feature.lastPackaged?.sourceCommit;
+  const aggregateCommit = feature.lastPackaged?.aggregateCommit;
+  const aggregateStatus = feature.lastPackaged
+    ? `\`${short(aggregateCommit)}\`${feature.aggregateCommitPresent && feature.aggregateMappingValid ? "" : "（映射无效）"}`
+    : "尚未打包";
+  console.log(`- \`${feature.branch}\`：${sourceStateLabel[feature.source.state]}；源 \`${short(sourceCommit)}\` → \`${short(feature.source.currentCommit)}\`；聚合 ${aggregateStatus}`);
   console.log(`  - worktree：${feature.worktree ? `\`${feature.worktree}\`` : "未找到"}`);
   for (const commit of feature.source.commits) {
     console.log(`  - \`${short(commit.commit)}\` ${commit.subject}`);
+  }
+  for (const issue of feature.upstreamIssues) {
+    const feedbackStatus = issue.feedbackFound === false ? "未找到记录的反馈评论" : `${issue.newerReplies.length} 条后续回复`;
+    console.log(`  - 上游 \`${issue.repository}#${issue.number}\`：${issueStateLabel[issue.state] ?? issue.state}；${feedbackStatus}；${issue.title ?? ""}`);
+    for (const reply of issue.newerReplies) {
+      console.log(`    - ${reply.createdAt} @${reply.author}：${reply.summary}`);
+    }
+    for (const pullRequest of issue.relatedPullRequests) {
+      console.log(`    - 关联 PR \`${pullRequest.repository}#${pullRequest.number}\`：${pullRequestStateLabel[pullRequest.state] ?? pullRequest.state}；${pullRequest.title ?? ""}`);
+    }
   }
 }
 console.log("");

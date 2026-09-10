@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "aggregate": {
     "branch": "local/aggregate",
     "upstreamRef": "origin/main",
@@ -9,18 +9,56 @@
   "features": [
     {
       "branch": "feature/recent-project-activity-main",
-      "lastPackagedSourceCommit": "8e97b50488b6566b25afa8fb8415cc0af2d072b8",
-      "lastPackagedAggregateCommit": "6b7e2565caf9c4b9a5376823df7b30c3e31064cc"
+      "lastPackaged": {
+        "sourceCommit": "8e97b50488b6566b25afa8fb8415cc0af2d072b8",
+        "aggregateCommit": "6b7e2565caf9c4b9a5376823df7b30c3e31064cc"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1614,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
+        }
+      ]
     },
     {
       "branch": "feature/mermaid-elk-layout",
-      "lastPackagedSourceCommit": "dfa62783f251e18f327d97cf4ec21b81371a4a3a",
-      "lastPackagedAggregateCommit": "fc7b99d647ca37f196e7293b196c8272f0ad8bf4"
+      "lastPackaged": {
+        "sourceCommit": "dfa62783f251e18f327d97cf4ec21b81371a4a3a",
+        "aggregateCommit": "fc7b99d647ca37f196e7293b196c8272f0ad8bf4"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3382,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
+        }
+      ]
     },
     {
       "branch": "fix/mobile-display-options",
-      "lastPackagedSourceCommit": "30f71b335d8a1df518025bf665022f1cc036f446",
-      "lastPackagedAggregateCommit": "29d8af766b0fccb07bd15770260081f286efe28f"
+      "lastPackaged": {
+        "sourceCommit": "30f71b335d8a1df518025bf665022f1cc036f446",
+        "aggregateCommit": "29d8af766b0fccb07bd15770260081f286efe28f"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3330,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327"
+        }
+      ]
+    },
+    {
+      "branch": "fix/vite-cve-2026-39363",
+      "lastPackaged": null,
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1780,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
+        }
+      ]
     }
   ]
 }

@@ -67,18 +67,24 @@
 
 当前纳入的独立改动如下：
 
-| 独立分支 | 上次打包源提交 | 上次打包聚合提交 | 目的 |
-| --- | --- | --- | --- |
-| `feature/recent-project-activity-main` | `8e97b5048` | `6b7e2565c` | 按项目最近用户发起的工作排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
-| `feature/mermaid-elk-layout` | `dfa62783f` | `fc7b99d64` | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
-| `fix/mobile-display-options` | `30f71b335` | `29d8af766` | 让项目标题行的布局设置可在触控移动端使用 |
+| 独立分支 | 上次打包源提交 | 上次打包聚合提交 | 上游回馈 | 目的 |
+| --- | --- | --- | --- | --- |
+| `feature/recent-project-activity-main` | `8e97b5048` | `6b7e2565c` | [#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177) | 按项目最近用户发起的工作排序；从 `review/recent-project-activity` 的 `3eb295888` 移植并适配最新 upstream |
+| `feature/mermaid-elk-layout` | `dfa62783f` | `fc7b99d64` | [#3382](https://github.com/get-bb/bb/issues/3382) | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
+| `fix/mobile-display-options` | `30f71b335` | `29d8af766` | [#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327) | 让项目标题行的布局设置可在触控移动端使用 |
+
+待打包但默认纳入的改动：
+
+| 独立分支 | 上游回馈 | 状态 |
+| --- | --- | --- |
+| `fix/vite-cve-2026-39363` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 已提交，等待下一次聚合打包 |
 
 维护规则：
 
 1. 项目根目录的工作区必须永久停留在 `local/aggregate`；不得在这里切换到功能或修复分支，也不得在这里编写可回流的产品代码。聚合维护文档、登记表和脚本是唯一例外。
 2. 每项后续功能或修复（包括其测试）开始前，必须创建或复用一个独立的 `feature/*` 或 `fix/*` 分支，并为该分支创建独立 worktree；不得在项目根目录实施。
 3. 独立 worktree 负责开发、测试、提交和发布；聚合分支只通过 `git cherry-pick -x <commit>` 引入已验证提交。
-4. 每个本地 `feature/*`、`fix/*` worktree 默认纳入聚合。每次引入或移除改动时，更新上表及 [config/local-aggregate-features.json](config/local-aggregate-features.json)，并保留 `-x` 的来源行以便追溯。该登记表是每个特性上次打包源提交和聚合提交的权威记录。
-5. 上游同步和本地打包必须调用 [local-aggregate-packaging](.bb/skills/local-aggregate-packaging/SKILL.md)：先检查新增分支、源提交变化和上游变化，向用户呈现影响并请求决定。默认先在独立 worktree rebase 受影响的 feature/fix 分支并验证，再重建聚合；不要把仅 rebase 聚合分支作为日常策略。
+4. 每个本地 `feature/*`、`fix/*` worktree 默认纳入聚合，并在 [config/local-aggregate-features.json](config/local-aggregate-features.json) 记录其上游回馈 issue。每次引入或移除改动时，更新上表和登记表，并保留 `-x` 的来源行以便追溯。该登记表是每个特性上次打包源提交、聚合提交和上游回馈的权威记录。
+5. 上游同步和本地打包必须调用 [local-aggregate-packaging](.bb/skills/local-aggregate-packaging/SKILL.md)：先检查新增分支、源提交变化、上游变化及每个回馈 issue 的采纳信号，向用户呈现维护建议并请求决定。默认先在独立 worktree rebase 受影响的 feature/fix 分支并验证，再重建聚合；若用户明确不 rebase，可以继续以当前本地基线增量打包，并保留未同步上游的状态。
 6. 本地体验、构建或打包必须从当前项目根目录启动，验证通过后才可替换本机正在运行的 source 服务。不要把独立功能 worktree 直接当作日常体验版本。
 7. 聚合层出现问题时，优先在相应独立分支修复并以新的提交重新引入；不要在聚合分支写无法回流的产品代码。
