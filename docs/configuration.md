@@ -386,9 +386,10 @@ simply unavailable.
 Known ACP agents appear when their CLI is installed on the host. bb exposes
 `acp-opencode` when `opencode` is on PATH and can be launched as `opencode acp`,
 `acp-omp` when `omp` (oh-my-pi) is on PATH, `acp-grok` when Grok Build's `grok`
-CLI is on PATH and can be launched as `grok agent stdio`, and
-`acp-hermes-agent` when Hermes' `hermes` CLI is on PATH. `acp-cursor` is always
-listed.
+CLI is on PATH and can be launched as `grok agent stdio`,
+`acp-hermes-agent` when Hermes' `hermes` CLI is on PATH, and `acp-dsh` when
+DeepSeek Harness' `dsh` CLI is on PATH and can be launched as `dsh --profile acp`.
+`acp-cursor` is always listed.
 
 Add your own agent through the ACP providers plugin's `customAgents` setting,
 which holds a JSON array. In the app it is the multi-line editor on the
@@ -404,7 +405,7 @@ Each entry needs `id` (lowercase letters, digits and dashes), `displayName`,
 and `command`. bb derives the provider id `acp-<id>`; it never changes once a
 thread has used it. An id bb always lists (`cursor`) is reserved; an id bb
 lists only where the agent is installed (`opencode`, `omp`, `grok`,
-`hermes-agent`) is not, so an entry with that id REPLACES the shipped agent.
+`hermes-agent`, `dsh`) is not, so an entry with that id REPLACES the shipped agent.
 A replacing entry keeps the shipped agent's `nativeSkillRoots` unless it sets
 its own, and bb still lists the roots that agent's host config names (its
 config directory, compat trees, configured paths, plugins) either way.
@@ -537,6 +538,7 @@ table lists what the shipped plugins declare and resolve.
 | omp          | The active `~/.omp/.../agent` roots and supported Pi, Agents, Claude, Codex, and OpenCode roots          | `.omp/skills` and the supported compatibility roots from the repository root to the current directory        |
 | Grok Build   | `$GROK_HOME/skills` or `~/.grok/skills`, plus `~/.agents/skills`, `~/.claude/skills`, `~/.cursor/skills` | The same four roots from the repository root to the current directory                                        |
 | Hermes Agent | `$HERMES_HOME/skills` or `~/.hermes/skills`                                                              | None                                                                                                         |
+| DeepSeek Harness | `~/.agents/skills`                                                                                   | `.agents/skills` from the repository root to the current directory                                           |
 
 OpenCode also uses `$OPENCODE_CONFIG_DIR/skills` when that variable exists.
 Pi and omp use `$PI_CODING_AGENT_DIR` when that variable exists. omp also uses
