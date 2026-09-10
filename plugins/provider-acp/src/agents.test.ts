@@ -276,6 +276,28 @@ describe("acpProviderDeclaration", () => {
     expect(cursor.experimental_visibility).toBeUndefined();
     expect(cursor.maintenance?.usage).toBe(true);
     expect(cursor.maintenance?.installation).toBe(true);
+
+    const dsh = acpProviderDeclaration(
+      KNOWN_ACP_AGENTS.find((agent) => agent.id === "acp-dsh")!,
+    );
+    expect(dsh.experimental_visibility).toBe("installed");
+    expect(dsh.capabilities.fork).toBe("none");
+    expect(dsh.capabilities.reasoningLevels).toEqual([
+      "none",
+      "low",
+      "high",
+      "max",
+    ]);
+    expect(dsh.experimental_bridgeOptions).toMatchObject({
+      acpLaunchSpec: {
+        command: "dsh",
+        args: ["--profile", "acp"],
+        nativeReasoning: {
+          configId: "reasoning_effort",
+          defaultLevel: "high",
+        },
+      },
+    });
   });
 
   it("gives a configured agent honest copy when it names no sign-in command", () => {

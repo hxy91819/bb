@@ -118,6 +118,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
       "acp-omp",
       "acp-grok",
       "acp-hermes-agent",
+      "acp-dsh",
     ]);
     expect(
       resolveCreateThreadExecutionDefaults(userRegistry, {
