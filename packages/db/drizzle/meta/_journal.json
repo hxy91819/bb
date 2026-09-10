@@ -806,6 +806,13 @@
       "when": 1788898395603,
       "tag": "0114_public_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "6",
+      "when": 1789038482124,
+      "tag": "0115_living_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

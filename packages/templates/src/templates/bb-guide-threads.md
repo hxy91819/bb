@@ -280,11 +280,18 @@ Ownership:
     --clear-section                        Remove section assignment
     --model <model>                        Set the sticky model for the next and later turns
     --reasoning-level <level>              Set the sticky reasoning level (provider-dependent)
+    --service-tier <default|fast>          Save the service tier for the next and later turns
     --visibility <visibility>              Set visible or hidden
 
   Model and reasoning updates stay within the thread's current provider. BB
   validates them against that provider's current model catalog, applies them on
   the next turn, and keeps using them on later turns until changed.
+
+  Service tier updates are saved immediately, including while a turn is running.
+  They apply to subsequent turns. The app's Fast mode toggle uses this same
+  setting; switching threads or reloading preserves it. Use `default` to disable
+  Fast mode. The SDK equivalent is `threads.update({ threadId, serviceTier })`;
+  passing `null` clears the override and restores the inherited tier.
 
   bb thread read [id]                      Mark read
   bb thread unread [id]                    Mark unread
