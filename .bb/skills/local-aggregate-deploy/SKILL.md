@@ -23,6 +23,14 @@ branch selection, cherry-picks, registry updates, and fork publication.
 - Before any restart, persist a checkpoint under the configured data directory.
   Include old and candidate commits, service unit, health endpoints, rollback
   owner, and the observed pre-cutover state. Keep it local.
+- Install `assets/oom-policy-continue.conf` as an additional drop-in for the
+  configured systemd unit and reload systemd before a cutover. Verify
+  `OOMPolicy=continue`; this keeps an OOM-killed child from stopping the whole
+  running service, while the build scope remains the primary memory boundary.
+- Run
+  `node .bb/skills/local-aggregate-deploy/scripts/test-resource-isolation.mjs`.
+  It must demonstrate the finite scope, serialization, detached-child
+  containment, and a bounded 96 MiB OOM probe before a package build starts.
 
 ## Build gate
 
@@ -31,14 +39,16 @@ executable from the local JSON, install frozen dependencies when the checkout
 does not already have the required dependency state, then run:
 
 ```bash
-<nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
+scripts/run-resource-isolated --profile package -- \
+  <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
 ```
 
-The helper limits the runtime build to the SDK, app, server, and host daemon at
-one Turbo task at a time. It also prepares bundled plugins. It supplies a 6 GiB
-Node heap only when the caller has not already chosen one. Do not substitute a
-full-repository build for this gate: broad builds belong to an idle, adequately
-provisioned machine, not a live service cutover.
+The runner gives the serialized package build a separate finite-memory user
+scope. The helper limits the runtime build to the SDK, app, server, and host
+daemon at one Turbo task at a time. It also prepares bundled plugins. It
+supplies a 6 GiB Node heap only when the caller has not already chosen one. Do
+not substitute a full-repository build for this gate: broad builds belong to
+an idle, adequately provisioned machine, not a live service cutover.
 
 If a build is OOM-killed, leave the working service running, record the signal
 in the checkpoint, and reduce competing build load before retrying the same

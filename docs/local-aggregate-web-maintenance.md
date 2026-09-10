@@ -30,7 +30,7 @@ git check-ignore -v config/local-aggregate-web.json
 - systemd 服务从聚合 worktree 启动 `scripts/start-bb.mjs`。
 - 服务使用既有数据目录；升级代码不会迁移或复制该目录。
 - Tailscale Serve 仅反向代理 loopback 的网页端口。保持 Tailnet-only，绝不使用 Funnel。
-- `scripts/bb-dev-app current` 使用隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
+- `scripts/run-resource-isolated -- scripts/bb-dev-app current` 使用受限资源、隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
 - 同一数据目录在任意时刻只能由一个 bb 服务实例使用。
 
 实际服务名、路径、端口和 Tailnet 地址以本机 `config/local-aggregate-web.json` 为准。

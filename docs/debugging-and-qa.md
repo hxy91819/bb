@@ -14,13 +14,20 @@
 Use `scripts/bb-dev-app` when validating changes in the desktop dev app or helping QA from this checkout:
 
 - `pnpm dev:status` runs `scripts/bb-dev-app status` to print the active branch, Node runtime, dev URLs, data dir, and logs.
-- `scripts/bb-dev-app current` restarts the dev server on the current branch.
-- `scripts/bb-dev-app main` fetches `origin/main`, fast-forwards `main`, and launches the dev server from this checkout.
-- `scripts/bb-dev-app branch <branch>` switches to a local branch, or creates it from `origin/<branch>`, then launches the dev server.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app current` restarts the dev server on the current branch.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app main` fetches `origin/main`, fast-forwards `main`, and launches the dev server from this checkout.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app branch <branch>` switches to a local branch, or creates it from `origin/<branch>`, then launches the dev server.
 - `pnpm dev:stop` runs `scripts/bb-dev-app stop` to stop the launcher-managed dev server and desktop.
 - `scripts/bb-dev-app logs dev` and `scripts/bb-dev-app logs desktop` follow logs.
 
-By default the launcher starts only the dev server (web frontend, server, host daemon) and prints the URL without opening a browser. Pass `--open` to open the browser after startup. Pass `--desktop` (e.g. `scripts/bb-dev-app current --desktop`) to also launch the Electron desktop shell — only do this when the user is testing a desktop-only change.
+Run source app launches and other resource-heavy local checks through
+`scripts/run-resource-isolated -- <command>`. The runner places the command in
+a finite-memory user scope and serializes heavy work. A launch attempted from
+a system service cgroup without this boundary fails before changing the dev
+instance. Use `scripts/run-resource-isolated --status` to inspect an active
+scope and `--profile package` only for the serialized local aggregate build.
+
+By default the launcher starts only the dev server (web frontend, server, host daemon) and prints the URL without opening a browser. Pass `--open` to open the browser after startup. Pass `--desktop` (e.g. `scripts/run-resource-isolated -- scripts/bb-dev-app current --desktop`) to also launch the Electron desktop shell — only do this when the user is testing a desktop-only change.
 
 The launcher uses the Node executable from the caller's `PATH`. It does not select another installed Node version. The `.nvmrc` file pins the primary development runtime to Node 22.19.0. Node 24 and Node 26 remain compatibility targets. Desktop development requires Node 22.19 or newer in the Node 22 release line.
 
@@ -29,7 +36,7 @@ QA through that URL needs the browser-local host daemon, restart the dev app
 with the share origin configured after exposing its app port:
 
 ```bash
-BB_APP_URL=https://<handle>--<app-port>.getbb.app scripts/bb-dev-app current
+BB_APP_URL=https://<handle>--<app-port>.getbb.app scripts/run-resource-isolated -- scripts/bb-dev-app current
 ```
 
 The port remains stable for the checkout, so the existing share continues to
@@ -132,7 +139,7 @@ Export `BB_PROVIDER_BRIDGE_RECORD_DIR` before you start the dev app and every
 provider bridge records its runtime and provider wires as NDJSON:
 
 ```bash
-BB_PROVIDER_BRIDGE_RECORD_DIR=$HOME/.bb/provider-recordings/raw scripts/bb-dev-app current
+BB_PROVIDER_BRIDGE_RECORD_DIR=$HOME/.bb/provider-recordings/raw scripts/run-resource-isolated -- scripts/bb-dev-app current
 eval "$(scripts/bb-dev-app env)"
 pnpm bb:dev thread spawn --project proj_personal --provider codex --prompt "Run git status." --json
 ls ~/.bb/provider-recordings/raw/codex/
@@ -158,7 +165,7 @@ Use `pnpm seed:perf` to fill a dev database with a large, realistic fixture:
 many projects, ~1,200 threads, and ~400k event rows with production-like
 payloads. Use it to reproduce performance problems that only appear at scale.
 
-- Start the dev app once first (`scripts/bb-dev-app current`), then stop it and
+- Start the dev app once first (`scripts/run-resource-isolated -- scripts/bb-dev-app current`), then stop it and
   seed. The fixture then attaches to the real local host, so agents still run.
 - By default the command seeds this checkout's dev data dir. Pass
   `--data-dir <path>` for another target. The command refuses to touch `~/.bb`.

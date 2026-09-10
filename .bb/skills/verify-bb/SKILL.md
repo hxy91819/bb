@@ -68,6 +68,7 @@ node --version
 npm install -g dev-browser@next
 dev-browser --version
 dev-browser --help
+scripts/run-resource-isolated --help
 scripts/bb-dev-app status
 ```
 
@@ -101,7 +102,7 @@ test -n "$BB_VERIFY_DATA_DIR" && test -n "$BB_VERIFY_APP_URL" || exit 1
 mkdir "$BB_VERIFY_DATA_DIR" || exit 1
 printf '%s\n' "$BB_VERIFY_RUN" > "$BB_VERIFY_DATA_DIR/verify-bb-owner"
 git rev-parse HEAD > "$BB_VERIFY_RUN/source-commit.txt"
-scripts/bb-dev-app current > "$BB_VERIFY_RUN/launch.log" 2>&1
+scripts/run-resource-isolated -- scripts/bb-dev-app current > "$BB_VERIFY_RUN/launch.log" 2>&1
 ```
 
 All three ports must be unoccupied before `current`, which stops listeners
@@ -113,6 +114,9 @@ Run slow startup through the agent's background process facility, inspect the
 log, and provide progress while it builds. Startup must finish successfully
 before driving. If it fails, inspect the error and clean up that attempt.
 The launcher runs install, native-module checks, and Turbo builds itself.
+The fixed resource scope serializes heavy local work and caps memory outside
+the running BB service. A busy scope or OOM exit is a failed verification, not
+a reason to bypass the runner.
 
 Record the variables above in your run notes so later shell calls retain the
 same targets. Never rely on variables surviving separate agent shell calls.
