@@ -47,3 +47,12 @@ This document records the upstream feedback associated with independently mainta
 - **Validation:** focused app/server/CLI/contract/provider tests and typechecks passed on the source fix. The aggregate-compatible source passed the focused database migration (62), app (103), server (94), and Codex provider (39) tests. In an isolated source web app, disable, navigation without sending, reload and re-enable passed. A real follow-up completed with explicit null in both resume and turn-start provider requests. Secret scans of changed files and the new commit passed.
 - **Screenshot:** browser screenshots and raw bridge recordings remain local because they include machine paths and model-catalog details; the upstream comment includes sanitized wire evidence.
 - **Integration status:** cherry-picked into `local/aggregate` as `ef60100bce75a5a4597aaa9748eb58dd6a5cdf47`; this pass does not create an upstream PR.
+
+## Local aggregate startup sequencing repair
+
+- **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) remains the Fast-mode bug's primary tracker. No separate upstream issue was created for this deployment-only follow-up, and this entry must not be read as a second product report for #3403.
+- **Fork implementation:** [fix/local-aggregate-server-startup](https://github.com/hxy91819/bb/tree/fix/local-aggregate-server-startup) at [`5d2d3c1cc`](https://github.com/hxy91819/bb/commit/5d2d3c1cc86b8e82610a78cf371713510a4144c6), packaged as `07443ddfce39d1a4230a36187c3eb8d604c30656`.
+- **Background:** a retained `starting` thread caused startup recovery to wait for a host-backed provision before the server could become healthy; the daemon that satisfies that provision is started only after server health succeeds.
+- **Change:** bind the HTTP listener first, then run the same recovery sweep in the background with its existing error reporting.
+- **Validation:** the original local data directory reproduced the pre-fix clean exit before listening. With the change, the source server reached `/health` while the retained thread's recovery continued; server startup diagnostics (4 tests) and server typecheck passed.
+- **Integration status:** packaged as a deployment compatibility repair only; no upstream PR was opened.

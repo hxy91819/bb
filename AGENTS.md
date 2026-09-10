@@ -77,6 +77,7 @@
 | `fix/vite-cve-2026-39363` | `abe95aefe` | `acecb1cb2` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 将 `@ladle/react` 与 Vitest 3 的传递 Vite 解析固定到 6.4.3 |
 | `fix/codex-fast-mode-toggle` | `0e41dc3a3` | `ef60100bc` | [#3403](https://github.com/get-bb/bb/issues/3403) | 保存 Fast 开关并显式关闭 Codex fast tier；以聚合基线兼容迁移后打包 |
 | `fix/codex-fast-mode-toggle-aggregate-compat` | `b613a8b73` | `ef60100bc` | [#3403](https://github.com/get-bb/bb/issues/3403) | 将 Fast 修复的迁移编号适配到未引入无关上游提交的本地聚合基线 |
+| `fix/local-aggregate-server-startup` | `5d2d3c1cc` | `07443ddfc` | [#3403](https://github.com/get-bb/bb/issues/3403) | 本地打包部署时先监听再恢复遗留线程，避免 host daemon 尚未启动造成启动死锁 |
 
 维护规则：
 
