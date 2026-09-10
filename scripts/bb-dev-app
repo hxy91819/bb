@@ -392,6 +392,16 @@ follow_logs() {
   esac
 }
 
+require_safe_start_cgroup() {
+  local cgroup
+  cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup 2>/dev/null || true)"
+  case "${cgroup}" in
+    /system.slice/*.service)
+      die "Source app launch shares a system service cgroup. Run scripts/run-resource-isolated -- scripts/bb-dev-app $*"
+      ;;
+  esac
+}
+
 main() {
   require_command git
   require_command node
@@ -417,14 +427,17 @@ main() {
 
   case "${command}" in
     main)
+      require_safe_start_cgroup main "$@"
       switch_to_main
       start_current "${open_after_start}" "${start_desktop_app}"
       ;;
     branch)
+      require_safe_start_cgroup branch "$@"
       switch_to_branch "${positional[0]:-}"
       start_current "${open_after_start}" "${start_desktop_app}"
       ;;
     current)
+      require_safe_start_cgroup current "$@"
       start_current "${open_after_start}" "${start_desktop_app}"
       ;;
     stop)
