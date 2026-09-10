@@ -41,6 +41,7 @@ interface ThreadUpdateCommandOptions {
   section?: string;
   clearSection?: boolean;
   model?: string;
+  serviceTier?: string;
   reasoningLevel?: string;
   visibility?: string;
 }
@@ -130,6 +131,7 @@ interface ThreadUpdateBody {
   sectionId?: string | null;
   parentThreadId?: string | null;
   model?: string;
+  serviceTier?: ServiceTier;
   reasoningLevel?: ReasoningLevel;
   visibility?: ThreadVisibility;
 }
@@ -157,6 +159,10 @@ export function registerActionsCommands(
       "Set the sticky reasoning level applied on the thread's next turn: low, medium, high, xhigh, max (provider-dependent)",
     )
     .option("--visibility <visibility>", "Thread visibility: visible or hidden")
+    .option(
+      "--service-tier <tier>",
+      "Set the service tier for the next and later turns: default or fast",
+    )
     .action(
       action(
         async (id: string | undefined, opts: ThreadUpdateCommandOptions) => {
@@ -169,6 +175,7 @@ export function registerActionsCommands(
             throw new Error("Cannot combine --section with --clear-section.");
           }
           const reasoningLevel = parseReasoningLevel(opts.reasoningLevel);
+          const serviceTier = parseServiceTier(opts.serviceTier);
           const visibility =
             opts.visibility === undefined
               ? undefined
@@ -181,10 +188,11 @@ export function registerActionsCommands(
             !opts.title &&
             !opts.model &&
             !reasoningLevel &&
+            !serviceTier &&
             !visibility
           ) {
             throw new Error(
-              "No changes requested. Provide --title, --parent-thread, --clear-parent-thread, --section, --clear-section, --model, --reasoning-level, or --visibility.",
+              "No changes requested. Provide --title, --parent-thread, --clear-parent-thread, --section, --clear-section, --model, --reasoning-level, --service-tier, or --visibility.",
             );
           }
 
@@ -215,6 +223,9 @@ export function registerActionsCommands(
           }
           if (reasoningLevel) {
             body.reasoningLevel = reasoningLevel;
+          }
+          if (serviceTier) {
+            body.serviceTier = serviceTier;
           }
           if (visibility) {
             body.visibility = visibility;
