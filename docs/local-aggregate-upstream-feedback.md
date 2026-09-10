@@ -1,6 +1,15 @@
 # Local Aggregate Upstream Feedback
 
-This document records the upstream feedback associated with independently maintained changes in `local/aggregate`. It is a contribution log, not the authoritative specification backlog: new specifications belong in the personal fork at `hxy91819/bb`.
+This document records the upstream feedback associated with independently maintained and pending local-aggregate changes. It is a contribution log, not the authoritative specification backlog: new specifications belong in the personal fork at `hxy91819/bb`.
+
+## Vite 6.4.1 CVE remediation
+
+- **Upstream feedback:** [get-bb/bb#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454)
+- **Feature worktree:** `fix/vite-cve-2026-39363` at `abe95aefe02d11250060ad81d9a3f74d3494e556`; it is pending aggregate packaging and has not been published to the fork.
+- **Background:** the lockfile resolves Vite 6.4.1 through `@ladle/react` and Vitest 3, while CVE-2026-39363 affects Vite 6.0.0 through 6.4.1 when its dev-server WebSocket is network-exposed.
+- **Proposal:** add scoped pnpm overrides for `@ladle/react>vite` and `vitest@3>vite` at 6.4.3, retaining the direct Vite 8 dependency and package major versions.
+- **Validation:** dependency-path commands on current upstream confirm the Vite 6.4.1 resolutions; the local lockfile patch resolves those paths to Vite 6.4.3. No network-exposed exploit was run.
+- **Screenshot:** not applicable; this is a dependency-resolution change.
 
 ## Recent project activity ordering
 

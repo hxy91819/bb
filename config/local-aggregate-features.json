@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "aggregate": {
+    "branch": "local/aggregate",
+    "upstreamRef": "origin/main",
+    "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
+    "lastIntegratedUpstreamCommit": "647337060276d54bbbc53b76e7ec80af6c272fbf"
+  },
+  "features": [
+    {
+      "branch": "feature/recent-project-activity-main",
+      "lastPackagedSourceCommit": "8e97b50488b6566b25afa8fb8415cc0af2d072b8",
+      "lastPackagedAggregateCommit": "6b7e2565caf9c4b9a5376823df7b30c3e31064cc"
+    },
+    {
+      "branch": "feature/mermaid-elk-layout",
+      "lastPackagedSourceCommit": "dfa62783f251e18f327d97cf4ec21b81371a4a3a",
+      "lastPackagedAggregateCommit": "fc7b99d647ca37f196e7293b196c8272f0ad8bf4"
+    },
+    {
+      "branch": "fix/mobile-display-options",
+      "lastPackagedSourceCommit": "30f71b335d8a1df518025bf665022f1cc036f446",
+      "lastPackagedAggregateCommit": "29d8af766b0fccb07bd15770260081f286efe28f"
+    }
+  ]
+}
