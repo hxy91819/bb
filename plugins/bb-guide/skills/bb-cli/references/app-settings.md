@@ -14,7 +14,8 @@ every window and client sees the same value.
 ## Sidebar preferences
 
 - The server keeps a keyed, revisioned registry of sidebar layout preferences
-  (`sidebar.organizationMode`, `sidebar.chronologicalSort`, the section
+  (`sidebar.organizationMode`, `sidebar.chronologicalSort`,
+  `sidebar.projectOrder`, the section
   orders, the collapsed-id lists, `sidebar.pluginPanelOrder`,
   `sidebar.visiblePluginPanels`, `sidebar.navigationProvider`,
   `sidebar.threadListProvider`).
