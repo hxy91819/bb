@@ -6125,16 +6125,25 @@ describe("machine providers migration", () => {
 });
 
 describe("environment and thread startup ownership migration", () => {
-  const environmentProvisioningMigrationWhen = (
+  const migrationJournal = (
     JSON.parse(
       readFileSync(
         resolve(__dirname, "../drizzle/meta/_journal.json"),
         "utf-8",
       ),
     ) as { entries: { tag: string; when: number }[] }
-  ).entries.find((entry) => entry.tag === "0116_majestic_swordsman")?.when;
+  ).entries;
+  const environmentProvisioningMigrationWhen = migrationJournal.find(
+    (entry) => entry.tag === "0116_majestic_swordsman",
+  )?.when;
   if (environmentProvisioningMigrationWhen === undefined) {
     throw new Error("Missing 0116_majestic_swordsman journal timestamp");
+  }
+  const serviceTierOverrideMigrationWhen = migrationJournal.find(
+    (entry) => entry.tag === "0117_charming_avengers",
+  )?.when;
+  if (serviceTierOverrideMigrationWhen === undefined) {
+    throw new Error("Missing 0117_charming_avengers journal timestamp");
   }
 
   it.each(["creating", "cancelled"])(
@@ -6266,4 +6275,59 @@ describe("environment and thread startup ownership migration", () => {
       }
     },
   );
+
+  it("adopts a legacy Fast override column before replaying canonical migrations", () => {
+    const db = createMigratedConnection();
+
+    try {
+      rewindEnvironmentProvisioningMigration(db);
+      const legacySchema = readFileSync(
+        resolve(
+          dirname(fileURLToPath(import.meta.url)),
+          "../drizzle/0113_environment_providers.sql",
+        ),
+        "utf8",
+      ).split("--> statement-breakpoint")[0]!;
+      db.$client.exec(legacySchema);
+      db.$client
+        .prepare<[number]>(
+          "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        )
+        .run(environmentProvisioningMigrationWhen);
+      db.$client.exec(
+        "ALTER TABLE threads ADD COLUMN service_tier_override text",
+      );
+      db.$client.exec(`
+        INSERT INTO projects (id, name, created_at, updated_at)
+        VALUES ('proj_legacy_fast', 'legacy Fast', 1, 1);
+        INSERT INTO threads (
+          id,
+          project_id,
+          provider_id,
+          latest_attention_at,
+          service_tier_override,
+          created_at,
+          updated_at
+        )
+        VALUES ('thr_legacy_fast', 'proj_legacy_fast', 'codex', 1, 'fast', 1, 1);
+      `);
+
+      expect(() => migrate(db)).not.toThrow();
+      expect(
+        db.$client
+          .prepare<[], { serviceTierOverride: string | null }>(
+            "SELECT service_tier_override AS serviceTierOverride FROM threads WHERE id = 'thr_legacy_fast'",
+          )
+          .get(),
+      ).toEqual({ serviceTierOverride: "fast" });
+      expect(readAppliedMigrationCreatedAts(db)).toEqual(
+        expect.arrayContaining([
+          environmentProvisioningMigrationWhen,
+          serviceTierOverrideMigrationWhen,
+        ]),
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
 });
