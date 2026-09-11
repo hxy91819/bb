@@ -6000,6 +6000,12 @@ describe("environment and thread startup ownership migration", () => {
   if (environmentProvisioningMigrationWhen === undefined) {
     throw new Error("Missing 0116_majestic_swordsman journal timestamp");
   }
+  const uiPreferencesMigrationWhen = migrationJournal.find(
+    (entry) => entry.tag === "0115_ui_preferences",
+  )?.when;
+  if (uiPreferencesMigrationWhen === undefined) {
+    throw new Error("Missing 0115_ui_preferences journal timestamp");
+  }
   const serviceTierOverrideMigrationWhen = migrationJournal.find(
     (entry) => entry.tag === "0117_charming_avengers",
   )?.when;
@@ -6184,6 +6190,33 @@ describe("environment and thread startup ownership migration", () => {
           environmentProvisioningMigrationWhen,
           serviceTierOverrideMigrationWhen,
         ]),
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("applies UI preferences skipped before a later legacy Fast migration", () => {
+    const db = createMigratedConnection();
+
+    try {
+      db.$client.prepare("DROP TABLE ui_preferences").run();
+      db.$client
+        .prepare<DeleteMigrationParameters>(
+          "DELETE FROM __drizzle_migrations WHERE created_at = ?",
+        )
+        .run(uiPreferencesMigrationWhen);
+
+      expect(() => migrate(db)).not.toThrow();
+      expect(
+        db.$client
+          .prepare<[], TableNameRow>(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ui_preferences'",
+          )
+          .get(),
+      ).toEqual({ name: "ui_preferences" });
+      expect(readAppliedMigrationCreatedAts(db)).toContain(
+        uiPreferencesMigrationWhen,
       );
     } finally {
       closeConnection(db);
