@@ -1,10 +1,6 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { MarkdownPreview } from "./markdown-preview";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
-
-const STAGE_VARS = {
-  "--md-content-w": "680px",
-} as CSSProperties;
 
 export default {
   title: "ui/Markdown Preview",
@@ -12,10 +8,7 @@ export default {
 
 function PreviewStage({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="@container/page mx-auto w-full max-w-[1280px] overflow-hidden rounded-md border border-border bg-background p-4"
-      style={STAGE_VARS}
-    >
+    <div className="@container/page mx-auto w-full max-w-[1280px] overflow-hidden rounded-md border border-border bg-background p-4">
       <div className="mx-auto max-w-[680px]">{children}</div>
     </div>
   );
@@ -151,7 +144,7 @@ flowchart TD
 \`\`\``;
 
 const NARROW_TABLE_MARKDOWN = `Sometimes a table only needs a couple of columns. It sits at the left edge of
-the text column — no breakout, nothing fancy.
+the text column — nothing fancy.
 
 | Key | Action |
 | --- | --- |
@@ -160,9 +153,8 @@ the text column — no breakout, nothing fancy.
 
 The paragraph after the table picks up at the same column width.`;
 
-const BREAKOUT_TABLE_MARKDOWN = `When a table is wider than the text column but still fits inside the
-container's breakout width, it extends past the column on the right —
-spilling into the gutter where the surrounding paragraph isn't reaching.
+const WIDE_TABLE_MARKDOWN = `When a table is wider than the text column, its cells wrap until it fits —
+the table never extends past the column into the gutter.
 
 | Identifier | Origin | Worker host | Status | Last activity | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -170,12 +162,11 @@ spilling into the gutter where the surrounding paragraph isn't reaching.
 | \`thr_9d44ee01\` | codex | localhost:3002 | idle | 2026-05-10 22:11 | flagged for replay |
 | \`thr_a7b21c89\` | claude-code | localhost:38887 | error | 2026-05-09 13:02 | exited 137 (oom) |
 
-The paragraph below returns to the regular column width, so the contrast
-between the breakout table and the text flow is clear.`;
+The paragraph below returns to the regular column width, so the table stays
+aligned with the text flow on both sides.`;
 
-const SCROLLING_TABLE_MARKDOWN = `When the intrinsic table width exceeds even the breakout cap, the wrapper
-caps at \`min(1100px, 100cqw − 2rem)\` and the table itself scrolls
-horizontally inside it.
+const SCROLLING_TABLE_MARKDOWN = `When a table's minimum width still exceeds the column, the wrapper scrolls
+horizontally inside the column instead of letting the table bleed past it.
 
 | Identifier | Origin | Worker host | Status | Branch | Last activity | Runtime | Tokens in | Tokens out | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -244,23 +235,23 @@ export function Overview() {
       </StoryRow>
       <StoryRow
         label="table — fits in column"
-        hint="narrow table sits flush with text, no breakout used"
+        hint="narrow table sits flush with text"
       >
         <PreviewStage>
           <MarkdownPreview content={NARROW_TABLE_MARKDOWN} />
         </PreviewStage>
       </StoryRow>
       <StoryRow
-        label="table — wider than column (breakout)"
-        hint="table extends past the text column into the container's right gutter"
+        label="table — wider than column (wraps)"
+        hint="cells wrap until the table fits inside the text column"
       >
         <PreviewStage>
-          <MarkdownPreview content={BREAKOUT_TABLE_MARKDOWN} />
+          <MarkdownPreview content={WIDE_TABLE_MARKDOWN} />
         </PreviewStage>
       </StoryRow>
       <StoryRow
-        label="table — wider than breakout (scrolls)"
-        hint="table caps at the breakout width and scrolls horizontally inside the wrapper"
+        label="table — wider than column (scrolls)"
+        hint="table stays inside the column and scrolls horizontally in the wrapper"
       >
         <PreviewStage>
           <MarkdownPreview content={SCROLLING_TABLE_MARKDOWN} />
