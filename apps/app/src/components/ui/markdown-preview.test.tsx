@@ -36,6 +36,45 @@ afterEach(() => {
 });
 
 describe("MarkdownPreview", () => {
+  it("shows a table expand control only when the table overflows its column", () => {
+    const narrow = render(
+      <MarkdownPreview content={"| A |\n| - |\n| B |"} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Expand table" }),
+    ).toBeNull();
+    narrow.unmount();
+
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(
+      800,
+    );
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+      400,
+    );
+    render(<MarkdownPreview content={"| A |\n| - |\n| B |"} />);
+    expect(
+      screen.getByRole("button", { name: "Expand table" }),
+    ).not.toBeNull();
+  });
+
+  it("opens and closes the expanded table dialog", () => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(
+      800,
+    );
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+      400,
+    );
+    render(<MarkdownPreview content={"| A |\n| - |\n| B |"} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand table" }));
+    expect(document.querySelectorAll("table")).toHaveLength(2);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close table preview" }),
+    );
+    expect(document.querySelectorAll("table")).toHaveLength(1);
+  });
+
   it("keeps the starting number of an ordered list", () => {
     const { container } = render(
       <MarkdownPreview content={"> 2. What happens if debt is unpaid?"} />,
