@@ -120,6 +120,7 @@ import {
   sidebarCollapsedThreadSectionsAtom,
   sidebarCollapsedMachinesAtom,
   sidebarOrganizationModeAtom,
+  sidebarProjectOrderAtom,
   type SidebarChronologicalSort,
   type CollapsibleSidebarSectionId,
   type SidebarOrganizationMode,
@@ -150,6 +151,7 @@ import {
 } from "./BuiltInSidebarSection";
 import { ReorderableSidebarSectionOrderList } from "./ReorderableSidebarSectionOrderList";
 import { useSidebarModeSectionOrder } from "./useSidebarModeSectionOrder";
+import { getProjectModeSectionOrder } from "./projectActivityOrder";
 import { haveSameOrder } from "@/lib/stored-order";
 import {
   resolveThreadTitleDisplayText,
@@ -739,6 +741,7 @@ interface ProjectModeSectionsProps
   onProjectSelect?: () => void;
   onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
+  personalProject: ProjectResponse | null;
   pinnedSection: BuiltInSidebarSectionOptions;
   projects: readonly ProjectResponse[];
   selectedThreadId?: string;
@@ -759,6 +762,7 @@ function ProjectModeSections({
   onToggleCollapsed,
   onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
+  personalProject,
   pinnedReorderPending,
   pinnedRootNodes,
   pinnedSection,
@@ -876,13 +880,44 @@ function ProjectModeSections({
         ?.filter(isSidebarProjectThread) ?? EMPTY_THREAD_LIST,
     [threadsByProject],
   );
+  const hasThreadsSection =
+    personalThreads.length > 0 || projectRows.length === 0;
   const { onOrderChange, order, persistedOrder } = useSidebarModeSectionOrder({
     mode: "project",
     entitySectionIds: projectSectionIds,
-    hasThreadsSection: personalThreads.length > 0 || projectRows.length === 0,
+    hasThreadsSection,
     showPinnedSection,
   });
-  const reorderDisabled = order.length < 2;
+  const projectOrder = useAtomValue(sidebarProjectOrderAtom);
+  const activityGroups = useMemo(
+    () => [
+      ...projectRows.map((row) => ({
+        id: buildSidebarEntitySectionId("project", row.project.id),
+        recentExplicitWorkSequence: row.project.recentExplicitWorkSequence,
+      })),
+      ...(hasThreadsSection
+        ? [
+            {
+              id: "threads" as const,
+              recentExplicitWorkSequence:
+                personalProject?.recentExplicitWorkSequence ?? null,
+            },
+          ]
+        : []),
+    ],
+    [hasThreadsSection, personalProject, projectRows],
+  );
+  const displayOrder = useMemo(
+    () =>
+      getProjectModeSectionOrder({
+        groups: activityGroups,
+        manualOrder: order,
+        orderMode: projectOrder,
+        showPinnedSection,
+      }),
+    [activityGroups, order, projectOrder, showPinnedSection],
+  );
+  const reorderDisabled = projectOrder === "recent" || displayOrder.length < 2;
   const personalItems = useMemo(
     () =>
       buildProjectThreadGroups(personalThreads, compareThreads, draftThreadIds),
@@ -965,7 +1000,7 @@ function ProjectModeSections({
   };
 
   return (
-    <ReorderableSidebarSectionOrderList order={order} threadDnd={threadDnd}>
+    <ReorderableSidebarSectionOrderList order={displayOrder} threadDnd={threadDnd}>
       {(sectionId, consumeClickSuppression) => {
         const builtInSection = renderBuiltInSidebarSection({
           sectionId,
@@ -1381,6 +1416,13 @@ function ProjectListComponent({
   const sections = sidebarNavigation?.sections ?? EMPTY_SECTION_DEFINITIONS;
   const projects = useMemo(
     () => sidebarNavigation?.projects.map(stripProjectThreads),
+    [sidebarNavigation],
+  );
+  const personalProject = useMemo(
+    () =>
+      sidebarNavigation
+        ? stripProjectThreads(sidebarNavigation.personalProject)
+        : null,
     [sidebarNavigation],
   );
   const threads = useMemo(() => {
@@ -1934,6 +1976,7 @@ function ProjectListComponent({
           renderProject={() => (
             <>
               <ProjectModeSections
+                personalProject={personalProject}
                 projects={projects ?? EMPTY_PROJECTS}
                 threads={threads}
                 draftThreadIds={draftThreadIds}

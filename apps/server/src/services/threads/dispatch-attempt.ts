@@ -39,6 +39,10 @@ import {
 } from "../lib/lifecycle-api-errors.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
 import {
+  isEligibleExplicitWorkAcceptance,
+  recordAcceptedExplicitWork,
+} from "../projects/recent-explicit-work.js";
+import {
   dispatchEnvironmentAndHost,
   dispatchExecutionSources,
   dispatchWaitReasonForPass,
@@ -282,7 +286,25 @@ export function attemptDispatch(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: DispatchAttemptArgs,
 ): Promise<DispatchAttemptOutcome> {
-  return runDispatchAttempt(deps, args, false);
+  return runDispatchAttempt(deps, args, false).then((outcome) => {
+    if (
+      (outcome.kind === "dispatched" || outcome.kind === "queued") &&
+      isEligibleExplicitWorkAcceptance({
+        origin: args.origin,
+        parentThreadId: args.thread.parentThreadId,
+        payloadInputLength: args.payload.input.length,
+        retryOf: args.retryOf !== undefined,
+        sendAt: args.payload.sendAt ?? null,
+        sourceKind: args.source.kind,
+        startedOnBehalfOfInitiator: args.startedOnBehalfOf?.initiator ?? null,
+        threadStatus: args.thread.status,
+        trigger: args.trigger,
+      })
+    ) {
+      recordAcceptedExplicitWork(deps, args.thread.projectId);
+    }
+    return outcome;
+  });
 }
 
 async function runDispatchAttempt(

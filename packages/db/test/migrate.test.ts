@@ -372,6 +372,8 @@ function dropRewindAddedTables(db: DbConnection): void {
   dropNewOnboardingExperimentColumn(db);
   dropSteerActiveThreadOnEnterColumn(db);
   dropOnboardingCompletedAtColumn(db);
+  dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("ALTER TABLE threads DROP COLUMN visibility").run();
   db.$client.exec("DROP INDEX IF EXISTS `threads_origin_plugin_archived_idx`");
   db.$client.prepare("ALTER TABLE threads DROP COLUMN origin_plugin_id").run();
@@ -736,6 +738,8 @@ function dropMarketplaceStatsColumn(db: DbConnection): void {
  * 0108's, so the replay recreates the table before 0110 drops it again.
  */
 function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
+  dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(environments)")
     .all();
@@ -840,6 +844,7 @@ function rewindEnvironmentRowFactsMigration(db: DbConnection): void {
 }
 
 function rewindMachineProvidersMigration(db: DbConnection): void {
+  dropServiceTierOverrideColumn(db);
   db.$client.exec("DROP TABLE IF EXISTS environment_hook_operations");
   if (
     db.$client
@@ -1072,6 +1077,8 @@ function dropPost0023Tables(db: DbConnection): void {
   dropEnvironmentRetireRequestedAtColumn(db);
   dropPluginArtifactGitCheckoutRootColumn(db);
   dropProjectGitRemoteUrlColumn(db);
+  dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.exec(`
     DROP TRIGGER IF EXISTS thread_search_segments_after_text_update;
@@ -1101,6 +1108,30 @@ function dropProjectGitRemoteUrlColumn(db: DbConnection): void {
     .all();
   if (columns.some((column) => column.name === "git_remote_url")) {
     db.$client.prepare("ALTER TABLE projects DROP COLUMN git_remote_url").run();
+  }
+}
+
+function dropProjectRecentExplicitWorkSequenceColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(projects)")
+    .all();
+  if (
+    columns.some((column) => column.name === "recent_explicit_work_sequence")
+  ) {
+    db.$client
+      .prepare("ALTER TABLE projects DROP COLUMN recent_explicit_work_sequence")
+      .run();
+  }
+}
+
+function dropServiceTierOverrideColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (columns.some((column) => column.name === "service_tier_override")) {
+    db.$client
+      .prepare("ALTER TABLE threads DROP COLUMN service_tier_override")
+      .run();
   }
 }
 
@@ -6083,6 +6114,18 @@ describe("machine providers migration", () => {
 });
 
 describe("environment and thread startup ownership migration", () => {
+  const environmentProvisioningMigrationWhen = (
+    JSON.parse(
+      readFileSync(
+        resolve(__dirname, "../drizzle/meta/_journal.json"),
+        "utf-8",
+      ),
+    ) as { entries: { tag: string; when: number }[] }
+  ).entries.find((entry) => entry.tag === "0116_majestic_swordsman")?.when;
+  if (environmentProvisioningMigrationWhen === undefined) {
+    throw new Error("Missing 0116_majestic_swordsman journal timestamp");
+  }
+
   it.each(["creating", "cancelled"])(
     "preserves %s allocation checkpoints and keeps attached environment resources authoritative",
     (phase) => {

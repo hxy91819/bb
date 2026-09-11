@@ -84,6 +84,7 @@ function stubSidebarBootstrapFetch(
             kind: "standard",
             name: project.name,
             gitRemoteUrl: project.gitRemoteUrl,
+            recentExplicitWorkSequence: null,
             createdAt: NOW,
             updatedAt: NOW,
             sources: project.hostIds.map((hostId, index) => ({
@@ -107,6 +108,7 @@ function stubSidebarBootstrapFetch(
             kind: "personal",
             name: "Personal",
             gitRemoteUrl: null,
+            recentExplicitWorkSequence: null,
             createdAt: NOW,
             updatedAt: NOW,
             sources: [],
@@ -332,6 +334,7 @@ describe("ProjectsSettingsSection", () => {
       kind: "standard",
       name: "bb-next",
       gitRemoteUrl: null,
+      recentExplicitWorkSequence: null,
       createdAt: NOW,
       updatedAt: NOW,
       sources: [],
