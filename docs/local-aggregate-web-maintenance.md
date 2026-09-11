@@ -9,7 +9,8 @@
 | --- | --- | --- |
 | `docs/local-aggregate-web-maintenance.md` | 提交 | 通用维护步骤与安全边界 |
 | `config/local-aggregate-web.example.json` | 提交 | 脱敏的配置结构示例 |
-| `config/local-aggregate-web.json` | 忽略 | 本机路径、内部 Tailnet 地址和端口 |
+| `config/local-aggregate-web.json` | 忽略 | 默认目标的本机路径、内部 Tailnet 地址和端口 |
+| `config/local-aggregate-web.<target>.json` | 忽略 | 指定目标的同一配置结构 |
 
 在新机器上复制模板：
 
@@ -25,6 +26,14 @@ git check-ignore -v config/local-aggregate-web.json
 
 不要在示例、文档、提交信息或远端仓库中写入内部 URL、机器路径、凭据、cookie、令牌或数据内容。
 
+## 多目标配置
+
+同一 checkout 可保存多个忽略的目标配置。未指定目标时使用
+`config/local-aggregate-web.json`；明确指定目标时使用
+`config/local-aggregate-web.<target>.json`。每个目标必须有独立的数据目录和
+服务单元；代码从同一个已发布的 `fork/local/aggregate` 获取，但不得共享正在
+使用的数据目录。
+
 ## 服务模型
 
 - systemd 服务从聚合 worktree 启动 `scripts/start-bb.mjs`。
@@ -33,7 +42,7 @@ git check-ignore -v config/local-aggregate-web.json
 - `scripts/run-resource-isolated -- scripts/bb-dev-app current` 使用受限资源、隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
 - 同一数据目录在任意时刻只能由一个 bb 服务实例使用。
 
-实际服务名、路径、端口和 Tailnet 地址以本机 `config/local-aggregate-web.json` 为准。
+实际服务名、路径、端口和 Tailnet 地址以所选本机配置为准。
 
 在另一台机器上交给 Agent 执行切换时，直接使用[远端 Agent 切换提示词](local-aggregate-remote-agent-prompt.md)。
 

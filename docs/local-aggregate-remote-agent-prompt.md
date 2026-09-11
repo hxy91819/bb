@@ -14,7 +14,7 @@ JSON 读取。
 1. 先执行 git status --short、git worktree list 和 git remote -v；保留所有无关改动，绝不 stash、删除或重置它们。
 2. 确认 fork remote 指向 git@github.com:hxy91819/bb.git。若 fork 不存在可添加它；若已存在但 URL 不同，停止并报告，不要覆盖。
 3. 执行 git fetch fork local/aggregate。切换或快进本地 local/aggregate 到 fork/local/aggregate；若不能 fast-forward，停止并报告，不要强推、rebase 或覆盖本地历史。
-4. 读取 config/local-aggregate-web.json。若它不存在，复制 config/local-aggregate-web.example.json 后停止，并报告仍需填写的本机值；不要把实际 JSON 加入 Git，也不要输出其中的内部 URL、路径、凭据或数据。
+4. 未指定目标时读取 config/local-aggregate-web.json；指定目标时读取 config/local-aggregate-web.<target>.json。若它不存在，复制 config/local-aggregate-web.example.json 后停止，并报告仍需填写的本机值；不要把实际 JSON 加入 Git，也不要输出其中的内部 URL、路径、凭据或数据。
 5. 读取 `.bb/skills/local-aggregate-deploy/SKILL.md`，使用 JSON 指定的持久 Node 22 可执行文件执行其串行运行时预构建、检查点、重启与健康门禁。不要以全仓库构建替代该门禁，不要依赖交互 shell 的 nvm，也不要用 /tmp 的 Node 运行 systemd 服务。
 6. 按维护文档和 JSON 更新 systemd drop-in，使服务从 JSON 的 repoPath 启动 scripts/start-bb.mjs，使用同一 dataDir、bindHost、serverPort 与 hostDaemonPort；随后 daemon-reload 并按该技能 restart 服务。
 7. 保持 Tailscale Serve 为 Tailnet-only，代理 JSON 的 serveTarget。不要启用 Funnel；不要把正式网页入口指到 scripts/bb-dev-app 的隔离开发端口或数据目录。
