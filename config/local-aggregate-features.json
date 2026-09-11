@@ -1,0 +1,100 @@
+{
+  "version": 2,
+  "aggregate": {
+    "branch": "local/aggregate",
+    "upstreamRef": "origin/main",
+    "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
+    "lastIntegratedUpstreamCommit": "b04091eca67bb463cce16b9bfa318660bd20ab69"
+  },
+  "features": [
+    {
+      "branch": "feature/mermaid-elk-layout",
+      "lastPackaged": {
+        "sourceCommit": "19b1cdecd345f35ed64d9322385c6e92b49d814c",
+        "aggregateCommit": "70a7da96735f950acdc0e67ff3352206f9855caa"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3382,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
+        }
+      ]
+    },
+    {
+      "branch": "fix/vite-cve-2026-39363",
+      "lastPackaged": {
+        "sourceCommit": "f56c75c9796cb686da4f5adb88262736a11fc0f9",
+        "aggregateCommit": "6bfd3db10e4114d5fb127b3469f6ba09d73cc901"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1780,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
+        }
+      ]
+    },
+    {
+      "branch": "fix/codex-fast-mode-toggle",
+      "lastPackaged": {
+        "sourceCommit": "e75be2e0324ac0e1a558f268cd8403b81ab9fca2",
+        "aggregateCommit": "21a78bbd1fd8596dcff9c8a5231cf3f97fca1baf"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-server-startup",
+      "lastPackaged": {
+        "sourceCommit": "58d86555c05be5c62f752856ce0645623f770060",
+        "aggregateCommit": "f35cde56bdb07e645d4c9c07169ce7ad8a7e7420"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "feature/dsh-acp-provider",
+      "lastPackaged": {
+        "sourceCommit": "2f638b8b2626326c774132e3b3c29196b2521bde",
+        "aggregateCommit": "754f5b91b29f9cf46394263aa42cbf99c577cd3e"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 2,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+        }
+      ]
+    },
+    {
+      "branch": "feature/recent-explicit-work-sequence",
+      "lastPackaged": {
+        "sourceCommit": "752fa6d86cb053fa08e52141dc1590ebe0e41b7d",
+        "aggregateCommit": "3ae6d8f0240e547c229a9abe4e734facb3f578c9"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1614,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ]
+    }
+  ]
+}
