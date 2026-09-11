@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf '%s\n' 'Usage:'
+  printf '%s\n' '  scripts/run-resource-isolated [--profile verification|package] -- <command> [args...]'
+  printf '%s\n' '  scripts/run-resource-isolated --status'
+}
+
+unit_name='bb-local-verification'
+profile='verification'
+
+user_manager_env() {
+  local uid runtime_dir bus
+  uid="$(id -u)"
+  runtime_dir="${XDG_RUNTIME_DIR:-/run/user/${uid}}"
+  bus="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${runtime_dir}/bus}"
+  [[ -S "${runtime_dir}/bus" ]] || {
+    printf 'User systemd bus is unavailable at %s\n' "${runtime_dir}/bus" >&2
+    exit 1
+  }
+  export XDG_RUNTIME_DIR="${runtime_dir}"
+  export DBUS_SESSION_BUS_ADDRESS="${bus}"
+}
+
+current_cgroup() {
+  awk -F: '$1 == "0" {print $3}' /proc/self/cgroup
+}
+
+if [[ "${1:-}" == '--help' || "${1:-}" == '-h' ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "${1:-}" == '--status' ]]; then
+  user_manager_env
+  exec systemctl --user show "${unit_name}.scope" \
+    -p ActiveState \
+    -p ControlGroup \
+    -p CPUQuotaPerSecUSec \
+    -p MemoryHigh \
+    -p MemoryMax \
+    -p MemorySwapMax \
+    -p LoadState \
+    -p OOMPolicy \
+    -p TasksMax
+fi
+
+if [[ "${1:-}" == '--profile' ]]; then
+  if (( $# < 2 )); then
+    usage >&2
+    exit 2
+  fi
+  profile="${2:-}"
+  shift 2
+fi
+
+if [[ "${1:-}" == '--' ]]; then
+  shift
+fi
+
+case "${profile}" in
+  verification)
+    memory_high='3G'
+    memory_max='4G'
+    memory_max_bytes="$((4 * 1024 * 1024 * 1024))"
+    ;;
+  package)
+    memory_high='5G'
+    memory_max='7G'
+    memory_max_bytes="$((7 * 1024 * 1024 * 1024))"
+    ;;
+  *)
+    printf 'Unknown resource profile: %s\n' "${profile}" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+if (( $# == 0 )); then
+  usage >&2
+  exit 2
+fi
+
+cgroup="$(current_cgroup)"
+case "${cgroup}" in
+  */"${unit_name}.scope")
+    active_memory_max="$(<"/sys/fs/cgroup${cgroup}/memory.max")"
+    if [[ "${active_memory_max}" == 'max' || "${active_memory_max}" -lt "${memory_max_bytes}" ]]; then
+      printf 'Active resource scope is smaller than the requested %s profile\n' "${profile}" >&2
+      exit 1
+    fi
+    exec "$@"
+    ;;
+esac
+
+command -v systemd-run >/dev/null 2>&1 || {
+  printf '%s\n' 'systemd-run is required for resource-isolated execution' >&2
+  exit 1
+}
+
+user_manager_env
+
+exec systemd-run --user --scope --collect --quiet \
+  --unit="${unit_name}" \
+  --description='BB local verification resource boundary' \
+  --nice=5 \
+  -p "MemoryHigh=${memory_high}" \
+  -p "MemoryMax=${memory_max}" \
+  -p MemorySwapMax=0 \
+  -p OOMPolicy=continue \
+  -p CPUQuota=300% \
+  -p TasksMax=1024 \
+  env BB_RESOURCE_SCOPE_ACTIVE=1 "$@"
