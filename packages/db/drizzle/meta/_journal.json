@@ -841,6 +841,13 @@
       "when": 1789579295571,
       "tag": "0119_military_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "6",
+      "when": 1789579591628,
+      "tag": "0120_stale_chamber",
+      "breakpoints": true
     }
   ]
 }
