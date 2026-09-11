@@ -1290,6 +1290,40 @@ function restoreStagedServiceTierOverrideColumn(db: DbConnection): void {
   `);
 }
 
+function applySkippedUiPreferencesMigrationBeforeLaterHistory(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0115_ui_preferences",
+  );
+  const appliedCreatedAts = readAppliedMigrationCreatedAts(db);
+  if (appliedCreatedAts.has(migration.createdAt)) {
+    return;
+  }
+
+  const latestAppliedMigrationCreatedAt =
+    readLatestAppliedMigrationCreatedAt(db);
+  if (
+    latestAppliedMigrationCreatedAt === null ||
+    latestAppliedMigrationCreatedAt < migration.createdAt
+  ) {
+    return;
+  }
+
+  if (tableExists(db, "ui_preferences")) {
+    markMigrationApplied(db, migration);
+    return;
+  }
+
+  applyMigrationStatements(db, migration);
+}
+
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
   migrationsFolder: string,
@@ -1565,6 +1599,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    applySkippedUiPreferencesMigrationBeforeLaterHistory(db, migrationsFolder);
     const stagedServiceTierOverride = stageExistingServiceTierOverrideColumn(
       db,
       migrationsFolder,
