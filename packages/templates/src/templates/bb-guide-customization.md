@@ -224,7 +224,7 @@ Server-backed sidebar preferences
 
 Sidebar layout lives on the server in a keyed, revisioned registry so every
 window, device, and the CLI share it: organization mode, chronological sort,
-section orders, collapsed rows and sections, navigation entry order and
+project order (recent activity or drag order), section orders, collapsed rows and sections, navigation entry order and
 visibility, and the navigation and thread-list provider pickers. The sidebar
 waits for them alongside the project list, and an upgrade uploads the old
 browser-stored layout once.
@@ -241,7 +241,8 @@ once on a conflict. `reset` writes the default. The SDK offers
 `sdk.system.uiPreferences.list()`, `.set()`, and `.reset()`.
 
 Every thread-list header's actions menu offers New project, New section,
-Organize, and Sort by. Organize selects By project, By machine, or Custom;
+Organize, Project order, and Sort by. Organize selects By project, By machine, or Custom;
+Project order selects Recent activity or Drag order for By project sections.
 Sort by selects a field, and selecting it again reverses its arrow/direction.
 `sidebar.sortDirection` accepts `ascending`, `descending`, or `default`.
 The default preserves each field's original order (newest first for dates,

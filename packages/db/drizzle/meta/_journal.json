@@ -827,6 +827,13 @@
       "when": 1789103246809,
       "tag": "0117_charming_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "6",
+      "when": 1789103396292,
+      "tag": "0118_mighty_paibok",
+      "breakpoints": true
     }
   ]
 }

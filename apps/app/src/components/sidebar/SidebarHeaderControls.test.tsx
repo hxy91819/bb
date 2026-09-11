@@ -19,6 +19,7 @@ import {
 import {
   sidebarChronologicalSortAtom,
   sidebarOrganizationModeAtom,
+  sidebarProjectOrderAtom,
   sidebarSortDirectionAtom,
 } from "./sidebarCollapsedAtoms";
 
@@ -36,6 +37,7 @@ function setup(label = "Pinned", section = false) {
   const store = createStore();
   store.set(sidebarOrganizationModeAtom, "project");
   store.set(sidebarChronologicalSortAtom, "updated");
+  store.set(sidebarProjectOrderAtom, "recent");
   store.set(sidebarSortDirectionAtom, "default");
   const newThread = vi.fn();
   const newProject = vi.fn();
@@ -104,6 +106,7 @@ describe("sidebar header controls", () => {
       "New project",
       "New section",
       "Organize",
+      "Project order",
       "Sort by",
       "Rename",
       "Remove",
@@ -135,6 +138,27 @@ describe("sidebar header controls", () => {
     await waitFor(() =>
       expect(
         screen.queryByRole("menuitemradio", { name: "By machine" }),
+      ).toBeNull(),
+    );
+  });
+
+  it("exposes an exclusive Project order choice and closes after selection", async () => {
+    const { store } = setup();
+    await openMenu();
+    await openSubmenu("Project order");
+    const dragOrder = await screen.findByRole("menuitemradio", {
+      name: "Drag order",
+    });
+    expect(
+      screen
+        .getByRole("menuitemradio", { name: "Recent activity" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    fireEvent.click(dragOrder);
+    expect(store.get(sidebarProjectOrderAtom)).toBe("manual");
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("menuitemradio", { name: "Drag order" }),
       ).toBeNull(),
     );
   });
