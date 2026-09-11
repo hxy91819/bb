@@ -4,7 +4,9 @@ import {
   isValidElement,
   memo,
   useContext,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type Dispatch,
@@ -43,6 +45,13 @@ import {
   type RehypeKatex,
 } from "./markdown-katex-loader.js";
 import { CopyButton } from "./copy-button.js";
+import { Button } from "@bb/shared-ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "@bb/shared-ui/dialog";
 import { Icon } from "@bb/shared-ui/icon";
 import { RouteAnchor } from "./app-route-anchor.js";
 import {
@@ -892,10 +901,93 @@ function MarkdownBlockquote({ children }: MarkdownBlockquoteProps) {
 }
 
 function MarkdownTable({ children }: MarkdownTableProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+    const update = () => {
+      setOverflows(scroller.scrollWidth > scroller.clientWidth + 1);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    const table = scroller.firstElementChild;
+    if (table) {
+      observer.observe(table);
+    }
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="my-2 overflow-x-auto">
-      <table className="border border-border">{children}</table>
+    <div className="group/table relative my-2">
+      <div ref={scrollerRef} className="overflow-x-auto">
+        <table className="border border-border">{children}</table>
+      </div>
+      {overflows ? (
+        <button
+          type="button"
+          aria-label="Expand table"
+          onClick={() => setExpanded(true)}
+          className="absolute right-1.5 top-1.5 inline-flex size-6 items-center justify-center rounded border border-border bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-focus-within/table:opacity-100 group-hover/table:opacity-100 max-md:pointer-coarse:opacity-100"
+        >
+          <Icon name="Maximize2" className="size-3.5" />
+        </button>
+      ) : null}
+      <MarkdownTableDialog onClose={() => setExpanded(false)} open={expanded}>
+        {children}
+      </MarkdownTableDialog>
     </div>
+  );
+}
+
+function MarkdownTableDialog({
+  children,
+  onClose,
+  open,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  open: boolean;
+}) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="left-0 top-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 items-center justify-center border-none bg-transparent p-0 shadow-none data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 sm:rounded-none [&>button]:hidden"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      >
+        <DialogTitle className="sr-only">Expanded table</DialogTitle>
+        <div className="max-h-[85vh] max-w-[92vw] overflow-auto rounded-md border border-border bg-background p-4">
+          <table className="border border-border">{children}</table>
+        </div>
+        <DialogClose asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-2 size-9 rounded-full bg-black/45 text-white hover:bg-black/60 hover:text-white"
+            aria-label="Close table preview"
+          >
+            <Icon name="X" className="size-5" />
+          </Button>
+        </DialogClose>
+      </DialogContent>
+    </Dialog>
   );
 }
 
