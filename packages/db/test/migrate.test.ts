@@ -373,6 +373,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   dropSteerActiveThreadOnEnterColumn(db);
   dropOnboardingCompletedAtColumn(db);
   dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("ALTER TABLE threads DROP COLUMN visibility").run();
   db.$client.exec("DROP INDEX IF EXISTS `threads_origin_plugin_archived_idx`");
   db.$client.prepare("ALTER TABLE threads DROP COLUMN origin_plugin_id").run();
@@ -639,6 +640,17 @@ function dropOnboardingCompletedAtColumn(db: DbConnection): void {
   }
 }
 
+function dropServiceTierOverrideColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (columns.some((column) => column.name === "service_tier_override")) {
+    db.$client
+      .prepare("ALTER TABLE threads DROP COLUMN service_tier_override")
+      .run();
+  }
+}
+
 function resetMigrationsAfterThreadSearch(db: DbConnection): void {
   restoreLegacyThreadOriginColumn(db);
   dropRewindAddedTables(db);
@@ -730,6 +742,7 @@ function dropMarketplaceStatsColumn(db: DbConnection): void {
  */
 function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
   dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(environments)")
     .all();
@@ -1000,6 +1013,7 @@ function dropPost0023Tables(db: DbConnection): void {
   dropPluginArtifactGitCheckoutRootColumn(db);
   dropProjectGitRemoteUrlColumn(db);
   dropProjectRecentExplicitWorkSequenceColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.exec(`
     DROP TRIGGER IF EXISTS thread_search_segments_after_text_update;
