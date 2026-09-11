@@ -84,7 +84,7 @@
 
 1. 项目根目录的工作区必须永久停留在 `local/aggregate`；不得在这里切换到功能或修复分支，也不得在这里编写可回流的产品代码。聚合维护文档、登记表和脚本是唯一例外。
 2. 每项后续功能或修复（包括其测试）开始前，必须创建或复用一个独立的 `feature/*` 或 `fix/*` 分支，并为该分支创建独立 worktree；不得在项目根目录实施。
-3. 独立 worktree 负责开发、测试、提交和发布；聚合分支只通过 `git cherry-pick -x <commit>` 引入已验证提交。已完成且已验证的 source 分支和 `local/aggregate` 均须以非强制推送发布到个人 fork；不得推送到上游。
+3. 独立 worktree 负责开发、测试、提交、`$autoreview` 收尾和发布；该分支在 `$autoreview` 报告无 accepted/actionable findings 之前不算已验证。聚合分支只通过 `git cherry-pick -x <commit>` 引入已验证提交。已完成且已验证的 source 分支和 `local/aggregate` 均须以非强制推送发布到个人 fork；不得推送到上游。
 4. 每个本地 `feature/*`、`fix/*` worktree 默认纳入聚合，并在 [config/local-aggregate-features.json](config/local-aggregate-features.json) 记录其上游回馈 issue。每次引入或移除改动时，更新上表和登记表，并保留 `-x` 的来源行以便追溯。该登记表是每个特性上次打包源提交、聚合提交和上游回馈的权威记录。
 5. 上游同步和本地打包必须调用 [open-source-fork-maintenance](.bb/skills/open-source-fork-maintenance/SKILL.md)：先检查新增分支、源提交变化、上游变化及每个回馈 issue 的采纳信号，向用户呈现维护建议并请求决定。默认先在独立 worktree rebase 受影响的 feature/fix 分支并验证，再重建聚合；若用户明确不 rebase，可以继续以当前本地基线增量打包，并保留未同步上游的状态。
 6. 本地体验、构建或打包必须从当前项目根目录启动，验证通过后才可替换本机正在运行的 source 服务。以该服务为目标的打包、替换或替换后健康/回退验证必须调用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)；普通构建、测试和单纯聚合不调用它。另一环境可从 fork 的 `local/aggregate` 取得相同聚合源码，但仍须在该环境安装依赖并构建；不要把独立功能 worktree 直接当作日常体验版本。
