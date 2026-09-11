@@ -5,10 +5,12 @@ import {
   createProject,
   ensurePersonalProject,
   findOrCreateProjectByLocalPathSource,
+  getPersonalProject,
   getProject,
   listProjects,
   listPublicProjects,
   markProjectDeleted,
+  promoteProjectRecentExplicitWork,
   reorderProject,
   setProjectGitRemoteUrlIfMissing,
 } from "../../src/data/projects.js";
@@ -380,5 +382,89 @@ describe("projects", () => {
         nextProjectId: null,
       }).kind,
     ).toBe("stale_neighbor");
+  });
+});
+
+describe("recent explicit work sequence", () => {
+  it("leaves new and upgraded projects without a promotion until work is accepted", () => {
+    const { db, host } = setup();
+    ensurePersonalProject(db);
+    const { project } = createProject(db, noopNotifier, {
+      name: "unpromoted-project",
+      source: {
+        type: "local_path",
+        hostId: host.id,
+        path: "/tmp/unpromoted-project",
+      },
+    });
+    db.$client
+      .prepare(
+        `INSERT INTO projects (id, kind, name, sort_key, created_at, updated_at)
+         VALUES ('proj_upgraded', 'standard', 'upgraded', 'W', 1, 1)`,
+      )
+      .run();
+
+    expect(project.recentExplicitWorkSequence).toBeNull();
+    expect(getPersonalProject(db)?.recentExplicitWorkSequence).toBeNull();
+    expect(getProject(db, "proj_upgraded")?.recentExplicitWorkSequence).toBeNull();
+  });
+
+  it("assigns a shared monotonic sequence without rewriting sort keys", () => {
+    const { db, host } = setup();
+    const personal = ensurePersonalProject(db);
+    const { project: first } = createProject(db, noopNotifier, {
+      name: "first-promoted",
+      source: {
+        type: "local_path",
+        hostId: host.id,
+        path: "/tmp/first-promoted",
+      },
+    });
+    const { project: second } = createProject(db, noopNotifier, {
+      name: "second-promoted",
+      source: {
+        type: "local_path",
+        hostId: host.id,
+        path: "/tmp/second-promoted",
+      },
+    });
+    const firstSortKey = first.sortKey;
+    const notifications: Array<{ projectId: string; changes: string[] }> = [];
+    const notifier = {
+      ...noopNotifier,
+      notifyProject(projectId: string, changes: string[]) {
+        notifications.push({ projectId, changes });
+      },
+    };
+
+    expect(promoteProjectRecentExplicitWork(db, notifier, first.id)).toMatchObject({
+      id: first.id,
+      recentExplicitWorkSequence: 1,
+      sortKey: firstSortKey,
+    });
+    expect(promoteProjectRecentExplicitWork(db, notifier, second.id)).toMatchObject({
+      id: second.id,
+      recentExplicitWorkSequence: 2,
+    });
+    expect(
+      promoteProjectRecentExplicitWork(db, notifier, PERSONAL_PROJECT_ID),
+    ).toMatchObject({
+      id: PERSONAL_PROJECT_ID,
+      recentExplicitWorkSequence: 3,
+    });
+    expect(promoteProjectRecentExplicitWork(db, notifier, first.id)).toMatchObject({
+      id: first.id,
+      recentExplicitWorkSequence: 4,
+      sortKey: firstSortKey,
+    });
+    expect(promoteProjectRecentExplicitWork(db, notifier, "proj_missing")).toBeNull();
+    expect(getProject(db, first.id)?.sortKey).toBe(firstSortKey);
+    expect(getProject(db, PERSONAL_PROJECT_ID)?.id).toBe(personal.id);
+    expect(notifications).toEqual([
+      { projectId: first.id, changes: ["project-updated"] },
+      { projectId: second.id, changes: ["project-updated"] },
+      { projectId: PERSONAL_PROJECT_ID, changes: ["project-updated"] },
+      { projectId: first.id, changes: ["project-updated"] },
+    ]);
   });
 });

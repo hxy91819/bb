@@ -19,6 +19,7 @@ import {
 import {
   sidebarOrganizationModeAtom,
   sidebarChronologicalSortAtom,
+  sidebarProjectOrderAtom,
   sidebarSortDirectionAtom,
 } from "./sidebarCollapsedAtoms";
 import { SidebarControlButton, SidebarRowControls } from "./SidebarRowControls";
@@ -46,15 +47,27 @@ const SIDEBAR_SORT_OPTIONS = [
   { label: "Alphabetical", sort: "alpha", direction: "ascending" },
 ] as const;
 
-function SidebarViewItems({ page }: { page: "organize" | "sort" }) {
+const SIDEBAR_PROJECT_ORDER_OPTIONS = [
+  { label: "Recent activity", order: "recent" },
+  { label: "Drag order", order: "manual" },
+] as const;
+
+type SidebarViewPage = "organize" | "projectOrder" | "sort";
+
+function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [organization, setOrganization] = useAtom(sidebarOrganizationModeAtom);
+  const [projectOrder, setProjectOrder] = useAtom(sidebarProjectOrderAtom);
   const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
   const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const selectedSort = sort === "none" ? "updated" : sort;
+  const pageLabel =
+    page === "organize"
+      ? "Organize"
+      : page === "projectOrder"
+        ? "Project order"
+        : "Sort by";
   return (
-    <DropdownMenuGroup
-      aria-label={page === "organize" ? "Organize" : "Sort by"}
-    >
+    <DropdownMenuGroup aria-label={pageLabel}>
       {page === "organize"
         ? SIDEBAR_ORGANIZE_OPTIONS.map((option) => (
             <DropdownMenuItem
@@ -73,48 +86,70 @@ function SidebarViewItems({ page }: { page: "organize" | "sort" }) {
               </span>
             </DropdownMenuItem>
           ))
-        : SIDEBAR_SORT_OPTIONS.map((option) => {
-            const selected = selectedSort === option.sort;
-            const direction =
-              savedDirection === "default" ? option.direction : savedDirection;
-            const nextDirection = selected
-              ? direction === "ascending"
-                ? "descending"
-                : "ascending"
-              : option.direction;
-            return (
+        : page === "projectOrder"
+          ? SIDEBAR_PROJECT_ORDER_OPTIONS.map((option) => (
               <DropdownMenuItem
-                key={option.sort}
+                key={option.order}
                 role="menuitemradio"
-                aria-checked={selected}
-                aria-label={
-                  selected
-                    ? `${option.label}, ${direction}. Sort ${nextDirection}`
-                    : option.label
-                }
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setSort(option.sort);
-                  setDirection(nextDirection);
+                aria-checked={projectOrder === option.order}
+                onSelect={() => {
+                  setProjectOrder(option.order);
                 }}
               >
                 {option.label}
-                {selected && (
-                  <span className="sr-only">
-                    , {direction}. Sort {nextDirection}
-                  </span>
-                )}
                 <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
-                  {selected && (
-                    <Icon
-                      name={direction === "ascending" ? "ArrowUp" : "ArrowDown"}
-                      className="size-4"
-                    />
+                  {projectOrder === option.order && (
+                    <Icon name="Check" className="size-4" />
                   )}
                 </span>
               </DropdownMenuItem>
-            );
-          })}
+            ))
+          : SIDEBAR_SORT_OPTIONS.map((option) => {
+              const selected = selectedSort === option.sort;
+              const direction =
+                savedDirection === "default"
+                  ? option.direction
+                  : savedDirection;
+              const nextDirection = selected
+                ? direction === "ascending"
+                  ? "descending"
+                  : "ascending"
+                : option.direction;
+              return (
+                <DropdownMenuItem
+                  key={option.sort}
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  aria-label={
+                    selected
+                      ? `${option.label}, ${direction}. Sort ${nextDirection}`
+                      : option.label
+                  }
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setSort(option.sort);
+                    setDirection(nextDirection);
+                  }}
+                >
+                  {option.label}
+                  {selected && (
+                    <span className="sr-only">
+                      , {direction}. Sort {nextDirection}
+                    </span>
+                  )}
+                  <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
+                    {selected && (
+                      <Icon
+                        name={
+                          direction === "ascending" ? "ArrowUp" : "ArrowDown"
+                        }
+                        className="size-4"
+                      />
+                    )}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
     </DropdownMenuGroup>
   );
 }
@@ -134,7 +169,7 @@ export function SidebarHeaderControls({
 }) {
   const creation = useContext(HeaderCreationContext);
   const compact = useIsCompactViewport();
-  const [page, setPage] = useState<"organize" | "sort" | null>(null);
+  const [page, setPage] = useState<SidebarViewPage | null>(null);
   const changeOpen = (next: boolean) => {
     if (!next) setPage(null);
     onOpenChange?.(next);
@@ -170,9 +205,11 @@ export function SidebarHeaderControls({
           mobileTitle={
             page === "organize"
               ? "Organize"
-              : page === "sort"
-                ? "Sort by"
-                : `${label} actions`
+              : page === "projectOrder"
+                ? "Project order"
+                : page === "sort"
+                  ? "Sort by"
+                  : `${label} actions`
           }
         >
           {compact && page ? (
@@ -209,6 +246,11 @@ export function SidebarHeaderControls({
               {(
                 [
                   { page: "organize", label: "Organize", icon: "Layers" },
+                  {
+                    page: "projectOrder",
+                    label: "Project order",
+                    icon: "ArrowUpDown",
+                  },
                   { page: "sort", label: "Sort by", icon: "Sort" },
                 ] as const
               ).map((item) =>

@@ -110,6 +110,7 @@ function toProjectResponseProjectFields(
     kind: project.kind,
     name: project.name,
     gitRemoteUrl: project.gitRemoteUrl,
+    recentExplicitWorkSequence: project.recentExplicitWorkSequence,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
