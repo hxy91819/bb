@@ -75,7 +75,7 @@
 | `feature/mermaid-elk-layout` | `19b1cdecd` | `70a7da967` | [#3382](https://github.com/get-bb/bb/issues/3382) | 为 BB Mermaid 渲染注册并默认启用 ELK 布局 |
 | `fix/vite-cve-2026-39363` | `f56c75c97` | `6bfd3db10` | [#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 将 `@ladle/react` 与 Vitest 3 的传递 Vite 解析固定到 6.4.3 |
 | `fix/codex-fast-mode-toggle` | `65ad5dc0b` | `da6557a99` | [#3403](https://github.com/get-bb/bb/issues/3403) | 保存 Fast 开关、作为新线程默认，并显式关闭 Codex fast tier |
-| `fix/local-aggregate-service-tier-migration` | `c6a69e157` | `9f460e6bb` | [#3403](https://github.com/get-bb/bb/issues/3403) | 在本地旧 Fast 列已存在而 canonical 台账未记录时，暂存并恢复该值以完成标准迁移序列 |
+| `fix/local-aggregate-service-tier-migration` | `5bca4e8f1` | `6cb7fd820` | [#3403](https://github.com/get-bb/bb/issues/3403) | 兼容旧 Fast 列及其较晚迁移时间戳，使 canonical Fast 与 UI 设置迁移完整重放 |
 | `fix/local-aggregate-server-startup` | `58d86555c` | `f35cde56b` | [#3403](https://github.com/get-bb/bb/issues/3403) | 本地打包部署时先监听再恢复遗留线程，避免 host daemon 尚未启动造成启动死锁 |
 | `feature/dsh-acp-provider` | `2f638b8b2` | `754f5b91b` | [hxy91819/bb#2](https://github.com/hxy91819/bb/issues/2) | ACP 分组模型、session/resume，以及 DeepSeek Harness |
 | `feature/recent-explicit-work-sequence` | `e403439e5` | `afb7c9755` | [#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177) | 用 server 持有的 promotion sequence 做跨设备 Recent activity 排序 |

@@ -52,8 +52,8 @@
     {
       "branch": "fix/local-aggregate-service-tier-migration",
       "lastPackaged": {
-        "sourceCommit": "c6a69e157b4adcb341599bd507da1f1d0e6547c4",
-        "aggregateCommit": "9f460e6bb2e178226f3fa9b37bd00b0786bc2646"
+        "sourceCommit": "5bca4e8f169aa4cebcf42371d20243c911c50e84",
+        "aggregateCommit": "6cb7fd820b912cf5901e73f9dcbbca0a12a3319c"
       },
       "upstreamIssues": [
         {

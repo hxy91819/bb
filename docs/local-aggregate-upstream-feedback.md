@@ -47,9 +47,9 @@ This document records the upstream feedback associated with independently mainta
 ## Local Fast migration compatibility
 
 - **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) remains the primary Fast-mode bug tracker. This is a local deployment compatibility repair, not a second upstream product report.
-- **Fork implementation:** [fix/local-aggregate-service-tier-migration](https://github.com/hxy91819/bb/tree/fix/local-aggregate-service-tier-migration) at [`c6a69e157`](https://github.com/hxy91819/bb/commit/c6a69e157b4adcb341599bd507da1f1d0e6547c4), packaged as `9f460e6bb`.
-- **Background:** a previously deployed branch-local Fast migration could leave `threads.service_tier_override` in the local schema without the rebuilt aggregate's canonical `0117_charming_avengers` journal row. Replaying the canonical migration then attempted to add the existing column and prevented startup.
-- **Change:** stage the existing value before Drizzle replays the canonical sequence, then restore it after the canonical column exists. This preserves Fast settings while allowing `0116`, `0117`, and `0118` to be recorded normally; no data-directory or migration-ledger edit is required.
+- **Fork implementation:** [fix/local-aggregate-service-tier-migration](https://github.com/hxy91819/bb/tree/fix/local-aggregate-service-tier-migration) at [`5bca4e8f1`](https://github.com/hxy91819/bb/commit/5bca4e8f169aa4cebcf42371d20243c911c50e84), packaged as `6cb7fd820`.
+- **Background:** a previously deployed branch-local Fast migration could leave `threads.service_tier_override` in the local schema without the rebuilt aggregate's canonical `0117_charming_avengers` journal row. Its later timestamp could also make Drizzle skip canonical `0115_ui_preferences`. The rebuilt aggregate then failed startup on duplicate-column and incomplete-history checks.
+- **Change:** stage the existing Fast value before Drizzle replays the canonical sequence, then restore it after the canonical column exists. Apply or adopt the skipped UI-preferences migration before later history. This preserves Fast settings while recording the canonical sequence normally; no data-directory or migration-ledger edit is required.
 - **Integration status:** packaged as a local deployment repair only; no upstream PR was opened.
 
 ## Local aggregate startup sequencing repair
