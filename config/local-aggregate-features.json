@@ -38,8 +38,8 @@
     {
       "branch": "fix/codex-fast-mode-toggle",
       "lastPackaged": {
-        "sourceCommit": "e75be2e0324ac0e1a558f268cd8403b81ab9fca2",
-        "aggregateCommit": "21a78bbd1fd8596dcff9c8a5231cf3f97fca1baf"
+        "sourceCommit": "65ad5dc0b2e8c9793a9cc018ab7c928f65d33571",
+        "aggregateCommit": "da6557a99f95d0417db9821012db58e50dfb1045"
       },
       "upstreamIssues": [
         {
@@ -80,8 +80,8 @@
     {
       "branch": "feature/recent-explicit-work-sequence",
       "lastPackaged": {
-        "sourceCommit": "752fa6d86cb053fa08e52141dc1590ebe0e41b7d",
-        "aggregateCommit": "3ae6d8f0240e547c229a9abe4e734facb3f578c9"
+        "sourceCommit": "e403439e53f30d7763b52e92ee299eee6ab9cd80",
+        "aggregateCommit": "afb7c97553c8242de9ad892270c8f4bec75b302d"
       },
       "upstreamIssues": [
         {

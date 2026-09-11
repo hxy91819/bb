@@ -15,7 +15,7 @@ This document records the upstream feedback associated with independently mainta
 
 - **Upstream feedback:** [get-bb/bb#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177)
 - **Fork specification:** [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1)
-- **Fork implementation:** [feature/recent-explicit-work-sequence](https://github.com/hxy91819/bb/tree/feature/recent-explicit-work-sequence) at [`752fa6d86`](https://github.com/hxy91819/bb/commit/752fa6d86cb053fa08e52141dc1590ebe0e41b7d)
+- **Fork implementation:** [feature/recent-explicit-work-sequence](https://github.com/hxy91819/bb/tree/feature/recent-explicit-work-sequence) at [`e403439e5`](https://github.com/hxy91819/bb/commit/e403439e53f30d7763b52e92ee299eee6ab9cd80)
 - **Background:** the previous browser-local promotion sequence kept Recent activity stable, but connected clients of the same server could disagree. Thread lifecycle churn should still not reshuffle project sections.
 - **Change:** store a server-owned monotonic sequence on the project when BB accepts eligible user-originated work. Recent activity orders pinned content first, then promoted projects by descending sequence, then unpromoted projects by the existing shared drag order.
 - **Replacement:** this supersedes `feature/recent-project-activity-main` (`8e97b5048`). That browser-local implementation is retired from the aggregate.
@@ -38,7 +38,7 @@ This document records the upstream feedback associated with independently mainta
 ## Codex Fast mode persistence
 
 - **Upstream feedback:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) is the primary bug tracker. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) is retained only as historical context: it is a closed, not-planned SDK feature request rather than the bug's tracking issue.
-- **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`e75be2e03`](https://github.com/hxy91819/bb/commit/e75be2e0324ac0e1a558f268cd8403b81ab9fca2), rebased onto current `origin/main` with migration `0117_charming_avengers`.
+- **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`65ad5dc0b`](https://github.com/hxy91819/bb/commit/65ad5dc0b2e8c9793a9cc018ab7c928f65d33571), rebased onto current `origin/main` with migration `0117_charming_avengers`.
 - **Background:** disabling Fast without sending another message only changed the main composer's local selection. Returning to the thread restored the saved fast tier. The Codex adapter also omitted the explicit reset for the default tier.
 - **Change:** persist the toggle through the thread-update API, SDK and CLI; refresh execution-option subscribers; keep the selected Fast value as the new-thread default. `fix/codex-fast-mode-toggle-aggregate-compat` is retired because this rebuild no longer needs a separate migration-number adapter.
 - **Screenshot:** browser screenshots and raw bridge recordings remain local because they include machine paths and model-catalog details; the upstream comment includes sanitized wire evidence.
