@@ -251,7 +251,7 @@ export function Overview() {
       </StoryRow>
       <StoryRow
         label="table — wider than column (scrolls)"
-        hint="table stays inside the column and scrolls horizontally in the wrapper"
+        hint="table stays inside the column and scrolls horizontally; a corner control opens a full-size preview"
       >
         <PreviewStage>
           <MarkdownPreview content={SCROLLING_TABLE_MARKDOWN} />
