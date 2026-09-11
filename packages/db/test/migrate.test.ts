@@ -372,6 +372,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   dropNewOnboardingExperimentColumn(db);
   dropSteerActiveThreadOnEnterColumn(db);
   dropOnboardingCompletedAtColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("ALTER TABLE threads DROP COLUMN visibility").run();
   db.$client.exec("DROP INDEX IF EXISTS `threads_origin_plugin_archived_idx`");
   db.$client.prepare("ALTER TABLE threads DROP COLUMN origin_plugin_id").run();
@@ -627,6 +628,17 @@ function dropSteerActiveThreadOnEnterColumn(db: DbConnection): void {
   }
 }
 
+function dropServiceTierOverrideColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (columns.some((column) => column.name === "service_tier_override")) {
+    db.$client
+      .prepare("ALTER TABLE threads DROP COLUMN service_tier_override")
+      .run();
+  }
+}
+
 function dropOnboardingCompletedAtColumn(db: DbConnection): void {
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(app_settings)")
@@ -728,6 +740,7 @@ function dropMarketplaceStatsColumn(db: DbConnection): void {
  * 0108's, so the replay recreates the table before 0110 drops it again.
  */
 function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
+  dropServiceTierOverrideColumn(db);
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(environments)")
     .all();
@@ -997,6 +1010,7 @@ function dropPost0023Tables(db: DbConnection): void {
   dropEnvironmentRetireRequestedAtColumn(db);
   dropPluginArtifactGitCheckoutRootColumn(db);
   dropProjectGitRemoteUrlColumn(db);
+  dropServiceTierOverrideColumn(db);
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.exec(`
     DROP TRIGGER IF EXISTS thread_search_segments_after_text_update;
