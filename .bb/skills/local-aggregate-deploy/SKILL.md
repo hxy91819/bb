@@ -54,6 +54,19 @@ If a build is OOM-killed, leave the working service running, record the signal
 in the checkpoint, and reduce competing build load before retrying the same
 serialized gate. Do not terminate unrelated user processes to make room.
 
+## Database migration gate
+
+For a candidate that contains database migrations, record its generated
+migration identifiers and whether the migration only adds state or rewrites
+existing state in the checkpoint. Take a recoverable database backup before a
+migration that rewrites or removes persisted data.
+
+Do not run a separate migration command. The replacement service applies its
+packaged migrations during startup before it can pass the health gate. If that
+startup fails, preserve the data directory, migration ledger, and unit journal;
+repair through a new independent worktree. The recovery path must not modify
+the migration ledger or apply ad-hoc database repair SQL.
+
 ## Cutover and proof
 
 Only after the build gate succeeds:
