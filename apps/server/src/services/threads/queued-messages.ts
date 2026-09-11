@@ -83,6 +83,7 @@ import {
   throwThreadEnvironmentUnavailable,
 } from "../lib/lifecycle-api-errors.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
+import { recordAcceptedExplicitWork } from "../projects/recent-explicit-work.js";
 import { requestQueuedMessageDispatch } from "./queued-message-dispatch.js";
 import {
   ThreadContextClearInProgressError,
@@ -233,6 +234,9 @@ export async function createQueuedMessageForThread(
       { behavior: "immediate" },
     );
   deps.hub.notifyThread(thread.id, ["queue-changed"]);
+  if (senderThreadId === null) {
+    recordAcceptedExplicitWork(deps, thread.projectId);
+  }
   if (senderThreadId === null && payload.input.length > 0) {
     deps.telemetry.capture({
       name: "user_message_sent",

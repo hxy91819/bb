@@ -783,4 +783,34 @@ describe("db rebuild schema", () => {
     ).toThrow(/NOT NULL constraint failed: host_daemon_sessions\.data_dir/);
     closeConnection(db);
   });
+
+  it("stores recent explicit work sequence as a nullable integer without a default", () => {
+    const db = createConnection(":memory:");
+    migrate(db);
+
+    const column = db.$client
+      .prepare<
+        [],
+        {
+          name: string;
+          type: string;
+          notNull: number;
+          dflt: string | null;
+        }
+      >(
+        `SELECT name, lower(type) AS type, "notnull" AS "notNull", dflt_value AS dflt
+         FROM pragma_table_info('projects')
+         WHERE name = 'recent_explicit_work_sequence'`,
+      )
+      .get();
+
+    expect(column).toEqual({
+      name: "recent_explicit_work_sequence",
+      type: "integer",
+      notNull: 0,
+      dflt: null,
+    });
+
+    closeConnection(db);
+  });
 });

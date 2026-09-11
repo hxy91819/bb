@@ -8,6 +8,7 @@ export {
   listProjects,
   listPublicProjects,
   markProjectDeleted,
+  promoteProjectRecentExplicitWork,
   reorderProject,
   setProjectGitRemoteUrlIfMissing,
   updateProject,

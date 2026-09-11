@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, max } from "drizzle-orm";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import type {
   DbConnection,
@@ -223,7 +223,7 @@ export function findOrCreateProjectByLocalPathSource(
   return { project, source: toProjectSource(source) };
 }
 
-export function getProject(db: DbConnection, id: string) {
+export function getProject(db: DbQueryConnection, id: string) {
   return db.select().from(projects).where(eq(projects.id, id)).get() ?? null;
 }
 
@@ -413,6 +413,42 @@ export function reorderProject({
     notifier.notifyProject(projectId, ["project-order-changed"]);
   }
   return result;
+}
+
+export function promoteProjectRecentExplicitWork(
+  db: DbConnection,
+  notifier: DbNotifier,
+  projectId: string,
+): ProjectRow | null {
+  const updated = db.transaction(
+    (tx) => {
+      if (!getProject(tx, projectId)) {
+        return null;
+      }
+      const currentMax =
+        tx
+          .select({
+            value: max(projects.recentExplicitWorkSequence),
+          })
+          .from(projects)
+          .get()?.value ?? 0;
+      return (
+        tx
+          .update(projects)
+          .set({
+            recentExplicitWorkSequence: currentMax + 1,
+          })
+          .where(eq(projects.id, projectId))
+          .returning()
+          .get() ?? null
+      );
+    },
+    { behavior: "immediate" },
+  );
+  if (updated) {
+    notifier.notifyProject(projectId, ["project-updated"]);
+  }
+  return updated;
 }
 
 export function deleteProject(

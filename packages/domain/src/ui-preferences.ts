@@ -22,6 +22,9 @@ export type SidebarChronologicalSort = z.infer<
   typeof sidebarChronologicalSortSchema
 >;
 
+const sidebarProjectOrderSchema = z.enum(["recent", "manual"]);
+export type SidebarProjectOrder = z.infer<typeof sidebarProjectOrderSchema>;
+
 const collapsibleSidebarSectionIdSchema = z.enum(["pinned", "threads"]);
 
 const uiPreferenceStringSchema = z
@@ -36,6 +39,7 @@ export const UI_PREFERENCE_KEYS = [
   "sidebar.organizationMode",
   "sidebar.chronologicalSort",
   "sidebar.sortDirection",
+  "sidebar.projectOrder",
   "sidebar.sectionOrder",
   "sidebar.manualSectionOrder",
   "sidebar.machineSectionOrder",
@@ -86,6 +90,11 @@ export const uiPreferenceDefinitions = {
     z.enum(["default", "ascending", "descending"]),
     "default",
     "Sidebar thread sort direction; default preserves the selected field's original direction.",
+  ),
+  "sidebar.projectOrder": defineUiPreference(
+    sidebarProjectOrderSchema,
+    "recent",
+    "How By project sections are ordered: recent accepted work, or the saved drag order.",
   ),
   "sidebar.sectionOrder": defineUiPreference(
     uiPreferenceStringListSchema,

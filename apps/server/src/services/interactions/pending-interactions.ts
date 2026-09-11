@@ -39,6 +39,7 @@ import {
   threadEnvironmentUnavailableDetails,
   throwThreadEnvironmentUnavailable,
 } from "../lib/lifecycle-api-errors.js";
+import { recordAcceptedExplicitWorkForThread } from "../projects/recent-explicit-work.js";
 import {
   appendPendingInteractionTimelineEvent,
   appendPendingInteractionTimelineEventInTransaction,
@@ -685,6 +686,7 @@ export class PendingInteractionLifecycle {
 
     const interaction = toPendingInteraction(updated);
     this.settleInteractionTerminalState(interaction);
+    recordAcceptedExplicitWorkForThread(this.deps, args.threadId);
     return interaction;
   }
 
