@@ -80,6 +80,7 @@
 | `fix/local-aggregate-server-startup` | `09240c134` | `8043c3b0e` | [#3403](https://github.com/get-bb/bb/issues/3403) | 本地打包部署时先监听再恢复遗留线程，避免 host daemon 尚未启动造成启动死锁 |
 | `feature/dsh-acp-provider` | `5e6149955` | `3f32fb27b` | [hxy91819/bb#2](https://github.com/hxy91819/bb/issues/2) | ACP 分组模型、session/resume，以及 DeepSeek Harness |
 | `feature/recent-explicit-work-sequence` | `f89304d17` | `b23a46721` | [#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177) | 用 server 持有的 promotion sequence 做跨设备 Recent activity 排序 |
+| `fix/local-aggregate-recent-sequence-migration` | `6c903e11f` | `42e8985a7` | [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) | 保留旧 Recent 排序值并补跑被旧时间戳跳过的机器管理迁移，修复稳定版切换启动失败 |
 | `fix/markdown-table-breakout` | `8ce604e1d` | `461c11481` | [hxy91819/bb#3](https://github.com/hxy91819/bb/issues/3) | 宽表留在正文栏内滚动，溢出时用全屏展开阅读 |
 
 维护规则：

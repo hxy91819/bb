@@ -36,7 +36,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 服务模型
 
-- systemd 服务从聚合 worktree 启动 `scripts/start-bb.mjs`。
+- systemd 服务从聚合 worktree 启动 `packages/bb-app/src/bin/bb-app.ts`，使用已经通过隔离构建的产物；启动前只检查原生模块。`scripts/start-bb.mjs` 会重新构建，不用于这个常驻服务入口。
 - 服务使用既有数据目录；升级代码不会迁移或复制该目录。
 - Tailscale Serve 仅反向代理 loopback 的网页端口。保持 Tailnet-only，绝不使用 Funnel。
 - `scripts/run-resource-isolated -- scripts/bb-dev-app current` 使用受限资源、隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
@@ -58,8 +58,8 @@ git check-ignore -v config/local-aggregate-web.json
 3. 在目标 worktree 安装依赖并执行运行时预构建：
 
    ```bash
-   <node-22-bin-directory>/pnpm install --frozen-lockfile
-   <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
+   scripts/run-resource-isolated --profile package -- <node-22-bin-directory>/pnpm install --frozen-lockfile
+   scripts/run-resource-isolated --profile package -- <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
    ```
 
 4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值：
@@ -69,15 +69,17 @@ git check-ignore -v config/local-aggregate-web.json
    WorkingDirectory=<repoPath>
    Environment=NODE_ENV=production
    Environment=PATH=<node-bin-directory>:/home/<user>/.local/bin:/usr/local/bin:/usr/bin:/bin
+   ExecStartPre=
+   ExecStartPre=<nodeExecutable> scripts/ensure-native-modules.mjs --check
    ExecStart=
-   ExecStart=<nodeExecutable> --conditions=source --import tsx scripts/start-bb.mjs --data-dir <dataDir> --server-bind-host <bindHost> --server-port <serverPort> --host-daemon-port <hostDaemonPort>
+   ExecStart=<nodeExecutable> --conditions=source --import tsx packages/bb-app/src/bin/bb-app.ts --data-dir <dataDir> --server-bind-host <bindHost> --server-port <serverPort> --host-daemon-port <hostDaemonPort>
    ```
 
 5. 重新加载并启用服务：
 
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable --now <systemdUnit>
+   scripts/run-resource-isolated -- sudo systemctl enable --now <systemdUnit>
    ```
 
 6. 让 Tailscale Serve 指向 JSON 中的 `serveTarget`，并核验其为 Tailnet-only：

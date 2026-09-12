@@ -111,6 +111,20 @@
       ]
     },
     {
+      "branch": "fix/local-aggregate-recent-sequence-migration",
+      "lastPackaged": {
+        "sourceCommit": "6c903e11f9066782430a30a3f5805cc86e02e40e",
+        "aggregateCommit": "42e8985a72d10f093d2da0b88aec2aeaf1c6c678"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ]
+    },
+    {
       "branch": "fix/markdown-table-breakout",
       "lastPackaged": {
         "sourceCommit": "8ce604e1d1aadd4445a6681a34c5f171d2553c92",

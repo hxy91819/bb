@@ -52,6 +52,15 @@ This document records the upstream feedback associated with independently mainta
 - **Change:** stage the existing Fast value before Drizzle replays the canonical sequence, then restore it after the canonical column exists. Apply or adopt the skipped UI-preferences migration before later history. This preserves Fast settings while recording the canonical sequence normally; no data-directory or migration-ledger edit is required.
 - **Integration status:** packaged as a local deployment repair only; no upstream PR was opened.
 
+## Stable aggregate migration recovery
+
+- **Tracking context:** [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) tracks the existing Recent activity feature; this is its local deployment compatibility repair.
+- **Source:** `fix/local-aggregate-recent-sequence-migration` at `6c903e11f`, integrated with a source reference as `42e8985a7`.
+- **Failure:** the previous aggregate had already added the Recent activity column under an older migration identity. Rebuilding on `desktop-v0.43.0` regenerated that migration, and the old ledger timestamp also caused the stable machine-provider migration to be skipped.
+- **Change:** preserve Recent values while the canonical migration runs, recover interrupted staging, and replay the skipped machine-provider migration. The deployment build now uses the existing bundled-plugins Turbo target.
+- **Validation:** 499 database tests and typechecking passed; a database-copy rehearsal preserved project and thread data, passed integrity checks, and was idempotent. Autoreview run `20260912T045729Z-85ecdd` reported no actionable findings.
+- **Publication:** the existing aggregate and feature refs diverged after the previous rebase. Their publication and worktree cleanup remain pending a remote-history decision; no force push was performed during recovery.
+
 ## Local aggregate startup sequencing repair
 
 - **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) remains the Fast-mode bug's primary tracker. No separate upstream issue was created for this deployment-only follow-up, and this entry must not be read as a second product report for #3403.
