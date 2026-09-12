@@ -1135,17 +1135,6 @@ function dropProjectRecentExplicitWorkSequenceColumn(db: DbConnection): void {
   }
 }
 
-function dropServiceTierOverrideColumn(db: DbConnection): void {
-  const columns = db.$client
-    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
-    .all();
-  if (columns.some((column) => column.name === "service_tier_override")) {
-    db.$client
-      .prepare("ALTER TABLE threads DROP COLUMN service_tier_override")
-      .run();
-  }
-}
-
 function dropThreadSectionSchema(db: DbConnection): void {
   db.$client.exec("DROP INDEX IF EXISTS threads_folder_archived_deleted_idx;");
   db.$client.exec("DROP INDEX IF EXISTS threads_section_archived_deleted_idx;");
