@@ -1240,6 +1240,73 @@ function repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
 
 const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
 const STAGED_SERVICE_TIER_OVERRIDE_COLUMN = "_bb_service_tier_override_pending";
+const STAGED_RECENT_WORK_SEQUENCE_COLUMN =
+  "_bb_recent_explicit_work_sequence_pending";
+
+function stageExistingRecentWorkSequenceColumn(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !columnExists(db, "projects", "recent_explicit_work_sequence") ||
+    columnExists(db, "projects", STAGED_RECENT_WORK_SEQUENCE_COLUMN)
+  ) {
+    return;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0119_magenta_dexter_bennett",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) return;
+
+  db.$client.exec(
+    `ALTER TABLE projects RENAME COLUMN recent_explicit_work_sequence TO ${STAGED_RECENT_WORK_SEQUENCE_COLUMN}`,
+  );
+}
+
+function restoreStagedRecentWorkSequenceColumn(db: DbConnection): void {
+  if (!columnExists(db, "projects", STAGED_RECENT_WORK_SEQUENCE_COLUMN)) return;
+  if (!columnExists(db, "projects", "recent_explicit_work_sequence")) {
+    db.$client.exec(
+      `ALTER TABLE projects RENAME COLUMN ${STAGED_RECENT_WORK_SEQUENCE_COLUMN} TO recent_explicit_work_sequence`,
+    );
+    return;
+  }
+
+  db.$client.transaction(() => {
+    db.$client.exec(`
+      UPDATE projects
+      SET recent_explicit_work_sequence = COALESCE(
+        recent_explicit_work_sequence,
+        ${STAGED_RECENT_WORK_SEQUENCE_COLUMN}
+      );
+      ALTER TABLE projects DROP COLUMN ${STAGED_RECENT_WORK_SEQUENCE_COLUMN};
+    `);
+  })();
+}
+
+function applySkippedMachineProvidersMigrationBeforeLaterHistory(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  const latestApplied = readLatestAppliedMigrationCreatedAt(db);
+  if (latestApplied === null) return;
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0117_machine_providers",
+  );
+  if (
+    latestApplied <= migration.createdAt ||
+    readAppliedMigrationCreatedAts(db).has(migration.createdAt)
+  ) {
+    return;
+  }
+
+  applyMigrationStatements(db, migration);
+}
 
 function stageExistingServiceTierOverrideColumn(
   db: DbConnection,
@@ -1600,6 +1667,10 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       migrationsFolder,
     );
     applySkippedUiPreferencesMigrationBeforeLaterHistory(db, migrationsFolder);
+    applySkippedMachineProvidersMigrationBeforeLaterHistory(
+      db,
+      migrationsFolder,
+    );
     const stagedServiceTierOverride = stageExistingServiceTierOverrideColumn(
       db,
       migrationsFolder,
@@ -1609,8 +1680,10 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       migrationsFolder,
     );
     try {
+      stageExistingRecentWorkSequenceColumn(db, migrationsFolder);
       drizzleMigrate(db, { migrationsFolder });
     } finally {
+      restoreStagedRecentWorkSequenceColumn(db);
       if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
       if (stagedServiceTierOverride) restoreStagedServiceTierOverrideColumn(db);
     }
