@@ -411,7 +411,6 @@ const branchLocalThreadSearchRowidFtsMigrationWhen = 1781403656071;
 const rowidThreadSearchMigrationHash =
   "025358fe89253aec7f5bd970dc3eb88d0e834f0d58fb9d75329a5d39899340f4";
 const legacyExperimentsMigrationWhen = 1781299832942;
-const environmentProvisioningMigrationWhen = 1789075667774;
 const machineProvidersMigrationWhen = 1789081162875;
 const eventLargeValuesMigrationWhen = 1781403656069;
 const eventLargeValuesRestoreMigrationWhen = 1781557200000;
@@ -6072,6 +6071,48 @@ describe("environment providers migration", () => {
 });
 
 describe("machine providers migration", () => {
+  it("replays machine ownership skipped by a later branch-local activity migration", () => {
+    const db = createMigratedConnection();
+    try {
+      rewindMachineProvidersMigration(db);
+      db.$client.exec(`
+        INSERT INTO hosts (id, name, type, created_at, updated_at)
+        VALUES ('host_branch_local', 'Existing host', 'persistent', 1, 1);
+        INSERT INTO projects (id, name, recent_explicit_work_sequence, created_at, updated_at)
+        VALUES ('project_branch_local', 'Existing activity', 42, 1, 1);
+      `);
+      db.$client
+        .prepare(
+          "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+        )
+        .run("branch-local-recent-work", 1789103396292);
+
+      migrate(db);
+
+      expect(
+        db.$client
+          .prepare(
+            "SELECT machine_provider_id, phase, resource FROM hosts WHERE id = 'host_branch_local'",
+          )
+          .get(),
+      ).toEqual({
+        machine_provider_id: "manual",
+        phase: "active",
+        resource: JSON.stringify({ version: 1, hostId: "host_branch_local" }),
+      });
+      expect(
+        db.$client
+          .prepare(
+            "SELECT recent_explicit_work_sequence FROM projects WHERE id = 'project_branch_local'",
+          )
+          .get(),
+      ).toEqual({ recent_explicit_work_sequence: 42 });
+      expect(() => migrate(db)).not.toThrow();
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("backfills server access for machines with a legacy access identity", () => {
     const db = createConnection(":memory:");
     try {
