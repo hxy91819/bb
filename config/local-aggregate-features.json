@@ -1,0 +1,133 @@
+{
+  "version": 2,
+  "aggregate": {
+    "branch": "local/aggregate",
+    "upstreamRef": "origin/main",
+    "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
+    "lastIntegratedUpstreamCommit": "607df4039fb3b3941771e3d0a1f44f1a45054708"
+  },
+  "features": [
+    {
+      "branch": "feature/mermaid-elk-layout",
+      "lastPackaged": {
+        "sourceCommit": "5bff15cf80944d2a29dafb5501498baf0ee90b79",
+        "aggregateCommit": "a3c82d3cfc3dc6a6450ccd9f07f3d361ac1536f3"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3382,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
+        }
+      ]
+    },
+    {
+      "branch": "fix/vite-cve-2026-39363",
+      "lastPackaged": {
+        "sourceCommit": "34810268090b1fbb0e8362e330b98e8a58f37ebb",
+        "aggregateCommit": "63d1cc8bd90d1d392cbe42b0c0412ec37422531e"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1780,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
+        }
+      ]
+    },
+    {
+      "branch": "fix/codex-fast-mode-toggle",
+      "lastPackaged": {
+        "sourceCommit": "7c844315bee3fefae2a48fbc071c906332996871",
+        "aggregateCommit": "028ede08cf83f75331372c1dfa77fac892d99898"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-service-tier-migration",
+      "lastPackaged": {
+        "sourceCommit": "b0e8bbd4b41bc08ad965c7735fa71d77f0df35a8",
+        "aggregateCommit": "23b71a5465bc030d96051d6ce692677041ed26b2"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-server-startup",
+      "lastPackaged": {
+        "sourceCommit": "09240c1344666c9286d0d1c05e948f174ce0779c",
+        "aggregateCommit": "8043c3b0e607db3958851de9ea1546788e416649"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "feature/dsh-acp-provider",
+      "lastPackaged": {
+        "sourceCommit": "5e614995538966baa837a454b5949181d145d0c9",
+        "aggregateCommit": "3f32fb27b5626e7da50a96c60cc2d01f3083f325"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 2,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+        }
+      ]
+    },
+    {
+      "branch": "feature/recent-explicit-work-sequence",
+      "lastPackaged": {
+        "sourceCommit": "ea76da09d4110a8f65bbe70a9d974bc457b9a690",
+        "aggregateCommit": "898cb14404f321ceb01d3f7c562a1d059337ceb1"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1614,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ]
+    },
+    {
+      "branch": "fix/markdown-table-breakout",
+      "lastPackaged": {
+        "sourceCommit": "8ce604e1d1aadd4445a6681a34c5f171d2553c92",
+        "aggregateCommit": "461c1148143e6ea64a5d1741cba5eb293ee68111"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1951,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1951"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 3,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/3"
+        }
+      ]
+    }
+  ]
+}
