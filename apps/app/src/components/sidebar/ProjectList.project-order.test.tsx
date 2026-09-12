@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createStore, Provider as JotaiProvider } from "jotai";
+import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeThreadListEntry } from "@bb/test-helpers/domain-fixtures";
@@ -93,12 +94,10 @@ function renderProjectMode({
   newSequence?: number | null;
   personalSequence?: number | null;
 }) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const { queryClient } = createQueryClientTestHarness();
   return render(
-    <QueryClientProvider client={queryClient}>
     <JotaiProvider store={store}>
+    <QueryClientProvider client={queryClient}>
       <ProjectModeSections
         personalProject={makeProjectResponse({
           id: PERSONAL_PROJECT_ID,
@@ -151,8 +150,8 @@ function renderProjectMode({
         onToggleThreadCollapsed={vi.fn()}
         onToggleEnvironmentCollapsed={vi.fn()}
       />
-    </JotaiProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
+    </JotaiProvider>,
   );
 }
 
