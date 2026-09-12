@@ -81,6 +81,7 @@ async function main() {
     turboEntrypoint,
     "run",
     "build",
+    "--filter=@bb/bundled-plugins",
     "--filter=@get-bb/plugin-sdk",
     "--filter=@bb/app",
     "--filter=@bb/server",
@@ -90,17 +91,9 @@ async function main() {
     "--summarize=false",
     "--no-update-notifier",
   ];
-  const bundledPluginsArgs = [
-    "--conditions=source",
-    "--import",
-    "tsx",
-    resolve(repoPath, "apps/server/scripts/copy-builtin-plugins.ts"),
-  ];
-
   if (dryRun) {
     process.stdout.write(
       `${JSON.stringify({
-        bundledPlugins: [process.execPath, ...bundledPluginsArgs],
         nodeOptions: env.NODE_OPTIONS,
         runtimeBuild: [process.execPath, ...runtimeBuildArgs],
       })}\n`,
@@ -113,14 +106,11 @@ async function main() {
     env,
     label: "serialized runtime build",
   });
-  await run(process.execPath, bundledPluginsArgs, {
-    cwd: repoPath,
-    env,
-    label: "bundled plugin preparation",
-  });
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? error.message : String(error)}\n`,
+  );
   process.exitCode = 1;
 });
