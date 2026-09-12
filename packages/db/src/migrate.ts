@@ -1255,7 +1255,7 @@ function stageExistingServiceTierOverrideColumn(
 
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0117_charming_avengers",
+    "0118_equal_toro",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
     return false;
