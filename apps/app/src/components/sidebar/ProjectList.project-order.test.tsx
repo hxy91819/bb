@@ -34,9 +34,18 @@ vi.mock("@/hooks/queries/system-queries", () => ({
   })),
 }));
 
-vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
-  useUpdateThread: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
-}));
+vi.mock("@/hooks/mutations/thread-state-mutations", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/hooks/mutations/thread-state-mutations")>();
+  const stub = () => ({ mutate: vi.fn(), mutateAsync: vi.fn() });
+  return {
+    ...actual,
+    useUpdateThread: stub,
+    usePinThread: stub,
+    useUnpinThread: stub,
+    useUnpinAndMoveThread: stub,
+  };
+});
 
 vi.mock("./ProjectRow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./ProjectRow")>();
