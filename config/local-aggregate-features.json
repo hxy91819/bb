@@ -52,8 +52,8 @@
     {
       "branch": "fix/local-aggregate-service-tier-migration",
       "lastPackaged": {
-        "sourceCommit": "b0e8bbd4b41bc08ad965c7735fa71d77f0df35a8",
-        "aggregateCommit": "23b71a5465bc030d96051d6ce692677041ed26b2"
+        "sourceCommit": "c4bac2d508a0a90a76c78b33926dd10f688cee4c",
+        "aggregateCommit": "5b10d534094b91fb75d0bf69833e6e3ee2ae6408"
       },
       "upstreamIssues": [
         {
@@ -94,8 +94,8 @@
     {
       "branch": "feature/recent-explicit-work-sequence",
       "lastPackaged": {
-        "sourceCommit": "aabc0102f2b835a30a4862684d5bfbc4c566635f",
-        "aggregateCommit": "da78a5f4d445d61e8a31383db39ab4ab203ef00f"
+        "sourceCommit": "f89304d178093d5efb3ebce4f9d48cb15ad87867",
+        "aggregateCommit": "b23a467213dca07e0ae186035af68f15c745ee44"
       },
       "upstreamIssues": [
         {
