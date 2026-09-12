@@ -6135,10 +6135,10 @@ describe("environment and thread startup ownership migration", () => {
     throw new Error("Missing 0115_ui_preferences journal timestamp");
   }
   const serviceTierOverrideMigrationWhen = migrationJournal.find(
-    (entry) => entry.tag === "0117_charming_avengers",
+    (entry) => entry.tag === "0118_equal_toro",
   )?.when;
   if (serviceTierOverrideMigrationWhen === undefined) {
-    throw new Error("Missing 0117_charming_avengers journal timestamp");
+    throw new Error("Missing 0118_equal_toro journal timestamp");
   }
 
   it.each(["creating", "cancelled"])(
