@@ -94,8 +94,8 @@
     {
       "branch": "feature/recent-explicit-work-sequence",
       "lastPackaged": {
-        "sourceCommit": "124adb608980cfd08978e4a30495fffaf98d0462",
-        "aggregateCommit": "50e32ea385eec84ac5dbe17700567b68636ae01e"
+        "sourceCommit": "aabc0102f2b835a30a4862684d5bfbc4c566635f",
+        "aggregateCommit": "da78a5f4d445d61e8a31383db39ab4ab203ef00f"
       },
       "upstreamIssues": [
         {
