@@ -81,6 +81,7 @@ const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
 const usageOnLoad = process.env.FAKE_ACP_USAGE_ON_LOAD === "1";
+const goalExtension = process.env.FAKE_ACP_GOAL_EXTENSION === "1";
 const usageSessionId = process.env.FAKE_ACP_USAGE_SESSION_ID;
 const modelConfig = process.env.FAKE_ACP_MODEL_CONFIG === "1";
 const groupedModelConfig = process.env.FAKE_ACP_GROUPED_MODEL_CONFIG === "1";
@@ -655,6 +656,9 @@ async function handleMessage(message) {
             promptCapabilities: { image: false },
             ...sessionCapabilities(),
           },
+          ...(goalExtension
+            ? { _meta: { goal: { version: 1, controlMethod: "_session/goal", actions: ["clear"] } } }
+            : {}),
           ...(authMethods.length > 0
             ? { authMethods: authMethods.map((id) => ({ id })) }
             : {}),
@@ -714,6 +718,18 @@ async function handleMessage(message) {
       }
       if (resumeSession) {
         captureMcpServers(message);
+        if (goalExtension) {
+          notifyUpdate({
+            sessionUpdate: "session_info_update",
+            _meta: { goal: {
+              objective: "Finish ACP goal integration",
+              status: "active",
+              tokenBudget: null,
+              tokensUsed: 123,
+              timeUsedSeconds: 5,
+            } },
+          }, message.params?.sessionId);
+        }
         if (usageOnLoad) {
           notifyUpdate(
             { sessionUpdate: "usage_update", used: 24_000, size: 128_000 },
@@ -737,6 +753,14 @@ async function handleMessage(message) {
           error: { code: -32601, message: "session/resume is not supported" },
         });
       }
+      return;
+    case "_session/goal":
+      if (!goalExtension || message.params?.action !== "clear") {
+        send({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Goal extension unavailable" } });
+        return;
+      }
+      notifyUpdate({ sessionUpdate: "session_info_update", _meta: { goal: null } });
+      send({ jsonrpc: "2.0", id: message.id, result: { goal: null } });
       return;
     case "session/load":
       if (!requireAuthenticated(message)) {

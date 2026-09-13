@@ -174,6 +174,7 @@ function executionOptions(args: {
 }
 
 interface AgentLaunchArgs {
+  goalExtensionKind?: `${string}/${string}`;
   dialectId?: string;
   parameterizedModelPicker?: boolean;
   agent?: { command: string; args: string[] };
@@ -269,7 +270,10 @@ async function startThread(args?: StartThreadArgs): Promise<{
         ...(args?.additionalWorkspaceWriteRoots
           ? {
               additionalWorkspaceWriteRoots: args.additionalWorkspaceWriteRoots,
-            }
+          }
+          : {}),
+        ...(args?.goalExtensionKind
+          ? { goalExtensionKind: args.goalExtensionKind }
           : {}),
       },
     }),
@@ -578,7 +582,11 @@ describe("acp bridge", () => {
     });
     expect((await waitForResponse(initializeId)).result).toMatchObject({
       protocolVersion: PROVIDER_BRIDGE_PROTOCOL_VERSION,
-      capabilities: { fork: "tip", approvalEnforcedBy: "runtime" },
+      capabilities: {
+        fork: "tip",
+        approvalEnforcedBy: "runtime",
+        threadGoalClear: true,
+      },
     });
 
     const modelListId = sendModelList({
@@ -3338,6 +3346,85 @@ describe("acp bridge", () => {
         modelContextWindow: 128_000,
         estimated: false,
       },
+    });
+    startedProviderThreadIds.push(first.providerThreadId);
+  });
+
+  it("forwards ACP Goal state on resume and clears it through the extension", async () => {
+    const first = await startThread({
+      envVars: { FAKE_ACP_RESUME_SESSION: "1", FAKE_ACP_GOAL_EXTENSION: "1" },
+      goalExtensionKind: "account-limits/goal",
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          goalExtensionKind: "account-limits/goal",
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_RESUME_SESSION: "1",
+              FAKE_ACP_GOAL_EXTENSION: "1",
+            },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    expect((await waitForResponse(resumeId)).result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(threadEventsOfType("thread/extensionState/updated").at(-1)).toMatchObject({
+      kind: "account-limits/goal",
+      payload: { objective: "Finish ACP goal integration", status: "active" },
+    });
+
+    const clearId = sendRequest("thread/goal/clear", {
+      threadId: first.bbThreadId,
+      providerThreadId: first.providerThreadId,
+    });
+    expect((await waitForResponse(clearId)).result).toEqual({ cleared: true });
+    expect(threadEventsOfType("thread/extensionState/updated").at(-1)).toMatchObject({
+      kind: "account-limits/goal",
+      payload: null,
+    });
+    startedProviderThreadIds.push(first.providerThreadId);
+  });
+
+  it("clears a persisted ACP Goal when the resumed agent has no current Goal", async () => {
+    const first = await startThread({
+      envVars: { FAKE_ACP_RESUME_SESSION: "1" },
+      goalExtensionKind: "account-limits/goal",
+    });
+    await stopThread(first.providerThreadId);
+    startedProviderThreadIds.pop();
+
+    const resumeId = sendRequest("thread/resume", {
+      threadId: first.bbThreadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        providerOptions: {
+          goalExtensionKind: "account-limits/goal",
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: { FAKE_ACP_RESUME_SESSION: "1" },
+          }),
+        },
+      }),
+      providerThreadId: first.providerThreadId,
+    });
+    expect((await waitForResponse(resumeId)).result).toEqual({
+      providerThreadId: first.providerThreadId,
+      sessionRestorable: true,
+    });
+    expect(threadEventsOfType("thread/extensionState/updated").at(-1)).toMatchObject({
+      kind: "account-limits/goal",
+      payload: null,
     });
     startedProviderThreadIds.push(first.providerThreadId);
   });

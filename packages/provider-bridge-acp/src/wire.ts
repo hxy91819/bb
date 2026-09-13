@@ -194,6 +194,36 @@ export const acpUsageUpdateSchema = z
   .passthrough();
 export type AcpUsageUpdate = z.infer<typeof acpUsageUpdateSchema>;
 
+export const acpGoalStatusSchema = z.enum([
+  "active",
+  "paused",
+  "blocked",
+  "complete",
+  "limited",
+]);
+
+export const acpGoalSnapshotSchema = z
+  .object({
+    objective: z.string(),
+    status: acpGoalStatusSchema,
+    tokenBudget: z.number().nullable().optional(),
+    tokensUsed: z.number().optional(),
+    timeUsedSeconds: z.number().optional(),
+    createdAt: z.number().optional(),
+    updatedAt: z.number().optional(),
+    controlMethod: z.string().min(1).optional(),
+  })
+  .passthrough();
+
+export const acpGoalSessionInfoUpdateSchema = z
+  .object({
+    sessionUpdate: z.literal("session_info_update"),
+    _meta: z
+      .object({ goal: acpGoalSnapshotSchema.nullable() })
+      .passthrough(),
+  })
+  .passthrough();
+
 const acpOtherSessionUpdateSchema = z
   .object({
     sessionUpdate: z.string(),
@@ -206,6 +236,7 @@ export const acpSessionUpdateSchema = z.union([
   acpToolCallUpdateEventSchema,
   acpPlanUpdateSchema,
   acpUsageUpdateSchema,
+  acpGoalSessionInfoUpdateSchema,
   acpOtherSessionUpdateSchema,
 ]);
 export type AcpSessionUpdate = z.infer<typeof acpSessionUpdateSchema>;
@@ -246,6 +277,19 @@ export const acpInitializeResultSchema = z
       .passthrough()
       .optional(),
     authMethods: z.array(z.object({ id: z.string() }).passthrough()).optional(),
+    _meta: z
+      .object({
+        goal: z
+          .object({
+            version: z.number().int().positive(),
+            controlMethod: z.string().min(1),
+            actions: z.array(z.enum(["set", "pause", "resume", "clear"])),
+          })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
