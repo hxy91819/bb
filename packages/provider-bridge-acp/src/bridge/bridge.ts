@@ -3,7 +3,12 @@ import {
   pendingInteractionResolutionSchema,
   reasoningEffortsForLevels,
 } from "@bb/domain";
-import type { AvailableModel, PromptInput, ReasoningLevel } from "@bb/domain";
+import type {
+  AvailableModel,
+  PromptInput,
+  ReasoningLevel,
+  ServiceTier,
+} from "@bb/domain";
 import { acpLaunchSpecSchema, type AcpLaunchSpec } from "../launch-spec.js";
 import {
   BRIDGE_INBOUND_REQUEST_METHODS,
@@ -81,6 +86,7 @@ import {
   type AcpSessionParams,
   type AcpSkillRoot,
 } from "../session-params.js";
+import { resolveAcpServiceTierTarget } from "./service-tier.js";
 import { buildCursorParameterizedModelCatalog } from "../cursor-model-selection.js";
 import {
   getAcpProviderHealth,
@@ -156,6 +162,7 @@ interface AcpPendingTurnInput {
   clientRequestId: string;
   input: PromptInput[];
   requestId: AcpBridgeRequestId | null;
+  serviceTier: ServiceTier | undefined;
 }
 
 interface AcpThreadSession {
@@ -169,6 +176,7 @@ interface AcpThreadSession {
   supportsImageInput: boolean;
   supportsLoadSession: boolean;
   supportsResume: boolean;
+  configOptions: readonly AcpConfigOption[] | undefined;
   policy: AcpSessionPolicy;
   pendingInstructions: string | undefined;
   activePromptKind: "turn" | "compaction" | null;
@@ -1081,62 +1089,76 @@ async function selectAcpNativeModel(args: {
   models: AcpSessionModels | undefined;
   modelSelection: AcpSessionParams["modelSelection"];
   nativeReasoning: AcpBridgeNativeReasoning | undefined;
-}): Promise<void> {
+  serviceTier: ServiceTier | undefined;
+}): Promise<readonly AcpConfigOption[] | undefined> {
   const selection = args.modelSelection;
-  if (!selection || !("modelId" in selection)) {
-    return;
+  if (selection && "selectFlag" in selection) {
+    return selectAcpNativeServiceTier({
+      connection: args.connection,
+      sessionId: args.sessionId,
+      configOptions: args.configOptions,
+      serviceTier:
+        args.serviceTier ??
+        (selection.serviceTier !== undefined
+          ? selection.serviceTier
+          : undefined),
+    });
   }
   let configOptions = args.configOptions;
-  const modelOption = findAcpModelConfigOption(args.configOptions);
-  const availableSessionModels = args.models?.availableModels ?? [];
-  const sessionModelsIncludeSelection = availableSessionModels.some(
-    (model) => model.modelId === selection.modelId,
-  );
-  const shouldSetModel =
-    (modelOption && modelOption.currentValue !== selection.modelId) ||
-    (!modelOption &&
-      sessionModelsIncludeSelection &&
-      args.models?.currentModelId !== selection.modelId);
-  if (shouldSetModel) {
-    let configState: AcpConfigStateResult | null = null;
-    let setModel = true;
-    if (modelOption) {
-      try {
+  if (selection && "modelId" in selection) {
+    const modelOption = findAcpModelConfigOption(args.configOptions);
+    const availableSessionModels = args.models?.availableModels ?? [];
+    const sessionModelsIncludeSelection = availableSessionModels.some(
+      (model) => model.modelId === selection.modelId,
+    );
+    const shouldSetModel =
+      (modelOption && modelOption.currentValue !== selection.modelId) ||
+      (!modelOption &&
+        sessionModelsIncludeSelection &&
+        args.models?.currentModelId !== selection.modelId);
+    if (shouldSetModel) {
+      let configState: AcpConfigStateResult | null = null;
+      let setModel = true;
+      if (modelOption) {
+        try {
+          configState = await args.connection.request({
+            method: "session/set_config_option",
+            params: {
+              sessionId: args.sessionId,
+              configId: modelOption.id,
+              value: selection.modelId,
+            },
+            resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
+          });
+          setModel = false;
+        } catch {
+          setModel = true;
+        }
+      }
+      if (setModel) {
         configState = await args.connection.request({
-          method: "session/set_config_option",
-          params: {
-            sessionId: args.sessionId,
-            configId: modelOption.id,
-            value: selection.modelId,
-          },
+          method: "session/set_model",
+          params: { sessionId: args.sessionId, modelId: selection.modelId },
           resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
         });
-        setModel = false;
-      } catch {
-        setModel = true;
       }
+      configOptions = configState?.configOptions ?? configOptions;
     }
-    if (setModel) {
-      configState = await args.connection.request({
-        method: "session/set_model",
-        params: { sessionId: args.sessionId, modelId: selection.modelId },
-        resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
-      });
-    }
-    configOptions = configState?.configOptions ?? configOptions;
+    configOptions = await selectAcpNativeReasoning({
+      connection: args.connection,
+      sessionId: args.sessionId,
+      configOptions,
+      modelSelection: selection,
+      nativeReasoning: args.nativeReasoning,
+    });
   }
-  await selectAcpNativeReasoning({
+  return selectAcpNativeServiceTier({
     connection: args.connection,
     sessionId: args.sessionId,
     configOptions,
-    modelSelection: selection,
-    nativeReasoning: args.nativeReasoning,
-  });
-  await selectAcpNativeServiceTier({
-    connection: args.connection,
-    sessionId: args.sessionId,
-    configOptions,
-    modelSelection: selection,
+    serviceTier:
+      args.serviceTier ??
+      (selection && "modelId" in selection ? selection.serviceTier : undefined),
   });
 }
 
@@ -1149,26 +1171,26 @@ async function selectAcpNativeReasoning(args: {
     { modelId: string }
   >;
   nativeReasoning: AcpBridgeNativeReasoning | undefined;
-}): Promise<void> {
+}): Promise<readonly AcpConfigOption[] | undefined> {
   const reasoningLevel = args.modelSelection.reasoningLevel;
   if (reasoningLevel === undefined) {
-    return;
+    return args.configOptions;
   }
   const thoughtLevelOption =
     findAcpThoughtLevelConfigOption(args.configOptions) ??
     nativeReasoningToThoughtLevelOption(args.nativeReasoning);
   if (!thoughtLevelOption) {
-    return;
+    return args.configOptions;
   }
   const value = acpNativeReasoningLevelToValue(
     reasoningLevel,
     thoughtLevelOption,
   );
   if (value === undefined) {
-    return;
+    return args.configOptions;
   }
   try {
-    await args.connection.request({
+    const configState = await args.connection.request({
       method: "session/set_config_option",
       params: {
         sessionId: args.sessionId,
@@ -1177,38 +1199,37 @@ async function selectAcpNativeReasoning(args: {
       },
       resultSchema: acpConfigStateResultSchema,
     });
+    return configState.configOptions ?? args.configOptions;
   } catch {}
+  return args.configOptions;
 }
 
 async function selectAcpNativeServiceTier(args: {
   connection: AcpAgentConnection;
   sessionId: string;
   configOptions: readonly AcpConfigOption[] | undefined;
-  modelSelection: Extract<
-    AcpSessionParams["modelSelection"],
-    { modelId: string }
-  >;
-}): Promise<void> {
-  const serviceTier = args.modelSelection.serviceTier;
+  serviceTier: ServiceTier | undefined;
+}): Promise<readonly AcpConfigOption[] | undefined> {
+  const serviceTier = args.serviceTier;
   if (serviceTier === undefined) {
-    return;
+    return args.configOptions;
   }
-  const fastOption = (args.configOptions ?? []).find(
-    (option) => option.id === "fast" && option.type === "select",
-  );
-  const value = serviceTier === "fast" ? "true" : "false";
-  if (!fastOption?.options?.some((option) => option.value === value)) {
-    return;
+  const target = resolveAcpServiceTierTarget(args.configOptions, serviceTier);
+  if (target === undefined) {
+    return args.configOptions;
   }
-  await args.connection.request({
+  const configState = await args.connection.request({
     method: "session/set_config_option",
     params: {
       sessionId: args.sessionId,
-      configId: fastOption.id,
-      value,
+      configId: target.option.id,
+      ...(target.type === "boolean"
+        ? { type: target.type, value: target.value }
+        : { value: target.value }),
     },
-    resultSchema: acpConfigStateResultSchema,
+    resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
   });
+  return configState?.configOptions ?? args.configOptions;
 }
 
 function buildPromptContentBlocks(
@@ -1678,6 +1699,7 @@ async function startAgentSession(
     supportsImageInput: false,
     supportsLoadSession: false,
     supportsResume: false,
+    configOptions: undefined,
     policy: {
       permissionMode: params.permissionMode,
       workspaceWriteRoots: params.workspaceWriteRoots,
@@ -1819,13 +1841,14 @@ async function startAgentSession(
         resultSchema: acpSessionNewResultSchema,
       });
       sessionId = newSession.sessionId;
-      await selectAcpNativeModel({
+      session.configOptions = await selectAcpNativeModel({
         connection,
         sessionId,
         configOptions: newSession.configOptions,
         models: newSession.models,
         modelSelection: params.modelSelection,
         nativeReasoning: params.nativeReasoning,
+        serviceTier: params.serviceTier,
       });
       if (request.kind === "resume") {
         emitStartNotification(ACP_WARNING_METHOD, {
@@ -1834,13 +1857,14 @@ async function startAgentSession(
         });
       }
     } else {
-      await selectAcpNativeModel({
+      session.configOptions = await selectAcpNativeModel({
         connection,
         sessionId,
         configOptions: loadedConfigOptions,
         models: loadedModels,
         modelSelection: params.modelSelection,
         nativeReasoning: params.nativeReasoning,
+        serviceTier: params.serviceTier,
       });
       const loadUsageUpdate = session.pendingLoadUsageUpdate;
       session.loading = false;
@@ -2036,6 +2060,12 @@ function runTurn(
       let stopReason: z.infer<typeof acpStopReasonSchema>;
       session.cancelRequested = false;
       try {
+        await applyAcpServiceTierForTurn(session, pending.serviceTier);
+        if (session.stopping) {
+          dropTurnInput(pending, "ACP session is stopping");
+          finishTurn(session, "cancelled");
+          return;
+        }
         session.promptRequestPending = true;
         const promptResult = session.connection.request({
           method: "session/prompt",
@@ -2084,6 +2114,25 @@ function runTurn(
   })();
 }
 
+async function applyAcpServiceTierForTurn(
+  session: AcpThreadSession,
+  serviceTier: ServiceTier | undefined,
+): Promise<void> {
+  if (serviceTier === undefined) {
+    return;
+  }
+  session.configOptions = await selectAcpNativeServiceTier({
+    connection: session.connection,
+    sessionId: session.providerThreadId,
+    configOptions: session.configOptions,
+    serviceTier,
+  });
+  session.construction = {
+    ...session.construction,
+    serviceTier,
+  };
+}
+
 function startCompaction(
   session: AcpThreadSession,
   pending: AcpPendingTurnInput,
@@ -2098,18 +2147,23 @@ function startCompaction(
     finishCompaction(session, outcome);
   };
 
-  const promptResult = session.connection.request({
-    method: "session/prompt",
-    params: {
-      sessionId: session.providerThreadId,
-      prompt: [{ type: "text", text: "/compact" }],
-    },
-    resultSchema: acpPromptResultSchema,
-  });
-  acceptTurnInput(session, pending);
-
-  session.turnSettled = promptResult
-    .then((result) => {
+  session.turnSettled = (async () => {
+    try {
+      await applyAcpServiceTierForTurn(session, pending.serviceTier);
+      if (session.stopping) {
+        dropTurnInput(pending, "ACP session is stopping");
+        return;
+      }
+      const promptResult = session.connection.request({
+        method: "session/prompt",
+        params: {
+          sessionId: session.providerThreadId,
+          prompt: [{ type: "text", text: "/compact" }],
+        },
+        resultSchema: acpPromptResultSchema,
+      });
+      acceptTurnInput(session, pending);
+      const result = await promptResult;
       finish(
         result.stopReason === "end_turn"
           ? compactionOutcomeForEndTurn(
@@ -2123,13 +2177,17 @@ function startCompaction(
                 error: `Agent stopped compaction: ${result.stopReason}`,
               },
       );
-    })
-    .catch((error: unknown) => {
+    } catch (error: unknown) {
+      dropTurnInput(
+        pending,
+        "ACP compaction failed before the prompt was sent",
+      );
       finish({
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
       });
-    });
+    }
+  })();
 }
 
 function finishCompaction(
@@ -2574,9 +2632,16 @@ async function handleRequest(
         };
         if (!isDeepStrictEqual(envVars, session.construction.envVars ?? {})) {
           const previousProviderThreadId = session.providerThreadId;
+          const construction =
+            params.options.serviceTier === undefined
+              ? session.construction
+              : {
+                  ...session.construction,
+                  serviceTier: params.options.serviceTier,
+                };
           session = await startAgentSession({
             kind: "resume",
-            params: { ...session.construction, envVars },
+            params: { ...construction, envVars },
             resumeProviderThreadId: previousProviderThreadId,
           });
           sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {
@@ -2592,6 +2657,7 @@ async function handleRequest(
         clientRequestId: params.clientRequestId,
         input: params.input,
         requestId: request.id,
+        serviceTier: params.options.serviceTier,
       };
       if (isStandaloneBuiltinCompactCommand(params.input)) {
         startCompaction(session, pending);
@@ -2619,6 +2685,7 @@ async function handleRequest(
         clientRequestId: params.clientRequestId,
         input: params.input,
         requestId: null,
+        serviceTier: params.options.serviceTier,
       });
       requestSteerCancel(session);
       sendResult(request.id, { threadId: params.threadId });
