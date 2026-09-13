@@ -835,6 +835,142 @@ describe("acp bridge", () => {
   );
 
   it.each([
+    { serviceTier: "fast" as const, initialFast: "off", selectedFast: "on" },
+    {
+      serviceTier: "default" as const,
+      initialFast: "on",
+      selectedFast: "off",
+    },
+  ])(
+    "maps a native Codex fast-mode option for $serviceTier",
+    async ({ serviceTier, initialFast, selectedFast }) => {
+      const requestLog = join(
+        workspaceDir,
+        `codex-${serviceTier}-session-requests.jsonl`,
+      );
+      const { providerThreadId } = await startThread({
+        envVars: {
+          FAKE_ACP_CODEX_FAST_MODE: "1",
+          FAKE_ACP_INITIAL_FAST: initialFast,
+          FAKE_ACP_REQUEST_LOG: requestLog,
+        },
+        serviceTier,
+      });
+
+      expect(
+        loggedAcpRequests(requestLog)
+          .filter((request) => request.method === "session/set_config_option")
+          .map((request) => ({
+            configId: request.params?.["configId"],
+            value: request.params?.["value"],
+          })),
+      ).toEqual([{ configId: "fast-mode", value: selectedFast }]);
+
+      sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "echo-selected-fast", mentions: [] }],
+      });
+      await waitForTurnCompleted();
+      expect(agentMessageTexts()).toContain(`selected-fast:${selectedFast}`);
+    },
+  );
+
+  it("applies a changed service tier on a later ACP turn", async () => {
+    const requestLog = join(workspaceDir, "codex-later-tier-requests.jsonl");
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_CODEX_FAST_MODE: "1",
+        FAKE_ACP_INITIAL_FAST: "off",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+      },
+    });
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "echo-selected-fast", mentions: [] }],
+      options: executionOptions({ serviceTier: "fast" }),
+    });
+    await waitForTurnCompleted();
+    expect(agentMessageTexts()).toContain("selected-fast:on");
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "echo-selected-fast", mentions: [] }],
+      options: executionOptions({ serviceTier: "default" }),
+    });
+    await waitFor(
+      () =>
+        threadEventsOfType("turn/completed").length >= 2 ? true : undefined,
+      "second turn/completed thread event",
+    );
+    expect(agentMessageTexts()).toContain("selected-fast:off");
+
+    expect(
+      loggedAcpRequests(requestLog)
+        .filter((request) => request.method === "session/set_config_option")
+        .map((request) => request.params?.["value"]),
+    ).toEqual(["on", "off"]);
+  });
+
+  it("sends the ACP boolean discriminator for boolean Fast options", async () => {
+    const requestLog = join(workspaceDir, "codex-boolean-tier-requests.jsonl");
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_CODEX_FAST_MODE: "1",
+        FAKE_ACP_CODEX_BOOLEAN_FAST_MODE: "1",
+        FAKE_ACP_INITIAL_FAST: "off",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+      },
+      serviceTier: "fast",
+    });
+
+    expect(
+      loggedAcpRequests(requestLog).find(
+        (request) => request.method === "session/set_config_option",
+      )?.params,
+    ).toMatchObject({
+      configId: "fast-mode",
+      type: "boolean",
+      value: true,
+    });
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "echo-selected-fast", mentions: [] }],
+    });
+    await waitForTurnCompleted();
+    expect(agentMessageTexts()).toContain("selected-fast:on");
+  });
+
+  it("applies a native service tier alongside a launch-flag model", async () => {
+    const requestLog = join(workspaceDir, "cli-model-tier-requests.jsonl");
+    const { providerThreadId } = await startThread({
+      agent: { command: FAKE_AGENT_PATH, args: [] },
+      model: "solo-2",
+      modelListArgs: ["--list-models"],
+      selectFlag: "--model",
+      envVars: {
+        FAKE_ACP_CODEX_FAST_MODE: "1",
+        FAKE_ACP_INITIAL_FAST: "off",
+        FAKE_ACP_MODEL_LINES: "solo-2 - Solo Two",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+      },
+      serviceTier: "fast",
+    });
+
+    expect(
+      loggedAcpRequests(requestLog)
+        .filter((request) => request.method === "session/set_config_option")
+        .map((request) => ({
+          configId: request.params?.["configId"],
+          value: request.params?.["value"],
+        })),
+    ).toContainEqual({ configId: "fast-mode", value: "on" });
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "echo-selected-fast", mentions: [] }],
+    });
+    await waitForTurnCompleted();
+    expect(agentMessageTexts()).toContain("selected-fast:on");
+  });
+
+  it.each([
     ["thread/start", "cursor-grok-4.6-medium", "grok-4.6"],
     ["thread/resume", "claude-4.6-sonnet-medium-thinking", "claude-sonnet-4-6"],
     ["thread/fork", "auto", "default"],
@@ -2412,6 +2548,36 @@ describe("acp bridge", () => {
     ).toHaveLength(1);
     expect(loggedPrompts(promptLog)).toEqual(["/compact"]);
     expect(agentMessageTexts()).not.toContain("echo:/compact");
+  });
+
+  it("applies a changed service tier before compaction", async () => {
+    const requestLog = join(
+      workspaceDir,
+      "compact-service-tier-requests.jsonl",
+    );
+    const promptLog = join(workspaceDir, "compact-service-tier-prompts.jsonl");
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_CODEX_FAST_MODE: "1",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+        FAKE_ACP_PROMPT_LOG: promptLog,
+      },
+    });
+
+    const turnId = sendTurnRequest("turn/start", providerThreadId, {
+      input: compactCommandInput(),
+      options: executionOptions({ serviceTier: "fast" }),
+    });
+    expect((await waitForResponse(turnId)).error).toBeUndefined();
+    await waitForTurnCompleted();
+
+    const requests = loggedAcpRequests(requestLog);
+    expect(
+      requests
+        .filter((request) => request.method === "session/set_config_option")
+        .map((request) => request.params?.["value"]),
+    ).toEqual(["on"]);
+    expect(loggedPrompts(promptLog)).toEqual(["/compact"]);
   });
 
   it("fails the compaction turn legibly when the agent rejects the request", async () => {
