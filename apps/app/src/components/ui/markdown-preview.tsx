@@ -934,7 +934,8 @@ function MarkdownTableDialog({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         aria-describedby={undefined}
-        className="left-0 top-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 items-center justify-center border-none bg-transparent p-0 shadow-none data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 sm:rounded-none [&>button]:hidden"
+        className="left-0 top-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 items-center justify-center border-none bg-transparent p-0 shadow-none data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 sm:rounded-none"
+        hideCloseButton
         onClick={(event) => {
           if (event.target === event.currentTarget) {
             onClose();
