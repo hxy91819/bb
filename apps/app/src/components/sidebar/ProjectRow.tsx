@@ -269,6 +269,7 @@ interface ThreadTreeNodeRowProps {
   node: ProjectThreadNode;
   depthOffset: number;
   isEnvGrouped: boolean;
+  showProjectName: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
@@ -287,6 +288,7 @@ interface ThreadTreeItemRowProps {
   projectId: string;
   item: ProjectThreadItem;
   depthOffset: number;
+  showProjectName: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
@@ -308,6 +310,7 @@ interface ThreadTreeItemRowProps {
 interface SectionTreeItemRowProps {
   section: SidebarSectionGroup;
   depthOffset: number;
+  showProjectName: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
@@ -344,6 +347,7 @@ interface EnvironmentThreadGroupRowProps {
   projectId: string;
   environmentThreadGroup: EnvironmentThreadGroup;
   depthOffset: number;
+  showProjectName: boolean;
   selectedThreadId?: string;
   isCollapsed: boolean;
   collapsedThreadIds: Set<string>;
@@ -1024,6 +1028,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
   projectId,
   environmentThreadGroup,
   depthOffset,
+  showProjectName,
   selectedThreadId,
   isCollapsed,
   variant,
@@ -1131,6 +1136,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
                     node={node}
                     depthOffset={depthOffset + 1}
                     isEnvGrouped
+                    showProjectName={showProjectName}
                     selectedThreadId={selectedThreadId}
                     collapsedThreadIds={collapsedThreadIds}
                     collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -1160,6 +1166,7 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
   projectId,
   item,
   depthOffset,
+  showProjectName,
   selectedThreadId,
   collapsedThreadIds,
   collapsedEnvironmentIds,
@@ -1182,6 +1189,7 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
       <SectionTreeItemRow
         section={item.group}
         depthOffset={depthOffset}
+        showProjectName={showProjectName}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
         collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -1209,6 +1217,7 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
         node={item.node}
         depthOffset={depthOffset}
         isEnvGrouped={false}
+        showProjectName={showProjectName}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
         collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -1230,6 +1239,7 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
       projectId={projectId}
       environmentThreadGroup={item.group}
       depthOffset={depthOffset}
+      showProjectName={showProjectName}
       selectedThreadId={selectedThreadId}
       isCollapsed={collapsedEnvironmentIds.has(item.group.environmentId)}
       collapsedThreadIds={collapsedThreadIds}
@@ -1333,6 +1343,7 @@ function SectionThreadDragOverlay({ thread }: { thread: ThreadListEntry }) {
 const SectionTreeItemRow = memo(function SectionTreeItemRow({
   section,
   depthOffset,
+  showProjectName,
   selectedThreadId,
   collapsedThreadIds,
   collapsedEnvironmentIds,
@@ -1425,6 +1436,7 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
                         ? 0
                         : depthOffset + 1
                     }
+                    showProjectName={showProjectName}
                     selectedThreadId={selectedThreadId}
                     collapsedThreadIds={collapsedThreadIds}
                     collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -1535,6 +1547,7 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
   node,
   depthOffset,
   isEnvGrouped,
+  showProjectName,
   selectedThreadId,
   collapsedThreadIds,
   collapsedEnvironmentIds,
@@ -1642,6 +1655,7 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
       projectId={rowProjectId}
       thread={node.thread}
       crossProjectId={crossProjectId}
+      showProjectName={showProjectName}
       isActive={selectedThreadId === node.thread.id}
       hasComposerDraft={hasComposerDraft}
       onProjectSelect={onProjectSelect}
@@ -1684,6 +1698,7 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
                       projectId={rowProjectId}
                       item={item}
                       depthOffset={depthOffset}
+                      showProjectName={showProjectName}
                       selectedThreadId={selectedThreadId}
                       collapsedThreadIds={collapsedThreadIds}
                       collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -1725,6 +1740,7 @@ interface SectionThreadTreeItemsProps {
   variant: ProjectThreadTreeVariant;
   projectId?: string;
   depthOffset?: number;
+  showProjectName: boolean;
   sortableParentKey?: string;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
@@ -1796,6 +1812,7 @@ function SectionThreadTreeItems({
   variant,
   projectId,
   depthOffset = 0,
+  showProjectName,
   sortableParentKey,
   selectedThreadId,
   collapsedThreadIds,
@@ -1842,6 +1859,7 @@ function SectionThreadTreeItems({
               projectId={projectId ?? getItemProjectId(item)}
               item={item}
               depthOffset={depthOffset}
+              showProjectName={showProjectName}
               selectedThreadId={selectedThreadId}
               collapsedThreadIds={collapsedThreadIds}
               collapsedEnvironmentIds={collapsedEnvironmentIds}
@@ -2015,6 +2033,7 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
         previewBeforeKey={treePreviewBeforeKey}
         variant={variant}
         projectId={projectId}
+        showProjectName={false}
         sortableParentKey={projectId}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
@@ -2136,6 +2155,7 @@ export const ChronologicalSectionThreadSections = memo(
         sectionDnd={renderedSectionDnd}
         previewBeforeKey={loosePreviewBeforeKey}
         variant="section"
+        showProjectName
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
         collapsedEnvironmentIds={collapsedEnvironmentIds}

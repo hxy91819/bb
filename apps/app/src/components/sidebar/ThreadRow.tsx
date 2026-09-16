@@ -135,6 +135,7 @@ interface ThreadRowProps {
   projectId: string;
   thread: ThreadListEntry;
   crossProjectId: string | null;
+  showProjectName: boolean;
   isActive: boolean;
   hasComposerDraft: boolean;
   onProjectSelect?: () => void;
@@ -500,6 +501,7 @@ function ThreadRowComponent({
   projectId,
   thread,
   crossProjectId,
+  showProjectName,
   isActive,
   hasComposerDraft,
   onProjectSelect,
@@ -528,6 +530,7 @@ function ThreadRowComponent({
   const threadTitle = getThreadDisplayTitle(thread);
   const labelTitle = useThreadTitleDisplayText(threadTitle);
   const crossProjectName = useSidebarProjectName(crossProjectId);
+  const projectName = useSidebarProjectName(showProjectName ? projectId : null);
   const crossProjectLabel =
     crossProjectId === null
       ? null
@@ -609,9 +612,9 @@ function ThreadRowComponent({
   const splitIndicatorLabel = trailingIndicatorResolution.accessibleLabel
     ? `${labelTitle} — open in split; ${trailingIndicatorResolution.accessibleLabel}`
     : `${labelTitle} — open in split`;
-  const linkLabel = hasComposerDraft
-    ? `Open ${labelTitle} (unsubmitted draft)`
-    : `Open ${labelTitle}`;
+  const linkLabel = `Open ${labelTitle}${projectName ? ` in ${projectName}` : ""}${
+    hasComposerDraft ? " (unsubmitted draft)" : ""
+  }`;
   const rowDragBindings = options.dragBindings;
   const nestTargetState = options.nestDrop?.state ?? null;
   const reorderPlacement = options.nestDrop?.reorderPlacement ?? null;
@@ -704,6 +707,15 @@ function ThreadRowComponent({
             <ThreadTitleMentions title={threadTitle} />
           </span>
         )}
+        {projectName ? (
+          <span
+            data-sidebar-thread-project-name=""
+            title={`Project: ${projectName}`}
+            className="pointer-events-none max-w-24 shrink-0 truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
+          >
+            {projectName}
+          </span>
+        ) : null}
         {crossProjectLabel !== null ? (
           <Tooltip>
             <TooltipTrigger asChild>

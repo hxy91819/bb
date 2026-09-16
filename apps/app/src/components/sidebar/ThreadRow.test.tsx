@@ -83,6 +83,7 @@ function ThreadRowTestHarness({
   hasComposerDraft = false,
   isActive = false,
   options = DEFAULT_OPTIONS,
+  showProjectName = false,
   shortcutKey,
   thread,
 }: {
@@ -90,6 +91,7 @@ function ThreadRowTestHarness({
   hasComposerDraft?: boolean;
   isActive?: boolean;
   options?: ThreadRowOptions;
+  showProjectName?: boolean;
   shortcutKey?: string;
   thread: ThreadListEntry;
 }) {
@@ -110,6 +112,7 @@ function ThreadRowTestHarness({
             projectId={thread.projectId}
             thread={thread}
             crossProjectId={crossProjectId}
+            showProjectName={showProjectName}
             isActive={isActive}
             hasComposerDraft={hasComposerDraft}
             options={options}
@@ -777,6 +780,49 @@ describe("ThreadRow", () => {
     expect(
       container.querySelector("[data-sidebar-thread-cross-project]"),
     ).toBeNull();
+  });
+
+  it("shows the project name when requested for an aggregated thread row", () => {
+    const { container } = render(
+      <ThreadTitleMentionResourcesProvider
+        sectionNamesById={new Map()}
+        projectNamesById={new Map([["proj_web", "Web App"]])}
+        threadById={new Map()}
+      >
+        <ThreadRowTestHarness
+          showProjectName
+          thread={createThread({ projectId: "proj_web" })}
+        />
+      </ThreadTitleMentionResourcesProvider>,
+    );
+
+    const projectName = container.querySelector(
+      "[data-sidebar-thread-project-name]",
+    );
+    expect(projectName?.textContent).toBe("Web App");
+    expect(projectName?.getAttribute("title")).toBe("Project: Web App");
+    expect(
+      screen.getByRole("link", { name: "Open Thread in Web App" }),
+    ).not.toBeNull();
+  });
+
+  it("omits the project name from project-scoped thread rows", () => {
+    const { container } = render(
+      <ThreadTitleMentionResourcesProvider
+        sectionNamesById={new Map()}
+        projectNamesById={new Map([["proj_web", "Web App"]])}
+        threadById={new Map()}
+      >
+        <ThreadRowTestHarness
+          thread={createThread({ projectId: "proj_web" })}
+        />
+      </ThreadTitleMentionResourcesProvider>,
+    );
+
+    expect(
+      container.querySelector("[data-sidebar-thread-project-name]"),
+    ).toBeNull();
+    expect(screen.getByRole("link", { name: "Open Thread" })).not.toBeNull();
   });
 
   it("renders a complete Unicode path mention instead of an ASCII prefix", () => {

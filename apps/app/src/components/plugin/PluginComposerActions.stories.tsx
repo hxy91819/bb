@@ -267,6 +267,7 @@ function ThreadRowStatusFixture() {
                   <ThreadRow
                     projectId={PROJECT_ID}
                     crossProjectId={null}
+                    showProjectName={false}
                     thread={makeThreadListEntry({
                       id: THREAD_ID,
                       projectId: PROJECT_ID,

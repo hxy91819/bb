@@ -50,16 +50,24 @@ const noop = () => {};
 
 type StoryThreadRowProps = Omit<
   ComponentProps<typeof ThreadRow>,
-  "hasComposerDraft"
+  "hasComposerDraft" | "showProjectName"
 > & {
   hasComposerDraft?: boolean;
+  showProjectName?: boolean;
 };
 
 function StoryThreadRow({
   hasComposerDraft = false,
+  showProjectName = false,
   ...props
 }: StoryThreadRowProps) {
-  return <ThreadRow {...props} hasComposerDraft={hasComposerDraft} />;
+  return (
+    <ThreadRow
+      {...props}
+      hasComposerDraft={hasComposerDraft}
+      showProjectName={showProjectName}
+    />
+  );
 }
 
 function UnreadDoneThreadRowCycle() {
