@@ -1,0 +1,203 @@
+{
+  "version": 2,
+  "aggregate": {
+    "branch": "local/aggregate",
+    "upstreamRef": "origin/main",
+    "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
+    "lastIntegratedUpstreamCommit": "267938526dfcbc0edb228ce827b5bec202c1af97"
+  },
+  "features": [
+    {
+      "branch": "feature/mermaid-elk-layout",
+      "lastPackaged": {
+        "sourceCommit": "e3460182b52a69ce9f5ef071b231f52c2aed999f",
+        "aggregateCommit": "df1d1972f1f972d3740b80d95106bdef25dad879"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3382,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
+        }
+      ]
+    },
+    {
+      "branch": "fix/vite-cve-2026-39363",
+      "lastPackaged": {
+        "sourceCommit": "42097e0e2a18ba697237567ddeb029b33cab3a20",
+        "aggregateCommit": "52bba2fc32ad5c55cd7312fb98f51fdd38fa1a6c"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1780,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-server-startup",
+      "lastPackaged": {
+        "sourceCommit": "b11109ea34db7d3f86b6fea684f62f9a374d003a",
+        "aggregateCommit": "31d189905527f79510d16d200d6ec183a85f7733"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/codex-fast-mode-toggle",
+      "lastPackaged": {
+        "sourceCommit": "200adda3e16c78edfe3f8f764aec2a2cb0d372e8",
+        "aggregateCommit": "2c63d38e010877b7ea002cf5c43a96feefe2b5a2"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "feature/recent-explicit-work-sequence",
+      "lastPackaged": {
+        "sourceCommit": "0c0cfbe071742a7fff01f258938595a63dd9e325",
+        "aggregateCommit": "7f977eae2db73c92f7fe4a4b2de917922153fa7e"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1614,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-service-tier-migration",
+      "lastPackaged": {
+        "sourceCommit": "934b0800cf5794004a95ba75fe2cd573e31e229c",
+        "aggregateCommit": "fa690d3ac5183f98022978e72df5aeb805c0a189"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ]
+    },
+    {
+      "branch": "fix/local-aggregate-recent-sequence-migration",
+      "lastPackaged": {
+        "sourceCommit": "c4ba8d541ede23cae2d0e30d524b7a6b94e23b2e",
+        "aggregateCommit": "f0aff25a876a19f1f899e876e7dfdf4b8db2d79d"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ]
+    },
+    {
+      "branch": "feature/dsh-acp-provider",
+      "lastPackaged": {
+        "sourceCommit": "53471331926ef585037d82259c318931cfa8947a",
+        "aggregateCommit": "c4aeed2952c94015b61207a0a0b90ba3af73a3f7"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 2,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+        }
+      ]
+    },
+    {
+      "branch": "fix/acp-fast-mode",
+      "lastPackaged": {
+        "sourceCommit": "f82a355069870fc9e40fd19b11c6dea92067393b",
+        "aggregateCommit": "c9d64614bacc43ec55a44aca7fdfd7296c004973"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 5,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/5"
+        }
+      ]
+    },
+    {
+      "branch": "fix/acp-codex-goal",
+      "lastPackaged": {
+        "sourceCommit": "3f755edd4ebfbd2d63a2f8e00be67e608f5ce35e",
+        "aggregateCommit": "52fc78e04737ba54453bf7729af72b26c449889d"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 6,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/6"
+        }
+      ]
+    },
+    {
+      "branch": "fix/markdown-table-breakout",
+      "lastPackaged": {
+        "sourceCommit": "b14e93e3d85d015908a115402ed8b34800efec1b",
+        "aggregateCommit": "19b1104a47477a49b495439051df196c7f28d2b7"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1951,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1951"
+        },
+        {
+          "repository": "get-bb/bb",
+          "number": 1705,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1705#issuecomment-5649924011"
+        }
+      ]
+    },
+    {
+      "branch": "fix/environment-switch-auto-continue",
+      "lastPackaged": {
+        "sourceCommit": "4edc380015496d22ee64d93c85294f8d5726ee8a",
+        "aggregateCommit": "9ec663a50405a4e80d4cfb4d26b8eda51d5210bc"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 7,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/7"
+        }
+      ]
+    },
+    {
+      "branch": "feature/thread-project-label",
+      "lastPackaged": {
+        "sourceCommit": "a268b26c7be5da45b6c79e0254adfa4a4a053fa2",
+        "aggregateCommit": "4da88e8daa19929b16680c9cba7838b5f6b2c7dc"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 4,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/4"
+        }
+      ]
+    }
+  ]
+}

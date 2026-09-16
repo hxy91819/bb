@@ -96,3 +96,6 @@ provider-recordings/raw/
 
 /plugins/.bundled-stage-*/
 /plugins/*/.bundled-runtime/
+
+config/local-aggregate-web*.json
+!config/local-aggregate-web.example.json

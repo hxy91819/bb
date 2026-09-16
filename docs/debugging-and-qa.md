@@ -12,12 +12,18 @@
 
 ## Local Dev QA Launcher
 
-Use `scripts/bb-dev-app` when validating changes in the desktop dev app or helping QA from this checkout:
+Use `scripts/bb-dev-app` when validating changes in the desktop dev app or helping QA from this checkout. In the local aggregate root, keep `local/aggregate` checked out and use `current`; branch switching belongs in independent worktrees.
+
+Run resource-heavy checks and source app launches through
+`scripts/run-resource-isolated -- <command>`. This supplies a finite-memory user
+scope and serializes heavy work. Use `--status` to inspect it and reserve
+`--profile package` for the serialized local aggregate build. The launcher
+rejects launches that share a system service cgroup without this boundary.
 
 - `pnpm dev:status` runs `scripts/bb-dev-app status` to print the active branch, Node runtime, dev URLs, data dir, and logs.
-- `scripts/bb-dev-app current` restarts the dev server on the current branch.
-- `scripts/bb-dev-app main` fetches `origin/main`, fast-forwards `main`, and launches the dev server from this checkout.
-- `scripts/bb-dev-app branch <branch>` switches to a local branch, or creates it from `origin/<branch>`, then launches the dev server.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app current` restarts the dev server on the current branch.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app main` fetches `origin/main`, fast-forwards `main`, and launches the dev server from an independent checkout.
+- `scripts/run-resource-isolated -- scripts/bb-dev-app branch <branch>` switches an independent checkout to a local branch, or creates it from `origin/<branch>`, then launches the dev server.
 - `pnpm dev:stop` runs `scripts/bb-dev-app stop` to stop the launcher-managed dev server and desktop.
 - `scripts/bb-dev-app logs dev` and `scripts/bb-dev-app logs desktop` follow logs.
 
