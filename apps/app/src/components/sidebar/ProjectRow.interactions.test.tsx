@@ -21,6 +21,7 @@ import {
 import { buildSidebarEntitySectionId } from "@bb/client-core";
 import { makeThreadListEntry } from "@bb/test-helpers/domain-fixtures";
 import { makeProjectResponse } from "@/test/fixtures/projects";
+import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
 
 const mockUpdateEnvironment = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -140,6 +141,51 @@ describe("ProjectRow interactions", () => {
     cleanup();
     mockDraftThreadIds.current = new Set();
     vi.clearAllMocks();
+  });
+
+  it("shows project names on threads in chronological mode", () => {
+    const thread = makeThread({ projectId: "proj_web" });
+
+    const { container } = render(
+      <TooltipProvider>
+        <Provider store={createStore()}>
+          <QueryClientProvider client={new QueryClient()}>
+            <MemoryRouter>
+              <ThreadTitleMentionResourcesProvider
+                sectionNamesById={new Map()}
+                projectNamesById={new Map([["proj_web", "Web App"]])}
+                threadById={new Map()}
+              >
+                <ChronologicalSectionThreadSections
+                  threadListState={{ status: "ready", threads: [thread] }}
+                  compareThreads={() => 0}
+                  collapsedThreadIds={new Set()}
+                  collapsedEnvironmentIds={new Set()}
+                  onToggleThreadCollapsed={vi.fn()}
+                  onToggleEnvironmentCollapsed={vi.fn()}
+                  topLevelSectionOrder={["threads"]}
+                  onTopLevelSectionOrderChange={vi.fn()}
+                  pinnedReorderPending={false}
+                  pinnedThreads={[]}
+                  onReorderPinnedThread={vi.fn()}
+                  builtInSections={{
+                    collapsedSectionIds: new Set(),
+                    onToggleCollapsed: vi.fn(),
+                    pinned: { label: "Pinned", content: null },
+                    threads: { label: "Threads" },
+                  }}
+                />
+              </ThreadTitleMentionResourcesProvider>
+            </MemoryRouter>
+          </QueryClientProvider>
+        </Provider>
+      </TooltipProvider>,
+    );
+
+    expect(
+      container.querySelector("[data-sidebar-thread-project-name]")
+        ?.textContent,
+    ).toBe("Web App");
   });
 
   it("keeps project header controls touch-accessible when their menu opens and closes", async () => {

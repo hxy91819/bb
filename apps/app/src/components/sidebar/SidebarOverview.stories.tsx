@@ -24,6 +24,10 @@ import {
 } from "../../../.ladle/story-fixtures";
 import { ProjectActionsProvider } from "@/components/project/ProjectActionsProvider";
 import { ThreadActionsProvider } from "@/components/thread/ThreadActionsProvider";
+import {
+  ThreadTitleMentionResourcesProvider,
+  useSidebarThreadTitleMentionResources,
+} from "@/components/thread/ThreadTitleMentions";
 import { Icon } from "@bb/shared-ui/icon";
 import {
   ProjectList,
@@ -459,6 +463,9 @@ function OrganizationSidebar({
 }) {
   const [store] = useState(() => createStore());
   const [isModeSeeded, setIsModeSeeded] = useState(false);
+  const resolvedNavigation = navigation ?? loadedSidebarNavigation;
+  const titleMentionResources =
+    useSidebarThreadTitleMentionResources(resolvedNavigation);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -485,7 +492,9 @@ function OrganizationSidebar({
       <QueryClientProvider client={queryClient}>
         <SidebarFrame>
           {isModeSeeded ? (
-            <LoadedSidebar hosts={hosts} navigation={navigation} />
+            <ThreadTitleMentionResourcesProvider {...titleMentionResources}>
+              <LoadedSidebar hosts={hosts} navigation={resolvedNavigation} />
+            </ThreadTitleMentionResourcesProvider>
           ) : (
             <LoadingSidebar />
           )}
