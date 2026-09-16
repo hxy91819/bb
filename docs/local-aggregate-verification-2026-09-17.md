@@ -5,13 +5,13 @@
 Baseline: `desktop-v0.43.1` / `267938526dfcbc0edb228ce827b5bec202c1af97`.
 The audited upstream tip has 118 unreleased commits beyond the stable release; none are integrated.
 The rebuild contains 13 source branches and 35 `cherry-pick -x` commits.
-The registry and AGENTS overview agree, including the maintenance authorization from `4bfdec0647cc94f66485550b02ce374a8155226e`.
+The registry and AGENTS overview agree, including the maintenance authorization from `4bfdec0647cc94f66485550b02ce374a8155226e` and the service-only approval boundary from `4f24e79314ee8fc7b7936ac28b90d675f5ef7fa8`.
 This is candidate verification, not runtime-package or deployment proof.
 
-The old aggregate remains `4bfdec0647cc94f66485550b02ce374a8155226e`.
+The root snapshot being replaced is `4f24e79314ee8fc7b7936ac28b90d675f5ef7fa8`.
 Its unrelated untracked work is preserved.
 The dirty migration-guard experiment is excluded and preserved; it has no new committed product delta.
-The older rebuild worktree is also retained until the documented cleanup gates pass.
+The older rebuild worktree is retained. The current temporary candidate may be removed after its exact tip is published and no live process uses its directory; this does not authorize broader source-worktree or backup cleanup.
 
 ## Source evidence
 
@@ -70,12 +70,12 @@ Gitleaks/TruffleHog are unavailable, so this is not a dedicated secret-scanner p
 All new source and cherry-pick authors/committers use the approved public identity.
 The full-history identity helper flags 112 pre-existing upstream identity mismatches and zero prohibited identities; upstream contributor history is intentionally not rewritten.
 
-## Remaining gates
+## Authorized handoff and deferred deployment
 
-The maintenance skill requires the candidate SHA, old aggregate SHA, branch list and verification evidence to be presented before a second explicit root-replacement confirmation.
-Fork push authorization does not remove that separate gate.
-After confirmation, preserve a backup ref and replace the root without stash, destructive reset, or untracked-file removal.
-Run the deployment skill's resource-isolation probe and serialized runtime build from the root before any service cutover.
-The original deployment request authorized replacing the configured source service, but the current session shares that service's cgroup: resume in an external Codex CLI session before restart.
-Keep the service running until the runtime build succeeds, record the local deployment checkpoint and migration backup, then verify both health endpoints, running revision, version and persistence behavior.
-Cleanup follows only healthy cutover and fork publication; dirty or active worktrees remain protected.
+The user's resumed instruction authorizes root replacement and fork publication without another confirmation. Maintenance skill revision `6847f1fe04c32955895911e435131a572e2f4fda` and the equivalent AGENTS rule from `4f24e79314ee8fc7b7936ac28b90d675f5ef7fa8` establish that standing authorization. The previous second-confirmation requirement is superseded.
+The verified product snapshot is unchanged from candidate `57b6c9da1becbf0b1b2c7fe259a8061dea7d0c49`; this handoff update changes only policy and records, so the completed product checks and source reviews are reused.
+Preserve the old root with a recoverable backup ref, replace it without stash, destructive reset, or untracked-file removal, then publish to the personal fork. Re-read each remote SHA immediately before a rewritten push and use an explicit lease; verify every remote result.
+
+The latest instruction explicitly excludes replacing or restarting the running production service. Earlier deployment authorization must not be reused. Root source replacement and publication are not proof of a deployed revision; keep existing dependencies and runtime artifacts untouched in this pass.
+After separate service-cutover authorization, use the deployment skill for the resource probe, frozen dependency installation, serialized root runtime build, local checkpoint and migration backup, then health, running-revision, version and persistence checks. Resume outside the target service's cgroup before restarting it.
+Broader post-cutover cleanup remains deferred; dirty or active worktrees stay protected.

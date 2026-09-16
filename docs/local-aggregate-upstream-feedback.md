@@ -19,7 +19,7 @@ These are fork feedback artifacts, not new upstream PRs. Product screenshots rem
 
 Migration identities are generated `0119_military_taskmaster` (Fast) and `0120_stale_chamber` (Recent). Old local timestamps also skipped stable `0118_brave_marvel_zombies`; a reproduced regression now verifies replay of plugin metadata along with `0117_machine_providers`, preservation of Fast/Recent values, and idempotence. The repair lives in the independent migration source, not in aggregate-only SQL or ledger edits.
 
-The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded: it has an untracked experiment and no new committed product patch beyond old aggregate history. Preserve it. Fork history rewrites use a freshly observed explicit lease under the authorized maintenance workflow. Root replacement, runtime packaging, deployment, and post-cutover cleanup remain separate gates; this entry is not deployment proof.
+The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded: it has an untracked experiment and no new committed product patch beyond old aggregate history. Preserve it. Root replacement and fork publication use the authorized maintenance workflow without another confirmation; history rewrites require a freshly observed explicit lease. Production service replacement requires separate explicit authorization and is excluded from this handoff. This entry is not deployment proof.
 
 ## Vite 6.4.1 CVE remediation
 
