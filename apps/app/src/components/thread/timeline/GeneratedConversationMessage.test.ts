@@ -101,6 +101,18 @@ describe("generatedConversationTitle — system source", () => {
     expect(title.segments[0]?.link).toBeUndefined();
   });
 
+  it("renders an environment switch as a workspace update", () => {
+    const title = systemTitle({
+      systemMessageKind: "environment-switched",
+      systemMessageSubject: null,
+    });
+
+    expect(title.plain).toBe("Workspace switched");
+    expect(title.segments).toEqual([
+      expect.objectContaining({ text: "Workspace switched" }),
+    ]);
+  });
+
   it("falls back to the generic System Message title for unlabeled rows", () => {
     const title = systemTitle({
       systemMessageKind: "unlabeled",

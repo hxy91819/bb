@@ -21,6 +21,7 @@ const systemMessageKindValues = [
   "child-failed",
   "child-interrupted",
   "child-outcome-batch",
+  "environment-switched",
   "unlabeled",
 ] as const;
 export const systemMessageKindSchema = z.enum(systemMessageKindValues);
