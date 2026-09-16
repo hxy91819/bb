@@ -237,6 +237,8 @@ function systemMessageTitleSegments(
       return subject !== null && subject.kind === "thread-batch"
         ? [verbSegment(`${subject.count} threads updated`)]
         : SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+    case "environment-switched":
+      return [verbSegment("Workspace switched")];
     case "unlabeled":
       return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
   }
@@ -322,6 +324,8 @@ function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
       return "AlertCircle";
     case "child-outcome-batch":
       return "ListTodo";
+    case "environment-switched":
+      return "FolderOpen";
     case "unlabeled":
       return "Info";
   }

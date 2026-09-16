@@ -102,6 +102,7 @@ import { cancelAbandonedProviderCreations } from "./thread-environment-providers
 import { scheduleThreadProvisioningAdvance } from "./thread-provisioning.js";
 import { isPreStartThreadStatus } from "./thread-status.js";
 import { settleDanglingBackgroundTasksForStoppedThreadInTransaction } from "./background-task-reconciliation.js";
+import { cancelEnvironmentSwitchContinuationInTransaction } from "./environment-switch-continuation.js";
 
 type ThreadStartCommand = Awaited<ReturnType<typeof buildThreadStartCommand>>;
 type ThreadStopCommand = ReturnType<typeof buildThreadStopCommand>;
@@ -1171,6 +1172,13 @@ function markThreadStopRequested(
           threadId: args.threadId,
         },
       );
+      if (args.interruptionReason === "manual-stop") {
+        if (
+          cancelEnvironmentSwitchContinuationInTransaction(tx, args.threadId)
+        ) {
+          notificationBuffer.notifyThread(args.threadId, ["queue-changed"]);
+        }
+      }
     },
     { behavior: "immediate" },
   );
@@ -1251,6 +1259,11 @@ function requestPreStartThreadStop(
           reason: "manual-stop",
           threadId: currentThread.id,
         });
+      }
+      if (
+        cancelEnvironmentSwitchContinuationInTransaction(tx, currentThread.id)
+      ) {
+        notificationBuffer.notifyThread(currentThread.id, ["queue-changed"]);
       }
       const abandonedContext = hasProvisioningContext
         ? getThreadProvisionContext(deps.db, currentThread.id)

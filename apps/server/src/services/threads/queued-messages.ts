@@ -68,6 +68,7 @@ import { resolvePermissionEscalation } from "./thread-runtime-config.js";
 import { hasMessageDispatchHooks } from "./dispatch-hooks.js";
 import { attemptDispatch } from "./dispatch-attempt.js";
 import { deliverParentSystemMessage } from "./parent-system-messages.js";
+import { cancelEnvironmentSwitchContinuationInTransaction } from "./environment-switch-continuation.js";
 import {
   createQueuedMessageAutoSendPausedError,
   createQueuedMessageClaimLostError,
@@ -235,6 +236,7 @@ export async function createQueuedMessageForThread(
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
         const { providerThreadId } = admitQueuedMessage(tx, currentThread);
+        cancelEnvironmentSwitchContinuationInTransaction(tx, thread.id);
         const queuedMessage = createQueuedThreadMessageInTransaction(tx, {
           threadId: thread.id,
           content: payload.input,
@@ -625,6 +627,12 @@ async function sendClaimedSystemNotice(
   );
   const queuedMessage = toThreadQueuedMessage(lead);
   const delivered = await deliverParentSystemMessage(deps, {
+    execution: {
+      model: queuedMessage.model,
+      reasoningLevel: queuedMessage.reasoningLevel,
+      permissionMode: queuedMessage.permissionMode,
+      serviceTier: queuedMessage.serviceTier,
+    },
     input: queuedMessage.content,
     parentThread: args.thread,
     systemMessageKind: notice.kind,
