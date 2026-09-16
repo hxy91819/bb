@@ -75,9 +75,26 @@ startup fails, preserve the data directory, migration ledger, and unit journal;
 repair through a new independent worktree. The recovery path must not modify
 the migration ledger or apply ad-hoc database repair SQL.
 
+## Mandatory external-agent handoff
+
+The production cutover must run from an agent started outside BB. An agent in a
+BB thread may complete the preconditions, build gate, migration preparation,
+and checkpoint, but must stop before any command that stops, restarts, or
+replaces the configured BB service.
+
+Before stopping, update the checkpoint with the completed gates, candidate
+commit, exact next command, and remaining verification. Give the user a prompt
+for a new agent launched from a terminal or another agent host that is not a BB
+thread. That agent must verify that it has no `BB_*` thread context and that its
+process is outside the configured service's cgroup. If either check fails, it
+must stop without touching the service. Authorization granted in the BB thread
+may be carried in the checkpoint, but the BB thread itself may not perform or
+resume the cutover.
+
 ## Cutover and proof
 
-Only after the build gate succeeds:
+Only the external agent may continue here, after reading the checkpoint and
+confirming the build gate succeeded:
 
 1. Restart the configured systemd unit. If an old failed unit is looping, stop
    it and reset its failed state before the new start.
