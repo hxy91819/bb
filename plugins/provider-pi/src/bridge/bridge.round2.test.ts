@@ -1,8 +1,11 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -380,15 +383,17 @@ it("reports a bash call's cwd as the thread's working directory, never an empty 
   expect(JSON.stringify(harness.deltasOf(threadId))).not.toContain('"cwd":""');
 }, 90_000);
 
-it("a resumed thread reports the session header's cwd, not the cwd bb asked for", async () => {
+it("a resumed thread relocates the session to the cwd bb asked for", async () => {
   const headerDir = mkdtempSync(join(tmpdir(), "bb-pi-header-cwd-"));
   try {
     const sessionDir = join(harness.workspaceDir, "sessions");
     mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, "thr-resume-cwd.jsonl");
     writeFileSync(
-      join(sessionDir, "thr-resume-cwd.jsonl"),
-      `${JSON.stringify({ type: "session", version: 3, id: "sess-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: headerDir })}\n`,
+      sessionFile,
+      `${JSON.stringify({ type: "session", version: 3, id: "sess-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: headerDir })}\n${JSON.stringify({ type: "message", id: "msg-1", role: "user", content: "preserve me" })}\n`,
     );
+    chmodSync(sessionFile, 0o600);
     const threadId = "thr-resume-cwd";
     const resumed = await harness.request((nextId += 1), "thread/resume", {
       threadId,
@@ -406,8 +411,17 @@ it("a resumed thread reports the session header's cwd, not the cwd bb asked for"
     expect(opened?.item).toMatchObject({
       type: "command",
       command: "pwd",
-      cwd: headerDir,
+      cwd: harness.workspaceDir,
     });
+    const [header, history] = readFileSync(sessionFile, "utf8").split("\n");
+    expect(JSON.parse(header!)).toMatchObject({ cwd: harness.workspaceDir });
+    expect(JSON.parse(history!)).toEqual({
+      type: "message",
+      id: "msg-1",
+      role: "user",
+      content: "preserve me",
+    });
+    expect(statSync(sessionFile).mode & 0o777).toBe(0o600);
   } finally {
     rmSync(headerDir, { recursive: true, force: true });
   }
