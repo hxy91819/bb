@@ -1,6 +1,6 @@
 # ACP mid-turn steering design
 
-Status: design proposal; no product implementation or provider compatibility claim from tests. The user accepts next-iteration semantics and requests a narrow visibility change: retain existing send/fallback behavior, but label interrupt delivery as “降级为中断并发送” instead of Steer.
+Status: agreed design direction; no product implementation or provider compatibility claim from tests yet. The user accepts next-iteration semantics and narrowed the visibility change: retain the existing send action and automatic fallback behavior, but label interrupt delivery as “降级为中断并发送” instead of Steer. The oracle review thread ended in an error after this narrowing; the label mechanism below is the concrete form of that decision.
 
 Reviewed source: local aggregate `a4923f542`. This document lives on the independent `fix/acp-mid-turn-steering-design` worktree, based on `desktop-v0.43.1` (`267938526`). The aggregate includes additional ACP service-tier, goal, and DSH work beyond that tag; an implementation must account for those dependencies explicitly rather than use the aggregate as an upstream PR base.
 
@@ -20,7 +20,15 @@ Keep the existing send action, queue action, and automatic fallback rules. Do no
 
 Where BB currently labels a delivered input Steer, show **Steer** for the native injection path and **降级为中断并发送** for the cancel-and-reprompt path. The label must describe this input's actual delivery, not just the provider's usual capability. A runtime busy rejection that safely falls back must update that same input to the degradation label; future inputs in the downgraded session receive it as well. Tier- or command-driven interruption receives the same label. Do not claim an interruption happened if the original turn ended naturally before any cancellation was sent. A failed input must not be labeled as successfully delivered.
 
-Use the existing per-input event/presentation path to carry the actual mode. If it cannot express the distinction, add only the narrow typed metadata needed by the existing input label and relevant CLI/SDK event rendering. Do not build a new per-session capability product surface or a general delivery-state system for this change. Do not replace the visible label with a log-only warning.
+Mechanism: a new thread delta `input.delivery` carrying `{ clientRequestId, delivery: "steer" | "interrupted" | "queued" }`, emitted only for inputs admitted through `turn/steer`, at the moment the carrying `session/prompt` write determines actual delivery:
+
+- `steer` — the input was written as a concurrent `session/prompt` while the turn's prompt group was in flight. This asserts delivery through the native path, not model consumption.
+- `interrupted` — the input was written as a continuation after a `session/cancel` was actually sent to deliver it. Covers incapable agents, explicit `interrupt` mode, tier/command-driven exceptions, and proven-rejection fallback replays.
+- `queued` — the input was written as a continuation after the in-flight group ended naturally with no `session/cancel` sent. Covers steers admitted during drain and rejected injections replayed after the group already ended. Render as a queued/downgraded delivery, not as interruption.
+
+An input emits at most two `input.delivery` deltas: a later emission corrects the earlier label (injected then fallback-replayed: `steer` → `interrupted` or `queued`). Plain `turn/start` inputs emit nothing. The delta assembles to a stored per-input event joined to the message by `clientRequestId`; the timeline label and CLI/SDK rendering read that stored fact. `appliedAs` and the `turn/steer` result stay unchanged so no response enum breaks.
+
+The new stored event type crosses the daemon→server wire: increment `HOST_DAEMON_PROTOCOL_VERSION` rather than rely on an old daemon silently dropping or misreading it. The bridge↔runtime delta grammar stays at the negotiated version — this bridge and runtime ship in one build, and out-of-tree bridges never emit the kind. Report mixed-acceptance ordering violations through the existing `provider.warning` delta. Do not build a new per-session capability product surface or a general delivery-state system for this change; do not replace the visible label with a log-only warning.
 
 ## Gates
 
@@ -45,7 +53,7 @@ The historical [codex-acp PR #314](https://github.com/zed-industries/codex-acp/p
 | User's Amp fork | Existing cancel-and-reprompt, preserving its `steerNextPrompt` behavior |
 | Cursor, OpenCode, OMP, Grok, Hermes, unknown/custom agents without affirmative evidence | Existing cancel-and-reprompt |
 
-Gate by input as well as agent. Until specifically verified, turn-starting commands such as `/compact`, `/init`, and `/review*` use the existing interrupt path. Do not let an agent silently serialize such a request merely because its normal-text steering gate passed. Attachment support must be tested for each asserted contract; do not infer steer attachment support solely from ordinary prompt support.
+Gate by input as well as agent. Until specifically verified, turn-starting commands such as `/compact`, `/init`, and `/review*` use the existing interrupt path. A text item whose mentions include a `command`-kind resource marks the input command-carrying; such inputs are ineligible for injection. Do not let an agent silently serialize such a request merely because its normal-text steering gate passed. The Devin dialect contract injects text-only inputs until attachment steering is probed; inputs carrying images or files use the interrupt path. An advertised `midTurnSteering` declaration or explicit `prompt` assertion may inject any non-command input.
 
 ## Turn ownership and request lifecycle
 
@@ -116,9 +124,14 @@ Leave bridge-wide initialize `steerMode: "queue"` unchanged for this scoped chan
 | `packages/provider-bridge-acp/src/bridge/agent-connection.ts`, tests | Report local submission separately from terminal response; retain typed error details when needed. |
 | `packages/provider-bridge-acp/src/bridge/fake-acp-agent.mjs`, `bridge.test.ts` | Controllable dissolve, queue-only, reject-busy, response-order, permission, config, and failure modes; assert externally visible behavior. |
 | `packages/provider-bridge-acp/src/delta-translation.test.ts` | Verify one continuous turn/tool stream and no duplicated acceptance or usage from multiple responders. Production translator changes only where needed for delivery metadata. |
-| Existing per-input event metadata and Steer label/rendering | Carry native versus actual interrupt delivery and render “降级为中断并发送” for the latter; no new send actions or settings workflow. |
+| `packages/provider-bridge-protocol/src/thread-delta.ts` + assembler/grammar tests | Add the `input.delivery` delta kind; keep it inside the negotiated grammar version. |
+| `packages/domain/src/provider-event.ts`, `thread-event-scope.ts` | Add the stored `turn/input/delivery` event type joined by `clientRequestId`. |
+| `packages/agent-runtime` delta assembly, `apps/host-daemon` event forwarding | Map the new delta to the new event; verify the daemon forwards it unchanged. |
+| `apps/server` event persistence + timeline, `apps/app` message label, CLI/SDK event rendering | Persist actual delivery on the input, render Steer / “降级为中断并发送” / queued on the message; no new send actions or settings workflow. |
+| `plugins/provider-acp/src/agents.ts`, `declaration.ts`, `agents.test.ts` | Add `steeringMode` to the strict custom-agent schema and pass it through `experimental_bridgeOptions` as `acpSteeringMode`. |
+| `HOST_DAEMON_PROTOCOL_VERSION` | Increment for the new daemon→server event type; an old pair must not silently lose the delivery fact. `PROVIDER_BRIDGE_PROTOCOL_VERSION` unchanged — bridge and runtime ship in one build. |
 
-For user-configurable opt-in, changes cannot stop inside the bridge. `plugins/provider-acp/src/agents.ts` has a strict custom-agent schema, and `declaration.ts` builds the bridge options. Add a `steeringMode` field there and pass it through to `acpSteeringMode`; test real settings-to-session propagation. Update the owning ACP skill, provider guide template, `docs/configuration.md`, and the existing Plugin Guide surface/SDK audit documentation as applicable. Keep the option available through existing plugin config CLI and SDK surfaces. Any changed daemon wire contract must follow the protocol-version rule; do not assume an untyped options object makes an old daemon compatible. An internal bridge-only lifecycle refactor needs no daemon wire change. If the label metadata changes daemon wire fields, apply the same version/compatibility rule; keep this a small metadata addition rather than redesigning dispatch.
+For user-configurable opt-in, changes cannot stop inside the bridge. `plugins/provider-acp/src/agents.ts` has a strict custom-agent schema, and `declaration.ts` builds the bridge options. Add a `steeringMode` field there and pass it through to `acpSteeringMode`; test real settings-to-session propagation. Update the owning ACP skill, provider guide template, `docs/configuration.md`, and the existing Plugin Guide surface/SDK audit documentation as applicable. Keep the option available through existing plugin config CLI and SDK surfaces. The delivery label rides the existing delta/event pipeline; the only daemon wire change is the new event type, covered by the version bump above.
 
 Required behavioral coverage:
 
@@ -134,6 +147,6 @@ Required behavioral coverage:
 10. Prompt-write failure emits no false acceptance; retry emits at most one acceptance; instruction prefixes, images, slash commands, and partial streaming output remain correct.
 11. Runtime/daemon stale recovery submits an unsent late input once, and never resubmits a native input already written.
 12. Keep the supplied Devin single-inference counterexample in the acceptance notes. Do not label a matching response ID as proof that the model consumed the steer.
-13. Native inputs show Steer; actual cancel-and-reprompt inputs show “降级为中断并发送”, including runtime fallback and tier/command exceptions. Natural completion races and failures must not falsely claim interruption or success. Existing send, queue, keyboard, CLI, and SDK action semantics remain unchanged.
+13. Native inputs show Steer; actual cancel-and-reprompt inputs show “降级为中断并发送”, including runtime fallback and tier/command exceptions; inputs delivered after natural completion show the queued label, not interruption. Failures must not claim interruption or success. Existing send, queue, keyboard, CLI, and SDK action semantics remain unchanged.
 
 Run relevant Turbo typecheck/tests through the repository's resource isolation wrapper, one scoped job at a time, once implementation exists. Use controllable fake-agent barriers for races rather than elapsed-time guesses. Reprobe Devin with a multi-iteration task for live acceptance. Product commits still require the independent-branch autoreview, fork publication, and registered cherry-pick workflow before aggregation. This design document alone does not mark a feature as verified or request deployment.
