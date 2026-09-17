@@ -53,8 +53,12 @@ vi.mock("@/components/thread/ThreadActionsMenu", () => ({
   ThreadActionsContextMenu: ({ children }: { children: ReactNode }) => (
     <>{children}</>
   ),
-  ThreadActionsMenu: () => null,
-  ThreadArchiveQuickAction: () => null,
+  ThreadActionsMenu: () => (
+    <button type="button" aria-label="Thread actions" />
+  ),
+  ThreadArchiveQuickAction: () => (
+    <button type="button" aria-label="Archive thread" />
+  ),
 }));
 
 function createThread(
@@ -1036,6 +1040,52 @@ describe("ThreadRow", () => {
       );
     },
   );
+
+  it("shows only thread actions beside a parent-thread disclosure", () => {
+    const { container } = renderThreadRow({
+      thread: createThread({ title: "Parent thread" }),
+      options: {
+        kind: "parent",
+        depth: 1,
+        isCompact: false,
+        isCollapsed: false,
+        childCount: 1,
+        childActivity: NO_COLLAPSED_CHILD_ACTIVITY,
+        onToggleCollapsed: vi.fn(),
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Archive thread" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Thread actions" })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Collapse Parent thread threads" }),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".bb-sidebar-hover-actions-inset"),
+    ).toBeNull();
+  });
+
+  it("keeps the quick archive action and inset on rows without children", () => {
+    const { container } = renderThreadRow({
+      options: {
+        kind: "parent",
+        depth: 1,
+        isCompact: false,
+        isCollapsed: false,
+        childCount: 0,
+        childActivity: NO_COLLAPSED_CHILD_ACTIVITY,
+        onToggleCollapsed: vi.fn(),
+      },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Archive thread" }),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Thread actions" })).not.toBeNull();
+    expect(
+      container.querySelector(".bb-sidebar-hover-actions-inset"),
+    ).not.toBeNull();
+  });
 
   it("shows its Command shortcut in place of an active indicator", () => {
     renderThreadRow({
