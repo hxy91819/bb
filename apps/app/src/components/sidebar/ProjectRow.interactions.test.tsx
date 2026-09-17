@@ -7,7 +7,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { ReactNode } from "react";
 import type { ThreadListEntry } from "@bb/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -99,7 +98,6 @@ function renderProjectRow(
   isActive = false,
   collapsedEnvironmentIds: Set<string> = new Set(),
   isCollapsed = false,
-  headerActions?: ReactNode,
 ) {
   const onToggleEnvironmentCollapsed = vi.fn();
   const result = render(
@@ -116,7 +114,6 @@ function renderProjectRow(
             collapsedThreadIds={new Set()}
             collapsedEnvironmentIds={collapsedEnvironmentIds}
             isLocalPathInvalid={false}
-            headerActions={headerActions}
             onToggleProjectCollapsed={onToggleProjectCollapsed}
             onToggleThreadCollapsed={vi.fn()}
             onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
@@ -247,24 +244,6 @@ describe("ProjectRow interactions", () => {
       "proj_test",
     );
     expect(projectGroup?.hasAttribute("data-sidebar-section-id")).toBe(false);
-  });
-
-  it("keeps project header actions available on coarse mobile sidebars", () => {
-    renderProjectRow(
-      vi.fn(),
-      { status: "ready", threads: [] },
-      false,
-      new Set(),
-      false,
-      <button type="button">Display options</button>,
-    );
-
-    expect(
-      screen
-        .getByRole("button", { name: "Display options" })
-        .closest(".bb-sidebar-hover-actions")
-        ?.getAttribute("data-sidebar-hover-actions-mobile"),
-    ).toBe("always");
   });
 
   it("shows generic runtime activity before a named workflow rollup", () => {
