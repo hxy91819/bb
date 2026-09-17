@@ -198,6 +198,20 @@
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/4"
         }
       ]
+    },
+    {
+      "branch": "fix/sidebar-parent-row-hover-archive",
+      "lastPackaged": {
+        "sourceCommit": "3aa38d9f7b7583a00d3666eabcb40d815bdc7e3c",
+        "aggregateCommit": "9da5c55d981e093dee111901115b65e80fe8bd79"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3821,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3821"
+        }
+      ]
     }
   ]
 }
