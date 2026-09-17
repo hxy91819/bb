@@ -37,6 +37,7 @@ interface AcpAgentRequestArgs<TResult> {
   method: string;
   params: unknown;
   resultSchema: z.ZodType<TResult>;
+  onSubmitted?: () => void;
 }
 
 export interface AcpAgentConnection {
@@ -179,16 +180,17 @@ export function createAcpAgentConnection(
     options.onExit({ code: null, signal: null, stderrTail });
   }
 
-  function writeLine(message: object): void {
+  function writeLine(message: object): boolean {
     if (stopping) {
-      return;
+      return false;
     }
     const stdin = child.stdin;
     if (!stdin || stdin.destroyed || !stdin.writable) {
       closeForAgentStdin(new Error("stdin is not writable"));
-      return;
+      return false;
     }
     stdin.write(JSON.stringify(message) + "\n");
+    return true;
   }
 
   child.stdin?.on("error", (error) => {
@@ -316,7 +318,7 @@ export function createAcpAgentConnection(
       return stopping || exited;
     },
 
-    request({ method, params, resultSchema }) {
+    request({ method, params, resultSchema, onSubmitted }) {
       if (stopping || exited) {
         return Promise.reject(
           new AcpAgentExitedError(
@@ -342,7 +344,16 @@ export function createAcpAgentConnection(
           },
           reject,
         });
-        writeLine({ jsonrpc: "2.0", id, method, params });
+        if (!writeLine({ jsonrpc: "2.0", id, method, params })) {
+          pending.delete(id);
+          reject(
+            new AcpAgentExitedError(
+              `ACP agent "${options.command}" is not running`,
+            ),
+          );
+          return;
+        }
+        onSubmitted?.();
       });
     },
 

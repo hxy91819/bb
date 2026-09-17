@@ -14,12 +14,14 @@ export interface AcceptedClientRequest {
 
 export interface AcceptedClientRequestContext {
   acceptedClientRequestEvents: readonly ThreadEventWithMetaLike[];
+  deliveryClientRequestEvents: readonly ThreadEventWithMetaLike[];
   rejectedClientRequestEvents: readonly ThreadEventWithMetaLike[];
 }
 
 export const EMPTY_ACCEPTED_CLIENT_REQUEST_CONTEXT: AcceptedClientRequestContext =
   {
     acceptedClientRequestEvents: [],
+    deliveryClientRequestEvents: [],
     rejectedClientRequestEvents: [],
   };
 
@@ -103,4 +105,29 @@ export function buildAcceptedClientRequestById({
     onAccepted: addAccepted,
   });
   return acceptedById;
+}
+
+export type TurnInputDelivery = "steer" | "interrupted" | "queued";
+
+export function buildDeliveryByClientRequestId({
+  context,
+  events,
+}: BuildAcceptedClientRequestByIdArgs): Map<
+  ClientTurnRequestId,
+  TurnInputDelivery
+> {
+  const deliveryEvents = [
+    ...context.deliveryClientRequestEvents,
+    ...events,
+  ].flatMap(({ event, meta }) =>
+    event.type === "turn/input/delivery"
+      ? [{ delivery: event.delivery, requestId: event.clientRequestId, seq: meta.seq }]
+      : [],
+  );
+  deliveryEvents.sort((a, b) => a.seq - b.seq);
+  const deliveryById = new Map<ClientTurnRequestId, TurnInputDelivery>();
+  for (const { delivery, requestId } of deliveryEvents) {
+    deliveryById.set(requestId, delivery);
+  }
+  return deliveryById;
 }

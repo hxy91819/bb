@@ -74,6 +74,7 @@ export const projectParityRows: ParityRowProjector = ({
   const timeline = buildThreadTimelineFromEvents({
     acceptedClientRequestContext: {
       acceptedClientRequestEvents: [],
+      deliveryClientRequestEvents: [],
       rejectedClientRequestEvents: [],
     },
     contextWindowEvents,
