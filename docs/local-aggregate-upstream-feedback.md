@@ -53,6 +53,7 @@ The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded
 - **Upstream feedback:** [get-bb/bb#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327)
 - **Upstream adoption:** [get-bb/bb#3352](https://github.com/get-bb/bb/pull/3352) merged as `8ac123f3551e7502a91c93e87329797f34ee626b`. The production change is the same `data-sidebar-hover-actions-mobile="always"` marker; the upstream test also covers the open header-actions state.
 - **Retirement:** `fix/mobile-display-options` (`30f71b335`) is no longer packaged. The rebuilt aggregate uses the upstream fix from `origin/main`.
+- **Aggregate cleanup:** `fix/local-aggregate-project-row-test-residue` removes only the obsolete test helper argument, invalid JSX prop, and duplicate assertion left when the retired fork commit re-entered through the superseded aggregate merge. The current test still exercises the real project actions through closed, open, and closed menu states, so mobile behavior coverage remains intact.
 
 ## Codex Fast mode persistence
 

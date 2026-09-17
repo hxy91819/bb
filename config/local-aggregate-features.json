@@ -212,6 +212,20 @@
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3821"
         }
       ]
+    },
+    {
+      "branch": "fix/local-aggregate-project-row-test-residue",
+      "lastPackaged": {
+        "sourceCommit": "12709f8dd6705c8c4b880727969b43255e6da218",
+        "aggregateCommit": "85f92ac37341dfef28de68f881a7db38e2916a43"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3330,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327"
+        }
+      ]
     }
   ]
 }
