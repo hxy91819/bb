@@ -87,6 +87,7 @@
 | `fix/environment-switch-auto-continue` | `4edc38001` | `9ec663a50` | [hxy91819/bb#7](https://github.com/hxy91819/bb/issues/7) | 环境目录切换后单次继续，并安全迁移 Pi session |
 | `feature/thread-project-label` | `a268b26c7` | `4da88e8da` | [hxy91819/bb#4](https://github.com/hxy91819/bb/issues/4) | 在线程列表和固定树中显示项目标签 |
 | `fix/sidebar-parent-row-hover-archive` | `3aa38d9f7` | `9da5c55d9` | [get-bb/bb#3821](https://github.com/get-bb/bb/issues/3821) | 父线程行 hover 不显示快捷归档，折叠箭头不再位移 |
+| `fix/sidebar-touch-hover-actions` | `ac8417dac` | `7435b9bef` | [get-bb/bb#3821](https://github.com/get-bb/bb/issues/3821) | 无 hover 的触摸设备不显示快捷归档或收缩线程标题 |
 | `fix/local-aggregate-project-row-test-residue` | `12709f8dd` | `85f92ac37` | [get-bb/bb#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327) | 清理已移除 ProjectRow headerActions 契约的旧聚合测试残留 |
 | `fix/local-aggregate-migration-history-cleanup` | `e39b496fb` | `4569551b1` | [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403), [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) | 移除旧聚合回流的重复迁移文件和倒序 journal 条目 |
 

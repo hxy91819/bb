@@ -64,6 +64,14 @@ The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded
 - **Retirement:** `fix/mobile-display-options` (`30f71b335`) is no longer packaged. The rebuilt aggregate uses the upstream fix from `origin/main`.
 - **Aggregate cleanup:** `fix/local-aggregate-project-row-test-residue` removes only the obsolete test helper argument, invalid JSX prop, and duplicate assertion left when the retired fork commit re-entered through the superseded aggregate merge. The current test still exercises the real project actions through closed, open, and closed menu states, so mobile behavior coverage remains intact.
 
+## Touch sidebar hover actions
+
+- **Upstream context:** [get-bb/bb#3821](https://github.com/get-bb/bb/issues/3821) documents the same 30px sidebar hover inset and quick Archive interaction for parent rows.
+- **Fork implementation:** [fix/sidebar-touch-hover-actions](https://github.com/hxy91819/bb/tree/fix/sidebar-touch-hover-actions) at [`ac8417dac`](https://github.com/hxy91819/bb/commit/ac8417dace81e8164f23ee9409aca23e774338f2).
+- **Failure:** touch browsers synthesize persistent `:hover`. The existing override applied only below 768px and its selector lost to the normal hover inset, so touching a thread row could reveal Archive and add 30px of right padding even on a phone.
+- **Change:** apply the suppression whenever the primary input cannot hover and match the touch-hover selector strongly enough to remove the inset, while preserving keyboard focus, open action menus, and desktop mouse hover.
+- **Validation:** all 4,471 app tests passed, app lint completed with no errors, and a rendered 1280px no-hover/coarse-pointer story retained `padding-right: 0`, hidden actions, and stable thread titles before and after hover. Autoreview run `20260917T063653Z-2fb1ac` reported no actionable findings.
+
 ## Codex Fast mode persistence
 
 - **Upstream feedback:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) is the primary bug tracker. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) is retained only as historical context: it is a closed, not-planned SDK feature request rather than the bug's tracking issue.
