@@ -848,13 +848,6 @@
       "when": 1789579591628,
       "tag": "0120_stale_chamber",
       "breakpoints": true
-    },
-    {
-      "idx": 119,
-      "version": "6",
-      "when": 1789179431804,
-      "tag": "0119_magenta_dexter_bennett",
-      "breakpoints": true
     }
   ]
 }
