@@ -259,6 +259,20 @@
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
         }
       ]
+    },
+    {
+      "branch": "fix/acp-mid-turn-steering",
+      "lastPackaged": {
+        "sourceCommit": "e6e68a0c0a1e3504fcf2ecbdac27bcf2154d0408",
+        "aggregateCommit": "8162eafe682f5d7ea54da585398c53159d78b553"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 8,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
+        }
+      ]
     }
   ]
 }
