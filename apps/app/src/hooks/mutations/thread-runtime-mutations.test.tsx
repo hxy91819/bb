@@ -154,10 +154,102 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.clearAllMocks();
 });
 
 describe("thread runtime mutations", () => {
+  it("promotes only accepted user work requests", async () => {
+    const { queryClient, wrapper } = createQueryClientTestHarness();
+    const existingThread = makeThreadResponse({
+      id: "thread-existing",
+      projectId: "project-existing",
+    });
+    vi.mocked(sdk.threads.spawn).mockResolvedValueOnce(
+      makeThreadResponse({
+        id: "thread-created",
+        projectId: "project-created",
+      }),
+    );
+    queryClient.setQueryData(threadQueryKey(existingThread.id), existingThread);
+    const { result } = renderHook(
+      () => ({
+        create: useCreateThread(),
+        createQueued: useCreateThreadQueuedMessage(),
+        send: useSendThreadMessage(),
+        sendQueued: useSendThreadQueuedMessage(),
+      }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.create.mutateAsync({
+        environment: { type: "project-default" },
+        input: [{ type: "text", text: "Start work", mentions: [] }],
+        projectId: "project-created",
+      });
+      await result.current.send.mutateAsync({
+        id: existingThread.id,
+        input: [{ type: "text", text: "Resume work", mentions: [] }],
+        mode: "auto",
+      });
+      await result.current.createQueued.mutateAsync({
+        id: existingThread.id,
+        input: [{ type: "text", text: "Queue work", mentions: [] }],
+      });
+      await result.current.sendQueued.mutateAsync({
+        id: existingThread.id,
+        mode: "auto",
+        queuedMessageId: "qmsg-1",
+      });
+    });
+
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("bb.sidebar.projectActivityPromotions") ??
+          "",
+      ),
+    ).toEqual({
+      promotions: { "project-created": 1, "project-existing": 4 },
+      sequence: 4,
+      version: 1,
+    });
+
+    vi.mocked(sdk.threads.spawn).mockResolvedValueOnce(
+      makeThreadResponse({ id: "empty-thread", projectId: "project-empty" }),
+    );
+    await act(async () => {
+      await result.current.create.mutateAsync({
+        environment: { type: "project-default" },
+        input: [],
+        originKind: "fork",
+        projectId: "project-empty",
+      });
+    });
+
+    vi.mocked(sdk.threads.send).mockRejectedValueOnce(new Error("rejected"));
+    await act(async () => {
+      await expect(
+        result.current.send.mutateAsync({
+          id: existingThread.id,
+          input: [{ type: "text", text: "Rejected", mentions: [] }],
+          mode: "auto",
+        }),
+      ).rejects.toThrow("rejected");
+    });
+
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("bb.sidebar.projectActivityPromotions") ??
+          "",
+      ),
+    ).toEqual({
+      promotions: { "project-created": 1, "project-existing": 4 },
+      sequence: 4,
+      version: 1,
+    });
+  });
+
   it("prefetches queued message detail as soon as a queued thread is created", async () => {
     const { queryClient, wrapper } = createQueryClientTestHarness();
     const { result } = renderHook(() => useCreateThread(), { wrapper });

@@ -9,6 +9,7 @@ import { PluginSlotMount } from "./PluginSlotMount";
 import { resolvePendingInteraction } from "@/lib/plugin-slot-resolvers";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { useStopThread } from "@/hooks/mutations/thread-runtime-mutations";
+import { useAcceptedThreadWorkPromotion } from "@/hooks/useAcceptedThreadWorkPromotion";
 import { sdk } from "@/lib/sdk";
 
 export interface PluginPendingInteractionRequest {
@@ -36,6 +37,7 @@ export function PluginPendingInteractionComposer({
 }: PluginPendingInteractionComposerProps) {
   const { pendingInteractions } = usePluginSlots();
   const stopThread = useStopThread();
+  const promoteAcceptedThreadWork = useAcceptedThreadWorkPromotion();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const slot = useMemo(
@@ -57,6 +59,7 @@ export function PluginPendingInteractionComposer({
           threadId: interaction.threadId,
           value,
         });
+        promoteAcceptedThreadWork({ threadId: interaction.threadId });
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
         throw cause;
@@ -64,7 +67,7 @@ export function PluginPendingInteractionComposer({
         setSubmitting(false);
       }
     },
-    [interaction.id, interaction.threadId],
+    [interaction.id, interaction.threadId, promoteAcceptedThreadWork],
   );
 
   const cancel = useCallback(async () => {

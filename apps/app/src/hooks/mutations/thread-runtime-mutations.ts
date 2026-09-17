@@ -10,6 +10,7 @@ import type {
 import type { AppCreateThreadRequest } from "@bb/client-core";
 import { BbHttpError, sdk } from "@/lib/sdk";
 import { wsManager } from "@/lib/ws";
+import { useAcceptedThreadWorkPromotion } from "@/hooks/useAcceptedThreadWorkPromotion";
 import type { QueuedMessageReorderRequest } from "@/lib/queued-message-reorder";
 import type {
   EditMessageMutationRequest,
@@ -122,6 +123,7 @@ async function deleteThreadQueuedMessageOrConfirmMissing({
 
 export function useCreateThread() {
   const queryClient = useQueryClient();
+  const promoteAcceptedThreadWork = useAcceptedThreadWorkPromotion();
 
   return useMutation({
     meta: {
@@ -137,6 +139,12 @@ export function useCreateThread() {
       }),
     onMutate: async () => beginCreateThreadTransaction({ queryClient }),
     onSuccess: (thread, variables) => {
+      if (variables.input.length > 0) {
+        promoteAcceptedThreadWork({
+          projectId: thread.projectId,
+          threadId: thread.id,
+        });
+      }
       if (thread.queuedMessageCount > 0) {
         void prefetchThreadQueuedMessages({
           queryClient,
@@ -159,6 +167,7 @@ export function useCreateThread() {
 
 export function useSendThreadMessage() {
   const queryClient = useQueryClient();
+  const promoteAcceptedThreadWork = useAcceptedThreadWorkPromotion();
 
   return useMutation({
     meta: {
@@ -204,6 +213,7 @@ export function useSendThreadMessage() {
       });
     },
     onSuccess: (data, variables, context) => {
+      promoteAcceptedThreadWork({ threadId: variables.id });
       applySendThreadMessageSuccess({
         queryClient,
         realtimeConnected: wsManager.getConnectionState() === "connected",
@@ -239,6 +249,7 @@ export function useEditThreadMessage() {
 
 export function useCreateThreadQueuedMessage() {
   const queryClient = useQueryClient();
+  const promoteAcceptedThreadWork = useAcceptedThreadWorkPromotion();
 
   return useMutation({
     meta: {
@@ -279,6 +290,7 @@ export function useCreateThreadQueuedMessage() {
       });
     },
     onSuccess: (queuedMessage, variables, context) => {
+      promoteAcceptedThreadWork({ threadId: variables.id });
       applyQueuedMessageCreateResult({
         queryClient,
         queuedMessage,
@@ -334,6 +346,7 @@ export function useUpdateThreadQueuedMessage() {
 
 export function useSendThreadQueuedMessage() {
   const queryClient = useQueryClient();
+  const promoteAcceptedThreadWork = useAcceptedThreadWorkPromotion();
 
   return useMutation({
     meta: {
@@ -360,6 +373,7 @@ export function useSendThreadQueuedMessage() {
       });
     },
     onSuccess: (data, variables, transaction) => {
+      promoteAcceptedThreadWork({ threadId: variables.id });
       applyQueuedMessageSendResult({
         queryClient,
         request: variables,
