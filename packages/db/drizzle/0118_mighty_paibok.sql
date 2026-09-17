@@ -1,1 +1,0 @@
-ALTER TABLE `projects` ADD `recent_explicit_work_sequence` integer;

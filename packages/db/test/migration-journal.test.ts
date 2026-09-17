@@ -101,6 +101,20 @@ describe("migration journal integrity", () => {
     expect(missing).toEqual([]);
   });
 
+  it("has a journal entry for every .sql file", () => {
+    const { entries } = readJournal();
+    const drizzleDir = resolve(__dirname, "..", "drizzle");
+    const journalTags = new Set(entries.map((entry) => entry.tag));
+    const unjournaled = fs
+      .readdirSync(drizzleDir)
+      .filter((filename) => filename.endsWith(".sql"))
+      .map((filename) => filename.slice(0, -4))
+      .filter((tag) => !journalTags.has(tag))
+      .sort();
+
+    expect(unjournaled).toEqual([]);
+  });
+
   it("contains every published migration with its released timestamp", () => {
     const { entries } = readJournal();
     const entriesByTag = new Map(entries.map((entry) => [entry.tag, entry]));
