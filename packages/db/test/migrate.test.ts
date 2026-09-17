@@ -389,6 +389,21 @@ function requirePublishedMigrationWhen(tag: string): number {
   return when;
 }
 
+function requireCurrentMigrationWhen(tag: string): number {
+  const journal = JSON.parse(
+    readFileSync(
+      resolve(__dirname, "..", "drizzle", "meta", "_journal.json"),
+      "utf-8",
+    ),
+  ) as { entries: { tag: string; when: number }[] };
+  const when = journal.entries.find((entry) => entry.tag === tag)?.when;
+  if (when === undefined) {
+    throw new Error(`No current migration timestamp for ${tag}`);
+  }
+
+  return when;
+}
+
 const baselineWhen = requirePublishedMigrationWhen("0000_baseline");
 const publishedTerminalSessionUserInputWhen = requirePublishedMigrationWhen(
   "0001_terminal_session_user_input",
@@ -614,6 +629,17 @@ function dropHostMaxPermissionModeColumn(db: DbConnection): void {
   }
 }
 
+function dropServiceTierOverrideColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (columns.some((column) => column.name === "service_tier_override")) {
+    db.$client
+      .prepare("ALTER TABLE threads DROP COLUMN service_tier_override")
+      .run();
+  }
+}
+
 function dropSteerActiveThreadOnEnterColumn(db: DbConnection): void {
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(app_settings)")
@@ -653,6 +679,7 @@ function dropServiceTierOverrideColumn(db: DbConnection): void {
 
 function resetMigrationsAfterThreadSearch(db: DbConnection): void {
   restoreLegacyThreadOriginColumn(db);
+  dropServiceTierOverrideColumn(db);
   dropRewindAddedTables(db);
   db.$client
     .prepare<[number]>("DELETE FROM __drizzle_migrations WHERE created_at > ?")
@@ -2427,6 +2454,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(permissionModesMigrationWhen);
+      dropServiceTierOverrideColumn(db);
       rewindEnvironmentRowFactsMigration(db);
       rewindEnvironmentProvidersMigration(db);
       dropSideChatPluginExperimentColumn(db);
@@ -2834,6 +2862,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(threadSectionsRepairMigrationWhen);
+      dropServiceTierOverrideColumn(db);
       rewindEnvironmentRowFactsMigration(db);
       rewindEnvironmentProvidersMigration(db);
       dropSideChatPluginExperimentColumn(db);
@@ -2938,6 +2967,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(threadSectionsRepairMigrationWhen);
+      dropServiceTierOverrideColumn(db);
       rewindEnvironmentRowFactsMigration(db);
       rewindEnvironmentProvidersMigration(db);
       dropSideChatPluginExperimentColumn(db);
@@ -3175,6 +3205,7 @@ describe("migrate", () => {
           `,
         )
         .run(threadSourceOriginMigrationWhen);
+      dropServiceTierOverrideColumn(db);
       dropRewindAddedTables(db);
       db.$client.exec(`
         DROP TRIGGER IF EXISTS thread_search_segments_after_text_update;
@@ -5531,6 +5562,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(eventParentToolCallMigrationWhen);
+      dropServiceTierOverrideColumn(db);
       db.$client.exec(`
         INSERT INTO events (
           id, thread_id, scope_kind, turn_id, sequence, type, item_id, item_kind, data, created_at
@@ -5615,10 +5647,14 @@ describe("migrate", () => {
 
 describe("environment providers migration", () => {
   const environmentProvidersMigrationWhen = 1788386943764;
+  const serviceTierOverrideMigrationWhen = requireCurrentMigrationWhen(
+    "0115_living_squadron_supreme",
+  );
 
   function seedPreProviderEnvironments(db: DbConnection): void {
     db.$client.prepare("DROP TABLE ui_preferences").run();
     db.$client.prepare("DROP TABLE retained_event_outputs").run();
+    dropServiceTierOverrideColumn(db);
     rewindEnvironmentRowFactsMigration(db);
     rewindEnvironmentProvidersMigration(db);
     db.$client
@@ -5692,6 +5728,29 @@ describe("environment providers migration", () => {
       .get(threadId);
     return JSON.parse(row?.startupContext ?? "null") as unknown;
   }
+
+  it("adds the service tier override to legacy threads", () => {
+    const db = createMigratedConnection();
+    try {
+      dropServiceTierOverrideColumn(db);
+      db.$client
+        .prepare<[number]>(
+          "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        )
+        .run(serviceTierOverrideMigrationWhen);
+
+      migrate(db);
+
+      expect(
+        db.$client
+          .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+          .all()
+          .map((column) => column.name),
+      ).toContain("service_tier_override");
+    } finally {
+      closeConnection(db);
+    }
+  });
 
   it("records bundled plugin owners while migrating legacy environments", () => {
     const db = createMigratedConnection();

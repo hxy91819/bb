@@ -42,6 +42,10 @@ out
 # temporary scripts
 .tmp/
 
+# Machine-specific aggregate web-service settings. This file can name internal
+# hosts and local paths; commit only its documented example.
+config/local-aggregate-web.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
