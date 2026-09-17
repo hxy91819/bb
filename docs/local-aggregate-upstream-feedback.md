@@ -21,6 +21,15 @@ Migration identities are generated `0119_military_taskmaster` (Fast) and `0120_s
 
 The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded: it has an untracked experiment and no new committed product patch beyond old aggregate history. Preserve it. Root replacement and fork publication use the authorized maintenance workflow without another confirmation; history rewrites require a freshly observed explicit lease. Production service replacement requires separate explicit authorization and is excluded from this handoff. This entry is not deployment proof.
 
+## Local aggregate migration history cleanup
+
+- **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) covers the Fast behavior and [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) covers Recent activity. This is local aggregate history repair, not a new product change or upstream submission.
+- **Source:** `fix/local-aggregate-migration-history-cleanup` at `e39b496fbf4fd54635fe06c5ede50e36ce135561`, integrated with a source reference as `4569551b19fc5e5d9528549db3bd013fa062ed62`.
+- **Failure:** superseded aggregate commits reintroduced five generated Fast/Recent SQL files. One also appended `0119_magenta_dexter_bennett` after `0120_stale_chamber` with a lower timestamp and reused journal index 119. Drizzle ignores four unjournaled files and skips the appended migration below the ledger high-water mark, but the source catalog violated journal ordering and retained conflicting migration identities.
+- **Change:** remove only the five superseded SQL files and the appended journal entry. Keep the deployed canonical `0119_military_taskmaster` and `0120_stale_chamber` identities, compatibility migration code, schemas, snapshots, and persisted ledger unchanged. Journal tests now reject SQL files without entries as well as entries without SQL files.
+- **Validation:** 503 database tests and database typechecking passed. A temporary copy of the deployment's 123-entry pre-cutover backup upgraded to 126 entries, preserved Fast and Recent aggregates, applied plugin metadata and each canonical migration once, retained each legacy identity once, and remained ledger-idempotent on a second migration. Autoreview run `20260917T032653Z-14485d` reported no actionable findings.
+- **Deferred work:** the untracked `migration-guard.mjs` experiment in `fix/local-aggregate-migration-guard` remains excluded from this source and deployment candidate.
+
 ## Vite 6.4.1 CVE remediation
 
 - **Upstream feedback:** [get-bb/bb#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454)
