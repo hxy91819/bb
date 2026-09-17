@@ -2688,6 +2688,40 @@ describe("acp bridge", () => {
     expect(threadEventsOfType("turn/completed")).toHaveLength(1);
   });
 
+  it("cancels an in-flight steer when the primary prompt fails", async () => {
+    const requestLog = join(workspaceDir, "steer-fail-requests.jsonl");
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_MID_TURN_STEERING: "1",
+        FAKE_ACP_CONCURRENT_PROMPTS: "1",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+        FAKE_ACP_PROMPT_FAIL_TEXT: "failme",
+        FAKE_ACP_PROMPT_FAIL_DELAY_MS: "250",
+      },
+    });
+    const turnId = sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "failme primary", mentions: [] }],
+      clientRequestId: "creq_prmfa22222",
+    });
+    await waitForResponse(turnId);
+
+    const steerId = sendTurnRequest("turn/steer", providerThreadId, {
+      expectedTurnId: "turn-1",
+      input: [{ type: "text", text: "hang steer", mentions: [] }],
+      clientRequestId: "creq_strfa22222",
+    });
+    await waitForResponse(steerId);
+
+    const completed = await waitForTurnCompleted();
+    expect(completed).toMatchObject({ status: "failed" });
+    expect(
+      loggedAcpRequests(requestLog).filter(
+        (entry) => entry.method === "session/cancel",
+      ),
+    ).toHaveLength(1);
+    expect(threadEventsOfType("turn/completed")).toHaveLength(1);
+  });
+
   it("keeps interrupt delivery after a busy rejection for the rest of the session", async () => {
     const promptLog = join(workspaceDir, "steer-busy-sticky-prompts.jsonl");
     const { providerThreadId } = await startThread({
