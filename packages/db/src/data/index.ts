@@ -295,6 +295,7 @@ export {
   listTimelineRootWindowTurnIds,
   listStoredDelegatingItemRowsByItemIds,
   listStoredTurnInputAcceptedRowsByClientRequestIds,
+  listStoredTurnInputDeliveryRowsByClientRequestIds,
   listStoredTurnRejectedRowsByClientRequestIds,
   listStoredTurnCompletedRowsByTurnIds,
   listStoredTurnStartedKeys,

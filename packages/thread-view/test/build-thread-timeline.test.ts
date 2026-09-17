@@ -766,6 +766,7 @@ function buildTimelineRowsWithAcceptedContext(
   return buildThreadTimelineFromEvents({
     acceptedClientRequestContext: {
       acceptedClientRequestEvents,
+      deliveryClientRequestEvents: [],
       rejectedClientRequestEvents: [],
     },
     contextWindowEvents: [],
@@ -789,6 +790,7 @@ function buildTimelineRowsWithRejectedContext(
   return buildThreadTimelineFromEvents({
     acceptedClientRequestContext: {
       acceptedClientRequestEvents: [],
+      deliveryClientRequestEvents: [],
       rejectedClientRequestEvents,
     },
     contextWindowEvents: [],

@@ -49,6 +49,7 @@ import {
 } from "./build-event-projection.js";
 import {
   buildAcceptedClientRequestById,
+  buildDeliveryByClientRequestId,
   buildRejectedClientRequestById,
   type AcceptedClientRequestContext,
 } from "./accepted-client-request-context.js";
@@ -879,6 +880,10 @@ function buildPendingSteerRowsFromEvents(
     context: acceptedClientRequestContext,
     events: orderedEvents,
   });
+  const deliveryByClientRequestId = buildDeliveryByClientRequestId({
+    context: acceptedClientRequestContext,
+    events: orderedEvents,
+  });
   const rejectedClientRequestById = buildRejectedClientRequestById(
     acceptedClientRequestContext,
     orderedEvents,
@@ -995,10 +1000,23 @@ function buildPendingSteerRowsFromEvents(
     if (pendingSteers.length === 0) {
       continue;
     }
+    const steerDelivery =
+      event.type === "client/turn/requested"
+        ? deliveryByClientRequestId.get(event.requestId)
+        : undefined;
     pendingSteerRows.push(
-      ...pendingSteers.map((pendingSteer) =>
-        convertSteerMessage(pendingSteer, ROOT_TIMELINE_ROW_ID_PREFIX),
-      ),
+      ...pendingSteers.map((pendingSteer) => {
+        if (
+          steerDelivery !== undefined &&
+          pendingSteer.turnRequest.kind === "steer"
+        ) {
+          pendingSteer.turnRequest = {
+            ...pendingSteer.turnRequest,
+            delivery: steerDelivery,
+          };
+        }
+        return convertSteerMessage(pendingSteer, ROOT_TIMELINE_ROW_ID_PREFIX);
+      }),
     );
   }
 

@@ -83,7 +83,13 @@ const eventProjectionTurnRequestStatusValues = [
 type EventProjectionTurnRequestStatus =
   (typeof eventProjectionTurnRequestStatusValues)[number];
 
+export type EventProjectionTurnRequestDelivery =
+  | "steer"
+  | "interrupted"
+  | "queued";
+
 export interface EventProjectionTurnRequest {
+  delivery?: EventProjectionTurnRequestDelivery;
   isGrouped: boolean;
   kind: EventProjectionTurnRequestKind;
   status: EventProjectionTurnRequestStatus;

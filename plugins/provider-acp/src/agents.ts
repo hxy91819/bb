@@ -18,6 +18,7 @@ export interface AcpAgentDefinition {
   icon?: string;
   launch: AcpLaunchSpec;
   dialect?: string;
+  steeringMode?: "auto" | "interrupt" | "prompt";
   parameterizedModelPicker?: boolean;
   primaryModels?: readonly string[];
   reasoningProbePriorityModelIds?: readonly string[];
@@ -47,6 +48,7 @@ export const customAcpAgentSchema = z
     env: z.record(z.string().regex(ENV_NAME_PATTERN), z.string()).default({}),
     cwd: z.string().min(1).optional(),
     dialect: z.string().min(1).optional(),
+    steeringMode: z.enum(["auto", "interrupt", "prompt"]).optional(),
     modelCli: launchSpecFields.modelCli,
     reasoningCli: launchSpecFields.reasoningCli,
     nativeReasoning: launchSpecFields.nativeReasoning,
@@ -88,6 +90,9 @@ export function customAcpAgentDefinition(
         : { permissionCli: agent.permissionCli }),
     },
     ...(agent.dialect === undefined ? {} : { dialect: agent.dialect }),
+    ...(agent.steeringMode === undefined
+      ? {}
+      : { steeringMode: agent.steeringMode }),
     ...(shipped?.nativeRootsResolver === undefined
       ? {}
       : { nativeRootsResolver: shipped.nativeRootsResolver }),
