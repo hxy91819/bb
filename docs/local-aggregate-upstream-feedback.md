@@ -16,6 +16,7 @@ The feedback audit retained every registered change. Mermaid #3382, dependency r
 - **Change:** the automations plugin marks sessions at dispatch time — spawned threads carry `[auto]` in title and first prompt, re-prompted target threads carry it at the front of the due message, and marking is idempotent. Stored prompts stay unchanged.
 - **Validation:** 82 focused plugin tests and plugin typecheck passed in the source worktree; autoreview run `20260918T032747Z-2a5e82` (codex `gpt-5.6-sol`, high) reported no accepted/actionable findings; the aggregate cherry-pick passed the same focused tests.
 - **Screenshot:** not applicable; the behavior is a thread-list title and message prefix observed in live dispatch.
+- **Integration status:** fork specification only; the owner classifies this behavior as personal preference, so no upstream issue was filed for it.
 
 Newly registered source branches and fork specifications:
 
