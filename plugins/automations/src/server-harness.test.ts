@@ -1192,7 +1192,8 @@ describe("automations server plugin harness", () => {
     expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
     expect(harness.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({
       projectId: PROJECT_ID,
-      title: "Sweep",
+      title: "[auto] Sweep",
+      prompt: "[auto] summarize the inbox",
       origin: "plugin",
       originPluginId: "automations",
     });
@@ -1229,6 +1230,36 @@ describe("automations server plugin harness", () => {
         "automations-changed",
         "automation-runs-changed",
       ]),
+    );
+
+    await harness.dispose();
+  });
+
+  it("marks re-prompted target threads as automation-driven", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const host = await bootAutomationsPlugin();
+    const { harness } = host;
+    const automation = await createAgentAutomation(harness, {
+      name: "Target sweep",
+      trigger: { triggerType: "schedule", cron: "* * * * *", timezone: "UTC" },
+      targetThreadId: THREAD_ID,
+    });
+
+    vi.setSystemTime(new Date("2026-01-01T00:01:05.000Z"));
+    const service = harness.runService("automation-sweep");
+    await vi.waitFor(() =>
+      expect(harness.sdk.callsTo("threads.send")).toHaveLength(1),
+    );
+    service.controller.abort();
+    await service.done;
+
+    expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(0);
+    const sendCall = harness.sdk.callsTo("threads.send")[0]?.[0] as {
+      input?: Array<{ text?: string }>;
+    };
+    expect(sendCall.input?.[0]?.text).toBe(
+      `[auto] [bb automation due:${automation.id}]\n\nsummarize the inbox`,
     );
 
     await harness.dispose();

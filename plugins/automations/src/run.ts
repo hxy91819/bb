@@ -75,6 +75,19 @@ function isProjectGoneError(error: unknown): boolean {
   return projectGoneErrorSchema.safeParse(error).success;
 }
 
+const AUTOMATION_SESSION_MARKER = "[auto]";
+
+// Every automation-triggered session is marked so it is recognizable at a
+// glance: spawned threads carry it in their title and prompt, and re-prompted
+// target threads carry it at the front of the due message. Applied at
+// dispatch time, so stored prompts stay untouched and every future automation
+// inherits the marker without opting in.
+export function markAutomationSession(text: string): string {
+  return text.startsWith(`${AUTOMATION_SESSION_MARKER} `)
+    ? text
+    : `${AUTOMATION_SESSION_MARKER} ${text}`;
+}
+
 function renderAutomationDueMessage(args: {
   automationId: string;
   prompt: string;
@@ -114,8 +127,8 @@ export async function executeAgentRun(
       await bb.sdk.threads.spawn({
         projectId: args.automation.projectId,
         environment: args.execution.environment,
-        prompt: args.execution.prompt,
-        title: args.automation.name,
+        prompt: markAutomationSession(args.execution.prompt),
+        title: markAutomationSession(args.automation.name),
         providerId: args.execution.providerId,
         model: args.execution.model,
         reasoningLevel: args.execution.reasoningLevel,
@@ -214,10 +227,12 @@ async function reuseTargetThreadForRun(
     input: [
       {
         type: "text",
-        text: renderAutomationDueMessage({
-          automationId: args.automation.id,
-          prompt: args.execution.prompt,
-        }),
+        text: markAutomationSession(
+          renderAutomationDueMessage({
+            automationId: args.automation.id,
+            prompt: args.execution.prompt,
+          }),
+        ),
         mentions: [],
       },
     ],
