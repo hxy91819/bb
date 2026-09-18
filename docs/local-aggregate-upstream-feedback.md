@@ -131,3 +131,11 @@ The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded
 - **Fork implementation:** [fix/markdown-table-breakout](https://github.com/hxy91819/bb/tree/fix/markdown-table-breakout) at [`755ea2faf`](https://github.com/hxy91819/bb/commit/755ea2fafd3ecb7820687c4e88dc837c35363acc)
 - **Change:** remove the table breakout geometry pipeline so tables stay in the prose column. When a table actually overflows, show a corner expand control that opens a full-screen natural-width dialog. The control is hover/focus-revealed and always visible on coarse pointers.
 - **Integration status:** incrementally packaged onto the existing aggregate baseline without taking newer `origin/main` or `desktop-v0.43.0`.
+
+## Side chat composer command
+
+- **Fork specification:** [hxy91819/bb#10](https://github.com/hxy91819/bb/issues/10)
+- **Fork implementation:** [feature/side-chat-command](https://github.com/hxy91819/bb/tree/feature/side-chat-command) at [`7c130e9ec`](https://github.com/hxy91819/bb/commit/7c130e9ec614a6cdfd048120ef648d8f08ba7a4f)
+- **Change:** typing `/side` in a thread's composer runs the side-chat plugin's `side-chat` thread panel action instead of inserting a command pill. The suggestion appears only when `isThreadForkable` allows it — unarchived thread with an environment and a provider that advertises `supportsFork` (e.g. Pi, Codex) — and while the action is registered. Command suggestions now support an optional `panelAction` dispatch target, and the thread panel action invocation is shared between the launcher and the composer.
+- **Validation:** 135 PromptBoxInternal tests, 112 related plugin/composer tests, and 12 focused suggestion tests passed; `@bb/app` and `@bb/client-core` typecheck clean; autoreview run `20260918T113716Z-c4c6bf` reported no actionable findings.
+- **Integration status:** fork-only spec for now; no upstream issue was filed in this pass.

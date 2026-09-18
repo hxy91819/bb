@@ -287,6 +287,20 @@
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
         }
       ]
+    },
+    {
+      "branch": "feature/side-chat-command",
+      "lastPackaged": {
+        "sourceCommit": "7c130e9ec614a6cdfd048120ef648d8f08ba7a4f",
+        "aggregateCommit": "b92da9b86d128bab3689b32d865e56a83110be3a"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 10,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
+        }
+      ]
     }
   ]
 }
