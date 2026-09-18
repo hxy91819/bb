@@ -263,8 +263,8 @@
     {
       "branch": "fix/acp-mid-turn-steering",
       "lastPackaged": {
-        "sourceCommit": "e6e68a0c0a1e3504fcf2ecbdac27bcf2154d0408",
-        "aggregateCommit": "8162eafe682f5d7ea54da585398c53159d78b553"
+        "sourceCommit": "a3c956e1fcf30051edc87cb4ef06df7e0c2cc1a3",
+        "aggregateCommit": "0b504c44a762467a4c81bfefcd1bc3e844b85b9c"
       },
       "upstreamIssues": [
         {

@@ -90,7 +90,7 @@
 | `fix/sidebar-touch-hover-actions` | `ac8417dac` | `7435b9bef` | [get-bb/bb#3832](https://github.com/get-bb/bb/issues/3832) | 无 hover 的触摸设备不显示快捷归档或收缩线程标题 |
 | `fix/local-aggregate-project-row-test-residue` | `12709f8dd` | `85f92ac37` | [get-bb/bb#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327) | 清理已移除 ProjectRow headerActions 契约的旧聚合测试残留 |
 | `fix/local-aggregate-migration-history-cleanup` | `e39b496fb` | `4569551b1` | [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403), [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) | 移除旧聚合回流的重复迁移文件和倒序 journal 条目 |
-| `fix/acp-mid-turn-steering` | `e6e68a0c0` | `8162eafe6` | [hxy91819/bb#8](https://github.com/hxy91819/bb/issues/8) | ACP 中原生 mid-turn steer，按实际投递标注 steer/interrupted/queued |
+| `fix/acp-mid-turn-steering` | `a3c956e1f` | `0b504c44a` | [hxy91819/bb#8](https://github.com/hxy91819/bb/issues/8) | ACP 中原生 mid-turn steer，按实际投递标注 steer/interrupted/queued |
 
 维护规则：
 
