@@ -17,6 +17,7 @@ interface UseCommandSuggestionsArgs {
   commandScope: "new-thread" | "thread";
   skillsTrigger: PromptMentionCommandTrigger | null;
   promptActions?: readonly CommandSuggestionPromptAction[];
+  panelCommands?: readonly CommandSuggestionPanelCommand[];
   environmentId: string | null;
   hostId?: string | null;
   query: string | null;
@@ -42,6 +43,41 @@ interface CommandSuggestionPromptAction {
     name: string;
     trailingText: string;
   };
+}
+
+export interface CommandSuggestionPanelCommand {
+  name: string;
+  pluginId: string;
+  actionId: string;
+  description: string | null;
+}
+
+export function panelCommandSuggestions({
+  panelCommands,
+  query,
+}: {
+  panelCommands: readonly CommandSuggestionPanelCommand[] | undefined;
+  query: string;
+}): ProviderCommandSuggestion[] {
+  return (panelCommands ?? [])
+    .map(
+      (command): ProviderCommandSuggestion => ({
+        kind: "command",
+        name: command.name,
+        source: "command",
+        origin: "user",
+        description: command.description,
+        argumentHint: null,
+        pluginId: command.pluginId,
+        panelAction: {
+          pluginId: command.pluginId,
+          actionId: command.actionId,
+        },
+      }),
+    )
+    .filter((suggestion) =>
+      commandSuggestionMatchesQuery(suggestion, query),
+    );
 }
 
 export function commandSuggestionMatchesQuery(
@@ -145,6 +181,16 @@ export function useCommandSuggestions(
         : [],
     [args.promptActions, isActive, trigger, trimmedQuery],
   );
+  const localPanelCommandSuggestions = useMemo(
+    () =>
+      isActive
+        ? panelCommandSuggestions({
+            panelCommands: args.panelCommands,
+            query: trimmedQuery.toLowerCase(),
+          })
+        : [],
+    [args.panelCommands, isActive, trimmedQuery],
+  );
 
   const commandsQuery = useProjectCommands(
     {
@@ -207,13 +253,14 @@ export function useCommandSuggestions(
       trimmedQuery,
     );
     return mergeCommandSuggestions(
-      promptActionSuggestions,
+      [...promptActionSuggestions, ...localPanelCommandSuggestions],
       discoveredSuggestions,
     );
   }, [
     commandsQuery.data?.commands,
     args.commandScope,
     isActive,
+    localPanelCommandSuggestions,
     promptActionSuggestions,
     trimmedQuery,
   ]);

@@ -140,12 +140,14 @@ function buildTypeaheadConfig({
   onMentionQueryChange = () => {},
   commandSuggestions = [],
   onCommandQueryChange = () => {},
+  onPanelAction,
 }: {
   mentionTriggers?: TypeaheadConfig["mention"]["triggers"];
   mentionSuggestions?: readonly PromptMentionSuggestion[];
   onMentionQueryChange?: TypeaheadConfig["mention"]["onQueryChange"];
   commandSuggestions?: TypeaheadConfig["command"]["suggestions"];
   onCommandQueryChange?: (query: string | null) => void;
+  onPanelAction?: TypeaheadConfig["command"]["onPanelAction"];
 } = {}): TypeaheadConfig {
   return {
     mention: {
@@ -167,6 +169,7 @@ function buildTypeaheadConfig({
       isLoadingMore: false,
       loadMore: () => {},
       onQueryChange: onCommandQueryChange,
+      onPanelAction,
     },
   };
 }
@@ -274,6 +277,7 @@ function renderPromptBox(
     mentionTriggers?: TypeaheadConfig["mention"]["triggers"];
     mentionSuggestions?: readonly PromptMentionSuggestion[];
     commandSuggestions?: TypeaheadConfig["command"]["suggestions"];
+    onPanelAction?: TypeaheadConfig["command"]["onPanelAction"];
     onAttachFiles?: (files: File[]) => Promise<void> | void;
   } = {},
 ) {
@@ -304,6 +308,7 @@ function renderPromptBox(
           onMentionQueryChange,
           commandSuggestions: options.commandSuggestions,
           onCommandQueryChange,
+          onPanelAction: options.onPanelAction,
         })}
         mentionMenuPlacement="bottom"
         attachments={{ onAttachFiles: options.onAttachFiles }}
@@ -372,7 +377,7 @@ async function selectPromptAction(label: string) {
   }
 }
 
-async function selectCommandSuggestion(label: string) {
+async function selectCommandSuggestion(label: string | RegExp) {
   const suggestion = await screen.findByRole("button", { name: label });
   fireEvent.mouseDown(suggestion, { button: 0 });
 }
@@ -4378,6 +4383,80 @@ describe("PromptBoxInternal prompt actions", () => {
           source: "command",
           origin: "user",
           label: "review",
+          argumentHint: null,
+        },
+      },
+    ]);
+  });
+
+  it("runs a panel action command without inserting a pill", async () => {
+    const onPanelAction = vi.fn(() => true);
+    const { changes, promptBoxRef } = renderPromptBox("/si", {
+      commandSuggestions: [
+        {
+          kind: "command",
+          name: "side",
+          source: "command",
+          origin: "user",
+          description: "Start side chat",
+          argumentHint: null,
+          pluginId: "side-chat",
+          panelAction: {
+            pluginId: "side-chat",
+            actionId: "side-chat",
+          },
+        },
+      ],
+      onPanelAction,
+    });
+
+    await focusPromptEnd(promptBoxRef);
+    await selectCommandSuggestion(/^side/);
+
+    expect(onPanelAction).toHaveBeenCalledWith({
+      pluginId: "side-chat",
+      actionId: "side-chat",
+    });
+    await waitFor(() => expect(latestValue(changes)).toBe(""));
+    expect(latestChange(changes)?.mentions).toEqual([]);
+  });
+
+  it("inserts a pill when the panel action cannot run", async () => {
+    const onPanelAction = vi.fn(() => false);
+    const { changes, promptBoxRef } = renderPromptBox("/si", {
+      commandSuggestions: [
+        {
+          kind: "command",
+          name: "side",
+          source: "command",
+          origin: "user",
+          description: "Start side chat",
+          argumentHint: null,
+          pluginId: "side-chat",
+          panelAction: {
+            pluginId: "side-chat",
+            actionId: "side-chat",
+          },
+        },
+      ],
+      onPanelAction,
+    });
+
+    await focusPromptEnd(promptBoxRef);
+    await selectCommandSuggestion(/^side/);
+
+    await waitFor(() => expect(latestValue(changes)).toBe("/side "));
+    expect(latestChange(changes)?.mentions).toEqual([
+      {
+        start: 0,
+        end: "/side".length,
+        resource: {
+          kind: "command",
+          trigger: "/",
+          name: "side",
+          source: "command",
+          origin: "user",
+          label: "side",
           argumentHint: null,
         },
       },
