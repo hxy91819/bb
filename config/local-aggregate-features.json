@@ -8,6 +8,20 @@
   },
   "features": [
     {
+      "branch": "feature/automation-auto-marker",
+      "lastPackaged": {
+        "sourceCommit": "694dec198b2603c17f1eab0cae7c3da9a28cbba2",
+        "aggregateCommit": "fbae7370f62ee785003b379c258c709acc4ad9b0"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 9,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/9"
+        }
+      ]
+    },
+    {
       "branch": "feature/mermaid-elk-layout",
       "lastPackaged": {
         "sourceCommit": "e3460182b52a69ce9f5ef071b231f52c2aed999f",

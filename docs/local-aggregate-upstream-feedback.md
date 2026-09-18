@@ -8,6 +8,15 @@ The selected baseline is `desktop-v0.43.1` (`267938526dfcbc0edb228ce827b5bec202c
 
 The feedback audit retained every registered change. Mermaid #3382, dependency remediation #1780, Recent activity #1614, and table behavior #1705 remain open. Closing Fast #3403 via #3472 addressed the wire reset, not local toggle persistence or next-thread defaults. Closing table #1951 via #1953 addressed clipping, not the local in-column scroll/expand behavior. Fork specifications #1 and #2 remain open. No branch was retired based only on issue closure.
 
+## Automation session auto marker
+
+- **Fork specification:** [hxy91819/bb#9](https://github.com/hxy91819/bb/issues/9)
+- **Fork implementation:** [feature/automation-auto-marker](https://github.com/hxy91819/bb/tree/feature/automation-auto-marker) at [`694dec198`](https://github.com/hxy91819/bb/commit/694dec198b2603c17f1eab0cae7c3da9a28cbba2), packaged as [`fbae7370f`](https://github.com/hxy91819/bb/commit/fbae7370f1b7649785ddb8414bcbd0dff5f15d4d).
+- **Background:** sessions spawned or re-prompted by BB automations were indistinguishable from manually created sessions, and every future automation would have to opt in by hand-writing a marker into its prompt.
+- **Change:** the automations plugin marks sessions at dispatch time — spawned threads carry `[auto]` in title and first prompt, re-prompted target threads carry it at the front of the due message, and marking is idempotent. Stored prompts stay unchanged.
+- **Validation:** 82 focused plugin tests and plugin typecheck passed in the source worktree; autoreview run `20260918T032747Z-2a5e82` (codex `gpt-5.6-sol`, high) reported no accepted/actionable findings; the aggregate cherry-pick passed the same focused tests.
+- **Screenshot:** not applicable; the behavior is a thread-list title and message prefix observed in live dispatch.
+
 Newly registered source branches and fork specifications:
 
 - [Thread project labels, #4](https://github.com/hxy91819/bb/issues/4): `feature/thread-project-label`; labels in thread-mode rows and pinned trees, excluding the personal project. The original `a268b26c7be5da45b6c79e0254adfa4a4a053fa2` commit is retained unchanged.

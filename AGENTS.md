@@ -73,6 +73,7 @@
 
 | 独立分支 | 上次打包源提交 | 上次打包聚合提交 | 上游回馈 | 目的 |
 | --- | --- | --- | --- | --- |
+| `feature/automation-auto-marker` | `694dec198` | `fbae7370f` | [hxy91819/bb#9](https://github.com/hxy91819/bb/issues/9) | 自动化触发的会话在派发时自动加 `[auto]` 前缀 |
 | `feature/mermaid-elk-layout` | `e3460182b` | `df1d1972f` | [get-bb/bb#3382](https://github.com/get-bb/bb/issues/3382) | 为 Mermaid 默认启用 ELK，保留 strict 安全配置 |
 | `fix/vite-cve-2026-39363` | `42097e0e2` | `52bba2fc3` | [get-bb/bb#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454) | 固定 Ladle / Vitest 3 的传递 Vite 到 6.4.3 |
 | `fix/local-aggregate-server-startup` | `b11109ea3` | `31d189905` | [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) | 先监听再恢复线程，解除 host daemon 启动依赖环 |
