@@ -42,7 +42,10 @@ import {
   mapScriptResultToRun,
   scriptPathEnv,
 } from "./script-runner.js";
-import { reconcileRunningAutomationRuns } from "./run.js";
+import {
+  markAutomationSession,
+  reconcileRunningAutomationRuns,
+} from "./run.js";
 import { sweepDueAutomations } from "./sweep.js";
 import { createAutomationService } from "./service.js";
 import { registerAutomationCli } from "./cli.js";
@@ -1680,6 +1683,17 @@ describe("script process containment", () => {
     } finally {
       await rm(pluginDataDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("session marker", () => {
+  it("marks session text once and idempotently", () => {
+    expect(markAutomationSession("summarize the inbox")).toBe(
+      "[auto] summarize the inbox",
+    );
+    expect(markAutomationSession("[auto] already marked")).toBe(
+      "[auto] already marked",
+    );
   });
 });
 
