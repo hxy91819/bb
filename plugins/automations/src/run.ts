@@ -82,6 +82,14 @@ function isProjectGoneError(error: unknown): boolean {
   return projectGoneErrorSchema.safeParse(error).success;
 }
 
+const AUTOMATION_SESSION_MARKER = "[auto]";
+
+export function markAutomationSession(text: string): string {
+  return text.startsWith(`${AUTOMATION_SESSION_MARKER} `)
+    ? text
+    : `${AUTOMATION_SESSION_MARKER} ${text}`;
+}
+
 function renderAutomationDueMessage(args: {
   automationId: string;
   prompt: string;
@@ -121,8 +129,8 @@ export async function executeAgentRun(
       await bb.sdk.threads.spawn({
         projectId: args.automation.projectId,
         environment: args.execution.environment,
-        prompt: args.execution.prompt,
-        title: args.automation.name,
+        prompt: markAutomationSession(args.execution.prompt),
+        title: markAutomationSession(args.automation.name),
         providerId: args.execution.providerId,
         model: args.execution.model,
         reasoningLevel: args.execution.reasoningLevel,
@@ -221,10 +229,12 @@ async function reuseTargetThreadForRun(
     input: [
       {
         type: "text",
-        text: renderAutomationDueMessage({
-          automationId: args.automation.id,
-          prompt: args.execution.prompt,
-        }),
+        text: markAutomationSession(
+          renderAutomationDueMessage({
+            automationId: args.automation.id,
+            prompt: args.execution.prompt,
+          }),
+        ),
         mentions: [],
       },
     ],
