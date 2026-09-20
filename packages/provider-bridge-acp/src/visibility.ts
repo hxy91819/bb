@@ -50,6 +50,7 @@ interface AcpMethodRawEvent {
 interface AcpUpdateRawEvent {
   kind: "update";
   updateKind: string;
+  goal: boolean;
 }
 
 interface AcpUnknownUpdateRawEvent {
@@ -75,7 +76,12 @@ function parseAcpRawEvent(event: JsonRpcMessage): AcpRawEvent {
   if (!updateKind) {
     return { kind: "update/unknown" };
   }
-  return { kind: "update", updateKind };
+  const meta = isRecord(update) ? update["_meta"] : undefined;
+  const goal =
+    updateKind === "session_info_update" &&
+    isRecord(meta) &&
+    "goal" in meta;
+  return { kind: "update", updateKind, goal };
 }
 
 function describeParsedAcpRawEvent(
@@ -90,6 +96,9 @@ function describeParsedAcpRawEvent(
           : "unknown",
       };
     case "update":
+      if (event.goal) {
+        return { kind: `acp/update:${event.updateKind}`, coverage: "normalized" };
+      }
       if (NORMALIZED_ACP_UPDATE_KINDS.has(event.updateKind)) {
         return {
           kind: `acp/update:${event.updateKind}`,
