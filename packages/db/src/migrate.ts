@@ -1310,25 +1310,24 @@ function restoreStagedRecentWorkSequenceColumn(db: DbConnection): void {
   })();
 }
 
-function applySkippedMachineProvidersMigrationBeforeLaterHistory(
+function applySkippedStableMigrationsBeforeLaterHistory(
   db: DbConnection,
   migrationsFolder: string,
 ): void {
   const latestApplied = readLatestAppliedMigrationCreatedAt(db);
   if (latestApplied === null) return;
 
-  const migration = requireExpectedAppliedMigration(
-    readExpectedAppliedMigrations(migrationsFolder),
-    "0117_machine_providers",
-  );
-  if (
-    latestApplied <= migration.createdAt ||
-    readAppliedMigrationCreatedAts(db).has(migration.createdAt)
-  ) {
-    return;
+  const expected = readExpectedAppliedMigrations(migrationsFolder);
+  const applied = readAppliedMigrationCreatedAts(db);
+  for (const tag of ["0117_machine_providers", "0118_brave_marvel_zombies"]) {
+    const migration = requireExpectedAppliedMigration(expected, tag);
+    if (
+      latestApplied > migration.createdAt &&
+      !applied.has(migration.createdAt)
+    ) {
+      applyMigrationStatements(db, migration);
+    }
   }
-
-  applyMigrationStatements(db, migration);
 }
 
 function stageExistingServiceTierOverrideColumn(
@@ -1730,10 +1729,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       migrationsFolder,
     );
     applySkippedUiPreferencesMigrationBeforeLaterHistory(db, migrationsFolder);
-    applySkippedMachineProvidersMigrationBeforeLaterHistory(
-      db,
-      migrationsFolder,
-    );
+    applySkippedStableMigrationsBeforeLaterHistory(db, migrationsFolder);
     const stagedServiceTierOverride = stageExistingServiceTierOverrideColumn(
       db,
       migrationsFolder,
