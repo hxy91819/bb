@@ -642,8 +642,24 @@
         "acp-codex-goal",
         "acp-mid-turn-steering"
       ],
+      "adaptations": [],
       "integrated": {
         "commit": "b3237e56a566b1c70b68bfd4e26ac11353bad180",
+        "sourceLogicalPatches": [
+          "acp-dsh-provider-core-v1",
+          "acp-dsh-fallback-tests-v1",
+          "acp-dsh-ordered-fallback-tests-v1",
+          "acp-dsh-collapse-policy-v1",
+          "acp-fast-mode-v1",
+          "acp-codex-goal-v1",
+          "acp-mid-turn-steering-design-v1",
+          "acp-mid-turn-steering-core-v1",
+          "acp-steering-submit-failure-v1",
+          "acp-steering-cancel-on-failure-v1",
+          "acp-steering-label-design-v1",
+          "acp-steering-adapter-design-v1",
+          "acp-steering-english-labels-v1"
+        ],
         "patches": [
           {
             "commit": "8588eaa6ef89e2be1c2ecfc68fcc22b19e0d8ab4",
