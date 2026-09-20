@@ -34,6 +34,10 @@ vi.mock("@/hooks/queries/system-queries", () => ({
   })),
 }));
 
+vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
+  useUpdateThread: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+}));
+
 vi.mock("./ProjectRow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./ProjectRow")>();
   return {
