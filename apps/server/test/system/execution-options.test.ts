@@ -369,7 +369,7 @@ describe("resolveSystemExecutionOptions", () => {
         responder.requests.filter(
           (request) => request.command.type === "provider.health",
         ),
-      ).toHaveLength(4);
+      ).toHaveLength(5);
       const modelRequest = responder.requests.find(
         (request) => request.command.type === "provider.list_models",
       );
@@ -750,7 +750,7 @@ describe("resolveSystemExecutionOptions", () => {
             responder.requests.filter(
               (request) => request.command.type === "provider.health",
             ),
-          ).toHaveLength(failStatusRequest ? 0 : 4);
+          ).toHaveLength(failStatusRequest ? 0 : 5);
           expect(
             responder.requests.filter(
               (request) => request.command.type === "provider.list_models",
@@ -1259,7 +1259,7 @@ describe("resolveSystemExecutionOptions", () => {
           responder.requests.filter(
             (request) => request.command.type === "provider.health",
           ),
-        ).toHaveLength(4);
+        ).toHaveLength(5);
         const modelRequest = responder.requests.find(
           (request) => request.command.type === "provider.list_models",
         );
@@ -1383,7 +1383,7 @@ describe("resolveSystemExecutionOptions", () => {
         responder.requests.filter(
           (request) => request.command.type === "provider.health",
         ),
-      ).toHaveLength(4);
+      ).toHaveLength(5);
       const modelRequest = responder.requests.find(
         (request) => request.command.type === "provider.list_models",
       );
