@@ -245,6 +245,8 @@ function systemMessageTitleSegments(
             verbSegment("result"),
           ]
         : SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+    case "environment-switched":
+      return [verbSegment("Workspace switched")];
     case "unlabeled":
       return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
   }
@@ -332,6 +334,8 @@ function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
       return "ListTodo";
     case "tool-result-delivered":
       return "Toolbox";
+    case "environment-switched":
+      return "FolderOpen";
     case "unlabeled":
       return "Info";
   }

@@ -1208,7 +1208,7 @@ describe("internal tool-call dispatch to plugin tools", () => {
 
         const builtinResponse = await postToolCall(
           UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
-          { path: environmentPath },
+          { path: environmentPath, continueCurrentTask: false },
         );
         const builtin = (await readJson(builtinResponse)) as {
           success: boolean;
