@@ -591,7 +591,21 @@
         }
       ],
       "disposition": "internal",
-      "reason": "Fork #14 defines the maintenance process and Provider pilot; no upstream product feedback is required."
+      "reason": "Fork #14 defines the maintenance process and Provider pilot; no upstream product feedback is required.",
+      "source": {
+        "baseCommit": "de07cd01c38abf97d0c02e3afaf546de622c5436",
+        "versionCommit": "72819a0c0b80f438bb4e53a26f889d60de9269ab",
+        "commits": [
+          {
+            "commit": "72819a0c0b80f438bb4e53a26f889d60de9269ab",
+            "logicalPatch": "two-tier-fork-maintenance-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": null
+      }
     }
   ],
   "domains": [
