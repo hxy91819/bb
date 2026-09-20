@@ -49,6 +49,13 @@ import {
   commandPillDismissedRangeEnd,
   findActiveTrigger,
   type ActiveTrigger,
+  type CommandMenuState,
+  type MentionMenuState,
+  type OrderedMentionSuggestions,
+  type ProviderCommandPanelAction,
+  type ProviderCommandSuggestion,
+  type PromptMentionSuggestion,
+  type TypeaheadMenuState,
   type TypeaheadTrigger,
 } from "./mentions/find-active-trigger";
 import {
@@ -397,6 +404,63 @@ function PromptSubmitButton({
       </Tooltip>
     </TooltipProvider>
   );
+}
+
+export interface TypeaheadMentionConfig {
+  triggers?: readonly PluginMentionTrigger[];
+  results: OrderedMentionSuggestions;
+  isLoading: boolean;
+  isRefreshing: boolean;
+  isError: boolean;
+  onQueryChange: (
+    query: string | null,
+    trigger: PluginMentionTrigger | null,
+  ) => void;
+  resolveLink?: PromptMentionLinkResolver;
+}
+
+export interface TypeaheadCommandConfig {
+  triggers: readonly PromptMentionCommandTrigger[];
+  suggestions: readonly ProviderCommandSuggestion[];
+  isLoading: boolean;
+  isError: boolean;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  loadMore: () => void;
+  onQueryChange: (
+    query: string | null,
+    trigger: PromptMentionCommandTrigger | null,
+  ) => void;
+  onEditorFocus?: () => void;
+  onPanelAction?: (target: ProviderCommandPanelAction) => boolean;
+}
+
+export interface TypeaheadConfig {
+  mention: TypeaheadMentionConfig;
+  command: TypeaheadCommandConfig;
+}
+
+export const INERT_TYPEAHEAD_COMMAND_CONFIG: TypeaheadCommandConfig = {
+  triggers: [],
+  suggestions: [],
+  isLoading: false,
+  isError: false,
+  hasMore: false,
+  isLoadingMore: false,
+  loadMore: () => {},
+  onQueryChange: () => {},
+};
+
+export interface AttachmentsConfig {
+  items?: PromptDraftAttachment[];
+  pendingUploads?: readonly PendingAttachmentUpload[];
+  isAttaching?: boolean;
+  error?: string | null;
+  onAttachFiles?: (files: File[]) => Promise<PromptDraftAttachment[]>;
+  onUpdate?: (
+    update: (attachments: PromptDraftAttachment[]) => PromptDraftAttachment[],
+  ) => void;
+  projectId?: string;
 }
 
 interface AttachmentHistoryEntry {
@@ -1056,8 +1120,38 @@ export function PromptBoxInternal({
     modifier: modifierSubmitAction,
     showModifierInMenu,
   } = submission;
-  const onSubmit = primarySubmitAction.run;
-  const onModifierSubmit = modifierSubmitAction?.run;
+  const draftSubmitAction = { onSubmit: onDefaultSubmit, requiresInput: true };
+  const immediateSubmitAction = {
+    onSubmit: onDefaultModifierSubmit,
+    requiresInput: false,
+  };
+  const [primarySubmitAction, modifierSubmitAction] = swapSubmitActions
+    ? [immediateSubmitAction, draftSubmitAction]
+    : [draftSubmitAction, immediateSubmitAction];
+  const { onSubmit } = primarySubmitAction;
+  const { onSubmit: onModifierSubmit } = modifierSubmitAction;
+  const {
+    triggers: mentionTriggerChars = DEFAULT_TYPEAHEAD_MENTION_TRIGGERS,
+    results: mentionResults,
+    isLoading: mentionLoading,
+    isRefreshing: mentionRefreshing,
+    isError: mentionError,
+    onQueryChange: onMentionQueryChange,
+    resolveLink: mentionResolveLink,
+  } = typeahead.mention;
+  const {
+    triggers: commandTriggerChars,
+    suggestions: commandSuggestions,
+    isLoading: commandLoading,
+    isError: commandError,
+    onQueryChange: onCommandQueryChange,
+    onEditorFocus: onCommandEditorFocus,
+    onPanelAction: onCommandPanelAction,
+  } = typeahead.command;
+  const onCommandEditorFocusRef = useRef(onCommandEditorFocus);
+  useEffect(() => {
+    onCommandEditorFocusRef.current = onCommandEditorFocus;
+  }, [onCommandEditorFocus]);
   const {
     items: attachments = [],
     pendingUploads,
@@ -2489,6 +2583,27 @@ export function PromptBoxInternal({
       if (!currentEditor || activeTrigger === null) return;
       if (activeTrigger.kind !== "command") return;
 
+      if (
+        item.panelAction !== undefined &&
+        onCommandPanelAction?.(item.panelAction) === true
+      ) {
+        triggerKeyRef.current = "";
+        dismissedTriggerRef.current = {
+          start: activeTrigger.from,
+          end: activeTrigger.to,
+          hasLeftRange: false,
+        };
+        setActiveTrigger(null);
+        onMentionQueryChange(null, null);
+        onCommandQueryChange(null);
+        currentEditor
+          .chain()
+          .focus()
+          .deleteRange({ from: activeTrigger.from, to: activeTrigger.to })
+          .run();
+        return;
+      }
+
       const trailingText = mentionPillTrailingText(
         currentEditor.state.doc,
         activeTrigger.to,
@@ -2509,7 +2624,13 @@ export function PromptBoxInternal({
         },
       });
     },
-    [activeTrigger, insertPromptMentionPill],
+    [
+      activeTrigger,
+      insertPromptMentionPill,
+      onCommandPanelAction,
+      onCommandQueryChange,
+      onMentionQueryChange,
+    ],
   );
 
   const applyTrigger = useCallback(
