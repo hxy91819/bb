@@ -1877,6 +1877,7 @@ function MarkdownPreviewComponent({
   return (
     <>
       <div
+        data-markdown-preview=""
         className={cn(
           "max-w-none break-words text-sm leading-relaxed text-foreground",
           className,
