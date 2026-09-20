@@ -33,6 +33,7 @@ import {
   type CommandMenuState,
   type MentionMenuState,
   type OrderedMentionSuggestions,
+  type ProviderCommandPanelAction,
   type ProviderCommandSuggestion,
   type PromptMentionSuggestion,
   type TypeaheadMenuState,
@@ -397,6 +398,7 @@ export interface TypeaheadCommandConfig {
     trigger: PromptMentionCommandTrigger | null,
   ) => void;
   onEditorFocus?: () => void;
+  onPanelAction?: (target: ProviderCommandPanelAction) => boolean;
 }
 
 export interface TypeaheadConfig {
@@ -1273,6 +1275,7 @@ export function PromptBoxInternal({
     isError: commandError,
     onQueryChange: onCommandQueryChange,
     onEditorFocus: onCommandEditorFocus,
+    onPanelAction: onCommandPanelAction,
   } = typeahead.command;
   const onCommandEditorFocusRef = useRef(onCommandEditorFocus);
   useEffect(() => {
@@ -2414,6 +2417,27 @@ export function PromptBoxInternal({
       if (!currentEditor || activeTrigger === null) return;
       if (activeTrigger.kind !== "command") return;
 
+      if (
+        item.panelAction !== undefined &&
+        onCommandPanelAction?.(item.panelAction) === true
+      ) {
+        triggerKeyRef.current = "";
+        dismissedTriggerRef.current = {
+          start: activeTrigger.from,
+          end: activeTrigger.to,
+          hasLeftRange: false,
+        };
+        setActiveTrigger(null);
+        onMentionQueryChange(null, null);
+        onCommandQueryChange(null);
+        currentEditor
+          .chain()
+          .focus()
+          .deleteRange({ from: activeTrigger.from, to: activeTrigger.to })
+          .run();
+        return;
+      }
+
       const trailingText = mentionPillTrailingText(
         currentEditor.state.doc,
         activeTrigger.to,
@@ -2438,7 +2462,13 @@ export function PromptBoxInternal({
         clearQuery: () => onCommandQueryChange(null, null),
       });
     },
-    [activeTrigger, insertPromptMentionPill, onCommandQueryChange],
+    [
+      activeTrigger,
+      insertPromptMentionPill,
+      onCommandPanelAction,
+      onCommandQueryChange,
+      onMentionQueryChange,
+    ],
   );
 
   const applyTrigger = useCallback(
