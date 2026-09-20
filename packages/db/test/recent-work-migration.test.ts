@@ -56,6 +56,59 @@ function readProjects(db: DbConnection) {
 }
 
 describe("recent work migration compatibility", () => {
+  it("upgrades the 0.43.0 aggregate without skipping stable plugin metadata", () => {
+    const db = createLegacyConnection();
+    try {
+      db.$client.exec(`
+        DROP TABLE thread_plugin_metadata;
+        DELETE FROM __drizzle_migrations WHERE created_at >= 1789175706080;
+        INSERT INTO threads (
+          id, project_id, provider_id, latest_attention_at,
+          service_tier_override, created_at, updated_at
+        ) VALUES ('thread_upgrade', 'project_positive', 'codex', 1, 'fast', 1, 1);
+      `);
+      const migrations = readMigrationFiles({
+        migrationsFolder: resolve(import.meta.dirname, "../drizzle"),
+      });
+      const fastMigration = migrations.find((candidate) =>
+        candidate.sql.some((sql) =>
+          sql.includes("ADD `service_tier_override`"),
+        ),
+      );
+      if (!fastMigration) throw new Error("Missing Fast migration");
+      const insert = db.$client.prepare(
+        "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+      );
+      insert.run(fastMigration.hash, 1789179169262);
+      insert.run(recentWorkMigration.hash, 1789179431804);
+
+      migrate(db);
+      expect(readProjects(db)).toEqual(expectedProjects);
+      expect(
+        db.$client
+          .prepare(
+            "SELECT service_tier_override FROM threads WHERE id = 'thread_upgrade'",
+          )
+          .get(),
+      ).toEqual({ service_tier_override: "fast" });
+      db.$client
+        .prepare(
+          "INSERT INTO thread_plugin_metadata (thread_id, plugin_id, metadata_json) VALUES (?, ?, ?)",
+        )
+        .run("thread_upgrade", "test-plugin", '{"retained":true}');
+      migrate(db);
+      expect(
+        db.$client
+          .prepare(
+            "SELECT metadata_json FROM thread_plugin_metadata WHERE thread_id = 'thread_upgrade'",
+          )
+          .get(),
+      ).toEqual({ metadata_json: '{"retained":true}' });
+    } finally {
+      db.$client.close();
+    }
+  });
+
   it("preserves project activity when upgrading a previously packaged migration", () => {
     const db = createLegacyConnection();
     try {
