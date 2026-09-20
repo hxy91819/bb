@@ -1,7 +1,7 @@
 # ACP providers
 
 First-party plugin for ACP (Agent Client Protocol) agent providers: Cursor,
-opencode, omp, Grok Build and Hermes Agent.
+opencode, omp, Grok Build, Hermes Agent, and DeepSeek Harness.
 
 OpenCode Go usage appears under OpenCode in the Provider usage panel for the
 selected machine. It reads the official Go endpoint using the machine's OpenCode
