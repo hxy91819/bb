@@ -409,6 +409,7 @@ describe("buildPluginProviderRegistration", () => {
       "acp-omp": "collapse",
       "acp-grok": "collapse",
       "acp-hermes-agent": "collapse",
+      "acp-dsh": "collapse",
     });
   });
 });
