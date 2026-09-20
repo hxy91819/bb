@@ -1736,7 +1736,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     );
     applySkippedUiPreferencesMigrationBeforeLaterHistory(db, migrationsFolder);
     applySkippedStableMigrationsBeforeLaterHistory(db, migrationsFolder);
-    const stagedServiceTierOverride = stageExistingServiceTierOverrideColumn(
+    stageExistingServiceTierOverrideColumn(
       db,
       migrationsFolder,
     );
@@ -1752,7 +1752,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     } finally {
       restoreStagedRecentWorkSequenceColumn(db);
       if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
-      if (stagedServiceTierOverride) restoreStagedServiceTierOverrideColumn(db);
+      restoreStagedServiceTierOverrideColumn(db);
       if (stagedThreadStorageDeletedAt)
         restoreStagedThreadStorageDeletedAtColumn(db);
     }
