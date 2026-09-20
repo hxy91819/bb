@@ -594,7 +594,7 @@
       "reason": "Fork #14 defines the maintenance process and Provider pilot; no upstream product feedback is required.",
       "source": {
         "baseCommit": "de07cd01c38abf97d0c02e3afaf546de622c5436",
-        "versionCommit": "9c678c5b0c43a772d2e1652bb543581bf9d0cfc9",
+        "versionCommit": "25ac1bb82b727fd64420dfd8ea98626c3cfa9b63",
         "commits": [
           {
             "commit": "72819a0c0b80f438bb4e53a26f889d60de9269ab",
@@ -611,6 +611,14 @@
           {
             "commit": "9c678c5b0c43a772d2e1652bb543581bf9d0cfc9",
             "logicalPatch": "two-tier-fork-maintenance-train-membership-v1"
+          },
+          {
+            "commit": "583143f2f4ea43c2b132b94b97214317bc1f70bf",
+            "logicalPatch": "two-tier-fork-maintenance-final-source-lock-v1"
+          },
+          {
+            "commit": "25ac1bb82b727fd64420dfd8ea98626c3cfa9b63",
+            "logicalPatch": "two-tier-fork-maintenance-complete-selection-v1"
           }
         ]
       },
