@@ -249,6 +249,10 @@ describe("ProjectModeSections project order", () => {
             label: "Pinned",
             content: <div>Pinned content</div>,
           }}
+          pinnedReorderPending={false}
+          pinnedRootNodes={[]}
+          pinnedThreads={[]}
+          onReorderPinnedThread={vi.fn()}
           threadsSection={{ label: "Threads" }}
           collapsedSectionIds={new Set()}
           collapsedThreadIds={new Set()}
@@ -351,6 +355,10 @@ describe("ProjectModeSections project order", () => {
             label: "Pinned",
             content: <div>Pinned content</div>,
           }}
+          pinnedReorderPending={false}
+          pinnedRootNodes={[]}
+          pinnedThreads={[]}
+          onReorderPinnedThread={vi.fn()}
           threadsSection={{ label: "Threads" }}
           collapsedSectionIds={new Set()}
           collapsedThreadIds={new Set()}
