@@ -104,6 +104,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
         "acp-omp",
         "acp-grok",
         "acp-hermes-agent",
+        "acp-dsh",
       ],
     });
   });
@@ -244,6 +245,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
         "acp-omp",
         "acp-grok",
         "acp-hermes-agent",
+        "acp-dsh",
       ],
     });
   });
