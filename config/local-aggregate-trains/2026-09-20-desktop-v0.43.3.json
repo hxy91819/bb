@@ -1,0 +1,33 @@
+{
+  "trainId": "2026-09-20-desktop-v0.43.3",
+  "status": "candidate",
+  "base": {
+    "tag": "desktop-v0.43.3",
+    "commit": "e865697f56bea89f3413dd4cc7fae964850d20a0"
+  },
+  "registry": "config/local-aggregate-features.json",
+  "sourceOrder": [
+    "feature/automation-auto-marker",
+    "feature/mermaid-elk-layout",
+    "fix/vite-cve-2026-39363",
+    "fix/local-aggregate-server-startup",
+    "fix/codex-fast-mode-toggle",
+    "feature/recent-explicit-work-sequence",
+    "fix/local-aggregate-service-tier-migration",
+    "fix/local-aggregate-recent-sequence-migration",
+    "feature/dsh-acp-provider",
+    "fix/acp-fast-mode",
+    "fix/acp-codex-goal",
+    "fix/markdown-table-breakout",
+    "fix/environment-switch-auto-continue",
+    "feature/thread-project-label",
+    "fix/sidebar-parent-row-hover-archive",
+    "fix/sidebar-touch-hover-actions",
+    "fix/sidebar-touch-navigation",
+    "fix/acp-mid-turn-steering",
+    "feature/side-chat-command",
+    "feature/sidebar-pinned-new-thread",
+    "fix/official-catalog-date-utc"
+  ],
+  "verification": "docs/local-aggregate-verification-2026-09-20.md"
+}
