@@ -18,6 +18,7 @@ import {
 import type {
   JsonObject,
   ReasoningLevel,
+  ServiceTier,
   ThreadChangeKind,
   ThreadLifecycleEvent,
   ThreadLifecycleNoopReason,
@@ -1804,6 +1805,7 @@ export function getThreadExecutionOverride(
 export interface SetThreadExecutionOverrideInput {
   threadId: string;
   modelOverride?: string | null;
+  serviceTierOverride?: ServiceTier | null;
   reasoningLevelOverride?: ReasoningLevel | null;
 }
 
@@ -1814,6 +1816,9 @@ export function setThreadExecutionOverride(
   const set: Partial<typeof threads.$inferInsert> = { updatedAt: Date.now() };
   if ("modelOverride" in input) {
     set.modelOverride = input.modelOverride;
+  }
+  if ("serviceTierOverride" in input) {
+    set.serviceTierOverride = input.serviceTierOverride;
   }
   if ("reasoningLevelOverride" in input) {
     set.reasoningLevelOverride = input.reasoningLevelOverride;

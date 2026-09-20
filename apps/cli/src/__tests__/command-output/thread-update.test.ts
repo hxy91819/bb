@@ -16,6 +16,28 @@ describe("bb thread update command output", () => {
   const register: CommandRegistrar = (program) =>
     registerThreadCommands(program, () => "http://server");
 
+  it.each(["default", "fast"])(
+    "saves the %s service tier through the SDK",
+    async (serviceTier) => {
+      const patch = vi.fn(async () =>
+        fixtures.makeThread({
+          id: "thread-fast",
+          projectId: "proj-1",
+          providerId: "codex",
+        }),
+      );
+      stubServerApi({ "v1.threads.:id.$patch": patch });
+      await runCommand(
+        ["thread", "update", "thread-fast", "--service-tier", serviceTier],
+        register,
+      );
+      expect(patch).toHaveBeenCalledWith({
+        param: { id: "thread-fast" },
+        json: { serviceTier },
+      });
+    },
+  );
+
   it("bb thread update sets the parent thread id", async () => {
     const thread: domain.Thread = fixtures.makeThread({
       id: "thread-update-1",

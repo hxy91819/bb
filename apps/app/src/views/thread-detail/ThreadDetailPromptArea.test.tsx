@@ -89,6 +89,7 @@ const mocks = vi.hoisted(() => ({
   unarchiveThreadMutate: vi.fn(),
   uploadPromptAttachmentMutateAsync: vi.fn(),
   updateQueuedMessageMutateAsync: vi.fn(),
+  updateServiceTier: vi.fn(),
   useThreadDefaultExecutionOptions: vi.fn(),
   useThreadCreationOptions: vi.fn(),
   useThreadPromptHistory: vi.fn(),
@@ -164,7 +165,10 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
           }) => void;
         };
         reasoning: { value: string };
-        serviceTier?: { value?: string };
+        serviceTier?: {
+          value?: string;
+          onChange?: (value: "default" | "fast") => void;
+        };
       };
       executionReadOnly?: boolean;
       pendingInteraction?: ReactNode;
@@ -179,6 +183,9 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
       }[];
     }) => (
       <div data-testid="follow-up-prompt-box">
+        <button onClick={() => execution.serviceTier?.onChange?.("default")}>
+          Disable fast mode
+        </button>
         {environmentSummary}
         <div data-testid="prompt-stack">
           {pluginComposerHost ? (
@@ -705,6 +712,14 @@ vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
   }),
 }));
 
+vi.mock("@/hooks/mutations/thread-service-tier-mutation", () => ({
+  useUpdateThreadServiceTier: () => ({
+    isPending: false,
+    variables: undefined,
+    mutate: mocks.updateServiceTier,
+  }),
+}));
+
 vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
   useProjectDisplayName: () => null,
 }));
@@ -962,6 +977,15 @@ describe("environment follow-up summary", () => {
 });
 
 describe("ThreadDetailPromptArea", () => {
+  it("saves fast mode when toggled without sending a message", () => {
+    renderPromptArea();
+    fireEvent.click(screen.getByRole("button", { name: "Disable fast mode" }));
+    expect(mocks.updateServiceTier).toHaveBeenCalledWith({
+      threadId: "thr_1",
+      serviceTier: "default",
+    });
+  });
+
   it("preserves plugin submission data through a follow-up composer", async () => {
     mocks.defaultExecutionOptions = {
       model: "gpt-5",
