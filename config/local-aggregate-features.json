@@ -1,37 +1,848 @@
 {
-  "version": 3,
+  "version": 4,
   "aggregate": {
     "branch": "local/aggregate",
     "upstreamRef": "origin/main",
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
     "lastIntegratedUpstreamCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+    "upstreamRepository": "get-bb/bb",
     "currentTrain": "config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json"
   },
   "features": [
-    {"branch":"feature/automation-auto-marker","module":"automation","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"6a040fd403b0b07f860bee6060ad218bd71a397c","aggregateCommit":"d1b0bc018e8103c45133ed6c7869ddba64b8ea8a"},"upstreamIssues":[{"repository":"hxy91819/bb","number":9,"feedbackUrl":"https://github.com/hxy91819/bb/issues/9"}]},
-    {"branch":"feature/mermaid-elk-layout","module":"visualization","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"be3ed658910aad418e9dda6f83dac892654f9238","aggregateCommit":"851341b730fd90be855a6189c1c5370f866dbc81"},"upstreamIssues":[{"repository":"get-bb/bb","number":3382,"feedbackUrl":"https://github.com/get-bb/bb/issues/3382"}]},
-    {"branch":"fix/vite-cve-2026-39363","module":"dependency-maintenance","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"92cc628c0c9a3778bc829cfaa52ee882c566a784","aggregateCommit":"fed8db0ef9ed6543b999988dfe1c5f60180c734c"},"upstreamIssues":[{"repository":"get-bb/bb","number":1780,"feedbackUrl":"https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"}]},
-    {"branch":"fix/local-aggregate-server-startup","module":"thread-execution","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"c384e97d972ebd73486faac4d141abb32c42d17d","aggregateCommit":"ed75f70424b745ae8a2c9d4a63fce0ce2b14a9e6"},"upstreamIssues":[{"repository":"get-bb/bb","number":3403,"feedbackUrl":"https://github.com/get-bb/bb/issues/3403"}]},
-    {"branch":"fix/codex-fast-mode-toggle","module":"thread-execution","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"745bde8e99f61e21f88b986f1f5c15ac5dfa1722","aggregateCommit":"12fe2907547f58b01466cd0d2e536c8765060504"},"upstreamIssues":[{"repository":"get-bb/bb","number":3403,"feedbackUrl":"https://github.com/get-bb/bb/issues/3403"}]},
-    {"branch":"feature/recent-explicit-work-sequence","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"1c66c014efe2fbbdf6785c81f5a58c386976066e","aggregateCommit":"b5c24c54a8cac6dce14669abbe11746bf46d6cd8"},"upstreamIssues":[{"repository":"get-bb/bb","number":1614,"feedbackUrl":"https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"},{"repository":"hxy91819/bb","number":1,"feedbackUrl":"https://github.com/hxy91819/bb/issues/1"}]},
-    {"branch":"fix/local-aggregate-service-tier-migration","module":"database-compatibility","status":"active","dependsOn":["fix/codex-fast-mode-toggle"],"lastPackaged":{"sourceCommit":"53c14d66799b73b1e9e0fcd408823d7613f93594","aggregateCommit":"8dabee74a06ce7e16d5b01e07ae6cb339198de38"},"upstreamIssues":[{"repository":"get-bb/bb","number":3403,"feedbackUrl":"https://github.com/get-bb/bb/issues/3403"}]},
-    {"branch":"fix/local-aggregate-recent-sequence-migration","module":"database-compatibility","status":"active","dependsOn":["feature/recent-explicit-work-sequence"],"lastPackaged":{"sourceCommit":"e3df742e03ba294395c437981f699c16e050260f","aggregateCommit":"070d767cdc6f9c00dff8a81a01a4dbeb09665f14"},"upstreamIssues":[{"repository":"hxy91819/bb","number":1,"feedbackUrl":"https://github.com/hxy91819/bb/issues/1"}]},
-    {"branch":"feature/dsh-acp-provider","module":"provider-runtime","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"6a115ffd25616a25b8de0c15011702bc879bddd1","aggregateCommit":"c1f9a555a17887fd57d6b9cae595e3a51bb151c4"},"upstreamIssues":[{"repository":"hxy91819/bb","number":2,"feedbackUrl":"https://github.com/hxy91819/bb/issues/2"}]},
-    {"branch":"fix/acp-fast-mode","module":"provider-runtime","status":"active","dependsOn":["feature/dsh-acp-provider"],"lastPackaged":{"sourceCommit":"e186f8f7d8967b01b5245c26a509b2bad961f349","aggregateCommit":"181af20e3cc83f6f62242023fc4e3187604c74b6"},"upstreamIssues":[{"repository":"hxy91819/bb","number":5,"feedbackUrl":"https://github.com/hxy91819/bb/issues/5"}]},
-    {"branch":"fix/acp-codex-goal","module":"provider-runtime","status":"active","dependsOn":["feature/dsh-acp-provider","fix/acp-fast-mode"],"lastPackaged":{"sourceCommit":"3d9900c6f0c0449f7afec47ba9b71896d68962f5","aggregateCommit":"9cd4e45a4c65de83f75d8dcdf54fd37413218c2c"},"upstreamIssues":[{"repository":"hxy91819/bb","number":6,"feedbackUrl":"https://github.com/hxy91819/bb/issues/6"}]},
-    {"branch":"fix/markdown-table-breakout","module":"markdown","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"b5d7217ad51e05058f331403942cec5641004344","aggregateCommit":"5da321810f57bc4df8117546e769775e39b35c89"},"upstreamIssues":[{"repository":"get-bb/bb","number":1951,"feedbackUrl":"https://github.com/get-bb/bb/issues/1951"},{"repository":"get-bb/bb","number":1705,"feedbackUrl":"https://github.com/get-bb/bb/issues/1705#issuecomment-5649924011"}]},
-    {"branch":"fix/environment-switch-auto-continue","module":"thread-execution","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"48471c27bdd2cc8583343f974534fa1413e3cf8b","aggregateCommit":"3141258d721f4a45e32389b8f18247c81d1c70c4"},"upstreamIssues":[{"repository":"hxy91819/bb","number":7,"feedbackUrl":"https://github.com/hxy91819/bb/issues/7"}]},
-    {"branch":"feature/thread-project-label","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"3ad1141175c4fbaee1a6d419e4da0bd2286deb18","aggregateCommit":"b1019f9e1b6447a03083c125bd01c4c8c636d8aa"},"upstreamIssues":[{"repository":"hxy91819/bb","number":4,"feedbackUrl":"https://github.com/hxy91819/bb/issues/4"}]},
-    {"branch":"fix/sidebar-parent-row-hover-archive","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"95754332f3f6ce4594490a99c32e1c8cee9a3b2a","aggregateCommit":"1dcbb34a1032e405519f20101388379d92ebb746"},"upstreamIssues":[{"repository":"get-bb/bb","number":3821,"feedbackUrl":"https://github.com/get-bb/bb/issues/3821"}]},
-    {"branch":"fix/sidebar-touch-hover-actions","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"fb866bb66923d4b4e7185eddb69a65e73aff3aa7","aggregateCommit":"580fd3e13518b22a5f46d5e138a69408bfe495e2"},"upstreamIssues":[{"repository":"get-bb/bb","number":3832,"feedbackUrl":"https://github.com/get-bb/bb/issues/3832"}]},
-    {"branch":"fix/sidebar-touch-navigation","module":"sidebar-recent","status":"active","dependsOn":["fix/sidebar-touch-hover-actions"],"lastPackaged":{"sourceCommit":"9a0fe7b73758ab43c91b67b6dd531e3af524b9bc","aggregateCommit":"79e3132e1009cf9b6ee5ceb3c82023c8162503ed"},"upstreamIssues":[{"repository":"hxy91819/bb","number":12,"feedbackUrl":"https://github.com/hxy91819/bb/issues/12"}]},
-    {"branch":"fix/acp-mid-turn-steering","module":"provider-runtime","status":"active","dependsOn":["feature/dsh-acp-provider"],"lastPackaged":{"sourceCommit":"4dd78b8e04d521f18886abbcfad8bd3c8f68a34a","aggregateCommit":"baa3bbecf21166357cc2d0aa53aa6863f1878eb0"},"upstreamIssues":[{"repository":"hxy91819/bb","number":8,"feedbackUrl":"https://github.com/hxy91819/bb/issues/8"}]},
-    {"branch":"feature/side-chat-command","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"fe03fbd735578af1b01087bbde60aed84120d9cc","aggregateCommit":"c5eec48d383ef1c5cf5e4db953bc97e0642cc995"},"upstreamIssues":[{"repository":"hxy91819/bb","number":10,"feedbackUrl":"https://github.com/hxy91819/bb/issues/10"}]},
-    {"branch":"feature/sidebar-pinned-new-thread","module":"sidebar-recent","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"3d4cc28a23240ff87a4b57eba686f7e5d6677506","aggregateCommit":"bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba"},"upstreamIssues":[{"repository":"hxy91819/bb","number":11,"feedbackUrl":"https://github.com/hxy91819/bb/issues/11"}]},
-    {"branch":"fix/official-catalog-date-utc","module":"maintenance-packaging","status":"active","dependsOn":[],"lastPackaged":{"sourceCommit":"bcd647a49c480f51a36e14e69cef1a98809d6101","aggregateCommit":"a0c918e2ef45055c8313e1850517c3fea42fe3ca"},"upstreamIssues":[{"repository":"hxy91819/bb","number":13,"feedbackUrl":"https://github.com/hxy91819/bb/issues/13"}]}
+    {
+      "id": "automation-auto-marker",
+      "branch": "feature/automation-auto-marker",
+      "module": "automation",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "6a040fd403b0b07f860bee6060ad218bd71a397c",
+        "aggregateCommit": "d1b0bc018e8103c45133ed6c7869ddba64b8ea8a"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 9,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/9"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "fork-only",
+      "reason": "Owner recorded this automation marker as a personal preference; fork #9 is its specification."
+    },
+    {
+      "id": "mermaid-elk-layout",
+      "branch": "feature/mermaid-elk-layout",
+      "module": "visualization",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "be3ed658910aad418e9dda6f83dac892654f9238",
+        "aggregateCommit": "851341b730fd90be855a6189c1c5370f866dbc81"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3382,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "Upstream #3382 describes the default ELK proposal; an open issue is not approval of the implementation.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "be3ed658910aad418e9dda6f83dac892654f9238",
+        "commits": [
+          {
+            "commit": "be3ed658910aad418e9dda6f83dac892654f9238",
+            "logicalPatch": "mermaid-elk-layout-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": null
+      }
+    },
+    {
+      "id": "vite-cve-2026-39363",
+      "branch": "fix/vite-cve-2026-39363",
+      "module": "dependency-maintenance",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "92cc628c0c9a3778bc829cfaa52ee882c566a784",
+        "aggregateCommit": "fed8db0ef9ed6543b999988dfe1c5f60180c734c"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1780,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "The recorded upstream #1780 comment covers the scoped Ladle/Vitest Vite override."
+    },
+    {
+      "id": "local-aggregate-server-startup",
+      "branch": "fix/local-aggregate-server-startup",
+      "module": "thread-execution",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "c384e97d972ebd73486faac4d141abb32c42d17d",
+        "aggregateCommit": "ed75f70424b745ae8a2c9d4a63fce0ce2b14a9e6"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "Local source-service startup recovery repair. Fast #3403 is historical context, not a report of the startup dependency cycle."
+    },
+    {
+      "id": "codex-fast-mode-toggle",
+      "branch": "fix/codex-fast-mode-toggle",
+      "module": "thread-execution",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "745bde8e99f61e21f88b986f1f5c15ac5dfa1722",
+        "aggregateCommit": "12fe2907547f58b01466cd0d2e536c8765060504"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "upstream-divergence",
+      "reason": "Merged upstream #3472 deliberately saves on submission/dispatch. The fork retains selection-time persistence and next-thread defaults."
+    },
+    {
+      "id": "recent-explicit-work-sequence",
+      "branch": "feature/recent-explicit-work-sequence",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "1c66c014efe2fbbdf6785c81f5a58c386976066e",
+        "aggregateCommit": "b5c24c54a8cac6dce14669abbe11746bf46d6cd8"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 1,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+      },
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1614,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "needs-update",
+      "reason": "The recorded #1614 comment describes retired browser-local ordering; fork #1 specifies the current server-owned cross-device sequence."
+    },
+    {
+      "id": "local-aggregate-service-tier-migration",
+      "branch": "fix/local-aggregate-service-tier-migration",
+      "module": "database-compatibility",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "53c14d66799b73b1e9e0fcd408823d7613f93594",
+        "aggregateCommit": "8dabee74a06ce7e16d5b01e07ae6cb339198de38"
+      },
+      "dependsOn": ["codex-fast-mode-toggle"],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "Adapts previously shipped fork Fast schemas and migration history; #3403 supplies feature context only."
+    },
+    {
+      "id": "local-aggregate-recent-sequence-migration",
+      "branch": "fix/local-aggregate-recent-sequence-migration",
+      "module": "database-compatibility",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "e3df742e03ba294395c437981f699c16e050260f",
+        "aggregateCommit": "070d767cdc6f9c00dff8a81a01a4dbeb09665f14"
+      },
+      "dependsOn": ["recent-explicit-work-sequence"],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "Preserves previously shipped fork Recent data and repairs skipped stable migrations; fork #1 is the parent feature specification."
+    },
+    {
+      "id": "acp-dsh-provider",
+      "branch": "feature/dsh-acp-provider",
+      "module": "provider-runtime",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "6a115ffd25616a25b8de0c15011702bc879bddd1",
+        "aggregateCommit": "c1f9a555a17887fd57d6b9cae595e3a51bb151c4"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 2,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #2 specifies grouped ACP models, session/resume and DSH; no actual upstream feedback is recorded.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "6a115ffd25616a25b8de0c15011702bc879bddd1",
+        "commits": [
+          {
+            "commit": "6c3ac99d397da8825eb0fcb6944ee9df2ebbb8d8",
+            "logicalPatch": "acp-dsh-provider-core-v1"
+          },
+          {
+            "commit": "670775309898aff9543a92a95de94f410394c423",
+            "logicalPatch": "acp-dsh-fallback-tests-v1"
+          },
+          {
+            "commit": "d3d7752d3bd1e7769840401baec948f5f9daf7db",
+            "logicalPatch": "acp-dsh-ordered-fallback-tests-v1"
+          },
+          {
+            "commit": "6a115ffd25616a25b8de0c15011702bc879bddd1",
+            "logicalPatch": "acp-dsh-collapse-policy-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": "provider"
+      }
+    },
+    {
+      "id": "acp-fast-mode",
+      "branch": "fix/acp-fast-mode",
+      "module": "provider-runtime",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "e186f8f7d8967b01b5245c26a509b2bad961f349",
+        "aggregateCommit": "181af20e3cc83f6f62242023fc4e3187604c74b6"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 5,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/5"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #5 specifies ACP native service-tier configuration; no actual upstream feedback is recorded.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "e186f8f7d8967b01b5245c26a509b2bad961f349",
+        "commits": [
+          {
+            "commit": "e186f8f7d8967b01b5245c26a509b2bad961f349",
+            "logicalPatch": "acp-fast-mode-v1"
+          }
+        ]
+      },
+      "dependsOn": [
+        "acp-dsh-provider"
+      ],
+      "integration": {
+        "domain": "provider"
+      }
+    },
+    {
+      "id": "acp-codex-goal",
+      "branch": "fix/acp-codex-goal",
+      "module": "provider-runtime",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5",
+        "aggregateCommit": "9cd4e45a4c65de83f75d8dcdf54fd37413218c2c"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 6,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/6"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #6 specifies ACP Codex goal extensions; no actual upstream feedback is recorded.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5",
+        "commits": [
+          {
+            "commit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5",
+            "logicalPatch": "acp-codex-goal-v1"
+          }
+        ]
+      },
+      "dependsOn": [
+        "acp-fast-mode"
+      ],
+      "integration": {
+        "domain": "provider"
+      }
+    },
+    {
+      "id": "markdown-table-breakout",
+      "branch": "fix/markdown-table-breakout",
+      "module": "markdown",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "b5d7217ad51e05058f331403942cec5641004344",
+        "aggregateCommit": "5da321810f57bc4df8117546e769775e39b35c89"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 3,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/3"
+      },
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1705,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1705#issuecomment-5649924011"
+        }
+      ],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1951,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1951"
+        }
+      ],
+      "disposition": "reported",
+      "reason": "The #1705 comment describes the column-scroll/expand variant. Closed #1951 is clipping-history context; fork #3 was superseded by that feedback."
+    },
+    {
+      "id": "environment-switch-auto-continue",
+      "branch": "fix/environment-switch-auto-continue",
+      "module": "thread-execution",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "48471c27bdd2cc8583343f974534fa1413e3cf8b",
+        "aggregateCommit": "3141258d721f4a45e32389b8f18247c81d1c70c4"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 7,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/7"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3187,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3187"
+        }
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Fork #7 is the specification. Existing upstream #3187 covers Pi session-directory relocation; the automatic continuation behavior needs separate scope discussion."
+    },
+    {
+      "id": "thread-project-label",
+      "branch": "feature/thread-project-label",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "3ad1141175c4fbaee1a6d419e4da0bd2286deb18",
+        "aggregateCommit": "b1019f9e1b6447a03083c125bd01c4c8c636d8aa"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 4,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/4"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #4 specifies project labels; no actual upstream feedback is recorded."
+    },
+    {
+      "id": "sidebar-parent-row-hover-archive",
+      "branch": "fix/sidebar-parent-row-hover-archive",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "95754332f3f6ce4594490a99c32e1c8cee9a3b2a",
+        "aggregateCommit": "1dcbb34a1032e405519f20101388379d92ebb746"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3821,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3821"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "upstream-divergence",
+      "reason": "Upstream #3822 fixes disclosure movement and is included in desktop-v0.43.3 while keeping quick Archive. The fork additionally hides Archive on parent rows."
+    },
+    {
+      "id": "sidebar-touch-hover-actions",
+      "branch": "fix/sidebar-touch-hover-actions",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "fb866bb66923d4b4e7185eddb69a65e73aff3aa7",
+        "aggregateCommit": "580fd3e13518b22a5f46d5e138a69408bfe495e2"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3832,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3832"
+        }
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "Upstream #3832 describes synthesized touch-hover inset and action visibility."
+    },
+    {
+      "id": "acp-mid-turn-steering",
+      "branch": "fix/acp-mid-turn-steering",
+      "module": "provider-runtime",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "4dd78b8e04d521f18886abbcfad8bd3c8f68a34a",
+        "aggregateCommit": "baa3bbecf21166357cc2d0aa53aa6863f1878eb0"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 8,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3151,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3151"
+        }
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Fork #8 is a local specification; its incorrect Upstream feedback wording was corrected. Upstream #3151 is a related ACP steering tracker, not submitted feedback for this patch.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "4dd78b8e04d521f18886abbcfad8bd3c8f68a34a",
+        "commits": [
+          {
+            "commit": "a9c4d1d88d3aae0c4ce0070c9376025b16f0a842",
+            "logicalPatch": "acp-mid-turn-steering-design-v1"
+          },
+          {
+            "commit": "7d3696d97eb2e9c77c4c46c3fd3646987ea75036",
+            "logicalPatch": "acp-mid-turn-steering-core-v1"
+          },
+          {
+            "commit": "20e8272e39a5cd17e069b6ba748963cbee81e89d",
+            "logicalPatch": "acp-steering-submit-failure-v1"
+          },
+          {
+            "commit": "7edb0828b20d229a83fedd6c30a1923cda7f93ca",
+            "logicalPatch": "acp-steering-cancel-on-failure-v1"
+          },
+          {
+            "commit": "382dd9d01480b770252625b6a4a1f58aae4c53e3",
+            "logicalPatch": "acp-steering-label-design-v1"
+          },
+          {
+            "commit": "80017a43205a9ce8906fbdd0fa678bb608a55448",
+            "logicalPatch": "acp-steering-adapter-design-v1"
+          },
+          {
+            "commit": "1af5d7aac68e0ae16495c54cb56acb948328dce6",
+            "logicalPatch": "acp-steering-english-labels-v1"
+          }
+        ]
+      },
+      "dependsOn": [
+        "acp-dsh-provider"
+      ],
+      "integration": {
+        "domain": "provider"
+      }
+    },
+    {
+      "id": "side-chat-command",
+      "branch": "feature/side-chat-command",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "fe03fbd735578af1b01087bbde60aed84120d9cc",
+        "aggregateCommit": "c5eec48d383ef1c5cf5e4db953bc97e0642cc995"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 10,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #10 specifies the /side composer action; no actual upstream feedback is recorded."
+    },
+    {
+      "id": "sidebar-pinned-new-thread",
+      "branch": "feature/sidebar-pinned-new-thread",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "3d4cc28a23240ff87a4b57eba686f7e5d6677506",
+        "aggregateCommit": "bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 11,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/11"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #11 specifies pinned New thread navigation; no actual upstream feedback is recorded."
+    },
+    {
+      "id": "sidebar-touch-navigation",
+      "branch": "fix/sidebar-touch-navigation",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "9a0fe7b73758ab43c91b67b6dd531e3af524b9bc",
+        "aggregateCommit": "79e3132e1009cf9b6ee5ceb3c82023c8162503ed"
+      },
+      "dependsOn": ["sidebar-touch-hover-actions"],
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 12,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/12"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3832,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3832"
+        }
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Touch navigation versus mouse title renaming is a distinct behavior from hover issue #3832; no actual upstream feedback is recorded."
+    },
+    {
+      "id": "official-catalog-date-utc",
+      "branch": "fix/official-catalog-date-utc",
+      "module": "maintenance-packaging",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "bcd647a49c480f51a36e14e69cef1a98809d6101",
+        "aggregateCommit": "a0c918e2ef45055c8313e1850517c3fea42fe3ca"
+      },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 13,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/13"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Normalizes UTC commit dates in generated official marketplace metadata; no specification or actual upstream feedback is recorded yet."
+    },
+    {
+      "id": "two-tier-fork-maintenance",
+      "branch": "feature/two-tier-fork-maintenance",
+      "module": "maintenance-process",
+      "status": "active",
+      "lastPackaged": null,
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 14,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/14"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 2,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 5,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/5"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 6,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/6"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 8,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "Fork #14 defines the maintenance process and Provider pilot; no upstream product feedback is required.",
+      "source": {
+        "baseCommit": "de07cd01c38abf97d0c02e3afaf546de622c5436",
+        "versionCommit": "63ed5d2eeb836c437f054de24f262f3971e6f69a",
+        "commits": [
+          {
+            "commit": "72819a0c0b80f438bb4e53a26f889d60de9269ab",
+            "logicalPatch": "two-tier-fork-maintenance-v1"
+          },
+          {
+            "commit": "4f3d38d5eab2c75194c55147a3cae03c83ecd4b7",
+            "logicalPatch": "two-tier-fork-maintenance-source-lock-v1"
+          },
+          {
+            "commit": "d562e82c9f34c301184bb90ff9ffae6e5d5d5055",
+            "logicalPatch": "two-tier-fork-maintenance-train-patches-v1"
+          },
+          {
+            "commit": "9c678c5b074fe94a626ab6808fde3aa61030af2b",
+            "logicalPatch": "two-tier-fork-maintenance-train-membership-v1"
+          },
+          {
+            "commit": "583143f2f4ea43c2b132b94b97214317bc1f70bf",
+            "logicalPatch": "two-tier-fork-maintenance-final-source-lock-v1"
+          },
+          {
+            "commit": "25ac1bb82b727fd64420dfd8ea98626c3cfa9b63",
+            "logicalPatch": "two-tier-fork-maintenance-complete-selection-v1"
+          },
+          {
+            "commit": "f64ff0e2dcc08e3db04134e7c1726a2a9cc9c3e7",
+            "logicalPatch": "two-tier-fork-maintenance-complete-train-lock-v1"
+          },
+          {
+            "commit": "289d719c416a929d20c6c716ada4992f22243b3b",
+            "logicalPatch": "two-tier-fork-maintenance-stable-integration-docs-v1"
+          },
+          {
+            "commit": "6e4536f9cba82bbd7255edeace08fe33eb28deed",
+            "logicalPatch": "two-tier-fork-maintenance-domain-mappings-v1"
+          },
+          {
+            "commit": "3739c520f1a07a1d94c504b9dc88845dd93811d9",
+            "logicalPatch": "two-tier-fork-maintenance-rebuilt-provider-v1"
+          },
+          {
+            "commit": "e1e6a55813b4bd6bcbc75c6eee116305ea8a2013",
+            "logicalPatch": "two-tier-fork-maintenance-provenance-v1"
+          },
+          {
+            "commit": "63ed5d2eeb836c437f054de24f262f3971e6f69a",
+            "logicalPatch": "two-tier-fork-maintenance-provider-dependencies-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": null
+      }
+    }
   ],
   "retired": [
-    {"branch":"fix/local-aggregate-project-row-test-residue","reason":"The stable rebuild no longer contains the retired ProjectRow helper contract; the current sidebar tests cover the retained behavior.","historicalAggregateCommit":"85f92ac37341dfef28de68f881a7db38e2916a43"},
-    {"branch":"fix/local-aggregate-migration-history-cleanup","reason":"The stable rebuild generated one ordered migration history and retains its effective compatibility checks; no standalone cleanup patch remains.","historicalAggregateCommit":"4569551b19fc5e5d9528549db3bd013fa062ed62"}
+    {
+      "id": "local-aggregate-project-row-test-residue",
+      "branch": "fix/local-aggregate-project-row-test-residue",
+      "module": "sidebar-recent",
+      "lastPackaged": {
+        "sourceCommit": "12709f8dd6705c8c4b880727969b43255e6da218",
+        "aggregateCommit": "85f92ac37341dfef28de68f881a7db38e2916a43"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3330,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "The stable rebuild no longer contains the retired ProjectRow helper contract; current sidebar tests cover the retained behavior.",
+      "historicalAggregateCommit": "85f92ac37341dfef28de68f881a7db38e2916a43"
+    },
+    {
+      "id": "local-aggregate-migration-history-cleanup",
+      "branch": "fix/local-aggregate-migration-history-cleanup",
+      "module": "database-compatibility",
+      "lastPackaged": {
+        "sourceCommit": "e39b496fbf4fd54635fe06c5ede50e36ce135561",
+        "aggregateCommit": "4569551b19fc5e5d9528549db3bd013fa062ed62"
+      },
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 3403,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
+        },
+        {
+          "repository": "hxy91819/bb",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "The stable rebuild generated one ordered migration history and retains its effective compatibility checks; no standalone cleanup patch remains.",
+      "historicalAggregateCommit": "4569551b19fc5e5d9528549db3bd013fa062ed62"
+    }
+  ],
+  "domains": [
+    {
+      "id": "provider",
+      "branch": "integration/provider-desktop-v0.43.3",
+      "baseline": {
+        "ref": "desktop-v0.43.3",
+        "commit": "e865697f56bea89f3413dd4cc7fae964850d20a0"
+      },
+      "members": [
+        "acp-dsh-provider",
+        "acp-fast-mode",
+        "acp-codex-goal",
+        "acp-mid-turn-steering"
+      ],
+      "adaptations": [],
+      "integrated": {
+        "commit": "1d94cae6d862b2b50f03e611c584a72be43c394b",
+        "sourceLogicalPatches": [
+          "acp-dsh-provider-core-v1",
+          "acp-dsh-fallback-tests-v1",
+          "acp-dsh-ordered-fallback-tests-v1",
+          "acp-dsh-collapse-policy-v1",
+          "acp-fast-mode-v1",
+          "acp-codex-goal-v1",
+          "acp-mid-turn-steering-design-v1",
+          "acp-mid-turn-steering-core-v1",
+          "acp-steering-submit-failure-v1",
+          "acp-steering-cancel-on-failure-v1",
+          "acp-steering-label-design-v1",
+          "acp-steering-adapter-design-v1",
+          "acp-steering-english-labels-v1"
+        ],
+        "patches": [
+          {
+            "commit": "6f3799fc28c5e4605cb465f83484d1bf283369d1",
+            "sourceCommit": "6c3ac99d397da8825eb0fcb6944ee9df2ebbb8d8",
+            "logicalPatch": "acp-dsh-provider-core-v1",
+            "features": ["acp-dsh-provider"]
+          },
+          {
+            "commit": "b01d0358b6d97a4a648ab74e660159878ac6f697",
+            "sourceCommit": "670775309898aff9543a92a95de94f410394c423",
+            "logicalPatch": "acp-dsh-fallback-tests-v1",
+            "features": ["acp-dsh-provider"]
+          },
+          {
+            "commit": "e010e07a1b5bbfd5ff78227ab35dbc454202c068",
+            "sourceCommit": "d3d7752d3bd1e7769840401baec948f5f9daf7db",
+            "logicalPatch": "acp-dsh-ordered-fallback-tests-v1",
+            "features": ["acp-dsh-provider"]
+          },
+          {
+            "commit": "345a59b50eca10b86656ce5a3ac4ffa8d1eea4ce",
+            "sourceCommit": "6a115ffd25616a25b8de0c15011702bc879bddd1",
+            "logicalPatch": "acp-dsh-collapse-policy-v1",
+            "features": ["acp-dsh-provider"]
+          },
+          {
+            "commit": "bc5a14ac067584bff72d0bee80e75f2b8c07891a",
+            "sourceCommit": "e186f8f7d8967b01b5245c26a509b2bad961f349",
+            "logicalPatch": "acp-fast-mode-v1",
+            "features": ["acp-fast-mode"]
+          },
+          {
+            "commit": "fada30162a4d43b1d311200755a536dd9c6d19f8",
+            "sourceCommit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5",
+            "logicalPatch": "acp-codex-goal-v1",
+            "features": ["acp-codex-goal"]
+          },
+          {
+            "commit": "e522beb38d29b255e388c8a4531915de71efe41f",
+            "sourceCommit": "a9c4d1d88d3aae0c4ce0070c9376025b16f0a842",
+            "logicalPatch": "acp-mid-turn-steering-design-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "112491499258351d38f3ccecb4e724979601024e",
+            "sourceCommit": "7d3696d97eb2e9c77c4c46c3fd3646987ea75036",
+            "logicalPatch": "acp-mid-turn-steering-core-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "6278a47573962e6a3a8b33dc68de09f8642279d1",
+            "sourceCommit": "20e8272e39a5cd17e069b6ba748963cbee81e89d",
+            "logicalPatch": "acp-steering-submit-failure-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "018ac48fddec94a940944b5de040f34c7b0218a1",
+            "sourceCommit": "7edb0828b20d229a83fedd6c30a1923cda7f93ca",
+            "logicalPatch": "acp-steering-cancel-on-failure-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "e7fd1d214d116974eb3a11a0e95857c33aaa7f73",
+            "sourceCommit": "382dd9d01480b770252625b6a4a1f58aae4c53e3",
+            "logicalPatch": "acp-steering-label-design-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "d925a14f213f3092f208509e99a037b2b2c80a0e",
+            "sourceCommit": "80017a43205a9ce8906fbdd0fa678bb608a55448",
+            "logicalPatch": "acp-steering-adapter-design-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "1d94cae6d862b2b50f03e611c584a72be43c394b",
+            "sourceCommit": "1af5d7aac68e0ae16495c54cb56acb948328dce6",
+            "logicalPatch": "acp-steering-english-labels-v1",
+            "features": ["acp-mid-turn-steering"]
+          }
+        ]
+      }
+    }
+  ],
+  "trains": [
+    {
+      "id": "2026-09-20-desktop-v0.43.3",
+      "manifest": "config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json"
+    },
+    {
+      "id": "provider-pilot-desktop-v0.43.3",
+      "manifest": "config/local-aggregate-trains/provider-pilot-desktop-v0.43.3.json"
+    }
   ]
 }
