@@ -3,10 +3,8 @@ import {
   cloneElement,
   isValidElement,
   memo,
-  useLayoutEffect,
   useContext,
   useMemo,
-  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type CSSProperties,
@@ -41,7 +39,6 @@ import { ImageLightbox, getWrappedImageIndex } from "./image-lightbox.js";
 import { InlineImageGalleryContext } from "./inline-image-gallery-context.js";
 import { remarkInlineDollarMath } from "./markdown-inline-dollar-math.js";
 import { normalizeMathFences } from "./markdown-math-fences.js";
-import { MARKDOWN_TABLE_START_OFFSET_VARIABLE } from "./markdown-table-breakout.js";
 import {
   markdownMayContainMath,
   useRehypeKatex,
@@ -256,11 +253,6 @@ type ExpandedMarkdownImageSetter = Dispatch<
   SetStateAction<ExpandedMarkdownImage | null>
 >;
 
-interface SetMarkdownContentWidthVariableArgs {
-  element: HTMLElement;
-  width: number;
-}
-
 type MarkdownPreviewPropsEqual = (
   previous: MarkdownPreviewProps,
   next: MarkdownPreviewProps,
@@ -302,10 +294,6 @@ type MarkdownUnorderedListProps = ComponentPropsWithoutRef<"ul"> & ExtraProps;
 type MarkdownRehypePlugins = NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 type MarkdownRemarkPlugins = NonNullable<ReactMarkdownOptions["remarkPlugins"]>;
 
-const MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE = "--md-table-breakout-max";
-const MARKDOWN_TABLE_BREAKOUT_WIDTH = `max(100%, min(1100px, 100cqw - 2rem, var(${MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE}, 100cqw)))`;
-const MARKDOWN_TABLE_BREAKOUT_START_MARGIN = `var(${MARKDOWN_TABLE_START_OFFSET_VARIABLE}, calc((100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH}) / 2))`;
-const MARKDOWN_CONTENT_WIDTH_VARIABLE = "--md-content-w";
 const MARKDOWN_SOURCE_COLOR_SCHEME_MEDIA_PATTERN =
   /^\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)$/iu;
 
@@ -1061,28 +1049,9 @@ function ContainedMarkdownTable({ children }: MarkdownTableProps) {
 }
 
 function MarkdownTable({ children }: MarkdownTableProps) {
-  const breakoutRef = useMarkdownTableContentWidthVariable();
-
   return (
-    <div
-      ref={breakoutRef}
-      className="my-2"
-      style={{
-        width: MARKDOWN_TABLE_BREAKOUT_WIDTH,
-        marginInlineStart: MARKDOWN_TABLE_BREAKOUT_START_MARGIN,
-        marginInlineEnd: `calc(100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH} - ${MARKDOWN_TABLE_BREAKOUT_START_MARGIN})`,
-      }}
-    >
-      <div
-        className="w-max max-w-full overflow-x-auto"
-        style={{
-          minWidth: `min(var(${MARKDOWN_CONTENT_WIDTH_VARIABLE}, 100%), 100%)`,
-          marginInlineStart: `var(${MARKDOWN_TABLE_START_OFFSET_VARIABLE}, auto)`,
-          marginInlineEnd: "auto",
-        }}
-      >
-        <table className="border border-border">{children}</table>
-      </div>
+    <div className="my-2 overflow-x-auto">
+      <table className="border border-border">{children}</table>
     </div>
   );
 }
@@ -1531,231 +1500,6 @@ function buildMarkdownComponents({
   return components;
 }
 
-function setMarkdownContentWidthVariable({
-  element,
-  width,
-}: SetMarkdownContentWidthVariableArgs): void {
-  if (width <= 0) {
-    return;
-  }
-  element.style.setProperty(MARKDOWN_CONTENT_WIDTH_VARIABLE, `${width}px`);
-}
-
-interface MarkdownTableGeometryRegistration {
-  breakout: HTMLElement;
-  clip: HTMLElement | null;
-  content: HTMLElement;
-  lastClipWidth: number;
-  lastContentWidth: number;
-}
-
-type MarkdownTableBreakoutLimitMeasurement =
-  | { kind: "remove" }
-  | { kind: "set"; value: string }
-  | { kind: "unchanged" };
-
-interface MarkdownTableGeometryMeasurement {
-  breakout: HTMLElement;
-  breakoutLimit: MarkdownTableBreakoutLimitMeasurement;
-  contentWidth: number;
-}
-
-const markdownTableRegistrationsByElement = new Map<
-  HTMLElement,
-  Set<MarkdownTableGeometryRegistration>
->();
-let sharedMarkdownTableResizeObserver: ResizeObserver | null = null;
-
-function measureMarkdownTableGeometry(
-  registrations: Iterable<MarkdownTableGeometryRegistration>,
-): void {
-  const measurements: MarkdownTableGeometryMeasurement[] = [];
-  for (const registration of registrations) {
-    const { breakout, clip, content } = registration;
-    const contentWidth = content.getBoundingClientRect().width;
-    const clipWidth = clip?.clientWidth ?? -1;
-    if (
-      contentWidth === registration.lastContentWidth &&
-      clipWidth === registration.lastClipWidth
-    ) {
-      continue;
-    }
-    registration.lastContentWidth = contentWidth;
-    registration.lastClipWidth = clipWidth;
-    measurements.push({
-      breakout,
-      breakoutLimit: readMarkdownTableBreakoutLimit({ breakout, clip }),
-      contentWidth,
-    });
-  }
-
-  for (const { breakout, breakoutLimit, contentWidth } of measurements) {
-    setMarkdownContentWidthVariable({
-      element: breakout,
-      width: contentWidth,
-    });
-    applyMarkdownTableBreakoutLimit({ breakout, measurement: breakoutLimit });
-  }
-}
-
-function getSharedMarkdownTableResizeObserver(): ResizeObserver {
-  sharedMarkdownTableResizeObserver ??= new ResizeObserver((entries) => {
-    const registrations = new Set<MarkdownTableGeometryRegistration>();
-    for (const entry of entries) {
-      if (!(entry.target instanceof HTMLElement)) continue;
-      for (const registration of markdownTableRegistrationsByElement.get(
-        entry.target,
-      ) ?? []) {
-        registrations.add(registration);
-      }
-    }
-    measureMarkdownTableGeometry(registrations);
-  });
-  return sharedMarkdownTableResizeObserver;
-}
-
-function observeMarkdownTableGeometry(
-  registration: MarkdownTableGeometryRegistration,
-): () => void {
-  const elements =
-    registration.clip === null || registration.clip === registration.content
-      ? [registration.content]
-      : [registration.content, registration.clip];
-  const observer = getSharedMarkdownTableResizeObserver();
-  for (const element of elements) {
-    let registrations = markdownTableRegistrationsByElement.get(element);
-    if (!registrations) {
-      registrations = new Set();
-      markdownTableRegistrationsByElement.set(element, registrations);
-      observer.observe(element);
-    }
-    registrations.add(registration);
-  }
-
-  return () => {
-    for (const element of elements) {
-      const registrations = markdownTableRegistrationsByElement.get(element);
-      registrations?.delete(registration);
-      if (registrations?.size === 0) {
-        markdownTableRegistrationsByElement.delete(element);
-        sharedMarkdownTableResizeObserver?.unobserve(element);
-      }
-    }
-    if (markdownTableRegistrationsByElement.size === 0) {
-      sharedMarkdownTableResizeObserver?.disconnect();
-      sharedMarkdownTableResizeObserver = null;
-    }
-  };
-}
-
-function useMarkdownTableContentWidthVariable() {
-  const breakoutRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const breakout = breakoutRef.current;
-    const content = breakout?.closest<HTMLElement>("[data-markdown-preview]");
-    if (!breakout || !content) {
-      return;
-    }
-    const clip = findHorizontalClipAncestor(content);
-    const registration: MarkdownTableGeometryRegistration = {
-      breakout,
-      clip,
-      content,
-      lastClipWidth: -1,
-      lastContentWidth: -1,
-    };
-
-    if (typeof ResizeObserver === "undefined") {
-      measureMarkdownTableGeometry([registration]);
-      return;
-    }
-
-    return observeMarkdownTableGeometry(registration);
-  }, []);
-
-  return breakoutRef;
-}
-
-const HORIZONTAL_CLIP_OVERFLOW_VALUES = new Set([
-  "hidden",
-  "clip",
-  "auto",
-  "scroll",
-]);
-
-function findHorizontalClipAncestor(element: HTMLElement): HTMLElement | null {
-  let current: HTMLElement | null = element;
-  while (current && current !== document.body) {
-    if (
-      HORIZONTAL_CLIP_OVERFLOW_VALUES.has(getComputedStyle(current).overflowX)
-    ) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return null;
-}
-
-function readMarkdownTableBreakoutLimit({
-  breakout,
-  clip,
-}: {
-  breakout: HTMLElement;
-  clip: HTMLElement | null;
-}): MarkdownTableBreakoutLimitMeasurement {
-  const parent = breakout.parentElement;
-  if (!clip || !parent) {
-    return { kind: "remove" };
-  }
-  const parentStyle = getComputedStyle(parent);
-  const parentPaddingLeft =
-    parent.getBoundingClientRect().left + parent.clientLeft + clip.scrollLeft;
-  const parentLeft = parentPaddingLeft + cssPixels(parentStyle.paddingLeft);
-  const parentRight =
-    parentPaddingLeft +
-    parent.clientWidth -
-    cssPixels(parentStyle.paddingRight);
-  const parentWidth = parentRight - parentLeft;
-  if (parentWidth <= 0) {
-    return { kind: "unchanged" };
-  }
-  const clipLeft = clip.getBoundingClientRect().left + clip.clientLeft;
-  const clipRight = clipLeft + clip.clientWidth;
-  const endRoom = Math.max(0, clipRight - parentRight);
-  if (
-    parentStyle
-      .getPropertyValue(MARKDOWN_TABLE_START_OFFSET_VARIABLE)
-      .trim() !== ""
-  ) {
-    return { kind: "set", value: `calc(${parentWidth + endRoom}px - 1rem)` };
-  }
-  const room = Math.min(Math.max(0, parentLeft - clipLeft), endRoom);
-  return { kind: "set", value: `${parentWidth + 2 * room}px` };
-}
-
-function applyMarkdownTableBreakoutLimit({
-  breakout,
-  measurement,
-}: {
-  breakout: HTMLElement;
-  measurement: MarkdownTableBreakoutLimitMeasurement;
-}): void {
-  if (measurement.kind === "remove") {
-    breakout.style.removeProperty(MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE);
-  } else if (measurement.kind === "set") {
-    breakout.style.setProperty(
-      MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE,
-      measurement.value,
-    );
-  }
-}
-
-function cssPixels(value: string): number {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 const FRONTMATTER_PATTERN =
   /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 
@@ -2037,7 +1781,6 @@ function MarkdownPreviewComponent({
   return (
     <>
       <div
-        data-markdown-preview=""
         className={cn(
           "max-w-none break-words text-sm leading-relaxed text-foreground",
           className,

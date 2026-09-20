@@ -233,7 +233,6 @@ const CSV_PREVIEW_MAX_ROWS = 500;
 const CSV_PREVIEW_ROW_HEIGHT_PX = 29;
 const CSV_PREVIEW_OVERSCAN_ROWS = 8;
 
-
 const HTML_FILE_PREVIEW_IFRAME_STYLE = {
   width: "100%",
   height: "100%",
@@ -549,7 +548,6 @@ export function FilePreview({
       data-file-preview-scroll-container={
         usesMarkdownPreviewLayout ? "" : undefined
       }
-      style={FILE_PREVIEW_WRAPPER_STYLE}
     >
       {headerMode === "file" ? (
         <FilePreviewHeader
