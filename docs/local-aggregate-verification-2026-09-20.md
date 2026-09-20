@@ -17,7 +17,16 @@ The serialized `package` resource profile completed `turbo run build typecheck -
 
 - [x] Candidate app typecheck and pinned-sidebar regression test.
 - [x] Candidate package build and typecheck through `scripts/run-resource-isolated --profile package`.
-- [ ] `$autoreview` for every rebased source and the frozen candidate.
+- [x] Frozen candidate autoreview `20260920T103141Z-08815f` completed. Its one ACP fallback-loading P1 was rejected because the common `sessionId === undefined` fallback clears `loading`, `loadingSessionId`, and pending usage before `session/new`; no accepted/actionable candidate finding remains.
+- [x] Provider pilot candidate `0f623a18f81511ed080da60369238e21f97675d9` passed the scoped Turbo behavior run: 358 ACP bridge tests and 86 provider-ACP plugin tests. The successful retry is `/tmp/two-tier-pilot-behavior-retry.log`; an earlier native-ABI repair process exited 139 before a fresh check and complete retry succeeded.
+- [x] Extracted contribution `1efc7a952f21a6e7340d74cf32d02992686af356` passed the same scoped behavior run after a frozen/offline install: 358 ACP bridge tests and 86 provider-ACP plugin tests. The successful log is `/tmp/two-tier-contribution-behavior.log`; the earlier `/tmp/provider-contribution-check.log` contains only the failed manager-bus attempt.
+- [ ] Close out any rebased source tip not covered by an existing source-level autoreview.
 - [ ] Publish source branches and the aggregate ref to the personal fork, then record the final aggregate SHA and artifact credential.
+
+## Credential scan limitation
+
+TruffleHog verification did not pass. The binary was initially absent, and two official release downloads were rejected because their SHA-256 values did not match the published checksum. The temporary downloaded file was never executed. This limitation must remain open rather than being reported as a successful scan.
+
+The test and package evidence above belongs to the exact `cc26cca6680fda183b08a7ec8145d060cb27f5f3` product candidate. The later two-tier maintenance-only combination requires structural reconstruction checks and a final package run by the release owner; this report does not treat the old package result as a new package credential.
 
 No production source service was replaced or restarted. This is source and package verification only.
