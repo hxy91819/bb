@@ -8,7 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { createStore, Provider } from "jotai";
 import type { ThreadListEntry } from "@bb/domain";
@@ -87,6 +87,23 @@ const DEFAULT_OPTIONS: ThreadRowOptions = {
   isCompact: false,
 };
 
+function CurrentRoute() {
+  return (
+    <input
+      aria-label="Current route"
+      type="hidden"
+      value={useLocation().pathname}
+      readOnly
+    />
+  );
+}
+
+function dispatchPointerDown(element: HTMLElement, pointerType: string) {
+  const event = new Event("pointerdown", { bubbles: true });
+  Object.defineProperty(event, "pointerType", { value: pointerType });
+  fireEvent(element, event);
+}
+
 function ThreadRowTestHarness({
   crossProjectId = null,
   hasComposerDraft = false,
@@ -115,6 +132,7 @@ function ThreadRowTestHarness({
 
   return (
     <MemoryRouter>
+      <CurrentRoute />
       <TooltipProvider>
         <SidebarThreadShortcutKeysContext.Provider value={shortcutKeys}>
           <ThreadRow
@@ -1632,14 +1650,89 @@ describe("ThreadRow", () => {
     expect(screen.getByText("Thread")).not.toBeNull();
   });
 
+  it.each(["touch", "pen"])(
+    "opens on repeated %s taps without renaming",
+    (pointerType) => {
+      renderThreadRow({});
+      const link = screen.getByRole("link", { name: "Open Thread" });
+      for (let count = 1; count <= 2; count++) {
+        dispatchPointerDown(link, pointerType);
+        fireEvent.click(link, { detail: count });
+        expect(screen.getByLabelText("Current route")).toHaveProperty(
+          "value",
+          link.getAttribute("href"),
+        );
+        expect(
+          screen.queryByRole("textbox", { name: "Thread name" }),
+        ).toBeNull();
+      }
+      fireEvent.doubleClick(link);
+      expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    },
+  );
+
+  it("does not rename after touch navigation remounts the row", () => {
+    const firstRender = renderThreadRow({});
+    const firstLink = screen.getByRole("link", { name: "Open Thread" });
+    dispatchPointerDown(firstLink, "touch");
+    fireEvent.click(firstLink, { detail: 1 });
+    firstRender.unmount();
+    renderThreadRow({});
+    const nextLink = screen.getByRole("link", { name: "Open Thread" });
+    dispatchPointerDown(nextLink, "touch");
+    fireEvent.click(nextLink, { detail: 2 });
+    fireEvent.doubleClick(nextLink);
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    expect(screen.getByLabelText("Current route")).toHaveProperty(
+      "value",
+      nextLink.getAttribute("href"),
+    );
+  });
+
+  it("does not rename when the title receives a touch double click", () => {
+    renderThreadRow({});
+    const title = screen.getByText("Thread");
+    dispatchPointerDown(title, "touch");
+    fireEvent.doubleClick(title);
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+  });
+
+  it("does not rename on repeated keyboard activation", () => {
+    renderThreadRow({});
+    const link = screen.getByRole("link", { name: "Open Thread" });
+    fireEvent.click(link, { detail: 0 });
+    fireEvent.click(link, { detail: 0 });
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    expect(screen.getByLabelText("Current route")).toHaveProperty(
+      "value",
+      link.getAttribute("href"),
+    );
+  });
+
+  it("keeps mouse double click available after touch navigation", () => {
+    renderThreadRow({});
+    const link = screen.getByRole("link", { name: "Open Thread" });
+    dispatchPointerDown(link, "touch");
+    fireEvent.click(link, { detail: 1 });
+    dispatchPointerDown(link, "mouse");
+    fireEvent.click(link, { detail: 1 });
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    dispatchPointerDown(link, "mouse");
+    fireEvent.click(link, { detail: 2 });
+    expect(screen.getByRole("textbox", { name: "Thread name" })).toBeTruthy();
+  });
+
   it("starts a rename from a second click after the row remounts", () => {
     const thread = createThread({ title: "Thread", titleFallback: "Thread" });
     const { rerenderThreadRow } = renderThreadRow({ thread });
     const link = screen.getByRole("link", { name: "Open Thread" });
 
-    fireEvent.click(link);
+    dispatchPointerDown(link, "mouse");
+    fireEvent.click(link, { detail: 1 });
     rerenderThreadRow(thread);
-    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }));
+    const remountedLink = screen.getByRole("link", { name: "Open Thread" });
+    dispatchPointerDown(remountedLink, "mouse");
+    fireEvent.click(remountedLink, { detail: 2 });
 
     expect(screen.getByRole("textbox", { name: "Thread name" })).toHaveProperty(
       "value",
