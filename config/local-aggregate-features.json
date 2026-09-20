@@ -669,6 +669,44 @@
       "integration": {
         "domain": null
       }
+    },
+    {
+      "id": "two-tier-stable-integration",
+      "branch": "feature/two-tier-stable-integration",
+      "module": "maintenance-process",
+      "status": "active",
+      "lastPackaged": null,
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 14,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/14"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "internal",
+      "reason": "Binds the complete desktop-v0.43.3 product train to the role-classified two-tier maintenance files without changing product behavior.",
+      "source": {
+        "baseCommit": "bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba",
+        "versionCommit": "2b61911657eb05d0e23657c54e9b735713272a67",
+        "commits": [
+          {
+            "commit": "cc26cca6680fda183b08a7ec8145d060cb27f5f3",
+            "logicalPatch": "stable-candidate-maintenance-records-v1"
+          },
+          {
+            "commit": "0b966e848b2f1711855c5fb1a97c7092627efdc2",
+            "logicalPatch": "two-tier-stable-integration-v1"
+          },
+          {
+            "commit": "2b61911657eb05d0e23657c54e9b735713272a67",
+            "logicalPatch": "two-tier-verification-count-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": null
+      }
     }
   ],
   "retired": [
