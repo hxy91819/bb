@@ -2805,6 +2805,98 @@ describe("acp bridge", () => {
     expect(threadEventsOfType("turn/completed")).toHaveLength(1);
   });
 
+  it.each([
+    ["after", "a", "slow second-steer"],
+    ["before", "b", "second-steer"],
+  ])(
+    "does not replay an earlier rejected steer when a later steer is accepted %s the rejection",
+    async (responseOrder, requestSuffix, secondSteerText) => {
+      const requestLog = join(
+        workspaceDir,
+        `steer-mixed-${responseOrder}-requests.jsonl`,
+      );
+      const promptLog = join(
+        workspaceDir,
+        `steer-mixed-${responseOrder}-prompts.jsonl`,
+      );
+      const { providerThreadId } = await startThread({
+        envVars: {
+          FAKE_ACP_MID_TURN_STEERING: "1",
+          FAKE_ACP_BUSY_PROMPT: "1",
+          FAKE_ACP_BUSY_PROMPT_TEXT: "first-steer",
+          FAKE_ACP_BUSY_PROMPT_DELAY_MS: "100",
+          FAKE_ACP_IGNORE_CANCEL: "1",
+          FAKE_ACP_REQUEST_LOG: requestLog,
+          FAKE_ACP_PROMPT_LOG: promptLog,
+        },
+      });
+      const turnId = sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "slow primary", mentions: [] }],
+      });
+      await waitForResponse(turnId);
+
+      const firstSteerId = sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        input: [{ type: "text", text: "first-steer", mentions: [] }],
+        clientRequestId: `creq_mxfst${requestSuffix}2345`,
+      });
+      const secondSteerId = sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        input: [{ type: "text", text: secondSteerText, mentions: [] }],
+        clientRequestId: `creq_mxsnd${requestSuffix}2345`,
+      });
+      await waitForResponse(firstSteerId);
+      await waitForResponse(secondSteerId);
+      await waitForTurnCompleted();
+
+      expect(loggedPrompts(promptLog)).toEqual([
+        "slow primary",
+        secondSteerText,
+      ]);
+      expect(agentMessageTexts().join("")).toContain(
+        `echo:${secondSteerText}`,
+      );
+      expect(threadEventsOfType("provider/warning").at(-1)).toMatchObject({
+        summary:
+          "ACP agent rejected an earlier steer after accepting a later one. The earlier input was not replayed, and native steering is disabled for this connection.",
+      });
+
+      const completedTurnCount = threadEventsOfType("turn/completed").length;
+      const nextTurnId = sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "slow next primary", mentions: [] }],
+      });
+      await waitForResponse(nextTurnId);
+      const nextSteerId = sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        input: [{ type: "text", text: "after-mixed", mentions: [] }],
+        clientRequestId: `creq_mxaft${requestSuffix}2345`,
+      });
+      await waitForResponse(nextSteerId);
+      await waitFor(
+        () =>
+          threadEventsOfType("turn/completed").length > completedTurnCount
+            ? threadEventsOfType("turn/completed").at(-1)
+            : undefined,
+        "the post-rejection turn to complete",
+      );
+
+      expect(loggedPrompts(promptLog)).toEqual([
+        "slow primary",
+        secondSteerText,
+        "slow next primary",
+        "after-mixed",
+      ]);
+      expect(
+        turnInputDeliveries(`creq_mxaft${requestSuffix}2345`),
+      ).toMatchObject([{ delivery: "interrupted" }]);
+      expect(
+        loggedAcpRequests(requestLog).filter(
+          (entry) => entry.method === "session/cancel",
+        ),
+      ).toHaveLength(2);
+    },
+  );
+
   it("cancels an in-flight steer when the primary prompt fails", async () => {
     const requestLog = join(workspaceDir, "steer-fail-requests.jsonl");
     const { providerThreadId } = await startThread({
@@ -2949,6 +3041,17 @@ describe("acp bridge", () => {
     expect(turnInputDeliveries("creq_sterfprm22")).toMatchObject([
       { delivery: "steer" },
     ]);
+  });
+
+  it("rejects acpSteeringMode=prompt when the agent declares midTurnSteering=false", async () => {
+    await expect(
+      startThread({
+        steeringMode: "prompt",
+        envVars: { FAKE_ACP_MID_TURN_STEERING: "0" },
+      }),
+    ).rejects.toThrow(
+      'ACP steering mode "prompt" conflicts with the agent declaration midTurnSteering=false.',
+    );
   });
 
   it("lets an explicit midTurnSteering=false declaration override the devin dialect", async () => {
