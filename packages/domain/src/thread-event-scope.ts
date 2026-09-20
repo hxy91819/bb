@@ -76,6 +76,7 @@ const threadEventScopeDefinitionByType = {
   "turn/started": { policy: "turn" },
   "turn/completed": { policy: "turn" },
   "turn/input/accepted": { policy: "turn" },
+  "turn/input/delivery": { policy: "turn" },
   "thread/name/updated": {
     policy: "thread",
     rationale:

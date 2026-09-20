@@ -34,6 +34,12 @@
       "clientRequestId": "required",
       "providerTurnId": "optional"
     },
+    "input.delivery": {
+      "kind": "required",
+      "clientRequestId": "required",
+      "delivery": "required",
+      "providerTurnId": "optional"
+    },
     "input.provider": {
       "kind": "required",
       "text": "required",

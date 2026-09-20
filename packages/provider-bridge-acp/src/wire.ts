@@ -287,6 +287,7 @@ export const acpInitializeResultSchema = z
           })
           .passthrough()
           .optional(),
+        midTurnSteering: z.unknown().optional(),
       })
       .passthrough()
       .optional(),

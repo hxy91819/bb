@@ -381,6 +381,10 @@ function formatConversationRequestLabel(
   }
   if (row.turnRequest.status === "pending") return "steer pending";
   if (row.turnRequest.status === "rejected") return "steer failed";
+  if (row.turnRequest.delivery === "interrupted") {
+    return "interrupted and sent";
+  }
+  if (row.turnRequest.delivery === "queued") return "queued";
   return "steer";
 }
 
