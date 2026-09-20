@@ -138,7 +138,8 @@
       {"logicalPatch":"two-tier-verification-count-v1","commit":"2b6191165dbab282d8c10032d2bae883c7c36938"},
       {"logicalPatch":"two-tier-complete-maintenance-train-v1","commit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f"},
       {"logicalPatch":"two-tier-maintenance-assets-v1","commit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2"},
-      {"logicalPatch":"two-tier-reconstruction-contract-v1","commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1"}
+      {"logicalPatch":"two-tier-reconstruction-contract-v1","commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1"},
+      {"logicalPatch":"two-tier-remote-cutover-contract-v1","commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307"}
     ]
   },
   "featurePatches": {
@@ -163,7 +164,7 @@
     "side-chat-command": ["side-chat-command-v1","side-chat-compose-contract-v1"],
     "sidebar-pinned-new-thread": ["sidebar-pinned-new-thread-v1"],
     "official-catalog-date-utc": ["official-catalog-date-utc-v1"],
-    "two-tier-stable-integration": ["stable-candidate-maintenance-records-v1","two-tier-stable-integration-v1","two-tier-verification-count-v1","two-tier-complete-maintenance-train-v1","two-tier-maintenance-assets-v1","two-tier-reconstruction-contract-v1"]
+    "two-tier-stable-integration": ["stable-candidate-maintenance-records-v1","two-tier-stable-integration-v1","two-tier-verification-count-v1","two-tier-complete-maintenance-train-v1","two-tier-maintenance-assets-v1","two-tier-reconstruction-contract-v1","two-tier-remote-cutover-contract-v1"]
   },
   "domains": ["provider"],
   "domainFeatures": {
@@ -236,7 +237,8 @@
     {"commit":"2b6191165dbab282d8c10032d2bae883c7c36938","sourceCommit":"2b6191165dbab282d8c10032d2bae883c7c36938","logicalPatch":"two-tier-verification-count-v1","features":["two-tier-stable-integration"]},
     {"commit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f","sourceCommit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f","logicalPatch":"two-tier-complete-maintenance-train-v1","features":["two-tier-stable-integration"]},
     {"commit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2","sourceCommit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2","logicalPatch":"two-tier-maintenance-assets-v1","features":["two-tier-stable-integration"]},
-    {"commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","sourceCommit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","logicalPatch":"two-tier-reconstruction-contract-v1","features":["two-tier-stable-integration"]}
+    {"commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","sourceCommit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","logicalPatch":"two-tier-reconstruction-contract-v1","features":["two-tier-stable-integration"]},
+    {"commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","sourceCommit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","logicalPatch":"two-tier-remote-cutover-contract-v1","features":["two-tier-stable-integration"]}
   ],
   "verification": "docs/local-aggregate-verification-2026-09-20.md"
 }

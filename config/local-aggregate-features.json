@@ -687,7 +687,7 @@
       "reason": "Binds the complete desktop-v0.43.3 product train to the role-classified two-tier maintenance files without changing product behavior.",
       "source": {
         "baseCommit": "bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba",
-        "versionCommit": "8a9ccb15cb48855338dfa85e52fba7efb20b75e1",
+        "versionCommit": "4ccc11d686b1742f276ba2c6c97a9b1f53a54307",
         "commits": [
           {
             "commit": "cc26cca6680fda183b08a7ec8145d060cb27f5f3",
@@ -712,6 +712,10 @@
           {
             "commit": "8a9ccb15cb48855338dfa85e52fba7efb20b75e1",
             "logicalPatch": "two-tier-reconstruction-contract-v1"
+          },
+          {
+            "commit": "4ccc11d686b1742f276ba2c6c97a9b1f53a54307",
+            "logicalPatch": "two-tier-remote-cutover-contract-v1"
           }
         ]
       },
