@@ -67,6 +67,7 @@ export interface AcpSessionParams {
   cwd: string;
   agent: { command: string; args: string[] };
   dialectId?: string | undefined;
+  serviceTier?: ServiceTier | undefined;
   modelSelection?: AcpModelSelection;
   launchReasoningLevel?: ReasoningLevel;
   reasoningCli?: AcpBridgeReasoningCli;
@@ -233,7 +234,7 @@ function buildAcpModelSelectionParam(
     return {
       modelSelection: {
         ...modelSelection,
-        ...(parameterizedModelPicker && options.serviceTier !== undefined
+        ...(options.serviceTier !== undefined
           ? { serviceTier: options.serviceTier }
           : {}),
       },
@@ -289,6 +290,9 @@ export function buildAcpSessionParams(
       args: [...launchSpec.args],
     },
     ...(args.dialectId === undefined ? {} : { dialectId: args.dialectId }),
+    ...(options.serviceTier === undefined
+      ? {}
+      : { serviceTier: options.serviceTier }),
     ...buildAcpModelSelectionParam(
       launchSpec,
       options,
