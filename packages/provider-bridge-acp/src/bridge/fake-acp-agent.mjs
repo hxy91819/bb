@@ -78,6 +78,16 @@
  *                              and prompt-result _meta.usage
  * - FAKE_ACP_COMPACT_STOP_REASON
  *                            → stop reason returned for /compact
+ * - FAKE_ACP_MID_TURN_STEERING
+ *                            → advertise _meta.midTurnSteering on initialize;
+ *                              "1" sends true, "0" sends false, any other value
+ *                              is sent verbatim for malformed-metadata tests
+ * - FAKE_ACP_CONCURRENT_PROMPTS=1
+ *                            → accept overlapping session/prompt requests;
+ *                              each settles independently, session/cancel
+ *                              settles all of them
+ * - FAKE_ACP_BUSY_PROMPT=1   → reject a session/prompt while another is
+ *                              in flight with a -32602 busy error
  */
 
 import { spawn } from "node:child_process";
@@ -124,6 +134,16 @@ const sessionNewDelayMs = Number(
 const updatesWithSessionResponse =
   process.env.FAKE_ACP_UPDATES_WITH_SESSION_RESPONSE === "1";
 const ignoreCancel = process.env.FAKE_ACP_IGNORE_CANCEL === "1";
+const midTurnSteeringEnv = process.env.FAKE_ACP_MID_TURN_STEERING;
+const advertiseMidTurnSteering = midTurnSteeringEnv !== undefined;
+const midTurnSteeringValue =
+  midTurnSteeringEnv === "1"
+    ? true
+    : midTurnSteeringEnv === "0"
+      ? false
+      : midTurnSteeringEnv;
+const concurrentPrompts = process.env.FAKE_ACP_CONCURRENT_PROMPTS === "1";
+const busyReject = process.env.FAKE_ACP_BUSY_PROMPT === "1";
 // `--list-models` is the agent's own model-list mode: the bridge derives its
 // list command from the launch spec's agent binary plus `modelCli.listArgs`,
 // so a list command can only ever be this binary.
@@ -144,6 +164,7 @@ const fakeModels = [
 
 let activePromptId = null;
 let stuckAfterCancel = false;
+const concurrentActivePromptIds = new Set();
 let nextAgentRequestId = 1000;
 let selectedModel = "fake/default";
 let selectedEffort = "none";
@@ -469,7 +490,22 @@ async function handlePrompt(message) {
     });
     return;
   }
-  activePromptId = message.id;
+  const trackConcurrent = concurrentPrompts || busyReject;
+  if (trackConcurrent && (activePromptId !== null || concurrentActivePromptIds.size > 0)) {
+    if (busyReject) {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: { code: -32602, message: "a prompt is already in flight" },
+      });
+      return;
+    }
+    concurrentActivePromptIds.add(message.id);
+  } else if (trackConcurrent) {
+    concurrentActivePromptIds.add(message.id);
+  } else {
+    activePromptId = message.id;
+  }
   const text = promptText(message.params?.prompt);
   if (process.env.FAKE_ACP_PROMPT_LOG) {
     appendFileSync(
@@ -649,8 +685,15 @@ async function handlePrompt(message) {
     notifyUpdate(messageChunk(`echo:${text}`));
   }
 
-  if (activePromptId === message.id) {
-    activePromptId = null;
+  const stillActive = trackConcurrent
+    ? concurrentActivePromptIds.has(message.id)
+    : activePromptId === message.id;
+  if (stillActive) {
+    if (trackConcurrent) {
+      concurrentActivePromptIds.delete(message.id);
+    } else {
+      activePromptId = null;
+    }
     const stopReason =
       text === "/compact"
         ? (process.env.FAKE_ACP_COMPACT_STOP_REASON ?? "end_turn")
@@ -695,6 +738,13 @@ async function handleMessage(message) {
             promptCapabilities: { image: false },
             ...sessionCapabilities(),
           },
+          ...(advertiseMidTurnSteering
+            ? {
+                _meta: {
+                  midTurnSteering: midTurnSteeringValue,
+                },
+              }
+            : {}),
           ...(authMethods.length > 0
             ? { authMethods: authMethods.map((id) => ({ id })) }
             : {}),
@@ -982,6 +1032,10 @@ async function handleMessage(message) {
         }
         send({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } });
       }
+      for (const id of concurrentActivePromptIds) {
+        send({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } });
+      }
+      concurrentActivePromptIds.clear();
       return;
     default:
       if (message.id !== undefined) {
