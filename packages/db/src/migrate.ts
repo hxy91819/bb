@@ -1262,6 +1262,56 @@ function repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
 const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
 const STAGED_THREAD_STORAGE_DELETED_AT_COLUMN =
   "_bb_thread_storage_deleted_at_pending";
+const STAGED_SERVICE_TIER_OVERRIDE_COLUMN = "_bb_service_tier_override_pending";
+
+function stageExistingServiceTierOverrideColumn(
+  db: DbConnection,
+  migrationsFolder: string,
+): boolean {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !tableExists(db, "threads") ||
+    !columnExists(db, "threads", "service_tier_override")
+  ) {
+    return false;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0127_nasty_marvex",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return false;
+  }
+
+  db.$client.exec(
+    `ALTER TABLE threads RENAME COLUMN service_tier_override TO ${STAGED_SERVICE_TIER_OVERRIDE_COLUMN}`,
+  );
+  return true;
+}
+
+function restoreStagedServiceTierOverrideColumn(db: DbConnection): void {
+  if (
+    !tableExists(db, "threads") ||
+    !columnExists(db, "threads", STAGED_SERVICE_TIER_OVERRIDE_COLUMN)
+  ) {
+    return;
+  }
+  if (!columnExists(db, "threads", "service_tier_override")) {
+    db.$client.exec(
+      `ALTER TABLE threads RENAME COLUMN ${STAGED_SERVICE_TIER_OVERRIDE_COLUMN} TO service_tier_override`,
+    );
+    return;
+  }
+  db.$client.exec(`
+    UPDATE threads
+    SET service_tier_override = COALESCE(
+      service_tier_override,
+      ${STAGED_SERVICE_TIER_OVERRIDE_COLUMN}
+    );
+    ALTER TABLE threads DROP COLUMN ${STAGED_SERVICE_TIER_OVERRIDE_COLUMN};
+  `);
+}
 
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
@@ -1578,6 +1628,10 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    const stagedServiceTierOverride = stageExistingServiceTierOverrideColumn(
+      db,
+      migrationsFolder,
+    );
     const stagedConnectMachineId = stageExistingConnectMachineIdColumn(
       db,
       migrationsFolder,
@@ -1588,6 +1642,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       drizzleMigrate(db, { migrationsFolder });
     } finally {
       if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
+      if (stagedServiceTierOverride) restoreStagedServiceTierOverrideColumn(db);
       if (stagedThreadStorageDeletedAt)
         restoreStagedThreadStorageDeletedAtColumn(db);
     }
