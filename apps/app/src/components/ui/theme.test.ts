@@ -331,6 +331,24 @@ describe("theme.css desktop portal hit testing", () => {
   });
 });
 
+describe("theme.css sidebar hover actions", () => {
+  it("keeps touch hover from shifting rows at any viewport width", () => {
+    const start = css.indexOf("@media (hover: none) {");
+    const end = css.indexOf(
+      "[data-sidebar-sticky-stack] [data-sidebar-sticky-tier=\"label\"]",
+      start,
+    );
+    const noHoverRules = css.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(noHoverRules).toMatch(
+      /\.bb-sidebar-hover-actions-row:hover:not\(:has\(:focus-visible\)\):not\([\s\S]*?data-sidebar-hover-actions-open="true"[\s\S]*?\.bb-sidebar-hover-actions-inset\s*\{\s*padding-right:\s*0;/,
+    );
+    expect(noHoverRules).not.toContain("max-width");
+  });
+});
+
 describe("theme.css sidebar width registration", () => {
   it("registers --sidebar-width as a non-inherited length", () => {
     const rule = css.match(/@property --sidebar-width\s*\{([^}]*)\}/)?.[1];
