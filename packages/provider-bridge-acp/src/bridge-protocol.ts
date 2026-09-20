@@ -12,6 +12,7 @@ import {
   skillsConfigureParamsSchema,
   threadDiscardParamsSchema as canonicalThreadDiscardParamsSchema,
   threadForkParamsSchema as canonicalThreadForkParamsSchema,
+  threadGoalClearParamsSchema,
   threadResumeParamsSchema as canonicalThreadResumeParamsSchema,
   threadStartParamsSchema as canonicalThreadStartParamsSchema,
   threadStopParamsSchema as canonicalThreadStopParamsSchema,
@@ -89,6 +90,10 @@ export const acpBridgeCommandSchema = z.discriminatedUnion("method", [
   z.object({
     method: z.literal("thread/discard"),
     params: canonicalThreadDiscardParamsSchema,
+  }),
+  z.object({
+    method: z.literal("thread/goal/clear"),
+    params: threadGoalClearParamsSchema,
   }),
   z.object({
     method: z.literal("skills/configure"),

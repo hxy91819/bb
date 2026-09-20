@@ -3,11 +3,13 @@ import {
   pendingInteractionResolutionSchema,
   reasoningEffortsForLevels,
 } from "@bb/domain";
-import type {
-  AvailableModel,
-  PromptInput,
-  ReasoningLevel,
-  ServiceTier,
+import {
+  isExtensionKind,
+  type AvailableModel,
+  type ExtensionKind,
+  type PromptInput,
+  type ReasoningLevel,
+  type ServiceTier,
 } from "@bb/domain";
 import { acpLaunchSpecSchema, type AcpLaunchSpec } from "../launch-spec.js";
 import {
@@ -105,6 +107,7 @@ import {
   acpSessionNewResultSchema,
   acpSessionNotificationParamsSchema,
   acpAgentMessageChunkUpdateSchema,
+  acpGoalSessionInfoUpdateSchema,
   extractAcpContentText,
   acpUsageUpdateSchema,
   type AcpConfigStateResult,
@@ -188,6 +191,8 @@ interface AcpThreadSession {
   loading: boolean;
   loadingSessionId: string | undefined;
   pendingLoadUsageUpdate: AcpUsageUpdate | undefined;
+  goalExtensionKind: ExtensionKind | undefined;
+  goalControlMethod: string | undefined;
   stopping: boolean;
   turnSettled: Promise<void> | undefined;
   pendingPermissions: Set<PendingAcpPermission>;
@@ -1661,6 +1666,7 @@ async function startAgentSession(
   const translator = createAcpDeltaTranslator({
     cwd: params.cwd,
     dialect,
+    goalExtensionKind: params.goalExtensionKind,
   });
   translator.configureInjectedTools(
     (params.dynamicTools ?? []).map((tool) => ({
@@ -1747,6 +1753,8 @@ async function startAgentSession(
     loading: false,
     loadingSessionId: undefined,
     pendingLoadUsageUpdate: undefined,
+    goalExtensionKind: params.goalExtensionKind,
+    goalControlMethod: undefined,
     stopping: false,
     turnSettled: undefined,
     pendingPermissions: new Set(),
@@ -1761,6 +1769,10 @@ async function startAgentSession(
       parameterizedModelPicker: params.parameterizedModelPicker,
       fsAccess: true,
     });
+    session.goalControlMethod =
+      initializeResult._meta?.goal?.actions.includes("clear") === true
+        ? initializeResult._meta.goal.controlMethod
+        : undefined;
     await authenticateAcpAgent({
       connection,
       env: childEnv,
@@ -1926,6 +1938,15 @@ async function startAgentSession(
       sessionRestorable: acpSessionRestorable(session),
     });
     sendThreadDeltas(bbThreadId, [{ kind: "session.reset" }]);
+    if (session.goalExtensionKind !== undefined) {
+      sendThreadDeltas(bbThreadId, [
+        {
+          kind: "extension.state",
+          extensionKind: session.goalExtensionKind,
+          payload: null,
+        },
+      ]);
+    }
     session.deferStartEmit = undefined;
     for (const deferred of deferredEmits) {
       if (
@@ -2301,14 +2322,21 @@ function handleAgentNotification(
     return;
   }
   if (session.loading) {
-    if (
-      parsed.data.sessionId === session.loadingSessionId &&
-      parsed.data.update.sessionUpdate === "usage_update"
-    ) {
+    if (parsed.data.sessionId !== session.loadingSessionId) {
+      return;
+    }
+    if (parsed.data.update.sessionUpdate === "usage_update") {
       const usageUpdate = acpUsageUpdateSchema.safeParse(parsed.data.update);
       if (usageUpdate.success) {
         session.pendingLoadUsageUpdate = usageUpdate.data;
       }
+    }
+    if (acpGoalSessionInfoUpdateSchema.safeParse(parsed.data.update).success) {
+      session.deferStartEmit?.(
+        ACP_UPDATE_METHOD,
+        { threadId: session.bbThreadId, update: parsed.data.update },
+        parsed.data.sessionId,
+      );
     }
     return;
   }
@@ -2447,11 +2475,23 @@ const acpProviderOptionsSchema = z
   .object({
     additionalWorkspaceWriteRoots: z.array(z.string()).optional(),
     acpDialect: z.string().min(1).optional(),
+    goalExtensionKind: z.string().min(1).optional(),
     parameterizedModelPicker: z.boolean().optional(),
     primaryModels: z.array(z.string().min(1)).optional(),
     reasoningProbePriorityModelIds: z.array(z.string().min(1)).optional(),
   })
   .passthrough();
+
+function decodeGoalExtensionKind(
+  providerOptions: Record<string, unknown> | undefined,
+): `${string}/${string}` | undefined {
+  const value = acpProviderOptionsSchema.parse(providerOptions ?? {})
+    .goalExtensionKind;
+  if (value === undefined || !isExtensionKind(value)) {
+    return undefined;
+  }
+  return value;
+}
 
 interface AcpModelPickerOptions {
   parameterizedModelPicker: boolean;
@@ -2522,7 +2562,7 @@ async function handleRequest(
           sessionRestore: false,
           threadArchive: false,
           threadRename: false,
-          threadGoalClear: false,
+          threadGoalClear: true,
           fork: "tip",
           approvalEnforcedBy: "runtime",
           grammarVersions: [THREAD_DELTA_GRAMMAR_V3, THREAD_DELTA_GRAMMAR_V3],
@@ -2617,6 +2657,9 @@ async function handleRequest(
           params.options.providerOptions,
         ),
         dialectId: decodeDialectId(params.options.providerOptions),
+        goalExtensionKind: decodeGoalExtensionKind(
+          params.options.providerOptions,
+        ),
         cwd: params.cwd,
         dynamicTools: params.dynamicTools,
         options: {
@@ -2744,6 +2787,28 @@ async function handleRequest(
     case "thread/discard":
       sendResult(request.id, { ok: true });
       return;
+
+    case "thread/goal/clear": {
+      const session = sessionsByBbThreadId.get(request.params.threadId);
+      if (
+        session === undefined ||
+        session.providerThreadId !== request.params.providerThreadId ||
+        session.goalControlMethod === undefined
+      ) {
+        sendResult(request.id, { cleared: false });
+        return;
+      }
+      await session.connection.request({
+        method: session.goalControlMethod,
+        params: {
+          sessionId: session.providerThreadId,
+          action: "clear",
+        },
+        resultSchema: z.record(z.string(), z.unknown()),
+      });
+      sendResult(request.id, { cleared: true });
+      return;
+    }
 
     case "skills/configure":
       configuredSkillRoots = request.params.roots.map((root) => ({
