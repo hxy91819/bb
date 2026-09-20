@@ -1,0 +1,23 @@
+{
+  "id": "provider-pilot-desktop-v0.43.3",
+  "status": "locked",
+  "baseline": {
+    "ref": "desktop-v0.43.3",
+    "commit": "e865697f56bea89f3413dd4cc7fae964850d20a0"
+  },
+  "domains": [
+    "provider"
+  ],
+  "domainFeatures": {
+    "provider": [
+      "acp-dsh-provider",
+      "acp-fast-mode",
+      "acp-codex-goal",
+      "acp-mid-turn-steering"
+    ]
+  },
+  "directFeatures": [
+    "mermaid-elk-layout"
+  ],
+  "verification": "docs/local-aggregate-provider-pilot-2026-09-20.md"
+}
