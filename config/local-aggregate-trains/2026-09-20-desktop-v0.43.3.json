@@ -26,7 +26,8 @@
     "acp-mid-turn-steering",
     "side-chat-command",
     "sidebar-pinned-new-thread",
-    "official-catalog-date-utc"
+    "official-catalog-date-utc",
+    "two-tier-stable-integration"
   ],
   "dependencies": {
     "automation-auto-marker": [],
@@ -49,7 +50,8 @@
     "acp-mid-turn-steering": ["acp-dsh-provider"],
     "side-chat-command": [],
     "sidebar-pinned-new-thread": [],
-    "official-catalog-date-utc": []
+    "official-catalog-date-utc": [],
+    "two-tier-stable-integration": []
   },
   "featureSources": {
     "automation-auto-marker": [{"logicalPatch":"automation-auto-marker-v1","commit":"6a040fd403b0b07f860bee6060ad218bd71a397c"}],
@@ -129,7 +131,12 @@
       {"logicalPatch":"side-chat-compose-contract-v1","commit":"fe03fbd735578af1b01087bbde60aed84120d9cc"}
     ],
     "sidebar-pinned-new-thread": [{"logicalPatch":"sidebar-pinned-new-thread-v1","commit":"3d4cc28a23240ff87a4b57eba686f7e5d6677506"}],
-    "official-catalog-date-utc": [{"logicalPatch":"official-catalog-date-utc-v1","commit":"bcd647a49c480f51a36e14e69cef1a98809d6101"}]
+    "official-catalog-date-utc": [{"logicalPatch":"official-catalog-date-utc-v1","commit":"bcd647a49c480f51a36e14e69cef1a98809d6101"}],
+    "two-tier-stable-integration": [
+      {"logicalPatch":"stable-candidate-maintenance-records-v1","commit":"cc26cca6680fda183b08a7ec8145d060cb27f5f3"},
+      {"logicalPatch":"two-tier-stable-integration-v1","commit":"0b966e848b2f1711855c5fb1a97c7092627efdc2"},
+      {"logicalPatch":"two-tier-verification-count-v1","commit":"2b61911657eb05d0e23657c54e9b735713272a67"}
+    ]
   },
   "featurePatches": {
     "automation-auto-marker": ["automation-auto-marker-v1"],
@@ -152,14 +159,15 @@
     "acp-mid-turn-steering": ["acp-mid-turn-steering-design-v1","acp-mid-turn-steering-core-v1","acp-steering-submit-failure-v1","acp-steering-cancel-on-failure-v1","acp-steering-label-design-v1","acp-steering-adapter-design-v1","acp-steering-english-labels-v1"],
     "side-chat-command": ["side-chat-command-v1","side-chat-compose-contract-v1"],
     "sidebar-pinned-new-thread": ["sidebar-pinned-new-thread-v1"],
-    "official-catalog-date-utc": ["official-catalog-date-utc-v1"]
+    "official-catalog-date-utc": ["official-catalog-date-utc-v1"],
+    "two-tier-stable-integration": ["stable-candidate-maintenance-records-v1","two-tier-stable-integration-v1","two-tier-verification-count-v1"]
   },
   "domains": ["provider"],
   "domainFeatures": {
     "provider": ["acp-dsh-provider","acp-fast-mode","acp-codex-goal","acp-mid-turn-steering"]
   },
   "directFeatures": [
-    "automation-auto-marker","mermaid-elk-layout","vite-cve-2026-39363","local-aggregate-server-startup","codex-fast-mode-toggle","recent-explicit-work-sequence","local-aggregate-service-tier-migration","local-aggregate-recent-sequence-migration","markdown-table-breakout","environment-switch-auto-continue","thread-project-label","sidebar-parent-row-hover-archive","sidebar-touch-hover-actions","sidebar-touch-navigation","side-chat-command","sidebar-pinned-new-thread","official-catalog-date-utc"
+    "automation-auto-marker","mermaid-elk-layout","vite-cve-2026-39363","local-aggregate-server-startup","codex-fast-mode-toggle","recent-explicit-work-sequence","local-aggregate-service-tier-migration","local-aggregate-recent-sequence-migration","markdown-table-breakout","environment-switch-auto-continue","thread-project-label","sidebar-parent-row-hover-archive","sidebar-touch-hover-actions","sidebar-touch-navigation","side-chat-command","sidebar-pinned-new-thread","official-catalog-date-utc","two-tier-stable-integration"
   ],
   "patches": [
     {"commit":"d1b0bc018e8103c45133ed6c7869ddba64b8ea8a","sourceCommit":"6a040fd403b0b07f860bee6060ad218bd71a397c","logicalPatch":"automation-auto-marker-v1","features":["automation-auto-marker"]},
@@ -219,7 +227,10 @@
     {"commit":"5b4d0956fb4af57a57f2182d0a28096c55fb2925","sourceCommit":"d3d7752d3bd1e7769840401baec948f5f9daf7db","logicalPatch":"acp-dsh-ordered-fallback-tests-v1","features":["acp-dsh-provider"]},
     {"commit":"c1f9a555a17887fd57d6b9cae595e3a51bb151c4","sourceCommit":"6a115ffd25616a25b8de0c15011702bc879bddd1","logicalPatch":"acp-dsh-collapse-policy-v1","features":["acp-dsh-provider"]},
     {"commit":"a0c918e2ef45055c8313e1850517c3fea42fe3ca","sourceCommit":"bcd647a49c480f51a36e14e69cef1a98809d6101","logicalPatch":"official-catalog-date-utc-v1","features":["official-catalog-date-utc"]},
-    {"commit":"bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba","sourceCommit":"3d4cc28a23240ff87a4b57eba686f7e5d6677506","logicalPatch":"sidebar-pinned-new-thread-v1","features":["sidebar-pinned-new-thread"]}
+    {"commit":"bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba","sourceCommit":"3d4cc28a23240ff87a4b57eba686f7e5d6677506","logicalPatch":"sidebar-pinned-new-thread-v1","features":["sidebar-pinned-new-thread"]},
+    {"commit":"cc26cca6680fda183b08a7ec8145d060cb27f5f3","sourceCommit":"cc26cca6680fda183b08a7ec8145d060cb27f5f3","logicalPatch":"stable-candidate-maintenance-records-v1","features":["two-tier-stable-integration"]},
+    {"commit":"0b966e848b2f1711855c5fb1a97c7092627efdc2","sourceCommit":"0b966e848b2f1711855c5fb1a97c7092627efdc2","logicalPatch":"two-tier-stable-integration-v1","features":["two-tier-stable-integration"]},
+    {"commit":"2b61911657eb05d0e23657c54e9b735713272a67","sourceCommit":"2b61911657eb05d0e23657c54e9b735713272a67","logicalPatch":"two-tier-verification-count-v1","features":["two-tier-stable-integration"]}
   ],
   "verification": "docs/local-aggregate-verification-2026-09-20.md"
 }
