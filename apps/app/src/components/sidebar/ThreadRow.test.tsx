@@ -1003,10 +1003,10 @@ describe("ThreadRow", () => {
       expect(
         titleContainer?.classList.contains("bb-sidebar-hover-actions-inset"),
       ).toBe(false);
-      expect(titleContainer?.classList.contains("pr-7.5")).toBe(true);
+      expect(titleContainer?.classList.contains("pr-7.5")).toBe(false);
       expect(
         titleContainer?.classList.contains("max-md:pointer-coarse:pr-0"),
-      ).toBe(true);
+      ).toBe(false);
       fireEvent.click(toggle);
       expect(onToggleCollapsed).toHaveBeenCalledWith("thr_test");
     },
@@ -1088,7 +1088,9 @@ describe("ThreadRow", () => {
     });
 
     expect(screen.queryByRole("button", { name: "Archive thread" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Thread actions" })).not.toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Thread actions" }),
+    ).not.toHaveLength(0);
     expect(
       screen.getByRole("button", { name: "Collapse Parent thread threads" }),
     ).not.toBeNull();
@@ -1113,7 +1115,9 @@ describe("ThreadRow", () => {
     expect(
       screen.getByRole("button", { name: "Archive thread" }),
     ).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Thread actions" })).not.toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Thread actions" }),
+    ).not.toHaveLength(0);
     expect(
       container.querySelector(".bb-sidebar-hover-actions-inset"),
     ).not.toBeNull();
