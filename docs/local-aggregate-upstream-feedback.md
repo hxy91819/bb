@@ -1,0 +1,153 @@
+# Local Aggregate Upstream Feedback
+
+This document records the upstream feedback associated with independently maintained and pending local-aggregate changes. It is a contribution log, not the authoritative specification backlog: new specifications belong in the personal fork at `hxy91819/bb`.
+
+## Stable rebuild, 2026-09-20
+
+The selected baseline is `desktop-v0.43.3` (`e865697f56bea89f3413dd4cc7fae964850d20a0`). The audited `origin/main` commits after this tag remain unreleased debt and are not part of this package. This pass replays 21 active source branches in the order frozen by [the train manifest](../config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json); the exact source-to-aggregate mapping, dependency edges, and retired cleanup branches are in [the registry](../config/local-aggregate-features.json).
+
+The local Fast migration compatibility patch now restores a staged `_bb_service_tier_override_pending` value even when a process exits between staging and canonical migration. The regression uses a file-free database state matching both canonical-ledger outcomes, calls `migrate()` twice, and verifies the persisted Fast setting is recovered and idempotent. Recent uses the same durable pending-state pattern. This fixes a release-blocking recovery gap discovered during the integration review.
+
+`fix/local-aggregate-project-row-test-residue` and `fix/local-aggregate-migration-history-cleanup` are retained as historical refs but retired from this rebuild: neither has a standalone product or compatibility delta after replaying the stable baseline. The current tests remain with their owning modules.
+
+Fork specifications [#12](https://github.com/hxy91819/bb/issues/12) and [#13](https://github.com/hxy91819/bb/issues/13) record the new touch-navigation and UTC marketplace-date fixes. No new upstream issue or pull request was created. The older entries below are historical evidence; their source and aggregate SHAs do not describe this train.
+
+The next train should freeze representative historical database fixtures before any large branch reorganization. The current registry introduces module and dependency fields, while the subsequent train can consolidate the database-compatibility, provider-runtime, and sidebar-recent modules around those fixtures. A build artifact credential must bind the final source SHA, Node/pnpm, platform and ABI; source publication, package construction, and service deployment remain distinct states.
+
+## Stable rebuild, 2026-09-17
+
+The selected baseline is `desktop-v0.43.1` (`267938526dfcbc0edb228ce827b5bec202c1af97`). The 118 commits from that release to the audited `origin/main` tip are unreleased debt, not part of this snapshot. Current source and cherry-pick identities are authoritative in [the registry](../config/local-aggregate-features.json); older identities and deployment observations below are historical.
+
+The feedback audit retained every registered change. Mermaid #3382, dependency remediation #1780, Recent activity #1614, and table behavior #1705 remain open. Closing Fast #3403 via #3472 addressed the wire reset, not local toggle persistence or next-thread defaults. Closing table #1951 via #1953 addressed clipping, not the local in-column scroll/expand behavior. Fork specifications #1 and #2 remain open. No branch was retired based only on issue closure.
+
+## Automation session auto marker
+
+- **Fork specification:** [hxy91819/bb#9](https://github.com/hxy91819/bb/issues/9)
+- **Fork implementation:** [feature/automation-auto-marker](https://github.com/hxy91819/bb/tree/feature/automation-auto-marker) at [`694dec198`](https://github.com/hxy91819/bb/commit/694dec198b2603c17f1eab0cae7c3da9a28cbba2), packaged as [`fbae7370f`](https://github.com/hxy91819/bb/commit/fbae7370f1b7649785ddb8414bcbd0dff5f15d4d).
+- **Background:** sessions spawned or re-prompted by BB automations were indistinguishable from manually created sessions, and every future automation would have to opt in by hand-writing a marker into its prompt.
+- **Change:** the automations plugin marks sessions at dispatch time — spawned threads carry `[auto]` in title and first prompt, re-prompted target threads carry it at the front of the due message, and marking is idempotent. Stored prompts stay unchanged.
+- **Validation:** 82 focused plugin tests and plugin typecheck passed in the source worktree; autoreview run `20260918T032747Z-2a5e82` (codex `gpt-5.6-sol`, high) reported no accepted/actionable findings; the aggregate cherry-pick passed the same focused tests.
+- **Screenshot:** not applicable; the behavior is a thread-list title and message prefix observed in live dispatch.
+- **Integration status:** fork specification only; the owner classifies this behavior as personal preference, so no upstream issue was filed for it.
+
+Newly registered source branches and fork specifications:
+
+- [Thread project labels, #4](https://github.com/hxy91819/bb/issues/4): `feature/thread-project-label`; labels in thread-mode rows and pinned trees, excluding the personal project. The original `a268b26c7be5da45b6c79e0254adfa4a4a053fa2` commit is retained unchanged.
+- [ACP Fast configuration, #5](https://github.com/hxy91819/bb/issues/5): `fix/acp-fast-mode`; select/boolean native configuration during startup, turns, compaction, and environment replacement.
+- [ACP Codex goals, #6](https://github.com/hxy91819/bb/issues/6): `fix/acp-codex-goal`; validated extension state, optional snapshot normalization, stale-state clearing, and capability-gated clear.
+- [Environment switch continuation, #7](https://github.com/hxy91819/bb/issues/7): `fix/environment-switch-auto-continue`; once-only continuation, explicit-input supersession, and Pi session directory relocation.
+
+These are fork feedback artifacts, not new upstream PRs. Product screenshots remain unpublished. Targeted behavior tests and typechecks are recorded in the [rebuild verification report](local-aggregate-verification-2026-09-17.md).
+
+Migration identities are generated `0119_military_taskmaster` (Fast) and `0120_stale_chamber` (Recent). Old local timestamps also skipped stable `0118_brave_marvel_zombies`; a reproduced regression now verifies replay of plugin metadata along with `0117_machine_providers`, preservation of Fast/Recent values, and idempotence. The repair lives in the independent migration source, not in aggregate-only SQL or ledger edits.
+
+The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded: it has an untracked experiment and no new committed product patch beyond old aggregate history. Preserve it. Root replacement and fork publication use the authorized maintenance workflow without another confirmation; history rewrites require a freshly observed explicit lease. Production service replacement requires separate explicit authorization and is excluded from this handoff. This entry is not deployment proof.
+
+## Local aggregate migration history cleanup
+
+- **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) covers the Fast behavior and [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) covers Recent activity. This is local aggregate history repair, not a new product change or upstream submission.
+- **Source:** `fix/local-aggregate-migration-history-cleanup` at `e39b496fbf4fd54635fe06c5ede50e36ce135561`, integrated with a source reference as `4569551b19fc5e5d9528549db3bd013fa062ed62`.
+- **Failure:** superseded aggregate commits reintroduced five generated Fast/Recent SQL files. One also appended `0119_magenta_dexter_bennett` after `0120_stale_chamber` with a lower timestamp and reused journal index 119. Drizzle ignores four unjournaled files. The deployed database skips the appended migration below its `0120` ledger high-water mark, while a fresh database has no high-water mark and would execute it after `0120`, failing on the duplicate Recent column. The source catalog also violated journal ordering and retained conflicting migration identities.
+- **Change:** remove only the five superseded SQL files and the appended journal entry. Keep the deployed canonical `0119_military_taskmaster` and `0120_stale_chamber` identities, compatibility migration code, schemas, snapshots, and persisted ledger unchanged. Journal tests now reject SQL files without entries as well as entries without SQL files.
+- **Validation:** 503 database tests and database typechecking passed. A temporary copy of the deployment's 123-entry pre-cutover backup upgraded to 126 entries, preserved Fast and Recent aggregates, applied plugin metadata and each canonical migration once, retained each legacy identity once, and remained ledger-idempotent on a second migration. Autoreview run `20260917T032653Z-14485d` reported no actionable findings.
+- **Deferred work:** the untracked `migration-guard.mjs` experiment in `fix/local-aggregate-migration-guard` remains excluded from this source and deployment candidate.
+
+## Vite 6.4.1 CVE remediation
+
+- **Upstream feedback:** [get-bb/bb#1780](https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454)
+- **Feature worktree:** `fix/vite-cve-2026-39363` at [`f56c75c97`](https://github.com/hxy91819/bb/commit/f56c75c9796cb686da4f5adb88262736a11fc0f9); packaged locally as `6bfd3db10e4114d5fb127b3469f6ba09d73cc901`.
+- **Background:** the lockfile resolves Vite 6.4.1 through `@ladle/react` and Vitest 3, while CVE-2026-39363 affects Vite 6.0.0 through 6.4.1 when its dev-server WebSocket is network-exposed.
+- **Proposal:** add scoped pnpm overrides for `@ladle/react>vite` and `vitest@3>vite` at 6.4.3, retaining the direct Vite 8 dependency and package major versions.
+- **Validation:** dependency-path commands on current upstream confirm the Vite 6.4.1 resolutions; the rebased lockfile patch resolves those paths to Vite 6.4.3. No network-exposed exploit was run.
+- **Screenshot:** not applicable; this is a dependency-resolution change.
+
+## Shared recent explicit work ordering
+
+- **Upstream feedback:** [get-bb/bb#1614](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177)
+- **Fork specification:** [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1)
+- **Fork implementation:** [feature/recent-explicit-work-sequence](https://github.com/hxy91819/bb/tree/feature/recent-explicit-work-sequence) at [`e403439e5`](https://github.com/hxy91819/bb/commit/e403439e53f30d7763b52e92ee299eee6ab9cd80)
+- **Background:** the previous browser-local promotion sequence kept Recent activity stable, but connected clients of the same server could disagree. Thread lifecycle churn should still not reshuffle project sections.
+- **Change:** store a server-owned monotonic sequence on the project when BB accepts eligible user-originated work. Recent activity orders pinned content first, then promoted projects by descending sequence, then unpromoted projects by the existing shared drag order.
+- **Replacement:** this supersedes `feature/recent-project-activity-main` (`8e97b5048`). That browser-local implementation is retired from the aggregate.
+- **Screenshot:** no product screenshot is published. The behavior is temporal and covered by observable ordering tests.
+
+## Mermaid ELK layout
+
+- **Upstream feedback:** [get-bb/bb#3382](https://github.com/get-bb/bb/issues/3382)
+- **Fork implementation:** [feature/mermaid-elk-layout](https://github.com/hxy91819/bb/tree/feature/mermaid-elk-layout) at [`19b1cdecd`](https://github.com/hxy91819/bb/commit/19b1cdecd345f35ed64d9322385c6e92b49d814c)
+- **Background:** dense Mermaid flowcharts can be difficult to scan with the default layout engine.
+- **Proposal:** register Mermaid's official ELK layout loader once and select ELK as the default while preserving bb's strict Mermaid security configuration, existing theme, and lazy loading.
+- **Screenshot:** no product screenshot is published. The available local comparison is a non-product proof of concept with non-English annotations, so it is intentionally not presented as upstream evidence.
+
+## Mobile project display options
+
+- **Upstream feedback:** [get-bb/bb#3330](https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327)
+- **Upstream adoption:** [get-bb/bb#3352](https://github.com/get-bb/bb/pull/3352) merged as `8ac123f3551e7502a91c93e87329797f34ee626b`. The production change is the same `data-sidebar-hover-actions-mobile="always"` marker; the upstream test also covers the open header-actions state.
+- **Retirement:** `fix/mobile-display-options` (`30f71b335`) is no longer packaged. The rebuilt aggregate uses the upstream fix from `origin/main`.
+- **Aggregate cleanup:** `fix/local-aggregate-project-row-test-residue` removes only the obsolete test helper argument, invalid JSX prop, and duplicate assertion left when the retired fork commit re-entered through the superseded aggregate merge. The current test still exercises the real project actions through closed, open, and closed menu states, so mobile behavior coverage remains intact.
+
+## Touch sidebar hover actions
+
+- **Upstream feedback:** [get-bb/bb#3832](https://github.com/get-bb/bb/issues/3832)
+- **Fork implementation:** [fix/sidebar-touch-hover-actions](https://github.com/hxy91819/bb/tree/fix/sidebar-touch-hover-actions) at [`ac8417dac`](https://github.com/hxy91819/bb/commit/ac8417dace81e8164f23ee9409aca23e774338f2).
+- **Failure:** touch browsers synthesize persistent `:hover`. The existing override applied only below 768px and its selector lost to the normal hover inset, so touching a thread row could reveal Archive and add 30px of right padding even on a phone.
+- **Change:** apply the suppression whenever the primary input cannot hover and match the touch-hover selector strongly enough to remove the inset, while preserving keyboard focus, open action menus, and desktop mouse hover.
+- **Validation:** all 4,471 app tests passed, app lint completed with no errors, and a rendered 1280px no-hover/coarse-pointer story retained `padding-right: 0`, hidden actions, and stable thread titles before and after hover. Autoreview run `20260917T063653Z-2fb1ac` reported no actionable findings.
+
+## Codex Fast mode persistence
+
+- **Upstream feedback:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) is the primary bug tracker. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) is retained only as historical context: it is a closed, not-planned SDK feature request rather than the bug's tracking issue.
+- **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`65ad5dc0b`](https://github.com/hxy91819/bb/commit/65ad5dc0b2e8c9793a9cc018ab7c928f65d33571), rebased onto current `origin/main` with migration `0117_charming_avengers`.
+- **Background:** disabling Fast without sending another message only changed the main composer's local selection. Returning to the thread restored the saved fast tier. The Codex adapter also omitted the explicit reset for the default tier.
+- **Change:** persist the toggle through the thread-update API, SDK and CLI; refresh execution-option subscribers; keep the selected Fast value as the new-thread default. `fix/codex-fast-mode-toggle-aggregate-compat` is retired because this rebuild no longer needs a separate migration-number adapter.
+- **Screenshot:** browser screenshots and raw bridge recordings remain local because they include machine paths and model-catalog details; the upstream comment includes sanitized wire evidence.
+- **Integration status:** this pass does not create an upstream PR.
+
+## Local Fast migration compatibility
+
+- **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) remains the primary Fast-mode bug tracker. This is a local deployment compatibility repair, not a second upstream product report.
+- **Fork implementation:** [fix/local-aggregate-service-tier-migration](https://github.com/hxy91819/bb/tree/fix/local-aggregate-service-tier-migration) at [`5bca4e8f1`](https://github.com/hxy91819/bb/commit/5bca4e8f169aa4cebcf42371d20243c911c50e84), packaged as `6cb7fd820`.
+- **Background:** a previously deployed branch-local Fast migration could leave `threads.service_tier_override` in the local schema without the rebuilt aggregate's canonical `0117_charming_avengers` journal row. Its later timestamp could also make Drizzle skip canonical `0115_ui_preferences`. The rebuilt aggregate then failed startup on duplicate-column and incomplete-history checks.
+- **Change:** stage the existing Fast value before Drizzle replays the canonical sequence, then restore it after the canonical column exists. Apply or adopt the skipped UI-preferences migration before later history. This preserves Fast settings while recording the canonical sequence normally; no data-directory or migration-ledger edit is required.
+- **Integration status:** packaged as a local deployment repair only; no upstream PR was opened.
+
+## Stable aggregate migration recovery
+
+- **Tracking context:** [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) tracks the existing Recent activity feature; this is its local deployment compatibility repair.
+- **Source:** `fix/local-aggregate-recent-sequence-migration` at `6c903e11f`, integrated with a source reference as `42e8985a7`.
+- **Failure:** the previous aggregate had already added the Recent activity column under an older migration identity. Rebuilding on `desktop-v0.43.0` regenerated that migration, and the old ledger timestamp also caused the stable machine-provider migration to be skipped.
+- **Change:** preserve Recent values while the canonical migration runs, recover interrupted staging, and replay the skipped machine-provider migration. The deployment build now uses the existing bundled-plugins Turbo target.
+- **Validation:** 499 database tests and typechecking passed; a database-copy rehearsal preserved project and thread data, passed integrity checks, and was idempotent. Autoreview run `20260912T045729Z-85ecdd` reported no actionable findings.
+- **Publication:** the existing aggregate and feature refs diverged after the previous rebase. Their publication and worktree cleanup remain pending a remote-history decision; no force push was performed during recovery.
+
+## Local aggregate startup sequencing repair
+
+- **Tracking context:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) remains the Fast-mode bug's primary tracker. No separate upstream issue was created for this deployment-only follow-up, and this entry must not be read as a second product report for #3403.
+- **Fork implementation:** [fix/local-aggregate-server-startup](https://github.com/hxy91819/bb/tree/fix/local-aggregate-server-startup) at [`58d86555c`](https://github.com/hxy91819/bb/commit/58d86555c05be5c62f752856ce0645623f770060).
+- **Background:** a retained `starting` thread caused startup recovery to wait for a host-backed provision before the server could become healthy; the daemon that satisfies that provision is started only after server health succeeds.
+- **Change:** bind the HTTP listener first, then run the same recovery sweep in the background with its existing error reporting.
+- **Integration status:** packaged as a deployment compatibility repair only; no upstream PR was opened.
+
+## ACP grouped models, session/resume, and DeepSeek Harness
+
+- **Fork specification:** [hxy91819/bb#2](https://github.com/hxy91819/bb/issues/2)
+- **Fork implementation:** [feature/dsh-acp-provider](https://github.com/hxy91819/bb/tree/feature/dsh-acp-provider) at [`2f638b8b2`](https://github.com/hxy91819/bb/commit/2f638b8b2626326c774132e3b3c29196b2521bde)
+- **Background:** ACP v1 allows grouped model select options and optional `session/resume`. BB flattened neither grouped catalogs nor resume-before-load, and DeepSeek Harness was not a known installed-only ACP agent.
+- **Change:** flatten grouped ACP model lists, restore via `session/resume` before `session/load`, and ship `acp-dsh` for `dsh --profile acp`.
+- **Integration status:** no get-bb/bb issue was filed in this pass.
+
+## Markdown table column scroll and expand
+
+- **Upstream context:** [get-bb/bb#1951](https://github.com/get-bb/bb/issues/1951) describes clipped-container breakout hiding the first columns.
+- **Fork specification:** [hxy91819/bb#3](https://github.com/hxy91819/bb/issues/3)
+- **Fork implementation:** [fix/markdown-table-breakout](https://github.com/hxy91819/bb/tree/fix/markdown-table-breakout) at [`755ea2faf`](https://github.com/hxy91819/bb/commit/755ea2fafd3ecb7820687c4e88dc837c35363acc)
+- **Change:** remove the table breakout geometry pipeline so tables stay in the prose column. When a table actually overflows, show a corner expand control that opens a full-screen natural-width dialog. The control is hover/focus-revealed and always visible on coarse pointers.
+- **Integration status:** incrementally packaged onto the existing aggregate baseline without taking newer `origin/main` or `desktop-v0.43.0`.
+
+## Side chat composer command
+
+- **Fork specification:** [hxy91819/bb#10](https://github.com/hxy91819/bb/issues/10)
+- **Fork implementation:** [feature/side-chat-command](https://github.com/hxy91819/bb/tree/feature/side-chat-command) at [`7c130e9ec`](https://github.com/hxy91819/bb/commit/7c130e9ec614a6cdfd048120ef648d8f08ba7a4f)
+- **Change:** typing `/side` in a thread's composer runs the side-chat plugin's `side-chat` thread panel action instead of inserting a command pill. The suggestion appears only when `isThreadForkable` allows it — unarchived thread with an environment and a provider that advertises `supportsFork` (e.g. Pi, Codex) — and while the action is registered. Command suggestions now support an optional `panelAction` dispatch target, and the thread panel action invocation is shared between the launcher and the composer.
+- **Validation:** 135 PromptBoxInternal tests, 112 related plugin/composer tests, and 12 focused suggestion tests passed; `@bb/app` and `@bb/client-core` typecheck clean; autoreview run `20260918T113716Z-c4c6bf` reported no actionable findings.
+- **Integration status:** fork-only spec for now; no upstream issue was filed in this pass.
