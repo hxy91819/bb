@@ -1,8 +1,13 @@
 import { z } from "zod";
 
+export function isGoalExtensionKind(kind: string): boolean {
+  return kind.endsWith("/goal");
+}
+
 export const threadTimelineGoalStatusSchema = z.enum([
   "active",
   "paused",
+  "blocked",
   "budgetLimited",
   "complete",
 ]);

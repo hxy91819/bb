@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { threadScope, turnScope, type ThreadEvent } from "@bb/domain";
+import {
+  threadScope,
+  turnScope,
+  type ExtensionKind,
+  type ThreadEvent,
+} from "@bb/domain";
 import type { ProviderRuntimeEvent } from "@bb/provider-bridge-protocol/bridge-kit";
 import { createDeltaAssembler } from "@bb/provider-bridge-protocol/assembler";
 import type { DeltaAssembler } from "@bb/provider-bridge-protocol/assembler";
@@ -34,8 +39,11 @@ interface AcpEquivalenceHarness {
 
 const SESSION_CWD = "/workspace";
 
-function createHarness(): AcpEquivalenceHarness {
-  const translator = createAcpDeltaTranslator({ cwd: SESSION_CWD });
+function createHarness(options: { goalExtensionKind?: ExtensionKind } = {}): AcpEquivalenceHarness {
+  const translator = createAcpDeltaTranslator({
+    cwd: SESSION_CWD,
+    goalExtensionKind: options.goalExtensionKind,
+  });
   const assembler = createDeltaAssembler({
     providerId: "acp",
     entropyPrefix: ENTROPY,
@@ -1225,6 +1233,82 @@ describe("acp delta translation (moved from the legacy adapter suite)", () => {
       harness.translate(updateEvent({ sessionUpdate: "totally_new_update" })),
     ).toMatchObject([
       { type: "provider/unhandled", rawType: "acp/update:totally_new_update" },
+    ]);
+  });
+
+  it("translates ACP goal state updates into the declared extension", () => {
+    const translator = createAcpDeltaTranslator({
+      cwd: SESSION_CWD,
+      goalExtensionKind: "account-limits/goal",
+    });
+    const translate = (event: ProviderRuntimeEvent) =>
+      translator.translateAcpEvent(event, { threadId: THREAD_ID });
+
+    expect(
+      translate(
+        updateEvent({
+          sessionUpdate: "session_info_update",
+          _meta: {
+            goal: {
+              objective: "finish the migration",
+              status: "active",
+              tokenBudget: 10_000,
+              tokensUsed: 120,
+              timeUsedSeconds: 3,
+            },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: "extension.state",
+        extensionKind: "account-limits/goal",
+        payload: {
+          objective: "finish the migration",
+          status: "active",
+          tokenBudget: 10_000,
+          tokensUsed: 120,
+          timeUsedSeconds: 3,
+        },
+      },
+    ]);
+
+    expect(
+      translate(
+        updateEvent({
+          sessionUpdate: "session_info_update",
+          _meta: {
+            goal: { objective: "unbounded goal", status: "active" },
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: "extension.state",
+        extensionKind: "account-limits/goal",
+        payload: {
+          objective: "unbounded goal",
+          status: "active",
+          tokenBudget: null,
+          tokensUsed: 0,
+          timeUsedSeconds: 0,
+        },
+      },
+    ]);
+
+    expect(
+      translate(
+        updateEvent({
+          sessionUpdate: "session_info_update",
+          _meta: { goal: null },
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: "extension.state",
+        extensionKind: "account-limits/goal",
+        payload: null,
+      },
     ]);
   });
 });

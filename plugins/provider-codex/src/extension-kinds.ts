@@ -9,6 +9,7 @@ export const CODEX_MACOS_PERMISSION_EXTENSION_KIND =
 export const codexGoalStatusSchema = z.enum([
   "active",
   "paused",
+  "blocked",
   "budgetLimited",
   "complete",
 ]);
