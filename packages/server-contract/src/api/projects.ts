@@ -431,6 +431,7 @@ export type UpdateSkillRequest = z.infer<typeof updateSkillRequestSchema>;
 
 export const projectResponseSchema = projectSchema.extend({
   sources: z.array(projectSourceSchema),
+  recentExplicitWorkSequence: z.number().int().nullable(),
 });
 export type ProjectResponse = z.infer<typeof projectResponseSchema>;
 

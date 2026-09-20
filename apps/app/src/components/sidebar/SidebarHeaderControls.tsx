@@ -22,6 +22,7 @@ import {
   sidebarChronologicalSortAtom,
   sidebarGroupThreadsByEnvironmentAtom,
   sidebarEnvironmentGroupingAtom,
+  sidebarProjectOrderAtom,
   sidebarSortDirectionAtom,
 } from "./sidebarCollapsedAtoms";
 import { SidebarControlButton, SidebarRowControls } from "./SidebarRowControls";
@@ -49,8 +50,16 @@ const SIDEBAR_SORT_OPTIONS = [
   { label: "Alphabetical", sort: "alpha", direction: "ascending" },
 ] as const;
 
-function SidebarViewItems({ page }: { page: "organize" | "sort" }) {
+const SIDEBAR_PROJECT_ORDER_OPTIONS = [
+  { label: "Recent activity", order: "recent" },
+  { label: "Drag order", order: "manual" },
+] as const;
+
+type SidebarViewPage = "organize" | "projectOrder" | "sort";
+
+function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [organization, setOrganization] = useAtom(sidebarOrganizationModeAtom);
+  const [projectOrder, setProjectOrder] = useAtom(sidebarProjectOrderAtom);
   const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
   const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const setEnvironmentGrouping = useSetAtom(sidebarEnvironmentGroupingAtom);
@@ -98,6 +107,29 @@ function SidebarViewItems({ page }: { page: "organize" | "sort" }) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </>
+    );
+  }
+  if (page === "projectOrder") {
+    return (
+      <DropdownMenuGroup aria-label="Project order">
+        {SIDEBAR_PROJECT_ORDER_OPTIONS.map((option) => (
+          <DropdownMenuItem
+            key={option.order}
+            role="menuitemradio"
+            aria-checked={projectOrder === option.order}
+            onSelect={() => {
+              setProjectOrder(option.order);
+            }}
+          >
+            {option.label}
+            <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
+              {projectOrder === option.order && (
+                <Icon name="Check" className="size-4" />
+              )}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuGroup>
     );
   }
   return (
@@ -165,7 +197,7 @@ export function SidebarHeaderControls({
 }) {
   const creation = useContext(HeaderCreationContext);
   const compact = useIsCompactViewport();
-  const [page, setPage] = useState<"organize" | "sort" | null>(null);
+  const [page, setPage] = useState<SidebarViewPage | null>(null);
   const changeOpen = (next: boolean) => {
     if (!next) setPage(null);
     onOpenChange?.(next);
@@ -203,6 +235,8 @@ export function SidebarHeaderControls({
           mobileTitle={
             page === "organize"
               ? "Organize"
+              : page === "projectOrder"
+                ? "Project order"
               : page === "sort"
                 ? "Sort by"
                 : `${label} actions`
@@ -242,6 +276,11 @@ export function SidebarHeaderControls({
               {(
                 [
                   { page: "organize", label: "Organize", icon: "Layers" },
+                  {
+                    page: "projectOrder",
+                    label: "Project order",
+                    icon: "ArrowUpDown",
+                  },
                   { page: "sort", label: "Sort by", icon: "Sort" },
                 ] as const
               ).map((item) =>
