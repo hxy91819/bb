@@ -5,6 +5,13 @@
     "ref": "desktop-v0.43.3",
     "commit": "e865697f56bea89f3413dd4cc7fae964850d20a0"
   },
+  "features": [
+    "acp-dsh-provider",
+    "acp-fast-mode",
+    "acp-codex-goal",
+    "acp-mid-turn-steering",
+    "mermaid-elk-layout"
+  ],
   "domains": [
     "provider"
   ],
