@@ -74,6 +74,8 @@ export function AppSidebar({
   const closeOnMobile = useCloseMobileSidebar();
   const { isCompactViewport, openMobile } = useSidebar();
   const [compactCustomizeMode, setCompactCustomizeMode] = useState(false);
+  const [pinnedNavContainer, setPinnedNavContainer] =
+    useState<HTMLDivElement | null>(null);
   const [threadShortcutKeysById, setThreadShortcutKeysById] = useState<
     ReadonlyMap<string, SidebarThreadShortcutPresentation>
   >(EMPTY_SIDEBAR_THREAD_SHORTCUT_KEYS);
@@ -205,34 +207,46 @@ export function AppSidebar({
   const body = (
     <>
       <SidebarTopReserveRow testId="app-sidebar-top-reserve-row" />
-      <SidebarNavigationRegion
-        compactCustomizeMode={isCompactCustomizeModeActive}
-        onCompactCustomizeModeChange={setCompactCustomizeMode}
-        onNavigate={closeOnMobile}
-        splitEnabled
-        newThreadSplit={newThreadSplit}
-        onNewChat={handleNewChat}
-        onSearchThreads={closeOnMobile}
-      />
       <div
-        aria-hidden="true"
-        className={cn(
-          "mx-2 my-2 shrink-0 border-t border-sidebar-border/25",
-          isCompactCustomizeModeActive && "hidden",
-        )}
-        data-testid="app-sidebar-navigation-divider"
+        ref={setPinnedNavContainer}
+        data-testid="app-sidebar-pinned-navigation"
+        className="shrink-0 px-2 pt-2 empty:hidden"
       />
-      <SidebarContent
-        className={cn(isCompactCustomizeModeActive && "hidden")}
-        aria-hidden={isCompactCustomizeModeActive ? true : undefined}
-        inert={isCompactCustomizeModeActive ? true : undefined}
-      >
-        <PluginThreadList
-          replacement={threadListReplacement}
-          original={originalThreadList}
-          searchQuery=""
+      <SidebarContent>
+        <SidebarNavigationRegion
+          compactCustomizeMode={isCompactCustomizeModeActive}
+          onCompactCustomizeModeChange={setCompactCustomizeMode}
           onNavigate={closeOnMobile}
+          splitEnabled
+          newThreadSplit={newThreadSplit}
+          onNewChat={handleNewChat}
+          onSearchThreads={closeOnMobile}
+          pinnedContainer={pinnedNavContainer}
         />
+        <div
+          aria-hidden="true"
+          className={cn(
+            "mx-2 shrink-0 border-t border-sidebar-border/25",
+            isCompactCustomizeModeActive && "hidden",
+          )}
+          data-testid="app-sidebar-navigation-divider"
+        />
+        <div
+          data-testid="app-sidebar-thread-list"
+          className={cn(
+            "flex min-h-0 flex-col",
+            isCompactCustomizeModeActive && "hidden",
+          )}
+          aria-hidden={isCompactCustomizeModeActive ? true : undefined}
+          inert={isCompactCustomizeModeActive ? true : undefined}
+        >
+          <PluginThreadList
+            replacement={threadListReplacement}
+            original={originalThreadList}
+            searchQuery=""
+            onNavigate={closeOnMobile}
+          />
+        </div>
       </SidebarContent>
       <SidebarFooter className="relative">
         <OverflowFade placement="above" tone="sidebar" size="sm" />

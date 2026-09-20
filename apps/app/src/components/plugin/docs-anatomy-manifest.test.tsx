@@ -180,7 +180,7 @@ describe("docs anatomy manifest", () => {
     const sectionSelectors: Record<string, string> = {
       "top-reserve": '[data-testid="app-sidebar-top-reserve-row"]',
       "sidebar-navigation": '[data-testid="sidebar-navigation-region"]',
-      "thread-list": '[data-sidebar="content"]',
+      "thread-list": '[data-testid="app-sidebar-thread-list"]',
       footer: '[data-sidebar="footer"]',
     };
     expect(Object.keys(sectionSelectors).sort()).toEqual(

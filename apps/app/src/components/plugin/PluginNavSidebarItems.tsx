@@ -10,6 +10,7 @@ import {
   type PointerEventHandler,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
@@ -146,6 +147,8 @@ export function PluginNavSidebarItems(props: {
   leadingOrderKeys?: readonly string[];
   onCompactCustomizeModeChange?: (isCustomizing: boolean) => void;
   onNavigate?: () => void;
+  pinnedContainer?: HTMLElement | null;
+  pinnedKeys?: readonly string[];
   splitEnabled?: boolean;
 }) {
   const entries = usePluginNavPanelChrome();
@@ -188,6 +191,8 @@ export function PluginNavSidebarItems(props: {
           }
         : {})}
       {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})}
+      pinnedContainer={props.pinnedContainer ?? null}
+      pinnedKeys={props.pinnedKeys}
     />
   );
 }
@@ -197,6 +202,8 @@ function PluginNavSidebarItemList({
   leadingOrderKeys,
   onCompactCustomizeModeChange,
   onNavigate,
+  pinnedContainer = null,
+  pinnedKeys,
   rows,
   splitEnabled = false,
 }: {
@@ -204,6 +211,8 @@ function PluginNavSidebarItemList({
   leadingOrderKeys: readonly string[];
   onCompactCustomizeModeChange?: (isCustomizing: boolean) => void;
   onNavigate?: () => void;
+  pinnedContainer?: HTMLElement | null;
+  pinnedKeys?: readonly string[];
   rows: readonly SidebarNavRow[];
   splitEnabled?: boolean;
 }) {
@@ -387,6 +396,7 @@ function PluginNavSidebarItemList({
     () => setIsCustomizeOpen(true),
     [setIsCustomizeOpen],
   );
+  const pinnedKeySet = useMemo(() => new Set(pinnedKeys ?? []), [pinnedKeys]);
   const rowProps = {
     onNavigate,
     pathname: location.pathname,
@@ -475,23 +485,27 @@ function PluginNavSidebarItemList({
           items={visibleKeys}
           strategy={verticalListSortingStrategy}
         >
-          {visible.map((row) =>
-            isPluginSidebarNavRow(row) ? (
+          {visible.map((row) => {
+            const rowKey = getPluginNavPanelKey(row);
+            const renderedRow = isPluginSidebarNavRow(row) ? (
               <SortableSidebarNavRow
-                key={getPluginNavPanelKey(row)}
+                key={rowKey}
                 row={row}
                 reorderDisabled={reorderDisabled}
                 {...rowProps}
               />
             ) : (
               <BuiltInSidebarNavRow
-                key={getPluginNavPanelKey(row)}
+                key={rowKey}
                 row={row}
                 onHide={rowProps.onHide}
                 onCustomize={openCustomize}
               />
-            ),
-          )}
+            );
+            return pinnedContainer !== null && pinnedKeySet.has(rowKey)
+              ? createPortal(renderedRow, pinnedContainer, rowKey)
+              : renderedRow;
+          })}
         </SortableContext>
       </DndContext>
       {hidden.length > 0 ? (

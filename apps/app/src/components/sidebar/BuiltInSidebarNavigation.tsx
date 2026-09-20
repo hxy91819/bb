@@ -12,8 +12,15 @@ import {
   ProjectListNewThreadAction,
   ProjectListSearchThreadsAction,
 } from "./ProjectList";
-import { DEFAULT_BUILT_IN_SIDEBAR_NAVIGATION_ORDER } from "@/components/plugin/pluginNavSidebarOrder";
+import {
+  BUILT_IN_SIDEBAR_NAVIGATION_KEYS,
+  DEFAULT_BUILT_IN_SIDEBAR_NAVIGATION_ORDER,
+} from "@/components/plugin/pluginNavSidebarOrder";
 import { getPluginsRoutePath, getSkillsRoutePath } from "@/lib/route-paths";
+
+const PINNED_SIDEBAR_NAVIGATION_KEYS = [
+  BUILT_IN_SIDEBAR_NAVIGATION_KEYS.newThread,
+];
 
 export type BuiltInSidebarNavigationProps = ComponentProps<
   typeof ProjectListNewThreadAction
@@ -24,6 +31,7 @@ export type BuiltInSidebarNavigationProps = ComponentProps<
     | "compactCustomizeMode"
     | "onCompactCustomizeModeChange"
     | "onNavigate"
+    | "pinnedContainer"
     | "splitEnabled"
   >;
 
@@ -34,6 +42,7 @@ export function BuiltInSidebarNavigation({
   onNavigate,
   onNewChat,
   onSearchThreads,
+  pinnedContainer,
   splitEnabled,
 }: BuiltInSidebarNavigationProps) {
   const navigate = useNavigate();
@@ -131,6 +140,8 @@ export function BuiltInSidebarNavigation({
           leadingOrderKeys={DEFAULT_BUILT_IN_SIDEBAR_NAVIGATION_ORDER}
           onCompactCustomizeModeChange={onCompactCustomizeModeChange}
           onNavigate={onNavigate}
+          pinnedContainer={pinnedContainer}
+          pinnedKeys={PINNED_SIDEBAR_NAVIGATION_KEYS}
           splitEnabled={splitEnabled}
         />
       </div>
