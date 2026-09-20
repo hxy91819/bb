@@ -894,6 +894,18 @@ function rewindMachineProvidersMigration(db: DbConnection): void {
   db.$client.exec("DROP TABLE IF EXISTS environment_variables");
   db.$client.exec("DROP TABLE IF EXISTS thread_plugin_metadata");
   db.$client.exec("DROP TABLE IF EXISTS provider_model_catalogs");
+  db.$client.exec("DROP INDEX IF EXISTS threads_lifecycle_owner_idx");
+  const threadColumns = new Set(
+    db.$client
+      .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+      .all()
+      .map((column) => column.name),
+  );
+  for (const column of ["lifecycle_owner_thread_id", "storage_deleted_at"]) {
+    if (threadColumns.has(column)) {
+      db.$client.exec(`ALTER TABLE threads DROP COLUMN ${column}`);
+    }
+  }
   dropServiceTierOverrideColumn(db);
   db.$client.exec("DROP TABLE IF EXISTS environment_hook_operations");
   if (
