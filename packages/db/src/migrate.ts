@@ -1280,7 +1280,7 @@ function stageExistingRecentWorkSequenceColumn(
 
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0119_magenta_dexter_bennett",
+    "0120_stale_chamber",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) return;
 
