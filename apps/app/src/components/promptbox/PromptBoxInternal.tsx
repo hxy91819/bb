@@ -2404,7 +2404,7 @@ export function PromptBoxInternal({
         };
         setActiveTrigger(null);
         onMentionQueryChange(null, null);
-        onCommandQueryChange(null);
+        onCommandQueryChange(null, null);
         currentEditor
           .chain()
           .focus()
