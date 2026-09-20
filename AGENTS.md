@@ -93,6 +93,7 @@
 | `fix/local-aggregate-migration-history-cleanup` | `e39b496fb` | `4569551b1` | [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403), [hxy91819/bb#1](https://github.com/hxy91819/bb/issues/1) | 移除旧聚合回流的重复迁移文件和倒序 journal 条目 |
 | `fix/acp-mid-turn-steering` | `cf5207ff3` | `096d4dcab` | [hxy91819/bb#8](https://github.com/hxy91819/bb/issues/8) | ACP 中原生 mid-turn steer，按实际投递标注 steer/interrupted/queued |
 | `feature/side-chat-command` | `7c130e9ec` | `b92da9b86` | [hxy91819/bb#10](https://github.com/hxy91819/bb/issues/10) | 线程输入框 `/side` 命令直接打开 side chat，仅在可 fork 时出现 |
+| `feature/sidebar-pinned-new-thread` | `3d4cc28a2` | `bd5fc41da` | [hxy91819/bb#11](https://github.com/hxy91819/bb/issues/11) | New thread 固定在侧栏顶部，其余导航项随线程列表滚动 |
 
 维护规则：
 

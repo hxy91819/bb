@@ -301,6 +301,20 @@
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
         }
       ]
+    },
+    {
+      "branch": "feature/sidebar-pinned-new-thread",
+      "lastPackaged": {
+        "sourceCommit": "3d4cc28a23240ff87a4b57eba686f7e5d6677506",
+        "aggregateCommit": "bd5fc41daae62d1af63ee3ba9612f956afb88c74"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 11,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/11"
+        }
+      ]
     }
   ]
 }
