@@ -12,6 +12,20 @@
     "acp-mid-turn-steering",
     "mermaid-elk-layout"
   ],
+  "dependencies": {
+    "acp-dsh-provider": [],
+    "acp-fast-mode": ["acp-dsh-provider"],
+    "acp-codex-goal": ["acp-dsh-provider"],
+    "acp-mid-turn-steering": ["acp-dsh-provider"],
+    "mermaid-elk-layout": []
+  },
+  "featurePatches": {
+    "acp-dsh-provider": ["acp-dsh-provider-core-v1", "acp-dsh-fallback-tests-v1", "acp-dsh-ordered-fallback-tests-v1", "acp-dsh-collapse-policy-v1"],
+    "acp-fast-mode": ["acp-fast-mode-v1"],
+    "acp-codex-goal": ["acp-codex-goal-v1"],
+    "acp-mid-turn-steering": ["acp-mid-turn-steering-design-v1", "acp-mid-turn-steering-core-v1", "acp-steering-submit-failure-v1", "acp-steering-cancel-on-failure-v1", "acp-steering-label-design-v1", "acp-steering-adapter-design-v1", "acp-steering-english-labels-v1"],
+    "mermaid-elk-layout": ["mermaid-elk-layout-v1"]
+  },
   "domains": [
     "provider"
   ],
