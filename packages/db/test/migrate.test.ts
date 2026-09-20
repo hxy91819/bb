@@ -6307,6 +6307,7 @@ describe("environment and thread startup ownership migration", () => {
     const db = createMigratedConnection();
 
     try {
+      rewindMachineProvidersMigration(db);
       rewindEnvironmentProvisioningMigration(db);
       const legacySchema = readFileSync(
         resolve(
