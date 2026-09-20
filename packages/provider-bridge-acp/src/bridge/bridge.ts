@@ -182,7 +182,9 @@ interface AcpTurnContext {
   everCancelled: boolean;
   failedMessage: string | undefined;
   finished: boolean;
-  maxAcceptedSteerSeq: number;
+  maxDeliveredSteerSeq: number;
+  minRejectedSteerSeq: number;
+  steerOrderWarned: boolean;
   drainWaiters: (() => void)[];
 }
 
@@ -2202,21 +2204,28 @@ function submitTurnPrompt(
   pending: AcpPendingTurnInput,
   delivery: AcpInputDelivery | undefined,
 ): Promise<{ stopReason: z.infer<typeof acpStopReasonSchema> }> {
+  const prompt = buildPromptContentBlocks(session, pending.input);
   ctx.inFlight += 1;
-  const request = session.connection.request({
-    method: "session/prompt",
-    params: {
-      sessionId: session.providerThreadId,
-      prompt: buildPromptContentBlocks(session, pending.input),
-    },
-    resultSchema: acpPromptResultSchema,
-    onSubmitted: () => {
-      acceptTurnInput(session, pending);
-      if (delivery !== undefined) {
-        emitInputDelivery(session, pending, delivery);
-      }
-    },
-  });
+  let request: Promise<{ stopReason: z.infer<typeof acpStopReasonSchema> }>;
+  try {
+    request = session.connection.request({
+      method: "session/prompt",
+      params: {
+        sessionId: session.providerThreadId,
+        prompt,
+      },
+      resultSchema: acpPromptResultSchema,
+      onSubmitted: () => {
+        acceptTurnInput(session, pending);
+        if (delivery !== undefined) {
+          emitInputDelivery(session, pending, delivery);
+        }
+      },
+    });
+  } catch (error) {
+    noteInFlightSettled(ctx);
+    throw error;
+  }
   void request.then(noteTurnPromptSettled, noteTurnPromptSettled);
   return request;
 
@@ -2231,11 +2240,19 @@ function dispatchNativeSteer(
   pending: AcpPendingTurnInput,
 ): void {
   const request = submitTurnPrompt(session, ctx, pending, "steer");
-  if (pending.acceptedEmitted) {
-    ctx.maxAcceptedSteerSeq = Math.max(ctx.maxAcceptedSteerSeq, pending.seq);
-  }
   void request.then(
-    () => undefined,
+    (result) => {
+      if (session.turn !== ctx || result.stopReason === "cancelled") {
+        return;
+      }
+      ctx.maxDeliveredSteerSeq = Math.max(ctx.maxDeliveredSteerSeq, pending.seq);
+      if (
+        ctx.minRejectedSteerSeq !== -1 &&
+        ctx.minRejectedSteerSeq < pending.seq
+      ) {
+        warnSteerOutOfOrder(session, ctx);
+      }
+    },
     (error) => onInjectedPromptFailed(session, ctx, pending, error),
   );
 }
@@ -2263,18 +2280,33 @@ function onInjectedPromptFailed(
     return;
   }
   session.nativeSteerRejected = true;
-  if (ctx.maxAcceptedSteerSeq > pending.seq) {
-    sendThreadDeltas(session.bbThreadId, [
-      {
-        kind: "provider.warning",
-        summary:
-          "ACP agent rejected an in-flight steer after accepting a later one; inputs may have been delivered out of order.",
-        vouchedTurn: true,
-      },
-    ]);
+  ctx.minRejectedSteerSeq =
+    ctx.minRejectedSteerSeq === -1
+      ? pending.seq
+      : Math.min(ctx.minRejectedSteerSeq, pending.seq);
+  if (ctx.maxDeliveredSteerSeq > pending.seq) {
+    warnSteerOutOfOrder(session, ctx);
   }
   requeueTurnInput(session, pending);
   requestSteerCancel(session, ctx);
+}
+
+function warnSteerOutOfOrder(
+  session: AcpThreadSession,
+  ctx: AcpTurnContext,
+): void {
+  if (ctx.steerOrderWarned) {
+    return;
+  }
+  ctx.steerOrderWarned = true;
+  sendThreadDeltas(session.bbThreadId, [
+    {
+      kind: "provider.warning",
+      summary:
+        "ACP agent rejected an in-flight steer after accepting a later one; inputs may have been delivered out of order.",
+      vouchedTurn: true,
+    },
+  ]);
 }
 
 function requeueTurnInput(
@@ -2390,7 +2422,9 @@ function runTurn(
     everCancelled: false,
     failedMessage: undefined,
     finished: false,
-    maxAcceptedSteerSeq: -1,
+    maxDeliveredSteerSeq: -1,
+    minRejectedSteerSeq: -1,
+    steerOrderWarned: false,
     drainWaiters: [],
   };
   session.turn = ctx;
