@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
+import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -563,9 +566,6 @@ async function handleRequest(
         request.params.providerThreadId,
       );
       const requestedCwd = request.params.cwd;
-      // The persisted cwd is stale when bb already moved the thread to a
-      // new environment directory and the old one was removed; resume at
-      // the requested, existing cwd instead of failing the whole turn.
       if (missingCwd !== null && !existsSync(requestedCwd ?? "")) {
         sendError(
           request.id,
@@ -574,6 +574,7 @@ async function handleRequest(
         );
         break;
       }
+      relocatePersistedSession(request.params.providerThreadId, requestedCwd);
       await handleThreadConstruction(
         request.id,
         request.params.threadId,
@@ -885,6 +886,51 @@ async function handleThreadConstruction(
   }
   await constructPiThreadSession(threadId, providerThreadId, params);
   sendThreadSessionResult(id, threadId, providerThreadId);
+}
+
+function relocatePersistedSession(
+  providerThreadId: string,
+  requestedCwd: string,
+): void {
+  const sessionFile = resolvePiSessionFilePath({
+    env: process.env,
+    threadId: providerThreadId,
+  });
+  let contents: string;
+  try {
+    contents = readFileSync(sessionFile, "utf8");
+  } catch {
+    return;
+  }
+  const lineEnd = contents.indexOf("\n");
+  const firstLine = lineEnd === -1 ? contents : contents.slice(0, lineEnd);
+  let header: Record<string, unknown>;
+  try {
+    header = JSON.parse(firstLine) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  if (
+    header.type !== "session" ||
+    typeof header.cwd !== "string" ||
+    header.cwd === requestedCwd
+  ) {
+    return;
+  }
+  const relocated = `${JSON.stringify({ ...header, cwd: requestedCwd })}${
+    lineEnd === -1 ? "\n" : contents.slice(lineEnd)
+  }`;
+  const temporaryFile = `${sessionFile}.relocating-${randomUUID()}`;
+  try {
+    writeFileSync(temporaryFile, relocated, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: statSync(sessionFile).mode,
+    });
+    renameSync(temporaryFile, sessionFile);
+  } finally {
+    rmSync(temporaryFile, { force: true });
+  }
 }
 
 function resumedSessionMissingCwd(providerThreadId: string): string | null {
