@@ -156,6 +156,7 @@ function renderPinnedParentWithChild({
       node={node}
       depthOffset={0}
       isEnvGrouped={false}
+      showProjectName={false}
       collapsedThreadIds={isCollapsed ? new Set(["thr_parent"]) : new Set()}
       collapsedEnvironmentIds={new Set()}
       onToggleThreadCollapsed={vi.fn()}

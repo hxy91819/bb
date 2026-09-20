@@ -143,6 +143,7 @@ export type ThreadRowOptions =
 interface ThreadRowProps {
   thread: SidebarThread;
   crossProjectId: string | null;
+  showProjectName: boolean;
   isActive: boolean;
   onProjectSelect?: () => void;
   options: ThreadRowOptions;
@@ -326,6 +327,7 @@ function useThreadSplitMiniMap(
 function ThreadRowComponent({
   thread,
   crossProjectId,
+  showProjectName,
   isActive,
   onProjectSelect,
   options,
@@ -349,6 +351,7 @@ function ThreadRowComponent({
     hasComposerDraft,
   );
   const labelTitle = thread.displayTitle;
+  const projectName = useSidebarProjectName(showProjectName ? projectId : null);
   const crossProjectName = useSidebarProjectName(crossProjectId);
   const crossProjectLabel =
     crossProjectId === null
@@ -448,9 +451,9 @@ function ThreadRowComponent({
   const splitIndicatorLabel = trailingIndicatorResolution.accessibleLabel
     ? `${labelTitle} — open in split; ${trailingIndicatorResolution.accessibleLabel}`
     : `${labelTitle} — open in split`;
-  const linkLabel = hasComposerDraft
-    ? `Open ${labelTitle} (unsubmitted draft)`
-    : `Open ${labelTitle}`;
+  const linkLabel = `Open ${labelTitle}${projectName ? ` in ${projectName}` : ""}${
+    hasComposerDraft ? " (unsubmitted draft)" : ""
+  }`;
   const rowDragBindings = isEditing ? undefined : options.dragBindings;
   const nestTargetState = options.nestDrop?.state ?? null;
   const reorderPlacement = options.nestDrop?.reorderPlacement ?? null;
@@ -628,6 +631,15 @@ function ThreadRowComponent({
             </TooltipTrigger>
             <TooltipContent side="top">{crossProjectLabel}</TooltipContent>
           </Tooltip>
+        ) : null}
+        {projectName ? (
+          <span
+            data-sidebar-thread-project-name=""
+            title={`Project: ${projectName}`}
+            className="pointer-events-none max-w-24 shrink-0 truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
+          >
+            {projectName}
+          </span>
         ) : null}
         {parentOptions && hasChildren ? (
           <SidebarChildToggleChevron
