@@ -2,11 +2,31 @@
 
 This document records the upstream feedback associated with independently maintained and pending local-aggregate changes. It is a contribution log, not the authoritative specification backlog: new specifications belong in the personal fork at `hxy91819/bb`.
 
+## Feedback audit, 2026-09-20
+
+The [version 3 registry](../config/local-aggregate-features.json) separates `specIssue` (local specification), `upstreamFeedback` (actual feedback submitted to `get-bb/bb`), and `relatedIssues` (context only). `disposition` and `reason` explain whether feedback is current, missing, outdated, intentionally fork-local, internal maintenance, or an upstream behavior divergence. Missing feedback is recorded explicitly; an unrelated issue is not required to register a branch. Package identities and the recorded upstream baseline are unchanged by this correction.
+
+The current distinctions are:
+
+- Mermaid #3382, the Vite comment on #1780, the table variant comment on #1705, and touch-hover #3832 describe the corresponding changes. Issue existence does not imply maintainer acceptance.
+- Recent #1614's [recorded comment](https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177) still describes the retired browser-local implementation and explicitly excludes database migration and cross-device synchronization. [Fork #1](https://github.com/hxy91819/bb/issues/1) describes the current server-owned sequence; the upstream feedback needs updating.
+- Fast [PR #3472](https://github.com/get-bb/bb/pull/3472) deliberately retains submission/dispatch-time persistence. The fork's selection-time save and new-thread defaults are a behavior divergence, not an unaddressed portion of an accepted upstream fix.
+- Parent disclosure [PR #3822](https://github.com/get-bb/bb/pull/3822) reserves action space and keeps quick Archive. The fork additionally hides that action on parent rows. The upstream fix is already in `desktop-v0.43.3`; retaining the fork variant is a separate product choice.
+- [ACP steering #3151](https://github.com/get-bb/bb/issues/3151) and [Pi environment-switch #3187](https://github.com/get-bb/bb/issues/3187) are related upstream trackers. Neither contains this fork's implementation feedback yet. The ACP proposal is capability-gated; the Pi relocation work does not by itself establish that every original pending-tool-call symptom is fixed. Automatic continuation is a separate part of the fork's behavior.
+- Fork #2, #4–#8, #10 and #11 are specifications awaiting upstream feedback, not upstream reports. Fork #8's incorrect “Upstream feedback” introduction was corrected in place, with its original verification clearly labeled historical. Fork #9 remains the owner's explicitly recorded personal preference.
+- Startup recovery, Fast/Recent history adapters, migration artifact cleanup and ProjectRow test residue are local maintenance. Their old #3403/#3330/fork #1 links remain context, not corresponding upstream bug reports.
+
+`fix/sidebar-touch-navigation` and `fix/official-catalog-date-utc` are now registered with `lastPackaged: null` and `needs-feedback`. Their presence in a development candidate does not establish a completed package. The former distinguishes touch navigation from mouse title renaming; #3832 only supplies adjacent hover context. The latter normalizes UTC dates in generated official marketplace metadata and currently has no issue. Neither entry asserts verification or upstream submission.
+
+The `fix/acp-mid-turn-steering-design` branch is supporting design work for the steering specification. The excluded migration-guard experiment remains an experiment. These are not separate completed product fixes awaiting their own upstream issue.
+
+Prepared upstream updates are in [the feedback drafts](local-aggregate-feedback-drafts.md). They are unpublished. The existing per-issue authorization boundary in AGENTS.md remains in effect. The dated sections below retain historical implementation and validation evidence; their old source SHAs and migration identities are not current package records.
+
 ## Stable rebuild, 2026-09-17
 
 The selected baseline is `desktop-v0.43.1` (`267938526dfcbc0edb228ce827b5bec202c1af97`). The 118 commits from that release to the audited `origin/main` tip are unreleased debt, not part of this snapshot. Current source and cherry-pick identities are authoritative in [the registry](../config/local-aggregate-features.json); older identities and deployment observations below are historical.
 
-The feedback audit retained every registered change. Mermaid #3382, dependency remediation #1780, Recent activity #1614, and table behavior #1705 remain open. Closing Fast #3403 via #3472 addressed the wire reset, not local toggle persistence or next-thread defaults. Closing table #1951 via #1953 addressed clipping, not the local in-column scroll/expand behavior. Fork specifications #1 and #2 remain open. No branch was retired based only on issue closure.
+The feedback audit retained every registered change. Mermaid #3382, dependency remediation #1780, Recent activity #1614, and table behavior #1705 were open. Fast #3472 fixed the wire reset and stale dispatch defaults while deliberately retaining submission-time saving; the local toggle persistence and next-thread defaults differ from that policy. Closing table #1951 via #1953 addressed clipping, not the local in-column scroll/expand behavior. Fork specifications #1 and #2 were open. No branch was retired based only on issue closure.
 
 ## Automation session auto marker
 
@@ -84,7 +104,7 @@ The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded
 
 ## Codex Fast mode persistence
 
-- **Upstream feedback:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403) is the primary bug tracker. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) is retained only as historical context: it is a closed, not-planned SDK feature request rather than the bug's tracking issue.
+- **Original upstream report:** [get-bb/bb#3403](https://github.com/get-bb/bb/issues/3403), closed through #3472. The retained selection-time persistence differs from upstream's explicit submission-time policy. [get-bb/bb#3401](https://github.com/get-bb/bb/issues/3401#issuecomment-5617155199) remains historical context.
 - **Fork implementation:** [fix/codex-fast-mode-toggle](https://github.com/hxy91819/bb/tree/fix/codex-fast-mode-toggle) at [`65ad5dc0b`](https://github.com/hxy91819/bb/commit/65ad5dc0b2e8c9793a9cc018ab7c928f65d33571), rebased onto current `origin/main` with migration `0117_charming_avengers`.
 - **Background:** disabling Fast without sending another message only changed the main composer's local selection. Returning to the thread restored the saved fast tier. The Codex adapter also omitted the explicit reset for the default tier.
 - **Change:** persist the toggle through the thread-update API, SDK and CLI; refresh execution-option subscribers; keep the selected Fast value as the new-thread default. `fix/codex-fast-mode-toggle-aggregate-compat` is retired because this rebuild no longer needs a separate migration-number adapter.
@@ -126,7 +146,7 @@ The unregistered `fix/local-aggregate-migration-guard` worktree remains excluded
 
 ## Markdown table column scroll and expand
 
-- **Upstream context:** [get-bb/bb#1951](https://github.com/get-bb/bb/issues/1951) describes clipped-container breakout hiding the first columns.
+- **Upstream feedback:** [the variant comment on get-bb/bb#1705](https://github.com/get-bb/bb/issues/1705#issuecomment-5649924011) describes column confinement and overflow-only expansion. Closed [get-bb/bb#1951](https://github.com/get-bb/bb/issues/1951) is historical clipping context.
 - **Fork specification:** [hxy91819/bb#3](https://github.com/hxy91819/bb/issues/3)
 - **Fork implementation:** [fix/markdown-table-breakout](https://github.com/hxy91819/bb/tree/fix/markdown-table-breakout) at [`755ea2faf`](https://github.com/hxy91819/bb/commit/755ea2fafd3ecb7820687c4e88dc837c35363acc)
 - **Change:** remove the table breakout geometry pipeline so tables stay in the prose column. When a table actually overflows, show a corner expand control that opens a full-screen natural-width dialog. The control is hover/focus-revealed and always visible on coarse pointers.

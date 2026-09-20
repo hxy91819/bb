@@ -1,10 +1,11 @@
 {
-  "version": 2,
+  "version": 3,
   "aggregate": {
     "branch": "local/aggregate",
     "upstreamRef": "origin/main",
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
-    "lastIntegratedUpstreamCommit": "267938526dfcbc0edb228ce827b5bec202c1af97"
+    "lastIntegratedUpstreamCommit": "267938526dfcbc0edb228ce827b5bec202c1af97",
+    "upstreamRepository": "get-bb/bb"
   },
   "features": [
     {
@@ -13,13 +14,15 @@
         "sourceCommit": "694dec198b2603c17f1eab0cae7c3da9a28cbba2",
         "aggregateCommit": "fbae7370f62ee785003b379c258c709acc4ad9b0"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 9,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/9"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 9,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/9"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "fork-only",
+      "reason": "Owner recorded this automation marker as a personal preference; fork #9 is its specification."
     },
     {
       "branch": "feature/mermaid-elk-layout",
@@ -27,13 +30,17 @@
         "sourceCommit": "e3460182b52a69ce9f5ef071b231f52c2aed999f",
         "aggregateCommit": "df1d1972f1f972d3740b80d95106bdef25dad879"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 3382,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3382"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "Upstream #3382 describes the default ELK proposal; an open issue is not approval of the implementation."
     },
     {
       "branch": "fix/vite-cve-2026-39363",
@@ -41,13 +48,17 @@
         "sourceCommit": "42097e0e2a18ba697237567ddeb029b33cab3a20",
         "aggregateCommit": "52bba2fc32ad5c55cd7312fb98f51fdd38fa1a6c"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 1780,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/1780#issuecomment-5612021454"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "The recorded upstream #1780 comment covers the scoped Ladle/Vitest Vite override."
     },
     {
       "branch": "fix/local-aggregate-server-startup",
@@ -55,13 +66,17 @@
         "sourceCommit": "b11109ea34db7d3f86b6fea684f62f9a374d003a",
         "aggregateCommit": "31d189905527f79510d16d200d6ec183a85f7733"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
           "repository": "get-bb/bb",
           "number": 3403,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
         }
-      ]
+      ],
+      "disposition": "internal",
+      "reason": "Local source-service startup recovery repair. Fast #3403 is historical context, not a report of the startup dependency cycle."
     },
     {
       "branch": "fix/codex-fast-mode-toggle",
@@ -69,13 +84,17 @@
         "sourceCommit": "200adda3e16c78edfe3f8f764aec2a2cb0d372e8",
         "aggregateCommit": "2c63d38e010877b7ea002cf5c43a96feefe2b5a2"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 3403,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "upstream-divergence",
+      "reason": "Merged upstream #3472 deliberately saves on submission/dispatch. The fork retains selection-time persistence and next-thread defaults."
     },
     {
       "branch": "feature/recent-explicit-work-sequence",
@@ -83,18 +102,21 @@
         "sourceCommit": "0c0cfbe071742a7fff01f258938595a63dd9e325",
         "aggregateCommit": "7f977eae2db73c92f7fe4a4b2de917922153fa7e"
       },
-      "upstreamIssues": [
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 1,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
+      },
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 1614,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/1614#issuecomment-5611939177"
-        },
-        {
-          "repository": "hxy91819/bb",
-          "number": 1,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "needs-update",
+      "reason": "The recorded #1614 comment describes retired browser-local ordering; fork #1 specifies the current server-owned cross-device sequence."
     },
     {
       "branch": "fix/local-aggregate-service-tier-migration",
@@ -102,13 +124,17 @@
         "sourceCommit": "934b0800cf5794004a95ba75fe2cd573e31e229c",
         "aggregateCommit": "fa690d3ac5183f98022978e72df5aeb805c0a189"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
           "repository": "get-bb/bb",
           "number": 3403,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3403"
         }
-      ]
+      ],
+      "disposition": "internal",
+      "reason": "Adapts previously shipped fork Fast schemas and migration history; #3403 supplies feature context only."
     },
     {
       "branch": "fix/local-aggregate-recent-sequence-migration",
@@ -116,13 +142,17 @@
         "sourceCommit": "c4ba8d541ede23cae2d0e30d524b7a6b94e23b2e",
         "aggregateCommit": "f0aff25a876a19f1f899e876e7dfdf4b8db2d79d"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
           "repository": "hxy91819/bb",
           "number": 1,
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
         }
-      ]
+      ],
+      "disposition": "internal",
+      "reason": "Preserves previously shipped fork Recent data and repairs skipped stable migrations; fork #1 is the parent feature specification."
     },
     {
       "branch": "feature/dsh-acp-provider",
@@ -130,13 +160,15 @@
         "sourceCommit": "53471331926ef585037d82259c318931cfa8947a",
         "aggregateCommit": "c4aeed2952c94015b61207a0a0b90ba3af73a3f7"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 2,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 2,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/2"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #2 specifies grouped ACP models, session/resume and DSH; no actual upstream feedback is recorded."
     },
     {
       "branch": "fix/acp-fast-mode",
@@ -144,13 +176,15 @@
         "sourceCommit": "f82a355069870fc9e40fd19b11c6dea92067393b",
         "aggregateCommit": "c9d64614bacc43ec55a44aca7fdfd7296c004973"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 5,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/5"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 5,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/5"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #5 specifies ACP native service-tier configuration; no actual upstream feedback is recorded."
     },
     {
       "branch": "fix/acp-codex-goal",
@@ -158,13 +192,15 @@
         "sourceCommit": "3f755edd4ebfbd2d63a2f8e00be67e608f5ce35e",
         "aggregateCommit": "52fc78e04737ba54453bf7729af72b26c449889d"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 6,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/6"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 6,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/6"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #6 specifies ACP Codex goal extensions; no actual upstream feedback is recorded."
     },
     {
       "branch": "fix/markdown-table-breakout",
@@ -172,18 +208,27 @@
         "sourceCommit": "b14e93e3d85d015908a115402ed8b34800efec1b",
         "aggregateCommit": "19b1104a47477a49b495439051df196c7f28d2b7"
       },
-      "upstreamIssues": [
-        {
-          "repository": "get-bb/bb",
-          "number": 1951,
-          "feedbackUrl": "https://github.com/get-bb/bb/issues/1951"
-        },
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 3,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/3"
+      },
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 1705,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/1705#issuecomment-5649924011"
         }
-      ]
+      ],
+      "relatedIssues": [
+        {
+          "repository": "get-bb/bb",
+          "number": 1951,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/1951"
+        }
+      ],
+      "disposition": "reported",
+      "reason": "The #1705 comment describes the column-scroll/expand variant. Closed #1951 is clipping-history context; fork #3 was superseded by that feedback."
     },
     {
       "branch": "fix/environment-switch-auto-continue",
@@ -191,13 +236,21 @@
         "sourceCommit": "4edc380015496d22ee64d93c85294f8d5726ee8a",
         "aggregateCommit": "9ec663a50405a4e80d4cfb4d26b8eda51d5210bc"
       },
-      "upstreamIssues": [
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 7,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/7"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
-          "repository": "hxy91819/bb",
-          "number": 7,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/7"
+          "repository": "get-bb/bb",
+          "number": 3187,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3187"
         }
-      ]
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Fork #7 is the specification. Existing upstream #3187 covers Pi session-directory relocation; the automatic continuation behavior needs separate scope discussion."
     },
     {
       "branch": "feature/thread-project-label",
@@ -205,13 +258,15 @@
         "sourceCommit": "a268b26c7be5da45b6c79e0254adfa4a4a053fa2",
         "aggregateCommit": "4da88e8daa19929b16680c9cba7838b5f6b2c7dc"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 4,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/4"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 4,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/4"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #4 specifies project labels; no actual upstream feedback is recorded."
     },
     {
       "branch": "fix/sidebar-parent-row-hover-archive",
@@ -219,13 +274,17 @@
         "sourceCommit": "3aa38d9f7b7583a00d3666eabcb40d815bdc7e3c",
         "aggregateCommit": "9da5c55d981e093dee111901115b65e80fe8bd79"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 3821,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3821"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "upstream-divergence",
+      "reason": "Upstream #3822 fixes disclosure movement and is included in desktop-v0.43.3 while keeping quick Archive. The fork additionally hides Archive on parent rows."
     },
     {
       "branch": "fix/sidebar-touch-hover-actions",
@@ -233,13 +292,17 @@
         "sourceCommit": "ac8417dace81e8164f23ee9409aca23e774338f2",
         "aggregateCommit": "7435b9bef711e5fce32e3687ee63a2936f0a6974"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [
         {
           "repository": "get-bb/bb",
           "number": 3832,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3832"
         }
-      ]
+      ],
+      "relatedIssues": [],
+      "disposition": "reported",
+      "reason": "Upstream #3832 describes synthesized touch-hover inset and action visibility."
     },
     {
       "branch": "fix/local-aggregate-project-row-test-residue",
@@ -247,13 +310,17 @@
         "sourceCommit": "12709f8dd6705c8c4b880727969b43255e6da218",
         "aggregateCommit": "85f92ac37341dfef28de68f881a7db38e2916a43"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
           "repository": "get-bb/bb",
           "number": 3330,
           "feedbackUrl": "https://github.com/get-bb/bb/issues/3330#issuecomment-5611939327"
         }
-      ]
+      ],
+      "disposition": "internal",
+      "reason": "Cleans fork integration test residue after upstream adopted the original mobile fix in #3352; #3330 is historical context."
     },
     {
       "branch": "fix/local-aggregate-migration-history-cleanup",
@@ -261,7 +328,9 @@
         "sourceCommit": "e39b496fbf4fd54635fe06c5ede50e36ce135561",
         "aggregateCommit": "4569551b19fc5e5d9528549db3bd013fa062ed62"
       },
-      "upstreamIssues": [
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
           "repository": "get-bb/bb",
           "number": 3403,
@@ -272,7 +341,9 @@
           "number": 1,
           "feedbackUrl": "https://github.com/hxy91819/bb/issues/1"
         }
-      ]
+      ],
+      "disposition": "internal",
+      "reason": "Removes duplicate fork migration artifacts and journal residue; linked Fast/Recent issues provide context only."
     },
     {
       "branch": "fix/acp-mid-turn-steering",
@@ -280,13 +351,21 @@
         "sourceCommit": "cf5207ff3456c729f7db5a4f9b858a09adcf18b2",
         "aggregateCommit": "096d4dcab252261c4a7c1593772a131d15fb0a89"
       },
-      "upstreamIssues": [
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 8,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
-          "repository": "hxy91819/bb",
-          "number": 8,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/8"
+          "repository": "get-bb/bb",
+          "number": 3151,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3151"
         }
-      ]
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Fork #8 is a local specification; its incorrect Upstream feedback wording was corrected. Upstream #3151 is a related ACP steering tracker, not submitted feedback for this patch."
     },
     {
       "branch": "feature/side-chat-command",
@@ -294,13 +373,15 @@
         "sourceCommit": "7c130e9ec614a6cdfd048120ef648d8f08ba7a4f",
         "aggregateCommit": "b92da9b86d128bab3689b32d865e56a83110be3a"
       },
-      "upstreamIssues": [
-        {
-          "repository": "hxy91819/bb",
-          "number": 10,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
-        }
-      ]
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 10,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #10 specifies the /side composer action; no actual upstream feedback is recorded."
     },
     {
       "branch": "feature/sidebar-pinned-new-thread",
@@ -308,13 +389,39 @@
         "sourceCommit": "3d4cc28a23240ff87a4b57eba686f7e5d6677506",
         "aggregateCommit": "bd5fc41daae62d1af63ee3ba9612f956afb88c74"
       },
-      "upstreamIssues": [
+      "specIssue": {
+        "repository": "hxy91819/bb",
+        "number": 11,
+        "feedbackUrl": "https://github.com/hxy91819/bb/issues/11"
+      },
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Fork #11 specifies pinned New thread navigation; no actual upstream feedback is recorded."
+    },
+    {
+      "branch": "fix/sidebar-touch-navigation",
+      "lastPackaged": null,
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
         {
-          "repository": "hxy91819/bb",
-          "number": 11,
-          "feedbackUrl": "https://github.com/hxy91819/bb/issues/11"
+          "repository": "get-bb/bb",
+          "number": 3832,
+          "feedbackUrl": "https://github.com/get-bb/bb/issues/3832"
         }
-      ]
+      ],
+      "disposition": "needs-feedback",
+      "reason": "Touch navigation versus mouse title renaming is a distinct behavior from hover issue #3832; no actual upstream feedback is recorded."
+    },
+    {
+      "branch": "fix/official-catalog-date-utc",
+      "lastPackaged": null,
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Normalizes UTC commit dates in generated official marketplace metadata; no specification or actual upstream feedback is recorded yet."
     }
   ]
 }
