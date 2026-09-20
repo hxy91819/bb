@@ -988,16 +988,19 @@ function MarkdownTableHead({ children }: MarkdownTableHeadProps) {
   return <thead className="bg-surface-recessed">{children}</thead>;
 }
 
+const MARKDOWN_TABLE_CELL_CLASS =
+  "min-w-20 border border-border px-2 py-1 [overflow-wrap:anywhere]";
+
 function MarkdownTableHeader({ children }: MarkdownTableHeaderProps) {
   return (
-    <th className="border border-border px-2 py-1 text-left font-medium">
+    <th className={cn(MARKDOWN_TABLE_CELL_CLASS, "text-left font-medium")}>
       {children}
     </th>
   );
 }
 
 function MarkdownTableCell({ children }: MarkdownTableCellProps) {
-  return <td className="border border-border px-2 py-1">{children}</td>;
+  return <td className={MARKDOWN_TABLE_CELL_CLASS}>{children}</td>;
 }
 
 function MarkdownRenderedImage({
