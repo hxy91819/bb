@@ -1246,7 +1246,7 @@ describe("ThreadRow", () => {
         titleContainer?.classList.contains(
           "pr-(--bb-sidebar-hover-actions-inset)",
         ),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         titleContainer?.style.getPropertyValue(
           "--bb-sidebar-hover-actions-inset",
@@ -1257,6 +1257,12 @@ describe("ThreadRow", () => {
       ).toBe(true);
       expect(navigationTarget?.classList.contains("flex-1")).toBe(true);
       expect(titleWrapper?.classList.contains("flex-1")).toBe(false);
+      expect(
+        screen.queryByRole("button", { name: "Archive thread" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Thread actions" }),
+      ).not.toBeNull();
       fireEvent.click(toggle);
       expect(onToggleCollapsed).toHaveBeenCalledWith("thr_test");
     },

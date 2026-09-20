@@ -521,6 +521,7 @@ function ThreadRowComponent({
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
             !isEditing &&
+            !(parentOptions && hasChildren) &&
             (reserveActionSpace
               ? "pr-(--bb-sidebar-hover-actions-inset) max-md:pointer-coarse:pr-0"
               : SIDEBAR_HOVER_ACTIONS_INSET_CLASS),
@@ -739,6 +740,7 @@ function ThreadRowComponent({
               >
                 <SidebarRowControls
                   primaryAction={
+                    parentOptions && hasChildren ? null : (
                     <ThreadRowQuickActions
                       actionIds={rowActionIds}
                       actions={actions}
@@ -748,6 +750,7 @@ function ThreadRowComponent({
                       onRename={startEditing}
                       onMenuOpenChange={setIsDropdownActionsOpen}
                     />
+                    )
                   }
                 >
                   <ThreadActionsMenu
