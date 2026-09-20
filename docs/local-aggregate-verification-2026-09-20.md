@@ -2,6 +2,10 @@
 
 This report applies to the candidate rebuilt from `desktop-v0.43.3` (`e865697f56bea89f3413dd4cc7fae964850d20a0`) using [the frozen train manifest](../config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json). It is updated only with verification performed against this source combination.
 
+## Final release receipt
+
+The entries below preserve verification recorded before the final source freeze. Final source-review closeout, later source repairs, exact candidate and train digests, runtime build results, toolchain, artifact digests, and publication refs belong to the external receipt in the annotated tag `fork-release/desktop-v0.43.3-20260920-two-tier`. After fetching that tag from the personal fork, read it with `git show refs/tags/fork-release/desktop-v0.43.3-20260920-two-tier`. The tag is created only after final verification and packaging; an interim candidate ref or the checkboxes below do not substitute for that receipt. Service deployment remains a separate operation.
+
 ## Focused regression evidence
 
 - Database migration test suite: 590 tests passed, including interrupted Fast staging recovery, Recent value preservation, canonical stable-migration replay, and idempotent second migrations.
