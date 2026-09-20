@@ -19,7 +19,7 @@ The serialized `package` resource profile completed `turbo run build typecheck -
 - [x] Candidate package build and typecheck through `scripts/run-resource-isolated --profile package`.
 - [x] Frozen candidate autoreview `20260920T103141Z-08815f` completed. Its one ACP fallback-loading P1 was rejected because the common `sessionId === undefined` fallback clears `loading`, `loadingSessionId`, and pending usage before `session/new`; no accepted/actionable candidate finding remains.
 - [x] Provider pilot candidate `0f623a18f81511ed080da60369238e21f97675d9` passed the scoped Turbo behavior run: 358 ACP bridge tests and 86 provider-ACP plugin tests. The successful retry is `/tmp/two-tier-pilot-behavior-retry.log`; an earlier native-ABI repair process exited 139 before a fresh check and complete retry succeeded.
-- [x] Extracted contribution `1efc7a952f21a6e7340d74cf32d02992686af356` passed the same scoped behavior run after a frozen/offline install: 358 ACP bridge tests and 86 provider-ACP plugin tests. The successful log is `/tmp/two-tier-contribution-behavior.log`; the earlier `/tmp/provider-contribution-check.log` contains only the failed manager-bus attempt.
+- [x] Extracted contribution `1efc7a952f21a6e7340d74cf32d02992686af356` passed its scoped behavior run after a frozen/offline install: 342 ACP bridge tests and 86 provider-ACP plugin tests. The successful log is `/tmp/two-tier-contribution-behavior.log`; the earlier `/tmp/provider-contribution-check.log` contains only the failed manager-bus attempt.
 - [ ] Close out any rebased source tip not covered by an existing source-level autoreview.
 - [ ] Publish source branches and the aggregate ref to the personal fork, then record the final aggregate SHA and artifact credential.
 
