@@ -1280,7 +1280,7 @@ function stageExistingRecentWorkSequenceColumn(
 
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0120_stale_chamber",
+    "0128_gifted_klaw",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) return;
 
@@ -1319,7 +1319,13 @@ function applySkippedStableMigrationsBeforeLaterHistory(
 
   const expected = readExpectedAppliedMigrations(migrationsFolder);
   const applied = readAppliedMigrationCreatedAts(db);
-  for (const tag of ["0117_machine_providers", "0118_brave_marvel_zombies"]) {
+  for (const tag of [
+    "0117_machine_providers",
+    "0118_brave_marvel_zombies",
+    "0119_provider_model_catalogs",
+    "0120_perfect_clint_barton",
+    "0121_fluffy_major_mapleleaf",
+  ]) {
     const migration = requireExpectedAppliedMigration(expected, tag);
     if (
       latestApplied > migration.createdAt &&

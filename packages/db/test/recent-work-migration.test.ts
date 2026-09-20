@@ -61,6 +61,23 @@ describe("recent work migration compatibility", () => {
     try {
       db.$client.exec(`
         DROP TABLE thread_plugin_metadata;
+        DROP TABLE provider_model_catalogs;
+        DROP INDEX threads_lifecycle_owner_idx;
+        ALTER TABLE threads DROP COLUMN lifecycle_owner_thread_id;
+        ALTER TABLE threads DROP COLUMN storage_deleted_at;
+        DROP INDEX project_attachment_threads_thread_idx;
+        DROP TABLE project_attachment_threads;
+        DROP TABLE project_attachment_backfills;
+        DROP TABLE project_attachments;
+        DROP INDEX threads_project_id_idx;
+        DROP INDEX environment_variables_global_name;
+        DROP INDEX environment_variables_project_name;
+        DROP TABLE environment_variables;
+        DROP TABLE thread_pruning_cursors;
+        ALTER TABLE queued_thread_messages DROP COLUMN origin;
+        ALTER TABLE queued_thread_messages DROP COLUMN origin_plugin_id;
+        ALTER TABLE queued_thread_messages DROP COLUMN requested_by_initiator;
+        ALTER TABLE queued_thread_messages DROP COLUMN requested_by_thread_id;
         DELETE FROM __drizzle_migrations WHERE created_at >= 1789175706080;
         INSERT INTO threads (
           id, project_id, provider_id, latest_attention_at,
@@ -79,8 +96,8 @@ describe("recent work migration compatibility", () => {
       const insert = db.$client.prepare(
         "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
       );
-      insert.run(fastMigration.hash, 1789179169262);
-      insert.run(recentWorkMigration.hash, 1789179431804);
+      insert.run(fastMigration.hash, 1789579295571);
+      insert.run(recentWorkMigration.hash, 1789579591628);
 
       migrate(db);
       expect(readProjects(db)).toEqual(expectedProjects);
