@@ -24,9 +24,11 @@ import {
   seedEnvironment,
   seedHostSession,
   seedProjectWithSource,
+  seedQueuedMessage,
   seedThread,
   seedTurnStarted,
 } from "../helpers/seed.js";
+import { textInput } from "../helpers/prompt-input.js";
 import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
 
 interface ActiveThreadStopFixture {
