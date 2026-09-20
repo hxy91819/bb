@@ -145,6 +145,13 @@ const SYSTEM_ROWS: readonly SystemRowFixture[] = [
     systemMessageSubject: { kind: "thread-batch", count: 3 },
     text: "Worker 1 completed: migration landed.\nWorker 2 was interrupted: stopped before review.\nWorker 3 completed: docs updated.",
   },
+  {
+    label: "environment-switched",
+    hint: "automatic continuation after moving the thread to another workspace",
+    systemMessageKind: "environment-switched",
+    systemMessageSubject: null,
+    text: "Continue the unfinished task in the new workspace.",
+  },
 ];
 
 export function Overview() {
