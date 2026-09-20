@@ -4,7 +4,7 @@ This record combines the two-tier maintenance model from fork specification #14 
 
 ## Inputs and ownership
 
-- Product authority: `cc26cca6680fda183b08a7ec8145d060cb27f5f3`, based on `desktop-v0.43.3` at `e865697f56bea89f3413dd4cc7fae964850d20a0`.
+- Initial product snapshot: `cc26cca6680fda183b08a7ec8145d060cb27f5f3`, based on `desktop-v0.43.3` at `e865697f56bea89f3413dd4cc7fae964850d20a0`.
 - Maintenance source: `feature/two-tier-fork-maintenance` at `63ed5d2eeb836c437f054de24f262f3971e6f69a`.
 - Shared skill: `mason-skills` at `feef03a69891c9f6ec6a317b29fc78d3276a9c41`.
 - Provider pilot domain: `1d94cae6d862b2b50f03e611c584a72be43c394b`.
@@ -12,11 +12,11 @@ This record combines the two-tier maintenance model from fork specification #14 
 
 The version 4 registry preserves the stable candidate's 21 product features, latest source/aggregate endpoints, module and dependency fields, and two retired cleanup records. It separately preserves the role-classified specification, upstream-feedback, related-issue, disposition, and reason fields from the maintenance source, including fork specifications #12, #13, and #14.
 
-The frozen full train lists all 58 product commits in their actual candidate order. Each entry binds an aggregate commit to its first-tier source commit and stable logical patch ID. The later `4dd78b8e` environment-continuation fixture is owned by `environment-switch-auto-continue` in the full train rather than being added to the Provider pilot's steering selection. Provider mappings otherwise reuse the 13 patches already present in the stable candidate; they are not reapplied as product changes.
+The initial product snapshot contains 58 product patches. The frozen full train preserves their order and explicitly records any later source closeout repairs. Each entry binds an aggregate commit to its first-tier source commit and stable logical patch ID. The `4dd78b8e` environment-continuation fixture is owned by `environment-switch-auto-continue` in the full train rather than being added to the Provider domain's steering selection. The initial Provider mappings reuse the 13 patches already present in the stable candidate; later repairs extend those mappings without reapplying the original product changes.
 
 ## Reconstruction contract
 
-The composer starts at the locked stable tag and applies the train's 58 product commits in order. It then applies every explicitly selected maintenance patch, including the six maintenance patches in the final frozen train, before binding the committed registry and train manifest. The resulting train contains 64 patches in total. Maintenance documentation, skills, links, configuration examples, resource-isolation tooling, and other maintenance assets are reconstructed rather than omitted from comparison.
+The composer starts at the locked stable tag and applies every product and maintenance patch in the committed train's explicit order before binding the committed registry and train manifest. The frozen manifest is the authority for the selection and patch counts. Maintenance documentation, skills, links, configuration examples, resource-isolation tooling, and other maintenance assets are reconstructed rather than omitted from comparison.
 
 Candidate verification compares the complete reconstructed source tree with the integration source tree using an exact tree diff. It has no maintenance-path exclusion list.
 
