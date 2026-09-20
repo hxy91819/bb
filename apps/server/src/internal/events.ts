@@ -280,6 +280,7 @@ function resolveProviderIdentifiers(event: HostDaemonEventEnvelope["event"]): {
     case "turn/started":
     case "turn/completed":
     case "turn/input/accepted":
+    case "turn/input/delivery":
     case "item/started":
     case "item/completed":
     case "item/backgroundTask/progress":
