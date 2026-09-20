@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
