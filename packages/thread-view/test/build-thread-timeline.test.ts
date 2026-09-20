@@ -764,6 +764,62 @@ function buildTimelineRows(
   }).rows;
 }
 
+function buildTimelineRowsWithAcceptedContext(
+  events: ThreadEventWithMeta[],
+  acceptedClientRequestEvents: ThreadEventWithMeta[],
+): TimelineRow[] {
+  return buildThreadTimelineFromEvents({
+    acceptedClientRequestContext: {
+      acceptedClientRequestEvents,
+      deliveryClientRequestEvents: [],
+      rejectedClientRequestEvents: [],
+    },
+    contextWindowEvents: [],
+    events,
+    options: {
+      completedTurnDisplay: "collapse",
+      includeNestedRows: true,
+      includeDiagnosticOperations: false,
+      isLatestPage: true,
+      threadStatus: "idle",
+      threadName: "",
+      workspaceRoot: null,
+    },
+  }).rows;
+}
+
+function buildTimelineRowsWithRejectedContext(
+  events: ThreadEventWithMeta[],
+  rejectedClientRequestEvents: ThreadEventWithMeta[],
+): TimelineRow[] {
+  return buildThreadTimelineFromEvents({
+    acceptedClientRequestContext: {
+      acceptedClientRequestEvents: [],
+      deliveryClientRequestEvents: [],
+      rejectedClientRequestEvents,
+    },
+    contextWindowEvents: [],
+    events,
+    options: {
+      completedTurnDisplay: "collapse",
+      includeNestedRows: true,
+      includeDiagnosticOperations: false,
+      isLatestPage: true,
+      threadStatus: "idle",
+      threadName: "",
+      workspaceRoot: null,
+    },
+  }).rows;
+}
+
+function isFileChangeRow(row: TimelineRow): row is TimelineFileChangeWorkRow {
+  return row.kind === "work" && row.workKind === "file-change";
+}
+
+function isToolRow(row: TimelineRow): row is TimelineToolWorkRow {
+  return row.kind === "work" && row.workKind === "tool";
+}
+
 function collectFileChangeRows(
   rows: readonly TimelineRow[],
 ): TimelineFileChangeWorkRow[] {
