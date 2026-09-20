@@ -177,7 +177,7 @@ interface AcpTurnContext {
   failedMessage: string | undefined;
   finished: boolean;
   maxDeliveredSteerSeq: number;
-  minRejectedSteerSeq: number;
+  rejectedSteers: AcpPendingTurnInput[];
   steerOrderWarned: boolean;
   drainWaiters: (() => void)[];
 }
@@ -2181,6 +2181,11 @@ function resolveAcpSteering(args: {
   if (configured === "interrupt") {
     return { native: false, textOnly: false };
   }
+  if (configured === "prompt" && args.declared === false) {
+    throw new Error(
+      'ACP steering mode "prompt" conflicts with the agent declaration midTurnSteering=false.',
+    );
+  }
   if (configured === "prompt") {
     return { native: true, textOnly: false };
   }
@@ -2328,17 +2333,14 @@ function dispatchNativeSteer(
 ): void {
   const request = submitTurnPrompt(session, ctx, pending, "steer");
   void request.then(
-    (result) => {
-      if (session.turn !== ctx || result.stopReason === "cancelled") {
+    () => {
+      if (session.turn !== ctx) {
         return;
       }
-      ctx.maxDeliveredSteerSeq = Math.max(ctx.maxDeliveredSteerSeq, pending.seq);
-      if (
-        ctx.minRejectedSteerSeq !== -1 &&
-        ctx.minRejectedSteerSeq < pending.seq
-      ) {
-        warnSteerOutOfOrder(session, ctx);
-      }
+      ctx.maxDeliveredSteerSeq = Math.max(
+        ctx.maxDeliveredSteerSeq,
+        pending.seq,
+      );
     },
     (error) => onInjectedPromptFailed(session, ctx, pending, error),
   );
@@ -2367,14 +2369,7 @@ function onInjectedPromptFailed(
     return;
   }
   session.nativeSteerRejected = true;
-  ctx.minRejectedSteerSeq =
-    ctx.minRejectedSteerSeq === -1
-      ? pending.seq
-      : Math.min(ctx.minRejectedSteerSeq, pending.seq);
-  if (ctx.maxDeliveredSteerSeq > pending.seq) {
-    warnSteerOutOfOrder(session, ctx);
-  }
-  requeueTurnInput(session, pending);
+  ctx.rejectedSteers.push(pending);
   requestSteerCancel(session, ctx);
 }
 
@@ -2390,7 +2385,7 @@ function warnSteerOutOfOrder(
     {
       kind: "provider.warning",
       summary:
-        "ACP agent rejected an in-flight steer after accepting a later one; inputs may have been delivered out of order.",
+        "ACP agent rejected an earlier steer after accepting a later one. The earlier input was not replayed, and native steering is disabled for this connection.",
       vouchedTurn: true,
     },
   ]);
@@ -2407,6 +2402,20 @@ function requeueTurnInput(
     session.queuedInputs.push(pending);
   } else {
     session.queuedInputs.splice(index, 0, pending);
+  }
+}
+
+function reconcileRejectedSteers(
+  session: AcpThreadSession,
+  ctx: AcpTurnContext,
+): void {
+  const rejected = ctx.rejectedSteers.splice(0).sort((a, b) => a.seq - b.seq);
+  for (const pending of rejected) {
+    if (ctx.maxDeliveredSteerSeq > pending.seq) {
+      warnSteerOutOfOrder(session, ctx);
+      continue;
+    }
+    requeueTurnInput(session, pending);
   }
 }
 
@@ -2518,7 +2527,7 @@ function runTurn(
     failedMessage: undefined,
     finished: false,
     maxDeliveredSteerSeq: -1,
-    minRejectedSteerSeq: -1,
+    rejectedSteers: [],
     steerOrderWarned: false,
     drainWaiters: [],
   };
@@ -2593,6 +2602,7 @@ function runTurn(
       }
 
       await whenTurnGroupDrained(ctx);
+      reconcileRejectedSteers(session, ctx);
 
       if (ctx.failedMessage !== undefined) {
         dropTurnInput(pending, "ACP turn failed");
