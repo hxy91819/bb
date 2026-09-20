@@ -9,6 +9,7 @@ import {
   type AvailableModel,
   type CallerExecutionInputSource,
   type ReasoningLevel,
+  type ServiceTier,
   type Thread,
 } from "@bb/domain";
 import { ApiError } from "../../errors.js";
@@ -21,6 +22,7 @@ import { getSupportedReasoningLevelsForProvider } from "./thread-reasoning-polic
 interface ThreadExecutionOverridePatch {
   model?: string | null;
   reasoningLevel?: ReasoningLevel | null;
+  serviceTier?: ServiceTier | null;
 }
 
 interface ResolveThreadExecutionOverrideUpdateArgs {
@@ -118,6 +120,27 @@ export async function applyThreadExecutionOverride(
 ): Promise<void> {
   const { thread, patch } = args;
 
+  if (
+    patch.serviceTier === "fast" &&
+    !deps.providerRegistry.get(thread.providerId)?.info.capabilities
+      .supportsServiceTier
+  ) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      `Provider ${thread.providerId} does not support fast mode.`,
+    );
+  }
+
+  if (!("model" in patch) && !("reasoningLevel" in patch)) {
+    setThreadExecutionOverride(deps.db, {
+      threadId: thread.id,
+      serviceTierOverride: patch.serviceTier,
+    });
+    deps.hub.notifyThread(thread.id, ["execution-options-changed"]);
+    return;
+  }
+
   const models = await loadThreadProviderModels(
     deps,
     thread,
@@ -140,7 +163,11 @@ export async function applyThreadExecutionOverride(
     threadId: thread.id,
     modelOverride: next.modelOverride,
     reasoningLevelOverride: next.reasoningLevelOverride,
+    ...("serviceTier" in patch
+      ? { serviceTierOverride: patch.serviceTier }
+      : {}),
   });
+  deps.hub.notifyThread(thread.id, ["execution-options-changed"]);
 }
 
 export async function recoverThreadModelOverride(
