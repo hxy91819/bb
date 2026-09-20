@@ -37,6 +37,7 @@ export type { ThreadEventWithMeta } from "./group-event-projection-turns.js";
 import { shouldSuppressLowValueToolCall } from "./tool-call-suppression.js";
 import {
   buildAcceptedClientRequestById,
+  buildDeliveryByClientRequestId,
   EMPTY_ACCEPTED_CLIENT_REQUEST_CONTEXT,
   type AcceptedClientRequest,
   type AcceptedClientRequestContext,
@@ -575,6 +576,10 @@ function buildFlatProjectionData(
     context: args.acceptedClientRequestContext,
     events: orderedEvents,
   });
+  const deliveryByClientRequestId = buildDeliveryByClientRequestId({
+    context: args.acceptedClientRequestContext,
+    events: orderedEvents,
+  });
   const clientRequestById = buildClientTurnRequestById(orderedEvents);
   const rejectedClientRequestIds = buildRejectedClientRequestIds(orderedEvents);
   const selectedStartedTurnIds = buildSelectedStartedTurnIds(orderedEvents);
@@ -705,9 +710,25 @@ function buildFlatProjectionData(
               options: args.options,
             })
           : [];
+      const acceptedSteerDelivery = deliveryByClientRequestId.get(
+        decoded.clientRequestId,
+      );
       for (const acceptedSteer of acceptedSteers) {
+        if (
+          acceptedSteerDelivery !== undefined &&
+          acceptedSteer.turnRequest.kind === "steer"
+        ) {
+          acceptedSteer.turnRequest = {
+            ...acceptedSteer.turnRequest,
+            delivery: acceptedSteerDelivery,
+          };
+        }
         appendProjectedUserMessage(state, acceptedSteer);
       }
+      continue;
+    }
+
+    if (decoded.type === "turn/input/delivery") {
       continue;
     }
 
@@ -753,7 +774,20 @@ function buildFlatProjectionData(
       options: args.options,
     });
     if (usersFromClientRequest.length > 0) {
+      const requestDelivery =
+        decoded.type === "client/turn/requested"
+          ? deliveryByClientRequestId.get(decoded.requestId)
+          : undefined;
       for (const userFromClientRequest of usersFromClientRequest) {
+        if (
+          requestDelivery !== undefined &&
+          userFromClientRequest.turnRequest.kind === "steer"
+        ) {
+          userFromClientRequest.turnRequest = {
+            ...userFromClientRequest.turnRequest,
+            delivery: requestDelivery,
+          };
+        }
         appendProjectedUserMessage(state, userFromClientRequest);
       }
       continue;

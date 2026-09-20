@@ -72,6 +72,60 @@ describe("delta assembler", () => {
     ]);
   });
 
+  it("queues input delivery and drains it right after turn/started", () => {
+    const assembler = createAssembler();
+    expect(
+      assemble(assembler, {
+        kind: "input.delivery",
+        clientRequestId: CREQ,
+        delivery: "interrupted",
+      }),
+    ).toEqual([]);
+
+    const events = assemble(assembler, { kind: "turn.open" });
+    expect(events.map((event) => event.type)).toEqual([
+      "turn/started",
+      "turn/input/delivery",
+    ]);
+    expect(events[1]).toMatchObject({
+      clientRequestId: CREQ,
+      delivery: "interrupted",
+      scope: events[0]?.scope,
+    });
+  });
+
+  it("emits input delivery into an already-open turn and allows corrections", () => {
+    const assembler = createAssembler();
+    assemble(assembler, { kind: "turn.open" });
+    const turnId = assembler.getOpenTurnId(THREAD_ID);
+    const first = assemble(assembler, {
+      kind: "input.delivery",
+      clientRequestId: CREQ_2,
+      delivery: "steer",
+    });
+    expect(first).toEqual([
+      expect.objectContaining({
+        type: "turn/input/delivery",
+        clientRequestId: CREQ_2,
+        delivery: "steer",
+        scope: turnScope(turnId ?? ""),
+      }),
+    ]);
+    const correction = assemble(assembler, {
+      kind: "input.delivery",
+      clientRequestId: CREQ_2,
+      delivery: "interrupted",
+    });
+    expect(correction).toEqual([
+      expect.objectContaining({
+        type: "turn/input/delivery",
+        clientRequestId: CREQ_2,
+        delivery: "interrupted",
+        scope: turnScope(turnId ?? ""),
+      }),
+    ]);
+  });
+
   it("claimIfIdle boundary opens and settles a turn only when input is pending", () => {
     const assembler = createAssembler();
     expect(
