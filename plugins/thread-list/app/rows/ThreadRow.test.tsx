@@ -196,6 +196,7 @@ function deferred() {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   resetSidebarTitleDoubleClickForTest();
 });
 
@@ -1448,12 +1449,37 @@ describe("ThreadRow", () => {
     const { rerenderThreadRow } = renderThreadRow({ thread });
     const link = screen.getByRole("link", { name: "Open Thread" });
 
-    fireEvent.click(link);
+    fireEvent.click(link, { detail: 1 });
     rerenderThreadRow(thread);
-    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }));
+    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }), {
+      detail: 1,
+    });
 
     expect(
       await screen.findByRole("textbox", { name: "Thread name" }),
     ).toHaveProperty("value", "Thread");
+  });
+
+  it("keeps touch taps for navigation and exposes one large actions button", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }));
+    renderThreadRow();
+    const link = screen.getByRole("link", { name: "Open Thread" });
+    for (let index = 0; index < 2; index += 1) {
+      fireEvent.pointerDown(link, { pointerType: "touch" });
+      fireEvent.click(link, { detail: 1 });
+    }
+
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    const actions = screen.getByRole("button", { name: "Thread actions" });
+    expect(actions.classList.contains("pointer-coarse:h-11")).toBe(true);
   });
 });
