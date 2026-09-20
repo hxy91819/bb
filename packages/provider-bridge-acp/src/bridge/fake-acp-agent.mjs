@@ -77,8 +77,7 @@ import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
 const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
-const resumeSession =
-  process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
+const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
 const usageOnLoad = process.env.FAKE_ACP_USAGE_ON_LOAD === "1";
@@ -95,6 +94,9 @@ const setConfigModelError = process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR === "1";
 const setConfigFastError = process.env.FAKE_ACP_SET_CONFIG_FAST_ERROR === "1";
 const cursorParameterizedModels =
   process.env.FAKE_ACP_CURSOR_PARAMETERIZED_MODELS === "1";
+const codexFastMode = process.env.FAKE_ACP_CODEX_FAST_MODE === "1";
+const codexBooleanFastMode =
+  process.env.FAKE_ACP_CODEX_BOOLEAN_FAST_MODE === "1";
 const requestLog = process.env.FAKE_ACP_REQUEST_LOG;
 const hangInitialize = process.env.FAKE_ACP_HANG_INITIALIZE === "1";
 const authMethods = (process.env.FAKE_ACP_AUTH_METHODS ?? "")
@@ -133,6 +135,12 @@ let nextAgentRequestId = 1000;
 let selectedModel = "fake/default";
 let selectedEffort = "none";
 let selectedFast = process.env.FAKE_ACP_INITIAL_FAST ?? "false";
+let selectedCodexFast =
+  process.env.FAKE_ACP_INITIAL_FAST === "true"
+    ? "on"
+    : process.env.FAKE_ACP_INITIAL_FAST === "false"
+      ? "off"
+      : (process.env.FAKE_ACP_INITIAL_FAST ?? "off");
 let clientSupportsParameterizedModels = false;
 let authenticatedMethod = null;
 let activeSessionId = sessionId;
@@ -290,30 +298,49 @@ function configOptions() {
   if (cursorParameterizedModels) {
     return cursorConfigOptions();
   }
-  if (!modelConfig) {
-    return undefined;
+  const options = modelConfig
+    ? [
+        {
+          id: "mode",
+          name: "Mode",
+          category: "mode",
+          type: "select",
+          currentValue: true,
+          options: [{ value: "build", name: "Build" }],
+        },
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: selectedModel,
+          options: groupedModelConfig
+            ? [{ group: "fake", name: "Fake", options: fakeModels }]
+            : fakeModels,
+        },
+        effortOptionForModel(selectedModel),
+      ].filter(Boolean)
+    : [];
+  if (codexFastMode) {
+    options.push({
+      id: "fast-mode",
+      name: "Fast mode",
+      category: "model_config",
+      type: codexBooleanFastMode ? "boolean" : "select",
+      currentValue: codexBooleanFastMode
+        ? selectedCodexFast === "on"
+        : selectedCodexFast,
+      ...(codexBooleanFastMode
+        ? {}
+        : {
+            options: [
+              { value: "off", name: "Off" },
+              { value: "on", name: "On" },
+            ],
+          }),
+    });
   }
-  return [
-    {
-      id: "mode",
-      name: "Mode",
-      category: "mode",
-      type: "select",
-      currentValue: true,
-      options: [{ value: "build", name: "Build" }],
-    },
-    {
-      id: "model",
-      name: "Model",
-      category: "model",
-      type: "select",
-      currentValue: selectedModel,
-      options: groupedModelConfig
-        ? [{ group: "fake", name: "Fake", options: fakeModels }]
-        : fakeModels,
-    },
-    effortOptionForModel(selectedModel),
-  ].filter(Boolean);
+  return options.length > 0 ? options : undefined;
 }
 
 function sessionCapabilities() {
@@ -560,7 +587,11 @@ async function handlePrompt(message) {
   } else if (text.includes("echo-selected-effort")) {
     notifyUpdate(messageChunk(`selected-effort:${selectedEffort}`));
   } else if (text.includes("echo-selected-fast")) {
-    notifyUpdate(messageChunk(`selected-fast:${selectedFast}`));
+    notifyUpdate(
+      messageChunk(
+        `selected-fast:${codexFastMode ? selectedCodexFast : selectedFast}`,
+      ),
+    );
   } else if (text.includes("echo-auth-method")) {
     notifyUpdate(messageChunk(`auth-method:${authenticatedMethod ?? "none"}`));
   } else if (text.includes("echo-electron-run-as-node")) {
@@ -854,6 +885,30 @@ async function handleMessage(message) {
           return;
         }
         selectedFast = value;
+        send({ jsonrpc: "2.0", id: message.id, result: configState() });
+        return;
+      }
+      if (configId === "fast-mode" && codexFastMode) {
+        if (codexBooleanFastMode !== (message.params?.type === "boolean")) {
+          send({
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32602, message: "invalid fast mode value type" },
+          });
+          return;
+        }
+        if (value === true || value === "on") {
+          selectedCodexFast = "on";
+        } else if (value === false || value === "off") {
+          selectedCodexFast = "off";
+        } else {
+          send({
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32602, message: `fast mode not found: ${value}` },
+          });
+          return;
+        }
         send({ jsonrpc: "2.0", id: message.id, result: configState() });
         return;
       }
