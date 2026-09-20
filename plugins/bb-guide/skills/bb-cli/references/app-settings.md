@@ -15,7 +15,7 @@ every window and client sees the same value.
 
 - The server keeps a keyed, revisioned registry of sidebar layout preferences
   (`sidebar.organizationMode`, `sidebar.threadGrouping.environment`,
-  `sidebar.chronologicalSort`, the section
+  `sidebar.chronologicalSort`, `sidebar.projectOrder`, the section
   orders, the collapsed-id lists, `sidebar.pluginPanelOrder`,
   `sidebar.visiblePluginPanels`, `sidebar.navigationProvider`,
   `sidebar.threadListProvider`).
@@ -28,6 +28,8 @@ every window and client sees the same value.
   machine and leaves them flat in Custom. The thread-list header's Organize menu
   exposes it under Groups as By environment. Each `sidebar.threadGrouping.*` key
   toggles one grouping dimension independently.
+- `sidebar.projectOrder` chooses Recent activity or Drag order for By project
+  sections; the default is Recent activity.
 - `bb settings ui list [--json]` prints every key with its value, revision,
   and description; `bb settings ui get <key> [--json]` prints one.
 - `bb settings ui set <key> <value> [--json]` takes a plain string for enum

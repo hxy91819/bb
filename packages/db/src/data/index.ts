@@ -7,6 +7,7 @@ export {
   getPublicProjectByLocalPathSource,
   listPublicProjects,
   markProjectDeleted,
+  promoteProjectRecentExplicitWork,
   reorderProject,
   setProjectGitRemoteUrlIfMissing,
   updateProject,

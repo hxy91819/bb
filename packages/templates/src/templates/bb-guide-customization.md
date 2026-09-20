@@ -264,6 +264,7 @@ Server-backed sidebar preferences
 
 Sidebar layout lives on the server in a keyed, revisioned registry so every
 window, device, and the CLI share it: organization mode, chronological sort,
+project order (recent activity or drag order),
 section orders, collapsed rows and sections, navigation entry order and
 visibility, and the navigation and thread-list provider pickers. The sidebar
 waits for them alongside the project list, and an upgrade uploads the old
@@ -284,12 +285,13 @@ Custom (`chronological`) is the default for `sidebar.organizationMode` when no
 value is saved. Existing server and legacy browser choices are preserved.
 
 Every thread-list header's actions menu offers New project, New section,
-Organize, and Sort by. Organize selects By project, By machine, or Custom, and
+Organize, Project order, and Sort by. Organize selects By project, By machine, or Custom, and
 its By environment toggle decides whether sibling threads sharing one worktree
 collapse into a single worktree row inside their section, in every organization
 mode. `sidebar.threadGrouping.environment` defaults to `auto`, which groups them
 everywhere except Custom: `bb settings ui set sidebar.threadGrouping.environment
 false` keeps every thread on its own row, and `true` groups them in every mode.
+Project order selects Recent activity or Drag order for By project sections.
 Sort by selects a field, and selecting it again reverses its arrow/direction.
 `sidebar.sortDirection` accepts `ascending`, `descending`, or `default`.
 The default preserves each field's original order (newest first for dates,
