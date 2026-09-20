@@ -31,8 +31,9 @@ git check-ignore -v config/local-aggregate-web.json
 同一 checkout 可保存多个忽略的目标配置。未指定目标时使用
 `config/local-aggregate-web.json`；明确指定目标时使用
 `config/local-aggregate-web.<target>.json`。每个目标必须有独立的数据目录和
-服务单元；代码从同一个已发布的 `fork/local/aggregate` 获取，但不得共享正在
-使用的数据目录。
+服务单元；代码从用户指定、由外部发布凭据绑定精确 commit 的不可变个人 fork
+ref 获取，不得以可变的 `fork/local/aggregate` 代替，也不得共享正在使用的数据
+目录。
 
 ## 服务模型
 
@@ -48,7 +49,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 首次配置
 
-1. 安装 Node 22.19 或更高的 Node 22 运行时，并把绝对二进制路径写进本机 JSON。systemd 不会加载交互 shell 的 `nvm`，因此不要让单元依赖 `nvm use` 或 `/tmp` 下的运行时。
+1. 安装满足 `package.json` engines 且与外部发布凭据所记构建工具链兼容的持久 Node 运行时，并把绝对二进制路径写进本机 JSON。Node 22.19.0 是当前源码最低版本，不是固定主版本；凭据锁定 Node 24.15.0 时使用持久 Node 24.15.0。systemd 不会加载交互 shell 的 `nvm`，因此不要让单元依赖 `nvm use` 或 `/tmp` 下的运行时。
 2. 在 Node 的 `bin` 目录为项目锁定的 pnpm 启用 Corepack：
 
    ```bash
@@ -58,9 +59,17 @@ git check-ignore -v config/local-aggregate-web.json
 3. 在目标 worktree 安装依赖并执行运行时预构建：
 
    ```bash
-   scripts/run-resource-isolated --profile package -- <node-22-bin-directory>/pnpm install --frozen-lockfile
+   scripts/run-resource-isolated --profile package -- <node-bin-directory>/pnpm install --frozen-lockfile
    scripts/run-resource-isolated --profile package -- <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
+   <nodeExecutable> scripts/ensure-native-modules.mjs --check
    ```
+
+   每台机器都必须在该 clean worktree 重新安装依赖和构建，不得复制其他机器的
+   `node_modules`、原生模块或构建产物。安装前后都核对 worktree 的 HEAD 与发布
+   凭据 commit；原生 ABI 检查必须使用常驻服务所用的同一 Node 可执行文件。
+
+   没有明确服务部署授权时，首次配置也在本步骤后停止；以下 systemd 和
+   Tailscale 步骤只在已有该授权时执行。
 
 4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值：
 
@@ -96,7 +105,7 @@ git check-ignore -v config/local-aggregate-web.json
 为唯一流程入口；它负责低内存预构建、持久检查点、切换门禁与回退边界。
 本节保留服务模型和本机配置的背景，不重复该技能的部署步骤。
 
-1. 检查现场并在 `local/aggregate` 完成聚合。默认不 push；若已明确授权，只推送到个人 fork：
+1. 发布机器先检查现场并在 `local/aggregate` 完成聚合。默认不 push；若已明确授权，只推送到个人 fork，并另行发布绑定精确源码 commit、不可变 ref 和工具链的外部凭据：
 
    ```bash
    git status --short
@@ -105,9 +114,11 @@ git check-ignore -v config/local-aggregate-web.json
    git push fork local/aggregate:refs/heads/local/aggregate
    ```
 
-2. 按该技能执行预构建、重启及服务健康验证。它不以全仓库构建替代运行时门禁。
+2. 目标机器只获取凭据指定的不可变 ref，在现有工作区之外创建 clean detached worktree，并核对其 HEAD 与凭据 commit。保留现有工作区的所有本地改动，不在其中构建。按该技能重新安装本机依赖并执行预构建；它不以全仓库构建替代运行时门禁。
 
-3. 对重要项目在浏览器强制刷新一次，以加载新的带 hash 前端 bundle，并打开一个既有会话确认数据可见。
+3. 没有明确服务部署授权时，到源码、构建和原生 ABI 准备完成为止，不修改 systemd、Tailscale 或本机目标配置。已有授权时才按该技能的外部 Agent 门禁更新 repoPath、常驻入口并切换服务。
+
+4. 授权切换后，对重要项目在浏览器强制刷新一次，以加载新的带 hash 前端 bundle，并打开一个既有会话确认数据可见。
 
 ## 回退
 
