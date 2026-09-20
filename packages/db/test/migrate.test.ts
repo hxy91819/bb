@@ -6412,6 +6412,71 @@ describe("environment and thread startup ownership migration", () => {
     }
   });
 
+  it.each([false, true])(
+    "recovers an interrupted Fast column staging when canonical migration is applied=%s",
+    (canonicalApplied) => {
+      const db = createMigratedConnection();
+
+      try {
+        const host = upsertHost(db, noopNotifier, {
+          id: "host-interrupted-fast-staging",
+          name: "Interrupted Fast staging host",
+        });
+        const { project } = createProject(db, noopNotifier, {
+          name: "Interrupted Fast staging project",
+          source: {
+            type: "local_path",
+            hostId: host.id,
+            path: "/tmp/interrupted-fast-staging",
+          },
+        });
+        const thread = createThread(db, noopNotifier, {
+          projectId: project.id,
+          providerId: "codex",
+        });
+        db.$client
+          .prepare("UPDATE threads SET service_tier_override = 'fast' WHERE id = ?")
+          .run(thread.id);
+        db.$client.exec(
+          "ALTER TABLE threads RENAME COLUMN service_tier_override TO _bb_service_tier_override_pending",
+        );
+        if (canonicalApplied) {
+          db.$client.exec(
+            "ALTER TABLE threads ADD COLUMN service_tier_override text",
+          );
+        } else {
+          db.$client
+            .prepare<[number]>(
+              "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+            )
+            .run(serviceTierOverrideMigrationWhen);
+          db.$client.exec(
+            "ALTER TABLE projects DROP COLUMN recent_explicit_work_sequence",
+          );
+        }
+
+        migrate(db);
+        migrate(db);
+
+        expect(
+          db.$client
+            .prepare<[string], { serviceTierOverride: string | null }>(
+              "SELECT service_tier_override AS serviceTierOverride FROM threads WHERE id = ?",
+            )
+            .get(thread.id),
+        ).toEqual({ serviceTierOverride: "fast" });
+        expect(
+          db.$client
+            .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+            .all()
+            .map((column) => column.name),
+        ).not.toContain("_bb_service_tier_override_pending");
+      } finally {
+        closeConnection(db);
+      }
+    },
+  );
+
   it("applies UI preferences skipped before a later legacy Fast migration", () => {
     const db = createMigratedConnection();
 
