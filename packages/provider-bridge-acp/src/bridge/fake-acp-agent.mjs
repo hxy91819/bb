@@ -69,6 +69,12 @@
  * - FAKE_ACP_PROMPT_ERROR=1  → reject every session/prompt request
  * - FAKE_ACP_GROK_CONTEXT=1  → advertise Grok model _meta.totalContextTokens
  *                              and prompt-result _meta.usage
+ * - FAKE_ACP_PROMPT_FAIL_TEXT=<substring>
+ *                            → reject session/prompt requests whose text
+ *                              contains it, after FAKE_ACP_PROMPT_FAIL_DELAY_MS
+ * - FAKE_ACP_PROMPT_FAIL_DELAY_MS=<ms>
+ *                            → delay before the FAKE_ACP_PROMPT_FAIL_TEXT
+ *                              rejection is sent (default 0)
  * - FAKE_ACP_COMPACT_STOP_REASON
  *                            → stop reason returned for /compact
  * - FAKE_ACP_MID_TURN_STEERING
@@ -136,6 +142,10 @@ const midTurnSteeringValue =
       : midTurnSteeringEnv;
 const concurrentPrompts = process.env.FAKE_ACP_CONCURRENT_PROMPTS === "1";
 const busyReject = process.env.FAKE_ACP_BUSY_PROMPT === "1";
+const promptFailText = process.env.FAKE_ACP_PROMPT_FAIL_TEXT;
+const promptFailDelayMs = Number(
+  process.env.FAKE_ACP_PROMPT_FAIL_DELAY_MS ?? "0",
+);
 // `--list-models` is the agent's own model-list mode: the bridge derives its
 // list command from the launch spec's agent binary plus `modelCli.listArgs`,
 // so a list command can only ever be this binary.
@@ -512,6 +522,21 @@ async function handlePrompt(message) {
 
   if (process.env.FAKE_ACP_PROMPT_ERROR === "1") {
     activePromptId = null;
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      error: { code: -32000, message: "Fake prompt failure" },
+    });
+    return;
+  }
+
+  if (promptFailText !== undefined && text.includes(promptFailText)) {
+    await sleep(promptFailDelayMs);
+    if (trackConcurrent) {
+      concurrentActivePromptIds.delete(message.id);
+    } else if (activePromptId === message.id) {
+      activePromptId = null;
+    }
     send({
       jsonrpc: "2.0",
       id: message.id,
