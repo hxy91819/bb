@@ -678,7 +678,7 @@ export function ProjectModeSections({
   pinnedReorderPending,
   pinnedRootNodes,
   pinnedSection,
-  pinnedThreads,
+  pinnedThreads = [],
   onReorderPinnedThread,
   projects,
   selectedThreadId,
