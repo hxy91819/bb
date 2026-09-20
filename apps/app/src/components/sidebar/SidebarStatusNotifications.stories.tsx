@@ -165,6 +165,7 @@ function StoryThreadRow({
       projectId={PROJECT_IDS.bb}
       thread={thread}
       crossProjectId={null}
+      showProjectName={false}
       isActive={isActive}
       hasComposerDraft={hasComposerDraft}
       options={defaultThreadOption}
