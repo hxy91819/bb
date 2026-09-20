@@ -4,6 +4,41 @@ Status: agreed design direction; no product implementation or provider compatibi
 
 Reviewed source: local aggregate `a4923f542`. This document lives on the independent `fix/acp-mid-turn-steering-design` worktree, based on `desktop-v0.43.1` (`267938526`). The aggregate includes additional ACP service-tier, goal, and DSH work beyond that tag; an implementation must account for those dependencies explicitly rather than use the aggregate as an upstream PR base.
 
+## Provider adapter architecture
+
+BB gives every wire protocol exactly one bridge in the host daemon; each bridge translates the shared `ThreadDelta` turn grammar into the provider's protocol. The three native bridges already deliver mid-turn input natively — this change brings the shared ACP bridge to the same level behind per-agent gating.
+
+```mermaid
+flowchart TB
+    subgraph BB["BB (this repository)"]
+        UI["server + client<br/>delivery labels: Steer / 降级为中断并发送 / queued<br/>(added by this change)"]
+
+        subgraph BR["host daemon · provider bridges (one per wire protocol)"]
+            direction LR
+            CCB["provider-claude-code<br/>@anthropic-ai/claude-agent-sdk<br/>steerMode: inject (native)"]
+            CXB["provider-codex<br/>codex app-server JSON-RPC<br/>steerMode: inject (native)"]
+            PIB["provider-pi<br/>Pi RPC<br/>native steering queue"]
+
+            ACPB["provider-bridge-acp<br/>shared ACP client — changed here:<br/>· gating: dialect table / _meta.midTurnSteering / acpSteeringMode<br/>· turn-group lifecycle (concurrent prompt accounting,<br/>ordered busy-rejection replay, cancel on primary failure)<br/>· input.delivery delta → turn/input/delivery event"]
+        end
+        UI --- BR
+    end
+
+    CCB --> CLAUDE["claude (SDK built-in)"]
+    CXB --> CODEX["codex app-server"]
+    PIB --> PIAGENT["pi"]
+
+    ACPB ==ACP wire==> DEV["devin acp — ACP built into the binary<br/>concurrent prompt verified live → Steer"]
+    ACPB ==ACP wire==> AMPACP["amp-acp — standalone adapter (local fork)<br/>AMP_ACP_CANCEL_MODE=steer: implements steering<br/>by folding post-cancel input into the amp steering path<br/>→ 降级为中断并发送"]
+    ACPB ==ACP wire==> DSHACP["dsh ACP adapter — bug lives here:<br/>internal agent supports steering but the adapter<br/>rejects concurrent prompts and exposes no capability<br/>→ 降级为中断并发送"]
+
+    AMPACP -->|"@ampcode/sdk"| AMP["amp binary<br/>native steering input"]
+    DSHACP --> DSH["dsh internal agent<br/>(steer-capable, unreachable over ACP)"]
+    ACPB -.optional.-> CXACP["codex-acp (zed adapter)<br/>steer depends on that adapter"]
+```
+
+Every "ACP provider" is actually a two-adapter chain: BB's shared bridge emits ACP, and a vendor-side ACP adapter fronts the agent. For Devin that adapter is the binary's own `devin acp` subcommand. For Amp it is the standalone `amp-acp` project — the reason steer already appears to work there is that the adapter (configured with `AMP_ACP_CANCEL_MODE=steer`) maps BB's cancel-and-reprompt onto Amp's native steering input; the transport is still an interruption, and the delivery label now says so honestly. For DSH the vendor adapter rejects concurrent prompts despite the internal agent supporting steering — the defect is outside BB's reach, so BB correctly stays on the interrupt path. Native injection for Amp would require `amp-acp` itself to accept concurrent `session/prompt`; configuring `steeringMode: "prompt"` in BB only helps if that adapter already does.
+
 ## Decision and guarantee
 
 Use hybrid gating (C). Send concurrent `session/prompt` only when the live agent positively advertises the supported steering extension, a tested dialect supplies that contract, or an explicit provider setting asserts it. All other agents retain cancel-and-reprompt, visibly labeled “降级为中断并发送”. Never learn support by submitting a user steer to an unknown agent and observing success.
