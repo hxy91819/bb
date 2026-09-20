@@ -1,10 +1,10 @@
 import { getThread, promoteProjectRecentExplicitWork } from "@bb/db";
 import type { DbConnection, DbNotifier } from "@bb/db";
-import type { Thread } from "@bb/domain";
 import type {
   StartedOnBehalfOf,
+  Thread,
   ThreadCreateOrigin,
-} from "@bb/server-contract";
+} from "@bb/domain";
 
 export interface ExplicitWorkAcceptance {
   origin: ThreadCreateOrigin | null;
