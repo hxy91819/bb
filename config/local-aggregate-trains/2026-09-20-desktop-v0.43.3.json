@@ -124,7 +124,8 @@
       {"logicalPatch":"acp-steering-cancel-on-failure-v1","commit":"7edb0828b20d229a83fedd6c30a1923cda7f93ca"},
       {"logicalPatch":"acp-steering-label-design-v1","commit":"382dd9d01480b770252625b6a4a1f58aae4c53e3"},
       {"logicalPatch":"acp-steering-adapter-design-v1","commit":"80017a43205a9ce8906fbdd0fa678bb608a55448"},
-      {"logicalPatch":"acp-steering-english-labels-v1","commit":"1af5d7aac68e0ae16495c54cb56acb948328dce6"}
+      {"logicalPatch":"acp-steering-english-labels-v1","commit":"1af5d7aac68e0ae16495c54cb56acb948328dce6"},
+      {"logicalPatch":"acp-steering-mixed-rejection-closeout-v1","commit":"3c08dd44ca691059507fa22da191a0439f546efa"}
     ],
     "side-chat-command": [
       {"logicalPatch":"side-chat-command-v1","commit":"e536f877891bf35db33f4edc8bb635b6440b4a79"},
@@ -139,7 +140,9 @@
       {"logicalPatch":"two-tier-complete-maintenance-train-v1","commit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f"},
       {"logicalPatch":"two-tier-maintenance-assets-v1","commit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2"},
       {"logicalPatch":"two-tier-reconstruction-contract-v1","commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1"},
-      {"logicalPatch":"two-tier-remote-cutover-contract-v1","commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307"}
+      {"logicalPatch":"two-tier-remote-cutover-contract-v1","commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307"},
+      {"logicalPatch":"two-tier-authoritative-patch-counts-v1","commit":"c44fbde0d6bd14805e3493c3a7f5613650b599e5"},
+      {"logicalPatch":"two-tier-final-receipt-discovery-v1","commit":"c8a252837cddec468194bf3a661c5f55c2d8ea26"}
     ]
   },
   "featurePatches": {
@@ -160,11 +163,11 @@
     "sidebar-parent-row-hover-archive": ["sidebar-parent-row-hover-archive-v1","sidebar-parent-row-archive-test-v1"],
     "sidebar-touch-hover-actions": ["sidebar-touch-hover-actions-v1"],
     "sidebar-touch-navigation": ["sidebar-touch-navigation-v1"],
-    "acp-mid-turn-steering": ["acp-mid-turn-steering-design-v1","acp-mid-turn-steering-core-v1","acp-steering-submit-failure-v1","acp-steering-cancel-on-failure-v1","acp-steering-label-design-v1","acp-steering-adapter-design-v1","acp-steering-english-labels-v1"],
+    "acp-mid-turn-steering": ["acp-mid-turn-steering-design-v1","acp-mid-turn-steering-core-v1","acp-steering-submit-failure-v1","acp-steering-cancel-on-failure-v1","acp-steering-label-design-v1","acp-steering-adapter-design-v1","acp-steering-english-labels-v1","acp-steering-mixed-rejection-closeout-v1"],
     "side-chat-command": ["side-chat-command-v1","side-chat-compose-contract-v1"],
     "sidebar-pinned-new-thread": ["sidebar-pinned-new-thread-v1"],
     "official-catalog-date-utc": ["official-catalog-date-utc-v1"],
-    "two-tier-stable-integration": ["stable-candidate-maintenance-records-v1","two-tier-stable-integration-v1","two-tier-verification-count-v1","two-tier-complete-maintenance-train-v1","two-tier-maintenance-assets-v1","two-tier-reconstruction-contract-v1","two-tier-remote-cutover-contract-v1"]
+    "two-tier-stable-integration": ["stable-candidate-maintenance-records-v1","two-tier-stable-integration-v1","two-tier-verification-count-v1","two-tier-complete-maintenance-train-v1","two-tier-maintenance-assets-v1","two-tier-reconstruction-contract-v1","two-tier-remote-cutover-contract-v1","two-tier-authoritative-patch-counts-v1","two-tier-final-receipt-discovery-v1"]
   },
   "domains": ["provider"],
   "domainFeatures": {
@@ -232,13 +235,16 @@
     {"commit":"c1f9a555a17887fd57d6b9cae595e3a51bb151c4","sourceCommit":"6a115ffd25616a25b8de0c15011702bc879bddd1","logicalPatch":"acp-dsh-collapse-policy-v1","features":["acp-dsh-provider"]},
     {"commit":"a0c918e2ef45055c8313e1850517c3fea42fe3ca","sourceCommit":"bcd647a49c480f51a36e14e69cef1a98809d6101","logicalPatch":"official-catalog-date-utc-v1","features":["official-catalog-date-utc"]},
     {"commit":"bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba","sourceCommit":"3d4cc28a23240ff87a4b57eba686f7e5d6677506","logicalPatch":"sidebar-pinned-new-thread-v1","features":["sidebar-pinned-new-thread"]},
+    {"commit":"c6d3b3f3f6f4301dec48deb3ef9c29de3ced6c30","sourceCommit":"3c08dd44ca691059507fa22da191a0439f546efa","logicalPatch":"acp-steering-mixed-rejection-closeout-v1","features":["acp-mid-turn-steering"]},
     {"commit":"cc26cca6680fda183b08a7ec8145d060cb27f5f3","sourceCommit":"cc26cca6680fda183b08a7ec8145d060cb27f5f3","logicalPatch":"stable-candidate-maintenance-records-v1","features":["two-tier-stable-integration"]},
     {"commit":"0b966e848b2f1711855c5fb1a97c7092627efdc2","sourceCommit":"0b966e848b2f1711855c5fb1a97c7092627efdc2","logicalPatch":"two-tier-stable-integration-v1","features":["two-tier-stable-integration"]},
     {"commit":"2b6191165dbab282d8c10032d2bae883c7c36938","sourceCommit":"2b6191165dbab282d8c10032d2bae883c7c36938","logicalPatch":"two-tier-verification-count-v1","features":["two-tier-stable-integration"]},
     {"commit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f","sourceCommit":"598f4e83d8bcc056ddf20d37323ef53d1faa338f","logicalPatch":"two-tier-complete-maintenance-train-v1","features":["two-tier-stable-integration"]},
     {"commit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2","sourceCommit":"7c0db921ffd12619fe4cb24df34fee93f6bd01b2","logicalPatch":"two-tier-maintenance-assets-v1","features":["two-tier-stable-integration"]},
     {"commit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","sourceCommit":"8a9ccb15cb48855338dfa85e52fba7efb20b75e1","logicalPatch":"two-tier-reconstruction-contract-v1","features":["two-tier-stable-integration"]},
-    {"commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","sourceCommit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","logicalPatch":"two-tier-remote-cutover-contract-v1","features":["two-tier-stable-integration"]}
+    {"commit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","sourceCommit":"4ccc11d686b1742f276ba2c6c97a9b1f53a54307","logicalPatch":"two-tier-remote-cutover-contract-v1","features":["two-tier-stable-integration"]},
+    {"commit":"c44fbde0d6bd14805e3493c3a7f5613650b599e5","sourceCommit":"c44fbde0d6bd14805e3493c3a7f5613650b599e5","logicalPatch":"two-tier-authoritative-patch-counts-v1","features":["two-tier-stable-integration"]},
+    {"commit":"c8a252837cddec468194bf3a661c5f55c2d8ea26","sourceCommit":"c8a252837cddec468194bf3a661c5f55c2d8ea26","logicalPatch":"two-tier-final-receipt-discovery-v1","features":["two-tier-stable-integration"]}
   ],
   "verification": "docs/local-aggregate-verification-2026-09-20.md"
 }
