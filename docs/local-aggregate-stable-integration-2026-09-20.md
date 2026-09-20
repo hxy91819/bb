@@ -16,15 +16,9 @@ The frozen full train lists all 58 product commits in their actual candidate ord
 
 ## Reconstruction contract
 
-The composer starts at the locked stable tag, applies the train's 58 candidate commits in order, then binds the committed registry and train manifest in a final maintenance commit. Product-tree comparison excludes only these maintenance surfaces:
+The composer starts at the locked stable tag and applies the train's 58 product commits in order. It then applies every explicitly selected maintenance patch, including the six maintenance patches in the final frozen train, before binding the committed registry and train manifest. The resulting train contains 64 patches in total. Maintenance documentation, skills, links, configuration examples, resource-isolation tooling, and other maintenance assets are reconstructed rather than omitted from comparison.
 
-- `.bb/skills/open-source-fork-maintenance`
-- `AGENTS.md`
-- `config/local-aggregate-features.json`
-- `config/local-aggregate-trains/`
-- `docs/local-aggregate-provider-pilot-2026-09-20.md`
-- `docs/local-aggregate-stable-integration-2026-09-20.md`
-- `docs/local-aggregate-verification-2026-09-20.md`
+Candidate verification compares the complete reconstructed source tree with the integration source tree using an exact tree diff. It has no maintenance-path exclusion list.
 
 The immutable output ref, manifest commit, train SHA-256, reconstructed candidate SHA, and exact comparison result are recorded after the committed manifest is composed. That post-commit evidence avoids embedding a commit's own SHA into itself.
 
