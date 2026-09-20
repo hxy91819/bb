@@ -427,7 +427,17 @@ function ThreadRowComponent({
   const rowActionKeys = useAtomValue(threadRowActionsAtom);
   const actionTarget = toThreadActionTarget(thread);
   const quickActions = experimental_useThreadActions(actionTarget, {
-    keys: thread.archivedAt !== null ? ARCHIVED_ROW_ACTION_KEYS : rowActionKeys,
+    keys: (thread.archivedAt !== null
+      ? ARCHIVED_ROW_ACTION_KEYS
+      : rowActionKeys
+    ).filter(
+      (key) =>
+        !(
+          options.kind === "parent" &&
+          options.childCount > 0 &&
+          key === "bb--core/archive"
+        ),
+    ),
     requestRename: () => {
       startEditing();
     },
@@ -605,6 +615,7 @@ function ThreadRowComponent({
           !shortcut &&
             !isEditing &&
             !isCustomizingActions &&
+            !(parentOptions && hasChildren && quickActions.length === 0) &&
             (reserveActionSpace
               ? "pr-(--bb-sidebar-hover-actions-inset) [@media(hover:none)]:pr-0"
               : SIDEBAR_HOVER_ACTIONS_INSET_CLASS),
