@@ -19,6 +19,26 @@
     "acp-mid-turn-steering": ["acp-dsh-provider"],
     "mermaid-elk-layout": []
   },
+  "featureSources": {
+    "acp-dsh-provider": [
+      { "logicalPatch": "acp-dsh-provider-core-v1", "commit": "6c3ac99d397da8825eb0fcb6944ee9df2ebbb8d8" },
+      { "logicalPatch": "acp-dsh-fallback-tests-v1", "commit": "670775309898aff9543a92a95de94f410394c423" },
+      { "logicalPatch": "acp-dsh-ordered-fallback-tests-v1", "commit": "d3d7752d3bd1e7769840401baec948f5f9daf7db" },
+      { "logicalPatch": "acp-dsh-collapse-policy-v1", "commit": "6a115ffd25616a25b8de0c15011702bc879bddd1" }
+    ],
+    "acp-fast-mode": [{ "logicalPatch": "acp-fast-mode-v1", "commit": "e186f8f7d8967b01b5245c26a509b2bad961f349" }],
+    "acp-codex-goal": [{ "logicalPatch": "acp-codex-goal-v1", "commit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5" }],
+    "acp-mid-turn-steering": [
+      { "logicalPatch": "acp-mid-turn-steering-design-v1", "commit": "a9c4d1d88d3aae0c4ce0070c9376025b16f0a842" },
+      { "logicalPatch": "acp-mid-turn-steering-core-v1", "commit": "7d3696d97eb2e9c77c4c46c3fd3646987ea75036" },
+      { "logicalPatch": "acp-steering-submit-failure-v1", "commit": "20e8272e39a5cd17e069b6ba748963cbee81e89d" },
+      { "logicalPatch": "acp-steering-cancel-on-failure-v1", "commit": "7edb0828b20d229a83fedd6c30a1923cda7f93ca" },
+      { "logicalPatch": "acp-steering-label-design-v1", "commit": "382dd9d01480b770252625b6a4a1f58aae4c53e3" },
+      { "logicalPatch": "acp-steering-adapter-design-v1", "commit": "80017a43205a9ce8906fbdd0fa678bb608a55448" },
+      { "logicalPatch": "acp-steering-english-labels-v1", "commit": "1af5d7aac68e0ae16495c54cb56acb948328dce6" }
+    ],
+    "mermaid-elk-layout": [{ "logicalPatch": "mermaid-elk-layout-v1", "commit": "be3ed658910aad418e9dda6f83dac892654f9238" }]
+  },
   "featurePatches": {
     "acp-dsh-provider": ["acp-dsh-provider-core-v1", "acp-dsh-fallback-tests-v1", "acp-dsh-ordered-fallback-tests-v1", "acp-dsh-collapse-policy-v1"],
     "acp-fast-mode": ["acp-fast-mode-v1"],
