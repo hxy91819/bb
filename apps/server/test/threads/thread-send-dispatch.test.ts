@@ -143,6 +143,38 @@ function parseThreadMessages(
 }
 
 describe("queued message dispatch hook", () => {
+  it("replaces a pending environment continuation with explicit user input", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedProviderThreadFixture({
+        harness,
+        value: 91,
+        status: "active",
+      });
+      const continuation = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("continue after switching"),
+        waitingOn: { kind: "thread-busy" },
+        systemNotice: { kind: "environment-switched", subject: null },
+      });
+
+      await expect(
+        acceptThreadSendRequest(harness.deps, {
+          thread,
+          payload: {
+            input: textInput("use these updated instructions instead"),
+            mode: "queue-if-active",
+          },
+        }),
+      ).resolves.toMatchObject({ delivery: "queued" });
+
+      expect(getQueuedThreadMessage(harness.db, continuation.id)).toBeNull();
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toHaveLength(1);
+      expect(
+        JSON.parse(listQueuedThreadMessages(harness.db, thread.id)[0]!.content),
+      ).toEqual(textInput("use these updated instructions instead"));
+    });
+  });
+
   it("rolls back and sends no host command when the idle thread was archived between claim and dispatch", async () => {
     await withTestHarness(async (harness) => {
       const { thread } = seedProviderThreadFixture({ harness, value: 1 });
@@ -1249,7 +1281,10 @@ describe("idle cold-start activation", () => {
         harness.deps,
         {
           currentEnvironment: environment,
-          input: { path: targetEnvironment.path },
+          input: {
+            path: targetEnvironment.path,
+            continueCurrentTask: false,
+          },
           thread,
           turnId: "turn_before_switch",
         },
