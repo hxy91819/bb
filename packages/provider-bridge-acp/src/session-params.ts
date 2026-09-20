@@ -63,11 +63,14 @@ type AcpModelSelection =
       serviceTier?: ServiceTier;
     };
 
+export type AcpSteeringMode = "auto" | "interrupt" | "prompt";
+
 export interface AcpSessionParams {
   threadId: string;
   cwd: string;
   agent: { command: string; args: string[] };
   dialectId?: string | undefined;
+  steeringMode?: AcpSteeringMode | undefined;
   serviceTier?: ServiceTier | undefined;
   goalExtensionKind?: ExtensionKind | undefined;
   modelSelection?: AcpModelSelection;
@@ -261,6 +264,7 @@ interface BuildAcpSessionParamsArgs {
   additionalWorkspaceWriteRoots: readonly string[];
   cwd: string;
   dialectId?: string | undefined;
+  steeringMode?: AcpSteeringMode | undefined;
   goalExtensionKind?: ExtensionKind | undefined;
   dynamicTools?: readonly DynamicTool[] | undefined;
   launchSpec: AcpLaunchSpec;
@@ -293,6 +297,9 @@ export function buildAcpSessionParams(
       args: [...launchSpec.args],
     },
     ...(args.dialectId === undefined ? {} : { dialectId: args.dialectId }),
+    ...(args.steeringMode === undefined
+      ? {}
+      : { steeringMode: args.steeringMode }),
     ...(options.serviceTier === undefined
       ? {}
       : { serviceTier: options.serviceTier }),
