@@ -33,6 +33,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  sessionStorage.clear();
   vi.resetAllMocks();
 });
 
@@ -87,13 +88,13 @@ it("keeps a saved tier when returning after leaving during the update", async ()
 });
 
 it("preserves the saved tier when the update fails", async () => {
-  localStorage.setItem("bb.promptbox.service-tier", "fast");
   vi.mocked(sdk.threads.update).mockRejectedValue(new Error("Save failed"));
   const { wrapper } = createQueryClientTestHarness();
   const { result } = renderHook(() => useSelection("thr_failed"), { wrapper });
   await waitFor(() =>
     expect(result.current.defaults.data?.serviceTier).toBe("fast"),
   );
+  act(() => result.current.preference.setValue("fast"));
   act(() =>
     result.current.update.mutate({
       threadId: "thr_failed",
