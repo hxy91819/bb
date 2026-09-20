@@ -2571,6 +2571,7 @@ function runTurn(
         ctx.failedMessage ??=
           error instanceof Error ? error.message : String(error);
         dropTurnInput(pending, "ACP turn failed before the prompt was sent");
+        requestSteerCancel(session, ctx);
         await whenTurnGroupDrained(ctx);
         failTurn(session, ctx);
         return;
@@ -2588,6 +2589,7 @@ function runTurn(
         session.restartAfterCancelError = session.cancelRequested || ctx.everCancelled;
         ctx.failedMessage ??=
           error instanceof Error ? error.message : String(error);
+        requestSteerCancel(session, ctx);
       }
 
       await whenTurnGroupDrained(ctx);
