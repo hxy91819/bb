@@ -34,6 +34,11 @@ type AcpCompactionOutcome =
   | { status: "skipped"; detail: string }
   | { status: "failed"; error: string };
 
+export interface AcpDialectSteering {
+  midTurnPrompts: boolean;
+  textOnly?: boolean;
+}
+
 export interface AcpDialect {
   readonly id: string;
   toolIdentity?(event: AcpToolCallUpdateEvent): AcpToolIdentity | undefined;
@@ -47,6 +52,7 @@ export interface AcpDialect {
     params: unknown,
   ): AcpClientRequestOutcome | undefined;
   maintenance?: AcpMaintenanceDialect;
+  steering?: AcpDialectSteering;
 }
 
 export interface AcpClientRequestOutcome {
@@ -368,8 +374,14 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   normalizeCommandEvent: normalizeOpenCodeCommandEvent,
 };
 
+export const DEVIN_ACP_DIALECT: AcpDialect = {
+  id: "devin",
+  steering: { midTurnPrompts: true, textOnly: true },
+};
+
 const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
   [CURSOR_ACP_DIALECT.id, CURSOR_ACP_DIALECT],
+  [DEVIN_ACP_DIALECT.id, DEVIN_ACP_DIALECT],
   [GROK_ACP_DIALECT.id, GROK_ACP_DIALECT],
   [OMP_ACP_DIALECT.id, OMP_ACP_DIALECT],
   [OPENCODE_ACP_DIALECT.id, OPENCODE_ACP_DIALECT],
@@ -377,6 +389,7 @@ const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
 
 const DIALECT_IDS_BY_COMMAND: Readonly<Record<string, string>> = {
   "cursor-agent": CURSOR_ACP_DIALECT.id,
+  devin: DEVIN_ACP_DIALECT.id,
   grok: GROK_ACP_DIALECT.id,
   omp: OMP_ACP_DIALECT.id,
   opencode: OPENCODE_ACP_DIALECT.id,

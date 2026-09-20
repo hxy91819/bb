@@ -219,6 +219,13 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
   }),
 
   z.object({
+    kind: z.literal("input.delivery"),
+    clientRequestId: clientTurnRequestIdSchema,
+    delivery: z.enum(["steer", "interrupted", "queued"]),
+    providerTurnId: providerTurnIdSchema.optional(),
+  }),
+
+  z.object({
     kind: z.literal("input.provider"),
     text: z.string().min(1),
     parentRef: deltaKeyPartSchema.optional(),
