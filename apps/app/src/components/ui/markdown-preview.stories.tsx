@@ -165,6 +165,16 @@ the table never extends past the column into the gutter.
 The paragraph below returns to the regular column width, so the table stays
 aligned with the text flow on both sides.`;
 
+
+const TOKEN_WRAP_TABLE_MARKDOWN = `Cells whose tokens cannot break at word
+boundaries still wrap — the row grows taller instead of scrolling.
+
+| Key | Consumers |
+| --- | --- |
+| \`old_instance_state\` / \`old_latest_operation\` / \`old_latest_operation_state\` / \`old_latest_operation_request_id\` / \`old_latest_operation_started_time\` | none |
+| \`old_blueprint_id\` (kept) | \`service/freactor/reducers/operation_subsequent_processors/register_blueprint_instance\` (fails fast), \`reducers/utils/instance_util.py:238\` |
+`;
+
 const SCROLLING_TABLE_MARKDOWN = `When a table's minimum width still exceeds the column, the wrapper scrolls
 horizontally inside the column instead of letting the table bleed past it.
 
@@ -247,6 +257,14 @@ export function Overview() {
       >
         <PreviewStage>
           <MarkdownPreview content={WIDE_TABLE_MARKDOWN} />
+        </PreviewStage>
+      </StoryRow>
+      <StoryRow
+        label="table — unbreakable cells (wraps)"
+        hint="long tokens break inside the cell; the row grows taller instead of scrolling"
+      >
+        <PreviewStage>
+          <MarkdownPreview content={TOKEN_WRAP_TABLE_MARKDOWN} />
         </PreviewStage>
       </StoryRow>
       <StoryRow
