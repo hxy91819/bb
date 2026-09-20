@@ -453,7 +453,7 @@
       "reason": "Fork #8 is a local specification; its incorrect Upstream feedback wording was corrected. Upstream #3151 is a related ACP steering tracker, not submitted feedback for this patch.",
       "source": {
         "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
-        "versionCommit": "4dd78b8e04d521f18886abbcfad8bd3c8f68a34a",
+        "versionCommit": "3c08dd44ca691059507fa22da191a0439f546efa",
         "commits": [
           {
             "commit": "a9c4d1d88d3aae0c4ce0070c9376025b16f0a842",
@@ -482,6 +482,10 @@
           {
             "commit": "1af5d7aac68e0ae16495c54cb56acb948328dce6",
             "logicalPatch": "acp-steering-english-labels-v1"
+          },
+          {
+            "commit": "3c08dd44ca691059507fa22da191a0439f546efa",
+            "logicalPatch": "acp-steering-mixed-rejection-closeout-v1"
           }
         ]
       },
@@ -687,7 +691,7 @@
       "reason": "Binds the complete desktop-v0.43.3 product train to the role-classified two-tier maintenance files without changing product behavior.",
       "source": {
         "baseCommit": "bb5c8ce9e8a250ea039b09bcaccaf1022a0815ba",
-        "versionCommit": "2b61911657eb05d0e23657c54e9b735713272a67",
+        "versionCommit": "c8a252837cddec468194bf3a661c5f55c2d8ea26",
         "commits": [
           {
             "commit": "cc26cca6680fda183b08a7ec8145d060cb27f5f3",
@@ -698,8 +702,32 @@
             "logicalPatch": "two-tier-stable-integration-v1"
           },
           {
-            "commit": "2b61911657eb05d0e23657c54e9b735713272a67",
+            "commit": "2b6191165dbab282d8c10032d2bae883c7c36938",
             "logicalPatch": "two-tier-verification-count-v1"
+          },
+          {
+            "commit": "598f4e83d8bcc056ddf20d37323ef53d1faa338f",
+            "logicalPatch": "two-tier-complete-maintenance-train-v1"
+          },
+          {
+            "commit": "7c0db921ffd12619fe4cb24df34fee93f6bd01b2",
+            "logicalPatch": "two-tier-maintenance-assets-v1"
+          },
+          {
+            "commit": "8a9ccb15cb48855338dfa85e52fba7efb20b75e1",
+            "logicalPatch": "two-tier-reconstruction-contract-v1"
+          },
+          {
+            "commit": "4ccc11d686b1742f276ba2c6c97a9b1f53a54307",
+            "logicalPatch": "two-tier-remote-cutover-contract-v1"
+          },
+          {
+            "commit": "c44fbde0d6bd14805e3493c3a7f5613650b599e5",
+            "logicalPatch": "two-tier-authoritative-patch-counts-v1"
+          },
+          {
+            "commit": "c8a252837cddec468194bf3a661c5f55c2d8ea26",
+            "logicalPatch": "two-tier-final-receipt-discovery-v1"
           }
         ]
       },
@@ -774,7 +802,7 @@
       ],
       "adaptations": [],
       "integrated": {
-        "commit": "1d94cae6d862b2b50f03e611c584a72be43c394b",
+        "commit": "0435fd672b5207bd9c3ecda89495a9f11e464279",
         "sourceLogicalPatches": [
           "acp-dsh-provider-core-v1",
           "acp-dsh-fallback-tests-v1",
@@ -788,7 +816,8 @@
           "acp-steering-cancel-on-failure-v1",
           "acp-steering-label-design-v1",
           "acp-steering-adapter-design-v1",
-          "acp-steering-english-labels-v1"
+          "acp-steering-english-labels-v1",
+          "acp-steering-mixed-rejection-closeout-v1"
         ],
         "patches": [
           {
@@ -867,6 +896,12 @@
             "commit": "1d94cae6d862b2b50f03e611c584a72be43c394b",
             "sourceCommit": "1af5d7aac68e0ae16495c54cb56acb948328dce6",
             "logicalPatch": "acp-steering-english-labels-v1",
+            "features": ["acp-mid-turn-steering"]
+          },
+          {
+            "commit": "0435fd672b5207bd9c3ecda89495a9f11e464279",
+            "sourceCommit": "3c08dd44ca691059507fa22da191a0439f546efa",
+            "logicalPatch": "acp-steering-mixed-rejection-closeout-v1",
             "features": ["acp-mid-turn-steering"]
           }
         ]
