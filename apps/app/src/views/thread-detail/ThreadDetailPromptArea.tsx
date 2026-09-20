@@ -106,6 +106,7 @@ import {
   useStopThread,
 } from "@/hooks/mutations/thread-runtime-mutations";
 import { useUnarchiveThread } from "@/hooks/mutations/thread-state-mutations";
+import { useUpdateThreadServiceTier } from "@/hooks/mutations/thread-service-tier-mutation";
 import {
   getLatestPendingInteraction,
   useThreadQueuedMessages,
@@ -499,6 +500,7 @@ export function ThreadDetailPromptArea({
   const clearThreadGoal = useClearThreadGoal();
   const unarchiveThread = useUnarchiveThread();
   const createThread = useCreateThread();
+  const updateServiceTier = useUpdateThreadServiceTier(thread.id);
   const projectName = useProjectDisplayName(
     thread.projectId === PERSONAL_PROJECT_ID ? undefined : thread.projectId,
   );
@@ -654,7 +656,7 @@ export function ThreadDetailPromptArea({
     selectedProviderComposerActions,
     selectedModel,
     setSelectedModel,
-    serviceTier,
+    serviceTier: selectedServiceTier,
     setServiceTier,
     reasoningLevel,
     setReasoningLevel,
@@ -688,6 +690,18 @@ export function ThreadDetailPromptArea({
     initialPermissionMode: defaultExecutionOptions?.permissionMode,
     initialEnvironmentSelectionValue: thread.environmentId ?? undefined,
   });
+  const serviceTier =
+    updateServiceTier.isPending &&
+    updateServiceTier.variables?.threadId === thread.id
+      ? updateServiceTier.variables.serviceTier
+      : selectedServiceTier;
+  const { mutate: saveServiceTier } = updateServiceTier;
+  const handleServiceTierChange = useCallback(
+    (value: typeof selectedServiceTier) => {
+      saveServiceTier({ threadId: thread.id, serviceTier: value ?? "default" });
+    },
+    [saveServiceTier, thread.id],
+  );
   const fallbackIdentity = modelFallback
     ? `${thread.id}:${modelFallback.sourceSeq}`
     : null;
@@ -1548,7 +1562,9 @@ export function ThreadDetailPromptArea({
       },
       serviceTier: {
         value: serviceTier,
-        onChange: setServiceTier,
+        onChange: isHandoffSelection
+          ? setServiceTier
+          : handleServiceTierChange,
         supported: supportsServiceTier,
         supportByProvider: serviceTierSupportByProvider,
         fastLabel: serviceTierFastLabel,
@@ -1590,6 +1606,7 @@ export function ThreadDetailPromptArea({
       serviceTierSupportByProvider,
       setReasoningLevel,
       setServiceTier,
+      handleServiceTierChange,
       supportsServiceTier,
       serviceTierFastLabel,
       thread.environmentId,
