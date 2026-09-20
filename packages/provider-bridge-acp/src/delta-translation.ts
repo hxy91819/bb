@@ -12,6 +12,7 @@ import type {
   ProviderRuntimeEvent,
 } from "@bb/provider-bridge-protocol/bridge-kit";
 import type {
+  ExtensionKind,
   ThreadEventItemStatus,
   ThreadEventPlanStep,
   ThreadEventTurnStatus,
@@ -59,6 +60,7 @@ import { acpVisibilityMetadata } from "./visibility.js";
 import {
   acpAgentMessageChunkUpdateSchema,
   acpAgentThoughtChunkUpdateSchema,
+  acpGoalSessionInfoUpdateSchema,
   acpPlanUpdateSchema,
   acpToolCallUpdateEventSchema,
   acpUsageUpdateSchema,
@@ -76,6 +78,7 @@ interface AcpDeltaTranslationContext {
 export interface AcpDeltaTranslatorOptions {
   cwd?: string | undefined;
   dialect?: AcpDialect | undefined;
+  goalExtensionKind?: ExtensionKind | undefined;
 }
 
 export interface AcpPermissionToolCallInput {
@@ -169,6 +172,7 @@ export function createAcpDeltaTranslator(
   options: AcpDeltaTranslatorOptions = {},
 ) {
   const dialect = options.dialect ?? GENERIC_ACP_DIALECT;
+  const goalExtensionKind = options.goalExtensionKind;
   const pathOptions = { cwd: options.cwd };
   const mergedToolCalls = new Map<string, AcpOpenToolCall>();
 
@@ -794,6 +798,33 @@ export function createAcpDeltaTranslator(
             size: parsed.data.size,
             estimated: false,
             attach: "open",
+          },
+        ];
+      }
+
+      case "session_info_update": {
+        const parsed = acpGoalSessionInfoUpdateSchema.safeParse(update);
+        if (!parsed.success || goalExtensionKind === undefined) {
+          return [];
+        }
+        const goal = parsed.data._meta.goal;
+        return [
+          {
+            kind: "extension.state",
+            extensionKind: goalExtensionKind,
+            payload:
+              goal === null
+                ? null
+                : {
+                    objective: goal.objective,
+                    status:
+                      goal.status === "limited"
+                        ? "budgetLimited"
+                        : goal.status,
+                    tokenBudget: goal.tokenBudget ?? null,
+                    tokensUsed: goal.tokensUsed ?? 0,
+                    timeUsedSeconds: goal.timeUsedSeconds ?? 0,
+                  },
           },
         ];
       }
