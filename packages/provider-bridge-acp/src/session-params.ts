@@ -1,5 +1,6 @@
 import type {
   DynamicTool,
+  ExtensionKind,
   PermissionMode,
   ReasoningLevel,
   ServiceTier,
@@ -68,6 +69,7 @@ export interface AcpSessionParams {
   agent: { command: string; args: string[] };
   dialectId?: string | undefined;
   serviceTier?: ServiceTier | undefined;
+  goalExtensionKind?: ExtensionKind | undefined;
   modelSelection?: AcpModelSelection;
   launchReasoningLevel?: ReasoningLevel;
   reasoningCli?: AcpBridgeReasoningCli;
@@ -259,6 +261,7 @@ interface BuildAcpSessionParamsArgs {
   additionalWorkspaceWriteRoots: readonly string[];
   cwd: string;
   dialectId?: string | undefined;
+  goalExtensionKind?: ExtensionKind | undefined;
   dynamicTools?: readonly DynamicTool[] | undefined;
   launchSpec: AcpLaunchSpec;
   options: AcpSessionExecutionOptions;
@@ -293,6 +296,9 @@ export function buildAcpSessionParams(
     ...(options.serviceTier === undefined
       ? {}
       : { serviceTier: options.serviceTier }),
+    ...(args.goalExtensionKind === undefined
+      ? {}
+      : { goalExtensionKind: args.goalExtensionKind }),
     ...buildAcpModelSelectionParam(
       launchSpec,
       options,
