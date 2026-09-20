@@ -95,6 +95,21 @@ describe("acpInitializeResultSchema", () => {
 
     expect(parsed.agentCapabilities?.sessionCapabilities?.fork).toEqual({});
   });
+
+  it("exposes the stable session resume capability", () => {
+    const parsed = acpInitializeResultSchema.parse({
+      protocolVersion: 1,
+      agentCapabilities: {
+        sessionCapabilities: { close: {}, list: {}, resume: {} },
+      },
+    });
+
+    expect(parsed.agentCapabilities?.sessionCapabilities).toEqual({
+      close: {},
+      list: {},
+      resume: {},
+    });
+  });
 });
 
 describe("acpSessionNewResultSchema", () => {
@@ -150,6 +165,150 @@ describe("acpSessionNewResultSchema", () => {
     );
     expect(parsed.data.configOptions?.[1].category).toBeUndefined();
     expect(parsed.data.configOptions?.[1].options?.[0].name).toBeUndefined();
+  });
+
+  it("flattens grouped ACP v1 model select options", () => {
+    const parsed = acpSessionNewResultSchema.parse({
+      sessionId: "session-1",
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: '["deepseek-official","deepseek-v4-flash"]',
+          options: [
+            {
+              group: "deepseek-official",
+              name: "DeepSeek Official",
+              options: [
+                {
+                  value: '["deepseek-official","deepseek-v4-flash"]',
+                  name: "DeepSeek V4 Flash",
+                },
+                {
+                  value: '["deepseek-official","deepseek-v4-pro"]',
+                  name: "DeepSeek V4 Pro",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "reasoning_effort",
+          name: "Reasoning effort",
+          category: "thought_level",
+          type: "select",
+          currentValue: "high",
+          options: [
+            { value: "low", name: "Low" },
+            { value: "high", name: "High" },
+            { value: "max", name: "Max" },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.configOptions?.[0]?.options).toEqual([
+      {
+        value: '["deepseek-official","deepseek-v4-flash"]',
+        name: "DeepSeek V4 Flash",
+      },
+      {
+        value: '["deepseek-official","deepseek-v4-pro"]',
+        name: "DeepSeek V4 Pro",
+      },
+    ]);
+    expect(parsed.configOptions?.[1]?.options).toEqual([
+      { value: "low", name: "Low" },
+      { value: "high", name: "High" },
+      { value: "max", name: "Max" },
+    ]);
+  });
+
+  it("accepts a DeepSeek Harness session/new payload", () => {
+    const initialize = acpInitializeResultSchema.parse({
+      protocolVersion: 1,
+      agentInfo: { name: "deepseek-harness-acp", version: "0.0.1" },
+      agentCapabilities: {
+        mcpCapabilities: { http: true },
+        promptCapabilities: {
+          image: false,
+          audio: false,
+          embeddedContext: false,
+        },
+        sessionCapabilities: { close: {}, list: {}, resume: {} },
+      },
+      authMethods: [],
+    });
+    expect(initialize.agentCapabilities?.loadSession).toBeUndefined();
+    expect(initialize.agentCapabilities?.sessionCapabilities?.resume).toEqual(
+      {},
+    );
+
+    const parsed = acpSessionNewResultSchema.parse({
+      sessionId: "5dd1a177-f517-4cd4-91ef-dfa417f971d1",
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: '["deepseek-official","deepseek-v4-flash"]',
+          options: [
+            {
+              group: "deepseek-official",
+              name: "DeepSeek",
+              options: [
+                {
+                  value: '["deepseek-official","deepseek-flash"]',
+                  name: "DeepSeek-V41-Flash",
+                },
+                {
+                  value: '["deepseek-official","deepseek-v4-flash"]',
+                  name: "DeepSeek-V4-Flash",
+                },
+                {
+                  value: '["deepseek-official","deepseek-v4-pro"]',
+                  name: "DeepSeek-V4-Pro",
+                },
+                {
+                  value:
+                    '["deepseek-official","deepseek-v4-flash-vision-exp"]',
+                  name: "DeepSeek-V4-Flash-Vision-Exp",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "reasoning_effort",
+          name: "Reasoning effort",
+          category: "thought_level",
+          type: "select",
+          currentValue: "high",
+          options: [
+            { value: "off", name: "Off" },
+            { value: "low", name: "Low" },
+            { value: "high", name: "High" },
+            { value: "max", name: "Max" },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.configOptions?.[0]?.options?.map((option) => option.value)).toEqual(
+      [
+        '["deepseek-official","deepseek-flash"]',
+        '["deepseek-official","deepseek-v4-flash"]',
+        '["deepseek-official","deepseek-v4-pro"]',
+        '["deepseek-official","deepseek-v4-flash-vision-exp"]',
+      ],
+    );
+    expect(parsed.configOptions?.[1]?.currentValue).toBe("high");
+    expect(parsed.configOptions?.[1]?.options?.map((option) => option.value)).toEqual(
+      ["off", "low", "high", "max"],
+    );
   });
 });
 

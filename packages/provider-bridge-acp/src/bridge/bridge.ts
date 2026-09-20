@@ -169,6 +169,7 @@ interface AcpThreadSession {
   connection: AcpAgentConnection;
   supportsImageInput: boolean;
   supportsLoadSession: boolean;
+  supportsResume: boolean;
   policy: AcpSessionPolicy;
   pendingInstructions: string | undefined;
   activePromptKind: "turn" | "compaction" | null;
@@ -185,6 +186,10 @@ interface AcpThreadSession {
   pendingToolCalls: Set<AbortController>;
   cursorMcpApproval: CursorMcpApproval | undefined;
   deferStartEmit: AcpDeferredStartEmitter | undefined;
+}
+
+function acpSessionRestorable(session: AcpThreadSession): boolean {
+  return session.supportsLoadSession || session.supportsResume;
 }
 
 type AcpDeferredStartEmitter = (
@@ -1706,6 +1711,7 @@ async function startAgentSession(
     connection,
     supportsImageInput: false,
     supportsLoadSession: false,
+    supportsResume: false,
     policy: {
       permissionMode: params.permissionMode,
       workspaceWriteRoots: params.workspaceWriteRoots,
@@ -1742,6 +1748,8 @@ async function startAgentSession(
       initializeResult.agentCapabilities?.promptCapabilities?.image ?? false;
     const supportsLoadSession =
       initializeResult.agentCapabilities?.loadSession ?? false;
+    const supportsResume =
+      initializeResult.agentCapabilities?.sessionCapabilities?.resume != null;
     const supportsFork =
       initializeResult.agentCapabilities?.sessionCapabilities?.fork != null;
     if (request.kind === "fork" && !supportsFork) {
@@ -1750,6 +1758,7 @@ async function startAgentSession(
       );
     }
     session.supportsLoadSession = supportsLoadSession;
+    session.supportsResume = supportsResume;
     const mcpServers = await buildSessionMcpServers(params);
     const mcpServer = mcpServers[0];
     if (mcpServer) {
@@ -1790,28 +1799,48 @@ async function startAgentSession(
       sessionId = forkedSession.sessionId;
       loadedConfigOptions = forkedSession.configOptions;
       loadedModels = forkedSession.models;
-    } else if (request.kind === "resume" && supportsLoadSession) {
+    } else if (request.kind === "resume") {
       session.loading = true;
       session.loadingSessionId = request.resumeProviderThreadId;
       session.pendingLoadUsageUpdate = undefined;
-      try {
-        const configState = await connection.request({
-          method: "session/load",
-          params: {
-            sessionId: request.resumeProviderThreadId,
-            cwd: params.cwd,
-            mcpServers,
-          },
-          resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
-        });
-        loadedConfigOptions = configState?.configOptions;
-        loadedModels = configState?.models;
-        sessionId = request.resumeProviderThreadId;
-      } catch {
-        sessionId = undefined;
-        session.loading = false;
-        session.loadingSessionId = undefined;
-        session.pendingLoadUsageUpdate = undefined;
+      if (supportsResume) {
+        try {
+          const configState = await connection.request({
+            method: "session/resume",
+            params: {
+              sessionId: request.resumeProviderThreadId,
+              cwd: params.cwd,
+              mcpServers,
+            },
+            resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
+          });
+          loadedConfigOptions = configState?.configOptions;
+          loadedModels = configState?.models;
+          sessionId = request.resumeProviderThreadId;
+        } catch {
+          sessionId = undefined;
+        }
+      }
+      if (sessionId === undefined && supportsLoadSession) {
+        try {
+          const configState = await connection.request({
+            method: "session/load",
+            params: {
+              sessionId: request.resumeProviderThreadId,
+              cwd: params.cwd,
+              mcpServers,
+            },
+            resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
+          });
+          loadedConfigOptions = configState?.configOptions;
+          loadedModels = configState?.models;
+          sessionId = request.resumeProviderThreadId;
+        } catch {
+          sessionId = undefined;
+          session.loading = false;
+          session.loadingSessionId = undefined;
+          session.pendingLoadUsageUpdate = undefined;
+        }
       }
     }
 
@@ -1870,7 +1899,7 @@ async function startAgentSession(
     sendNotification(BRIDGE_NOTIFICATION_METHODS.threadIdentity, {
       threadId: bbThreadId,
       providerThreadId: sessionId,
-      sessionRestorable: session.supportsLoadSession,
+      sessionRestorable: acpSessionRestorable(session),
     });
     sendThreadDeltas(bbThreadId, [{ kind: "session.reset" }]);
     session.deferStartEmit = undefined;
@@ -2558,7 +2587,7 @@ async function handleRequest(
       );
       sendResult(request.id, {
         providerThreadId: session.providerThreadId,
-        sessionRestorable: session.supportsLoadSession,
+        sessionRestorable: acpSessionRestorable(session),
       });
       return;
     }
