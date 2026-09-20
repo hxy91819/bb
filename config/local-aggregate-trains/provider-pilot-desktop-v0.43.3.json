@@ -15,7 +15,7 @@
   "dependencies": {
     "acp-dsh-provider": [],
     "acp-fast-mode": ["acp-dsh-provider"],
-    "acp-codex-goal": ["acp-dsh-provider"],
+    "acp-codex-goal": ["acp-fast-mode"],
     "acp-mid-turn-steering": ["acp-dsh-provider"],
     "mermaid-elk-layout": []
   },
