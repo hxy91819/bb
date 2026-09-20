@@ -192,10 +192,6 @@ const CSV_PREVIEW_MAX_ROWS = 500;
 const CSV_PREVIEW_ROW_HEIGHT_PX = 29;
 const CSV_PREVIEW_OVERSCAN_ROWS = 8;
 
-const FILE_PREVIEW_WRAPPER_STYLE = {
-  "--md-content-w": "100cqi",
-} as CSSProperties;
-
 const HTML_FILE_PREVIEW_IFRAME_STYLE = {
   width: "100%",
   height: "100%",
@@ -482,7 +478,6 @@ export function FilePreview({
             ? "@container/page flex min-h-full flex-col"
             : "@container/page min-h-full"
       }
-      style={FILE_PREVIEW_WRAPPER_STYLE}
     >
       {headerMode === "file" ? (
         <FilePreviewHeader
