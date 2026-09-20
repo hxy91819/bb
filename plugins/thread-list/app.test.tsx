@@ -382,7 +382,7 @@ describe("thread-list plugin", () => {
       },
     });
     const link = await screen.findByRole("link", {
-      name: "Open Personal thread",
+      name: "Open Personal thread in Personal",
     });
     link.click();
     await waitFor(() => expect(listProps.onNavigate).toHaveBeenCalledOnce());

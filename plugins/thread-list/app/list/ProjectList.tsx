@@ -1665,6 +1665,7 @@ function ProjectListComponent({
     <PinnedThreadTree
       rootItems={pinnedSidebarState.rootItems}
       rootNodes={pinnedSidebarState.rootNodes}
+      showProjectName={organizationMode === "chronological"}
       selectedThreadId={selectedThreadId}
       collapsedThreadIds={collapsedThreadIds}
       collapsedEnvironmentIds={collapsedEnvironmentIds}
