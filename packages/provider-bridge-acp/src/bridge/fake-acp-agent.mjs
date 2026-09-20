@@ -139,6 +139,10 @@ const midTurnSteeringValue =
       : midTurnSteeringEnv;
 const concurrentPrompts = process.env.FAKE_ACP_CONCURRENT_PROMPTS === "1";
 const busyReject = process.env.FAKE_ACP_BUSY_PROMPT === "1";
+const busyPromptText = process.env.FAKE_ACP_BUSY_PROMPT_TEXT;
+const busyPromptDelayMs = Number(
+  process.env.FAKE_ACP_BUSY_PROMPT_DELAY_MS ?? "0",
+);
 const promptFailText = process.env.FAKE_ACP_PROMPT_FAIL_TEXT;
 const promptFailDelayMs = Number(
   process.env.FAKE_ACP_PROMPT_FAIL_DELAY_MS ?? "0",
@@ -493,8 +497,18 @@ function captureMcpServers(message) {
 
 async function handlePrompt(message) {
   const trackConcurrent = concurrentPrompts || busyReject;
-  if (trackConcurrent && (activePromptId !== null || concurrentActivePromptIds.size > 0)) {
-    if (busyReject) {
+  const text = promptText(message.params?.prompt);
+  if (
+    trackConcurrent &&
+    (activePromptId !== null || concurrentActivePromptIds.size > 0)
+  ) {
+    if (
+      busyReject &&
+      (busyPromptText === undefined || text.includes(busyPromptText))
+    ) {
+      if (busyPromptDelayMs > 0) {
+        await sleep(busyPromptDelayMs);
+      }
       send({
         jsonrpc: "2.0",
         id: message.id,
@@ -508,7 +522,6 @@ async function handlePrompt(message) {
   } else {
     activePromptId = message.id;
   }
-  const text = promptText(message.params?.prompt);
   if (process.env.FAKE_ACP_PROMPT_LOG) {
     appendFileSync(
       process.env.FAKE_ACP_PROMPT_LOG,
