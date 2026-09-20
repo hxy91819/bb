@@ -459,9 +459,8 @@ function ThreadRowComponent({
         className={cn(
           "flex min-w-0 flex-1 items-center gap-1.5",
           !shortcut &&
-            (parentOptions && hasChildren
-              ? "pr-7.5 max-md:pointer-coarse:pr-0"
-              : SIDEBAR_HOVER_ACTIONS_INSET_CLASS),
+            !(parentOptions && hasChildren) &&
+            SIDEBAR_HOVER_ACTIONS_INSET_CLASS,
         )}
       >
         {isEditing ? (
@@ -576,10 +575,12 @@ function ThreadRowComponent({
               >
                 <SidebarRowControls
                   primaryAction={
-                    <ThreadArchiveQuickAction
-                      thread={thread}
-                      className={SIDEBAR_CONTROL_BUTTON_CLASS}
-                    />
+                    parentOptions && hasChildren ? null : (
+                      <ThreadArchiveQuickAction
+                        thread={thread}
+                        className={SIDEBAR_CONTROL_BUTTON_CLASS}
+                      />
+                    )
                   }
                 >
                   <ThreadActionsMenu
