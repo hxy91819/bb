@@ -196,7 +196,6 @@ function deferred() {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
   resetSidebarTitleDoubleClickForTest();
 });
 
@@ -1460,17 +1459,7 @@ describe("ThreadRow", () => {
     ).toHaveProperty("value", "Thread");
   });
 
-  it("keeps touch taps for navigation and exposes one large actions button", () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: query === "(pointer: coarse)",
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }));
+  it("keeps touch taps for navigation without an extra menu column", () => {
     renderThreadRow();
     const link = screen.getByRole("link", { name: "Open Thread" });
     for (let index = 0; index < 2; index += 1) {
@@ -1479,7 +1468,8 @@ describe("ThreadRow", () => {
     }
 
     expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
-    const actions = screen.getByRole("button", { name: "Thread actions" });
-    expect(actions.classList.contains("pointer-coarse:h-11")).toBe(true);
+    expect(
+      screen.getAllByRole("button", { name: "Thread actions" }),
+    ).toHaveLength(1);
   });
 });
