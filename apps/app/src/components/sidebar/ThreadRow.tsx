@@ -401,7 +401,7 @@ function ThreadRowComponent({
   );
   const rowClassName = cn(
     SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
-    "group/thread-row bb-sidebar-thread-row pointer-coarse:min-h-11",
+    "group/thread-row",
     SIDEBAR_ROW_BASE_CLASS,
     LIST_HOVER_TRANSITION,
     parentOptions?.stickyLevel === undefined && "relative",
@@ -587,7 +587,7 @@ function ThreadRowComponent({
                 }
                 className={cn(
                   SIDEBAR_HOVER_ACTIONS_CLASS,
-                  "absolute inset-y-0 right-0 z-10 flex items-center justify-end pointer-coarse:hidden",
+                  "absolute inset-y-0 right-0 z-10 flex items-center justify-end max-md:pointer-coarse:hidden",
                 )}
               >
                 <SidebarRowControls
@@ -611,19 +611,6 @@ function ThreadRowComponent({
             </span>
           </span>
         )}
-        <span className="relative z-10 hidden pointer-coarse:flex">
-          <SidebarRowControls primaryAction={null}>
-            <ThreadActionsMenu
-              thread={thread}
-              triggerClassName={cn(
-                SIDEBAR_CONTROL_BUTTON_CLASS,
-                "pointer-coarse:h-11 pointer-coarse:w-11",
-              )}
-              onOpenInSplit={splitAvailable ? openInSplit : undefined}
-              onOpenChange={setIsDropdownActionsOpen}
-            />
-          </SidebarRowControls>
-        </span>
       </span>
     </>
   );
