@@ -6,7 +6,7 @@
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
     "lastIntegratedUpstreamCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
     "upstreamRepository": "get-bb/bb",
-    "currentTrain": "config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json"
+    "currentTrain": "config/local-aggregate-trains/2026-09-21-desktop-v0.43.3.json"
   },
   "features": [
     {
@@ -160,7 +160,9 @@
         "sourceCommit": "53c14d66799b73b1e9e0fcd408823d7613f93594",
         "aggregateCommit": "8dabee74a06ce7e16d5b01e07ae6cb339198de38"
       },
-      "dependsOn": ["codex-fast-mode-toggle"],
+      "dependsOn": [
+        "codex-fast-mode-toggle"
+      ],
       "specIssue": null,
       "upstreamFeedback": [],
       "relatedIssues": [
@@ -182,7 +184,9 @@
         "sourceCommit": "e3df742e03ba294395c437981f699c16e050260f",
         "aggregateCommit": "070d767cdc6f9c00dff8a81a01a4dbeb09665f14"
       },
-      "dependsOn": ["recent-explicit-work-sequence"],
+      "dependsOn": [
+        "recent-explicit-work-sequence"
+      ],
       "specIssue": null,
       "upstreamFeedback": [],
       "relatedIssues": [
@@ -540,10 +544,12 @@
       "module": "sidebar-recent",
       "status": "active",
       "lastPackaged": {
-        "sourceCommit": "9a0fe7b73758ab43c91b67b6dd531e3af524b9bc",
-        "aggregateCommit": "79e3132e1009cf9b6ee5ceb3c82023c8162503ed"
+        "sourceCommit": "4a0b74603c8a1d502e86280cf541b833156e492a",
+        "aggregateCommit": "1b6f40111968f9ceb7c610d14d42f93a7355d67c"
       },
-      "dependsOn": ["sidebar-touch-hover-actions"],
+      "dependsOn": [
+        "sidebar-touch-hover-actions"
+      ],
       "specIssue": {
         "repository": "hxy91819/bb",
         "number": 12,
@@ -558,7 +564,24 @@
         }
       ],
       "disposition": "needs-feedback",
-      "reason": "Fork #12 specifies touch, pen, and keyboard navigation versus mouse title renaming. The extra persistent mobile menu column packaged with that branch is withdrawn on the source and is not part of the spec; no actual upstream feedback is recorded."
+      "reason": "Fork #12 specifies touch, pen, and keyboard navigation versus mouse title renaming. The extra persistent mobile menu column packaged with that branch is withdrawn on the source and is not part of the spec; no actual upstream feedback is recorded.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "4a0b74603c8a1d502e86280cf541b833156e492a",
+        "commits": [
+          {
+            "commit": "9a0fe7b73758ab43c91b67b6dd531e3af524b9bc",
+            "logicalPatch": "sidebar-touch-navigation-v1"
+          },
+          {
+            "commit": "4a0b74603c8a1d502e86280cf541b833156e492a",
+            "logicalPatch": "sidebar-touch-navigation-chrome-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
     },
     {
       "id": "official-catalog-date-utc",
@@ -824,91 +847,123 @@
             "commit": "6f3799fc28c5e4605cb465f83484d1bf283369d1",
             "sourceCommit": "6c3ac99d397da8825eb0fcb6944ee9df2ebbb8d8",
             "logicalPatch": "acp-dsh-provider-core-v1",
-            "features": ["acp-dsh-provider"]
+            "features": [
+              "acp-dsh-provider"
+            ]
           },
           {
             "commit": "b01d0358b6d97a4a648ab74e660159878ac6f697",
             "sourceCommit": "670775309898aff9543a92a95de94f410394c423",
             "logicalPatch": "acp-dsh-fallback-tests-v1",
-            "features": ["acp-dsh-provider"]
+            "features": [
+              "acp-dsh-provider"
+            ]
           },
           {
             "commit": "e010e07a1b5bbfd5ff78227ab35dbc454202c068",
             "sourceCommit": "d3d7752d3bd1e7769840401baec948f5f9daf7db",
             "logicalPatch": "acp-dsh-ordered-fallback-tests-v1",
-            "features": ["acp-dsh-provider"]
+            "features": [
+              "acp-dsh-provider"
+            ]
           },
           {
             "commit": "345a59b50eca10b86656ce5a3ac4ffa8d1eea4ce",
             "sourceCommit": "6a115ffd25616a25b8de0c15011702bc879bddd1",
             "logicalPatch": "acp-dsh-collapse-policy-v1",
-            "features": ["acp-dsh-provider"]
+            "features": [
+              "acp-dsh-provider"
+            ]
           },
           {
             "commit": "bc5a14ac067584bff72d0bee80e75f2b8c07891a",
             "sourceCommit": "e186f8f7d8967b01b5245c26a509b2bad961f349",
             "logicalPatch": "acp-fast-mode-v1",
-            "features": ["acp-fast-mode"]
+            "features": [
+              "acp-fast-mode"
+            ]
           },
           {
             "commit": "fada30162a4d43b1d311200755a536dd9c6d19f8",
             "sourceCommit": "3d9900c6f0c0449f7afec47ba9b71896d68962f5",
             "logicalPatch": "acp-codex-goal-v1",
-            "features": ["acp-codex-goal"]
+            "features": [
+              "acp-codex-goal"
+            ]
           },
           {
             "commit": "e522beb38d29b255e388c8a4531915de71efe41f",
             "sourceCommit": "a9c4d1d88d3aae0c4ce0070c9376025b16f0a842",
             "logicalPatch": "acp-mid-turn-steering-design-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "112491499258351d38f3ccecb4e724979601024e",
             "sourceCommit": "7d3696d97eb2e9c77c4c46c3fd3646987ea75036",
             "logicalPatch": "acp-mid-turn-steering-core-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "6278a47573962e6a3a8b33dc68de09f8642279d1",
             "sourceCommit": "20e8272e39a5cd17e069b6ba748963cbee81e89d",
             "logicalPatch": "acp-steering-submit-failure-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "018ac48fddec94a940944b5de040f34c7b0218a1",
             "sourceCommit": "7edb0828b20d229a83fedd6c30a1923cda7f93ca",
             "logicalPatch": "acp-steering-cancel-on-failure-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "e7fd1d214d116974eb3a11a0e95857c33aaa7f73",
             "sourceCommit": "382dd9d01480b770252625b6a4a1f58aae4c53e3",
             "logicalPatch": "acp-steering-label-design-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "d925a14f213f3092f208509e99a037b2b2c80a0e",
             "sourceCommit": "80017a43205a9ce8906fbdd0fa678bb608a55448",
             "logicalPatch": "acp-steering-adapter-design-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "1d94cae6d862b2b50f03e611c584a72be43c394b",
             "sourceCommit": "1af5d7aac68e0ae16495c54cb56acb948328dce6",
             "logicalPatch": "acp-steering-english-labels-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           },
           {
             "commit": "0435fd672b5207bd9c3ecda89495a9f11e464279",
             "sourceCommit": "3c08dd44ca691059507fa22da191a0439f546efa",
             "logicalPatch": "acp-steering-mixed-rejection-closeout-v1",
-            "features": ["acp-mid-turn-steering"]
+            "features": [
+              "acp-mid-turn-steering"
+            ]
           }
         ]
       }
     }
   ],
   "trains": [
+    {
+      "id": "2026-09-21-desktop-v0.43.3",
+      "manifest": "config/local-aggregate-trains/2026-09-21-desktop-v0.43.3.json"
+    },
     {
       "id": "2026-09-20-desktop-v0.43.3",
       "manifest": "config/local-aggregate-trains/2026-09-20-desktop-v0.43.3.json"
