@@ -17,7 +17,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import {
   COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
   COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
@@ -317,7 +316,6 @@ function ThreadRowComponent({
 }: ThreadRowProps) {
   const [isDropdownActionsOpen, setIsDropdownActionsOpen] = useState(false);
   const [isContextActionsOpen, setIsContextActionsOpen] = useState(false);
-  const isPointerCoarse = usePointerCoarse();
   const actions = experimental_useSidebarThreadActions();
   const showProviderIcons = useAtomValue(sidebarShowProviderIconsAtom);
   const { providers } = experimental_useProviders();
@@ -444,7 +442,7 @@ function ThreadRowComponent({
   );
   const rowClassName = cn(
     SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
-    "group/thread-row bb-sidebar-thread-row pointer-coarse:min-h-11 cursor-pointer",
+    "group/thread-row cursor-pointer",
     SIDEBAR_ROW_BASE_CLASS,
     LIST_HOVER_TRANSITION,
     parentOptions?.stickyLevel === undefined && "relative",
@@ -714,59 +712,40 @@ function ThreadRowComponent({
                   />
                 )}
               </span>
-              {!isPointerCoarse && (
-                <div
-                  data-sidebar-hover-actions-open={
-                    isActionsOpen ? "true" : undefined
+              <div
+                data-sidebar-hover-actions-open={
+                  isActionsOpen ? "true" : undefined
+                }
+                className={cn(
+                  SIDEBAR_HOVER_ACTIONS_CLASS,
+                  "absolute inset-y-0 right-0 z-10 flex items-center justify-end max-md:pointer-coarse:hidden",
+                  isEditing && "invisible pointer-events-none",
+                )}
+              >
+                <SidebarRowControls
+                  primaryAction={
+                    parentOptions && hasChildren ? null : (
+                      <ThreadArchiveQuickAction
+                        thread={thread}
+                        className={SIDEBAR_CONTROL_BUTTON_CLASS}
+                      />
+                    )
                   }
-                  className={cn(
-                    SIDEBAR_HOVER_ACTIONS_CLASS,
-                    "absolute inset-y-0 right-0 z-10 flex items-center justify-end pointer-coarse:hidden",
-                    isEditing && "invisible pointer-events-none",
-                  )}
                 >
-                  <SidebarRowControls
-                    primaryAction={
-                      parentOptions && hasChildren ? null : (
-                        <ThreadArchiveQuickAction
-                          thread={thread}
-                          className={SIDEBAR_CONTROL_BUTTON_CLASS}
-                        />
-                      )
-                    }
-                  >
-                    <ThreadActionsMenu
-                      thread={thread}
-                      triggerClassName={SIDEBAR_CONTROL_BUTTON_CLASS}
-                      onOpenInSplit={splitAvailable ? openInSplit : undefined}
-                      onOpenChange={setIsDropdownActionsOpen}
-                      onRename={rename.startEditingFromMenu}
-                      onCloseAutoFocus={rename.onCloseAutoFocus}
-                    />
-                  </SidebarRowControls>
-                </div>
-              )}
+                  <ThreadActionsMenu
+                    thread={thread}
+                    triggerClassName={SIDEBAR_CONTROL_BUTTON_CLASS}
+                    onOpenInSplit={splitAvailable ? openInSplit : undefined}
+                    onOpenChange={setIsDropdownActionsOpen}
+                    onRename={rename.startEditingFromMenu}
+                    onCloseAutoFocus={rename.onCloseAutoFocus}
+                  />
+                </SidebarRowControls>
+              </div>
             </span>
           </span>
         )}
       </span>
-      {isPointerCoarse && !isEditing && (
-        <span className="relative z-10 flex">
-          <SidebarRowControls primaryAction={null}>
-            <ThreadActionsMenu
-              thread={thread}
-              triggerClassName={cn(
-                SIDEBAR_CONTROL_BUTTON_CLASS,
-                "pointer-coarse:h-11 pointer-coarse:w-11",
-              )}
-              onOpenInSplit={splitAvailable ? openInSplit : undefined}
-              onOpenChange={setIsDropdownActionsOpen}
-              onRename={rename.startEditingFromMenu}
-              onCloseAutoFocus={rename.onCloseAutoFocus}
-            />
-          </SidebarRowControls>
-        </span>
-      )}
     </>
   );
 
