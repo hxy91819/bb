@@ -1554,6 +1554,18 @@ describe("ThreadRow", () => {
     expect(screen.getByText("Thread")).not.toBeNull();
   });
 
+  it("keeps compact-pointer hover actions on the status slot instead of a second menu column", () => {
+    const { container } = renderThreadRow({});
+    const overlay = container.querySelector(".bb-sidebar-hover-actions");
+    expect(overlay?.className).toContain("max-md:pointer-coarse:hidden");
+    expect(overlay?.className.split(/\s+/)).not.toContain(
+      "pointer-coarse:hidden",
+    );
+    expect(container.querySelector(".pointer-coarse\\:flex")).toBeNull();
+    expect(container.querySelector(".pointer-coarse\\:min-h-11")).toBeNull();
+    expect(container.querySelector(".bb-sidebar-thread-row")).toBeNull();
+  });
+
   it.each(["touch", "pen"])(
     "opens on repeated %s taps without renaming",
     (pointerType) => {
