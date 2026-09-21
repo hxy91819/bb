@@ -558,7 +558,7 @@
         }
       ],
       "disposition": "needs-feedback",
-      "reason": "Touch navigation versus mouse title renaming is a distinct behavior from hover issue #3832; no actual upstream feedback is recorded."
+      "reason": "Fork #12 specifies touch, pen, and keyboard navigation versus mouse title renaming. The extra persistent mobile menu column packaged with that branch is withdrawn on the source and is not part of the spec; no actual upstream feedback is recorded."
     },
     {
       "id": "official-catalog-date-utc",

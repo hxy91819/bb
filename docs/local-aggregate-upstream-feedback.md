@@ -12,7 +12,20 @@ The local Fast migration compatibility patch now restores a staged `_bb_service_
 
 Fork specifications [#12](https://github.com/hxy91819/bb/issues/12) and [#13](https://github.com/hxy91819/bb/issues/13) record the new touch-navigation and UTC marketplace-date fixes. No new upstream issue or pull request was created. The older entries below are historical evidence; their source and aggregate SHAs do not describe this train.
 
+The packaged `fix/sidebar-touch-navigation` commit also added a persistent mobile thread-row menu column. That extra chrome is withdrawn on the source branch; [#12](https://github.com/hxy91819/bb/issues/12) keeps only touch-versus-rename navigation. See [Touch navigation without persistent mobile chrome](#touch-navigation-without-persistent-mobile-chrome).
+
 The next train should freeze representative historical database fixtures before any large branch reorganization. The current registry introduces module and dependency fields, while the subsequent train can consolidate the database-compatibility, provider-runtime, and sidebar-recent modules around those fixtures. A build artifact credential must bind the final source SHA, Node/pnpm, platform and ABI; source publication, package construction, and service deployment remain distinct states.
+
+## Touch navigation without persistent mobile chrome
+
+- **Fork specification:** [hxy91819/bb#12](https://github.com/hxy91819/bb/issues/12)
+- **Related upstream:** [get-bb/bb#3832](https://github.com/get-bb/bb/issues/3832) remains the touch-hover inset/Archive bug; [get-bb/bb#3822](https://github.com/get-bb/bb/pull/3822) is the desktop parent-row reserved-space fix.
+- **Fork implementation:** [fix/sidebar-touch-navigation](https://github.com/hxy91819/bb/tree/fix/sidebar-touch-navigation). The currently packaged source is [`9a0fe7b73`](https://github.com/hxy91819/bb/commit/9a0fe7b73758ab43c91b67b6dd531e3af524b9bc); the follow-up lives on this same branch and is not yet packaged.
+- **Background:** the 2026-09-20 train packaged two behaviors in one commit. Touch, pen, and keyboard activation should open the thread instead of renaming it; mouse double-click still renames. The same commit also hid the hover overlay on every coarse pointer, raised the row, forced status-icon visibility, and added a 44px always-on `⋯` column. That extra column is what left a blank gap on phone thread rows. The owner asked only to stop desktop hover Archive on touch, not for a persistent mobile menu.
+- **Change:** keep the navigation-versus-rename behavior from [#12](https://github.com/hxy91819/bb/issues/12). Withdraw the extra mobile chrome as a group: the second `⋯` column, overlay hiding on every coarse pointer, extra 44px row height, and the thread-row coarse-pointer CSS that zeroes action padding and keeps the status icon visible. Restoring the upstream overlay without those CSS rules would let a focused or open menu cover the title on a wide coarse-pointer layout.
+- **Kept separately:** `fix/sidebar-touch-hover-actions` stays until [#3832](https://github.com/get-bb/bb/issues/3832) is in a stable `desktop-v*` tag. `fix/sidebar-parent-row-hover-archive` is a desktop preference (hide quick Archive on parent rows) and does not drive this mobile trailing-chrome change.
+- **Acceptance:** compact phone rows match upstream trailing chrome: no persistent `⋯`, no extra 30px parent-row Archive gutter. The existing status-icon slot may still occupy space on idle rows. Long-press remains the compact-pointer thread-action entry; if a 390×844 iOS Safari parent or leaf row cannot open that menu, do not ship the chrome withdrawal without a replacement entry.
+- **Integration status:** source-branch product change only. This pass does not rebuild the train, cherry-pick onto `local/aggregate`, or replace the running service.
 
 ## Stable rebuild, 2026-09-17
 
