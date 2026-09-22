@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
 import {
   experimental_useSidebarThreadActions,
+  useBbContext,
   useSdk,
   useSidebarThreadDraftIds,
 } from "@get-bb/plugin-sdk/app";
@@ -30,6 +31,7 @@ import {
 import { useDialogState } from "../ui/useDialogState.js";
 import {
   buildProjectThreadGroups,
+  resolveSidebarNewThreadProjectId,
   getCollapsedChildActivity,
   getProjectThreadItemDescendants,
   type ProjectThreadNode,
@@ -1291,11 +1293,21 @@ function ProjectListComponent({
   onProjectSelect,
 }: ProjectListProps) {
   const sdk = useSdk();
+  const { projectId: routeProjectId } = useBbContext();
   const sidebarActions = experimental_useSidebarThreadActions();
   const { status, sections, projects, archived } = useSidebarData();
   const threads = useMemo<ThreadListEntry[]>(
     () => projects.flatMap((project) => project.threads),
     [projects],
+  );
+  const defaultNewThreadProjectId = useMemo(
+    () =>
+      resolveSidebarNewThreadProjectId({
+        recentThreads: threads,
+        rememberedProjectId: PERSONAL_PROJECT_ID,
+        routeProjectId,
+      }),
+    [routeProjectId, threads],
   );
   const draftThreadIds = useSidebarThreadDraftIds();
   const preferencesReady = usePreferencesReady();
@@ -1350,13 +1362,13 @@ function ProjectListComponent({
     [openRootComposeForProject],
   );
   const handleCreateProjectlessThread = useCallback(() => {
-    openRootComposeForProject(PERSONAL_PROJECT_ID);
-  }, [openRootComposeForProject]);
+    openRootComposeForProject(defaultNewThreadProjectId);
+  }, [defaultNewThreadProjectId, openRootComposeForProject]);
   const handleCreateThreadInSection = useCallback(
     (sectionId: string) => {
-      openRootComposeForProject(PERSONAL_PROJECT_ID, sectionId);
+      openRootComposeForProject(defaultNewThreadProjectId, sectionId);
     },
-    [openRootComposeForProject],
+    [defaultNewThreadProjectId, openRootComposeForProject],
   );
   const [isSectionCreateDialogOpen, setIsSectionCreateDialogOpen] =
     useState(false);
