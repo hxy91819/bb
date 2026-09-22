@@ -758,6 +758,32 @@
       "integration": {
         "domain": null
       }
+    },
+    {
+      "id": "mobile-queue-action",
+      "branch": "feature/mobile-queue-action",
+      "module": "prompt-composer",
+      "status": "active",
+      "lastPackaged": null,
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Adds a visible Queue/Steer action for coarse-pointer mobile Composer users; no upstream feedback is recorded yet.",
+      "source": {
+        "baseCommit": "c6412434f405e21454cca5728df64cbaa4da989e",
+        "versionCommit": "316afd4545b4790eba7459d3b2d7b034913e1ef0",
+        "commits": [
+          {
+            "commit": "316afd4545b4790eba7459d3b2d7b034913e1ef0",
+            "logicalPatch": "mobile-queue-action-v1"
+          }
+        ]
+      },
+      "dependsOn": [],
+      "integration": {
+        "domain": null
+      }
     }
   ],
   "retired": [
