@@ -6,7 +6,7 @@
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
     "lastIntegratedUpstreamCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
     "upstreamRepository": "get-bb/bb",
-    "currentTrain": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r2.json"
+    "currentTrain": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r3.json"
   },
   "features": [
     {
@@ -823,6 +823,32 @@
       }
     },
     {
+      "id": "mobile-queue-action",
+      "branch": "feature/mobile-queue-action",
+      "module": "prompt-composer",
+      "status": "active",
+      "lastPackaged": null,
+      "dependsOn": [],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Adds a visible Queue/Steer action for coarse-pointer mobile Composer users; no upstream feedback is recorded yet.",
+      "source": {
+        "baseCommit": "c6412434f405e21454cca5728df64cbaa4da989e",
+        "versionCommit": "316afd4545b4790eba7459d3b2d7b034913e1ef0",
+        "commits": [
+          {
+            "commit": "316afd4545b4790eba7459d3b2d7b034913e1ef0",
+            "logicalPatch": "mobile-queue-action-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
+    },
+    {
       "id": "sidebar-new-thread-project",
       "branch": "fix/sidebar-new-thread-project",
       "module": "sidebar-recent",
@@ -1049,6 +1075,10 @@
     }
   ],
   "trains": [
+    {
+      "id": "2026-09-22-desktop-v0.43.3-r3",
+      "manifest": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r3.json"
+    },
     {
       "id": "2026-09-22-desktop-v0.43.3-r2",
       "manifest": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r2.json"
