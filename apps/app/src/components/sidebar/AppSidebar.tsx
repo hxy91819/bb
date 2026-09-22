@@ -1,13 +1,15 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
+import { PERSONAL_PROJECT_ID, THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
+import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
 import { useNavigate } from "react-router-dom";
 import { OverflowFade } from "@/components/ui/overflow-fade.js";
 import {
@@ -55,6 +57,11 @@ import {
   NavRailNewThreadButton,
   type NavRailCustomizeState,
 } from "./AppNavRail";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import {
+  useLastSelectedProjectId,
+  useSetRootComposeProjectId,
+} from "@/lib/root-compose-selection";
 
 const BUG_REPORT_NEW_ISSUE_URL = "https://github.com/get-bb/bb/issues/new";
 
@@ -74,7 +81,33 @@ export function AppSidebar({
   alternateBody,
 }: AppSidebarProps) {
   const threadListReplacement = useThreadListReplacement();
-  const { threadId: activeThreadId } = useRouteState();
+  const { projectId: routeProjectId, threadId: activeThreadId } =
+    useRouteState();
+  const sidebarNavigation = useSidebarNavigation();
+  const setRootComposeProjectId = useSetRootComposeProjectId();
+  const rememberedProjectId = useLastSelectedProjectId();
+  useEffect(() => {
+    if (routeProjectId && routeProjectId !== PERSONAL_PROJECT_ID) {
+      setRootComposeProjectId(routeProjectId);
+    }
+  }, [routeProjectId, setRootComposeProjectId]);
+  const defaultNewThreadProjectId = useMemo(
+    () =>
+      resolveSidebarNewThreadProjectId({
+        availableProjectIds: sidebarNavigation.data?.projects.map(
+          (project) => project.id,
+        ),
+        recentThreads: sidebarNavigation.data
+          ? [
+              ...sidebarNavigation.data.projects,
+              sidebarNavigation.data.personalProject,
+            ].flatMap((project) => project.threads)
+          : [],
+        rememberedProjectId,
+        routeProjectId,
+      }),
+    [rememberedProjectId, routeProjectId, sidebarNavigation.data],
+  );
   const navigate = useNavigate();
   const closeOnMobile = useCloseMobileSidebar();
   const { isCompactViewport, open, openMobile } = useSidebar();
@@ -96,11 +129,17 @@ export function AppSidebar({
   const pluginSidebarFooter = usePluginSidebarFooterDisclosure();
 
   const handleNewChat = useCallback(() => {
+    setRootComposeProjectId(defaultNewThreadProjectId);
     closeOnMobile();
     void navigate(getRootComposeRoutePath(), {
       state: { focusPrompt: true },
     });
-  }, [closeOnMobile, navigate]);
+  }, [
+    closeOnMobile,
+    defaultNewThreadProjectId,
+    navigate,
+    setRootComposeProjectId,
+  ]);
 
   const showThreadShortcuts = useCallback(() => {
     const targets = getSidebarThreadShortcutTargets(sidebarRef.current);
