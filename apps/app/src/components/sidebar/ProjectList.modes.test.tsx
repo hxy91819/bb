@@ -17,8 +17,12 @@ import {
   useAtomValue,
 } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ThreadListEntry } from "@bb/domain";
-import { ActiveSidebarModeSections, MachineModeSections } from "./ProjectList";
+import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
+import {
+  ActiveSidebarModeSections,
+  MachineModeSections,
+  resolveSidebarNewThreadProjectId,
+} from "./ProjectList";
 import { buildMachineThreadGroups } from "@bb/client-core";
 import {
   collapsedSidebarSectionIdsAtom,
@@ -292,5 +296,52 @@ describe("sidebar organization mode sections", () => {
     expect(screen.queryByText("Machine activity")).toBeNull();
     expect(screen.getByLabelText("Plan mode active")).not.toBeNull();
     expect(screen.queryByLabelText("Thread working")).toBeNull();
+  });
+});
+
+describe("sidebar new-thread project defaults", () => {
+  it("inherits the selected thread project before considering recent threads", () => {
+    expect(
+      resolveSidebarNewThreadProjectId({
+        recentThreads: [
+          makeThread({ projectId: "proj_recent", updatedAt: 20 }),
+        ],
+        rememberedProjectId: "proj_remembered",
+        routeProjectId: "proj_selected",
+      }),
+    ).toBe("proj_selected");
+  });
+
+  it("uses the most recent project thread when no thread is selected", () => {
+    expect(
+      resolveSidebarNewThreadProjectId({
+        recentThreads: [
+          makeThread({
+            id: "thr_personal",
+            projectId: PERSONAL_PROJECT_ID,
+            status: "idle",
+            latestAttentionAt: 100,
+          }),
+          makeThread({
+            id: "thr_project",
+            projectId: "proj_recent",
+            status: "idle",
+            latestAttentionAt: 50,
+          }),
+        ],
+        rememberedProjectId: PERSONAL_PROJECT_ID,
+        routeProjectId: undefined,
+      }),
+    ).toBe("proj_recent");
+  });
+
+  it("falls back to the remembered project when no project thread exists", () => {
+    expect(
+      resolveSidebarNewThreadProjectId({
+        recentThreads: [makeThread({ projectId: PERSONAL_PROJECT_ID })],
+        rememberedProjectId: "proj_remembered",
+        routeProjectId: undefined,
+      }),
+    ).toBe("proj_remembered");
   });
 });

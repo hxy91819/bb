@@ -52,7 +52,7 @@ import { getRootComposeRoutePath } from "@/lib/route-paths";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { BbHttpError } from "@bb/sdk/browser";
-import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
+import { useRootComposeProjectId } from "@/lib/root-compose-selection";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { Button } from "@bb/shared-ui/button";
 import {
@@ -167,6 +167,24 @@ interface ProjectListNewThreadActionProps {
     openInSplit(): void;
   };
   onNewChat?: () => void;
+}
+
+export function resolveSidebarNewThreadProjectId({
+  recentThreads,
+  rememberedProjectId,
+  routeProjectId,
+}: {
+  recentThreads: readonly ThreadListEntry[];
+  rememberedProjectId: string;
+  routeProjectId: string | undefined;
+}): string {
+  if (routeProjectId !== undefined) return routeProjectId;
+  return (
+    [...recentThreads]
+      .sort(compareStandardThreads)
+      .find((thread) => thread.projectId !== PERSONAL_PROJECT_ID)?.projectId ??
+    rememberedProjectId
+  );
 }
 
 interface ProjectListSearchThreadsActionProps {
@@ -1352,7 +1370,8 @@ function ProjectListComponent({
   isCreatingProject = false,
 }: ProjectListProps) {
   const navigate = useNavigate();
-  const setRootComposeProjectId = useSetRootComposeProjectId();
+  const [rootComposeProjectId, setRootComposeProjectId] =
+    useRootComposeProjectId();
   const sidebarNavigationQuery = useSidebarNavigation();
   const sidebarNavigation = sidebarNavigationQuery.data;
   const sections = sidebarNavigation?.sections ?? EMPTY_SECTION_DEFINITIONS;
@@ -1389,7 +1408,8 @@ function ProjectListComponent({
       sidebarNavigationQuery.error,
     ),
   });
-  const { threadId: selectedThreadId } = useRouteState();
+  const { projectId: routeProjectId, threadId: selectedThreadId } =
+    useRouteState();
   const {
     isPending: isPinnedReorderPending,
     mutate: reorderPinnedThreadMutate,
@@ -1442,14 +1462,19 @@ function ProjectListComponent({
     },
     [openRootComposeForProject],
   );
+  const defaultNewThreadProjectId = resolveSidebarNewThreadProjectId({
+    recentThreads: threads,
+    rememberedProjectId: rootComposeProjectId,
+    routeProjectId,
+  });
   const handleCreateProjectlessThread = useCallback(() => {
-    openRootComposeForProject(PERSONAL_PROJECT_ID);
-  }, [openRootComposeForProject]);
+    openRootComposeForProject(defaultNewThreadProjectId);
+  }, [defaultNewThreadProjectId, openRootComposeForProject]);
   const handleCreateThreadInSection = useCallback(
     (sectionId: string) => {
-      openRootComposeForProject(PERSONAL_PROJECT_ID, sectionId);
+      openRootComposeForProject(defaultNewThreadProjectId, sectionId);
     },
-    [openRootComposeForProject],
+    [defaultNewThreadProjectId, openRootComposeForProject],
   );
   const [isSectionCreateDialogOpen, setIsSectionCreateDialogOpen] =
     useState(false);
