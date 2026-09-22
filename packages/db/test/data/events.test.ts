@@ -1261,6 +1261,38 @@ describe("events", () => {
     ).toEqual([2, 5]);
   });
 
+  it.each([
+    { type: "text", text: "Visible input", mentions: [] },
+    { type: "image", url: "https://example.com/image.png" },
+    { type: "localImage", path: "/tmp/image.png" },
+    { type: "localFile", path: "/tmp/input.txt" },
+  ])("uses only visible $type input as a timeline anchor", (part) => {
+    const { db, thread } = setup();
+    const hiddenPart = { ...part, visibility: "agent-only" };
+    const inputs = [
+      [hiddenPart],
+      [hiddenPart, { type: "text", text: "", mentions: [] }],
+      [hiddenPart, part],
+    ];
+    insertEvents(db, noopNotifier, inputs.map((input, index) => ({
+      threadId: thread.id,
+      sequence: index + 1,
+      type: "client/turn/requested",
+      ...threadEventFields,
+      data: JSON.stringify({
+        initiator: "system",
+        input,
+        target: { kind: "new-turn" },
+      }),
+    })));
+
+    expect(listTimelineSegmentAnchorsDescending(db, {
+      limit: 10,
+      sequenceStart: 0,
+      threadId: thread.id,
+    }).map((row) => row.sequence)).toEqual([3]);
+  });
+
   it("lists bounded timeline segment anchors with request shape rules", () => {
     const { db, thread } = setup();
 

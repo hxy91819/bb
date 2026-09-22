@@ -83,6 +83,7 @@ function backgroundTaskData(status: "pending" | "completed"): string {
 }
 
 interface SeedOptions {
+  hiddenTurnIndexes?: readonly number[];
   backgroundTask?: "open" | "completed";
   delegateLastTurn?: boolean;
   completeLastTurn: boolean;
@@ -123,7 +124,16 @@ function seedTurns(
         request: { method: "turn/start", params: {} },
         requestId: clientRequestId,
         senderThreadId: null,
-        input: [{ type: "text", text: `User message ${turn}`, mentions: [] }],
+        input: [
+          {
+            type: "text",
+            text: `User message ${turn}`,
+            mentions: [],
+            ...(options.hiddenTurnIndexes?.includes(index)
+              ? { visibility: "agent-only" }
+              : {}),
+          },
+        ],
         target: turn === 1 ? { kind: "thread-start" } : { kind: "new-turn" },
         execution,
       }),
@@ -1526,6 +1536,77 @@ describe("timeline segment anchors", () => {
 });
 
 describe("timeline window event exclusions", () => {
+  it.each([[1], [2]])(
+    "keeps history pageable around hidden turn inputs %j",
+    (hiddenTurnIndex) => {
+      const { db, thread } = setup();
+      try {
+        seedTurns(db, thread, {
+          completeLastTurn: true,
+          hiddenTurnIndexes: [hiddenTurnIndex],
+          itemsPerTurn: [20, 20, 20],
+        });
+
+        const walked = walkAllPages(db, thread, 20);
+        expect(walked.pages).toBeGreaterThan(1);
+        expect(walked.rows).toEqual(
+          walkAllPages(db, thread, LARGE_BUDGET).rows,
+        );
+        expect(
+          walked.rows.some((row) =>
+            row.includes(`User message ${hiddenTurnIndex + 1}`),
+          ),
+        ).toBe(false);
+      } finally {
+        db.$client.close();
+      }
+    },
+  );
+
+  it("keeps visible history when the latest request has only hidden input", () => {
+    const { db, thread } = setup();
+    try {
+      seedTurns(db, thread, { completeLastTurn: true, itemsPerTurn: [1] });
+      const before = buildPage(db, thread, LARGE_BUDGET, null, 1).response;
+      insertEvents(db, noopNotifier, [
+        {
+          threadId: thread.id,
+          sequence: 1_000,
+          type: "client/turn/requested",
+          scope: threadScope(),
+          itemId: null,
+          itemKind: null,
+          parentToolCallId: null,
+          data: JSON.stringify({
+            direction: "outbound",
+            source: "tell",
+            initiator: "system",
+            request: { method: "turn/start", params: {} },
+            requestId: requestId(99),
+            senderThreadId: null,
+            input: [
+              {
+                type: "text",
+                text: "Continue the task",
+                mentions: [],
+                visibility: "agent-only",
+              },
+            ],
+            target: { kind: "new-turn" },
+            execution,
+          }),
+        },
+      ]);
+
+      const after = buildPage(db, thread, LARGE_BUDGET, null, 1).response;
+      expect(after.rows).toEqual(before.rows);
+      expect(after.timelinePage.hasOlderRows).toBe(false);
+      expect(after.timelinePage.olderCursor).toBeNull();
+    } finally {
+      db.$client.close();
+    }
+  });
+
   it("never reads workspace diff events into a window", () => {
     const { db, thread } = setup();
     seedTurns(db, thread, { completeLastTurn: true, itemsPerTurn: [5] });
