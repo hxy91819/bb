@@ -6,7 +6,7 @@
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
     "lastIntegratedUpstreamCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
     "upstreamRepository": "get-bb/bb",
-    "currentTrain": "config/local-aggregate-trains/2026-09-21-desktop-v0.43.3.json"
+    "currentTrain": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3.json"
   },
   "features": [
     {
@@ -531,6 +531,19 @@
       "dependsOn": [
         "side-chat-command"
       ],
+      "source": {
+        "baseCommit": "c6412434f405e21454cca5728df64cbaa4da989e",
+        "versionCommit": "e3b30935a506755cb8913f91908b247106ea3071",
+        "commits": [
+          {
+            "commit": "e3b30935a506755cb8913f91908b247106ea3071",
+            "logicalPatch": "side-chat-main-composer-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      },
       "specIssue": null,
       "upstreamFeedback": [],
       "relatedIssues": [
@@ -984,6 +997,10 @@
     }
   ],
   "trains": [
+    {
+      "id": "2026-09-22-desktop-v0.43.3",
+      "manifest": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3.json"
+    },
     {
       "id": "2026-09-21-desktop-v0.43.3",
       "manifest": "config/local-aggregate-trains/2026-09-21-desktop-v0.43.3.json"
