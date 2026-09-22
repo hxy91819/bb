@@ -6,7 +6,7 @@
     "stableTagPattern": "^desktop-v\\d+\\.\\d+\\.\\d+$",
     "lastIntegratedUpstreamCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
     "upstreamRepository": "get-bb/bb",
-    "currentTrain": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3.json"
+    "currentTrain": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r2.json"
   },
   "features": [
     {
@@ -795,6 +795,32 @@
       "integration": {
         "domain": null
       }
+    },
+    {
+      "id": "mobile-model-picker",
+      "branch": "fix/mobile-model-picker",
+      "module": "composer",
+      "status": "active",
+      "lastPackaged": null,
+      "dependsOn": [],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Sizes the mobile model-picker trigger. No specification issue or upstream feedback is recorded yet.",
+      "source": {
+        "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
+        "versionCommit": "5be76d569802981ec4cde245f4f03c51731431d9",
+        "commits": [
+          {
+            "commit": "5be76d569802981ec4cde245f4f03c51731431d9",
+            "logicalPatch": "mobile-model-picker-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
     }
   ],
   "retired": [
@@ -997,6 +1023,10 @@
     }
   ],
   "trains": [
+    {
+      "id": "2026-09-22-desktop-v0.43.3-r2",
+      "manifest": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3-r2.json"
+    },
     {
       "id": "2026-09-22-desktop-v0.43.3",
       "manifest": "config/local-aggregate-trains/2026-09-22-desktop-v0.43.3.json"
