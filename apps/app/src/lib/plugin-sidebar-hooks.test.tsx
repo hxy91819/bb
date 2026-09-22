@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import {
-  act,
-  cleanup,
-  renderHook as renderHookBase,
-} from "@testing-library/react";
-import { getDefaultStore } from "jotai";
+import { act, cleanup, renderHook as renderHookBase } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createStore, getDefaultStore, Provider } from "jotai";
+import { useCallback, type ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { useRootComposeProjectId } from "./root-compose-selection";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
 import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,8 +24,9 @@ import {
   clearPluginThreadRowStatuses,
   setPluginThreadRowStatus,
 } from "./plugin-thread-row-status";
-import { useEnvironmentProviders } from "./plugin-sdk-hooks";
+import { useBbNavigate, useEnvironmentProviders } from "./plugin-sdk-hooks";
 import { SidebarThreadShortcutKeysContext } from "@/components/sidebar/sidebarThreadShortcuts";
+import { PluginContext } from "@/components/plugin/plugin-context";
 import { SidebarThreadEntriesTestProvider } from "@/test/sidebarThreadEntriesTestProvider";
 
 const renderHook: typeof renderHookBase = (callback, options) =>
@@ -114,9 +115,28 @@ vi.mock("@bb/shared-ui/hooks/use-compact-viewport", () => ({
   useIsCompactViewport: () => false,
 }));
 
-vi.mock("./root-compose-selection", () => ({
-  useSetRootComposeProjectId: () => actions.setRootComposeProjectId,
-}));
+vi.mock("./root-compose-selection", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./root-compose-selection")>();
+  return {
+    ...actual,
+    useSetRootComposeProjectId: () => {
+      const setProjectId = actual.useSetRootComposeProjectId();
+      const setSelection = useCallback(
+        (nextProjectId: string) => {
+          actions.setRootComposeProjectId(nextProjectId);
+          setProjectId(nextProjectId);
+        },
+        [setProjectId],
+      );
+      return setSelection;
+    },
+  };
+});
+
+function Router({ children }: { children: ReactNode }) {
+  return <MemoryRouter>{children}</MemoryRouter>;
+}
 
 const environmentProviders = vi.hoisted(() => ({
   providers: undefined as readonly Record<string, unknown>[] | undefined,
@@ -170,6 +190,8 @@ function payload(threads: ThreadListEntry[], sections: SidebarSection[] = []) {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
+  sessionStorage.clear();
   vi.clearAllMocks();
   state.data = undefined;
   archiveQuery.data = undefined;
@@ -327,7 +349,141 @@ describe("useSidebarThreads sections", () => {
   });
 });
 
+describe("useBbNavigate project inheritance", () => {
+  it.each([
+    {
+      path: "/projects/proj_current",
+      remembered: null,
+      explicit: undefined,
+      expected: "proj_current",
+    },
+    {
+      path: "/",
+      remembered: "proj_saved",
+      explicit: undefined,
+      expected: "proj_saved",
+    },
+    {
+      path: "/",
+      remembered: null,
+      explicit: undefined,
+      expected: "proj_latest",
+    },
+    {
+      path: "/projects/proj_current",
+      remembered: "proj_saved",
+      explicit: PERSONAL_PROJECT_ID,
+      expected: PERSONAL_PROJECT_ID,
+    },
+  ])(
+    "selects $expected from $path",
+    ({ path, remembered, explicit, expected }) => {
+      state.data = payload([]);
+      state.data.projects = ["proj_current", "proj_saved", "proj_latest"].map(
+        (id) => ({
+          id,
+          name: id,
+          threads:
+            id === "proj_latest"
+              ? [makeThreadListEntry({ projectId: id, createdAt: 2 })]
+              : [],
+        }),
+      );
+      const store = createStore();
+      const client = new QueryClient();
+      const { result } = renderHook(
+        () => ({
+          selection: useRootComposeProjectId(),
+          navigate: useBbNavigate(),
+        }),
+        {
+          wrapper: ({ children }) => (
+            <Provider store={store}>
+              <QueryClientProvider client={client}>
+                <MemoryRouter initialEntries={[path]}>
+                  <PluginContext.Provider value="thread-list">
+                    {children}
+                  </PluginContext.Provider>
+                </MemoryRouter>
+              </QueryClientProvider>
+            </Provider>
+          ),
+        },
+      );
+      if (remembered !== null)
+        act(() => result.current.selection[1](remembered));
+      act(() => result.current.navigate.toCompose({ projectId: explicit }));
+      expect(result.current.selection[0]).toBe(expected);
+    },
+  );
+});
+
 describe("useSidebarThreadActions", () => {
+  it.each([
+    {
+      route: "/",
+      remembered: "proj_deleted",
+      expected: "proj_recent",
+    },
+    {
+      route: "/",
+      remembered: "proj_remembered",
+      deselect: true,
+      expected: "proj_remembered",
+    },
+    {
+      route: "/projects/proj_current/threads/thr_current",
+      remembered: "proj_remembered",
+      expected: "proj_current",
+    },
+    {
+      route: "/settings",
+      remembered: "proj_remembered",
+      expected: "proj_remembered",
+    },
+    {
+      route: "/threads/thr_personal",
+      remembered: "proj_remembered",
+      expected: "proj_remembered",
+    },
+  ])("persists $expected when opening from $route", (testCase) => {
+    const { route, remembered, expected } = testCase;
+    state.data = {
+      ...payload([]),
+      projects: [
+        { id: "proj_current", name: "Current", threads: [] },
+        { id: "proj_remembered", name: "Remembered", threads: [] },
+        {
+          id: "proj_recent",
+          name: "Recent",
+          threads: [makeThreadListEntry({ projectId: "proj_recent" })],
+        },
+      ],
+    };
+    const store = createStore();
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <Provider store={store}>
+          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+        </Provider>
+      );
+    }
+    const { result } = renderHook(
+      () => ({
+        selection: useRootComposeProjectId(),
+        actions: useSidebarThreadActions(),
+      }),
+      { wrapper: Wrapper },
+    );
+    act(() => result.current.selection[1](remembered));
+    if ("deselect" in testCase && testCase.deselect) {
+      act(() => result.current.selection[1](PERSONAL_PROJECT_ID));
+    }
+    act(() => result.current.actions.openNewThread({ focusPrompt: true }));
+    expect(result.current.selection[0]).toBe(expected);
+    expect(sessionStorage.getItem("bb.root-compose.project-id")).toBe(expected);
+  });
+
   it.each([
     { pinned: true, pinnedAt: null, mutate: mutations.pinThreadAsync },
     { pinned: false, pinnedAt: 42, mutate: mutations.unpinThreadAsync },
@@ -342,7 +498,9 @@ describe("useSidebarThreadActions", () => {
           resolveMutation = resolve;
         }),
       );
-      const { result } = renderHook(() => useSidebarThreadActions());
+      const { result } = renderHook(() => useSidebarThreadActions(), {
+        wrapper: Router,
+      });
 
       let settled = false;
       const request = result.current.setPinned(thread.id, pinned).then(() => {
@@ -363,7 +521,9 @@ describe("useSidebarThreadActions", () => {
 
   it("opens a project composer without a legacy route transition", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
 
     act(() => {
       result.current.openNewThread({
@@ -383,16 +543,26 @@ describe("useSidebarThreadActions", () => {
 
   it("opens a section without changing the selected project", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
-
+    state.data.projects.push({
+      id: "proj_selected",
+      name: "Selected",
+      threads: [],
+    });
+    const { result } = renderHook(
+      () => ({
+        selection: useRootComposeProjectId(),
+        actions: useSidebarThreadActions(),
+      }),
+      { wrapper: Router },
+    );
+    act(() => result.current.selection[1]("proj_selected"));
     act(() => {
-      result.current.openNewThread({
+      result.current.actions.openNewThread({
         sectionId: "sec_later",
         focusPrompt: true,
       });
     });
-
-    expect(actions.setRootComposeProjectId).not.toHaveBeenCalled();
+    expect(result.current.selection[0]).toBe("proj_selected");
     expect(actions.navigate).toHaveBeenCalledWith("/", {
       state: {
         focusPrompt: true,
@@ -404,7 +574,9 @@ describe("useSidebarThreadActions", () => {
 
   it("reuses an environment the way bb's environment header does", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
 
     act(() => {
       result.current.openNewThread({
@@ -423,7 +595,9 @@ describe("useSidebarThreadActions", () => {
 
   it("passes a machine selection to the root composer", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
 
     act(() => {
       result.current.openNewThread({
@@ -444,7 +618,9 @@ describe("useSidebarThreadActions", () => {
 
   it("preserves explicit pinned placement over the legacy section", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
     act(() =>
       result.current.openNewThread({
         sectionId: "sec_old",
@@ -461,7 +637,9 @@ describe("useSidebarThreadActions", () => {
 
   it("clears placement when opening global new thread", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
     act(() => {
       result.current.openNewThread();
     });
@@ -476,7 +654,9 @@ describe("useSidebarThreadActions", () => {
     const store = getDefaultStore();
     const collapsedAtom = getThreadConversationCollapsedAtom("thr_1");
     store.set(collapsedAtom, true);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
 
     act(() => {
       result.current.open("thr_1");
@@ -490,7 +670,9 @@ describe("useSidebarThreadActions", () => {
 
   it("ignores open for an unknown thread", () => {
     state.data = payload([]);
-    const { result } = renderHook(() => useSidebarThreadActions());
+    const { result } = renderHook(() => useSidebarThreadActions(), {
+      wrapper: Router,
+    });
     act(() => {
       result.current.open("thr_missing");
     });

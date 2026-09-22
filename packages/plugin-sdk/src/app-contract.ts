@@ -1702,6 +1702,8 @@ export interface PluginSidebarThreadActions {
   /**
    * Go to the new-thread screen. Passing `projectId` also makes that project
    * the composer's selection, so the thread is created where you asked.
+   * Without `projectId`, use the current project or the remembered selection,
+   * falling back to recent project activity when neither is set.
    * `sectionId` files the new thread under that section, and
    * `environmentId` reuses that environment (the "New thread in
    * environment" affordance), both exactly as bb's own list does.
@@ -4854,8 +4856,9 @@ export interface BbNavigate {
    * and section mention tokens become pills) and `focusPrompt` to focus the
    * composer on arrival — the pairing behind "Create via chat" style entry
    * points that drop the user into chat with a prefilled prompt.
-   * `projectId` makes that project the composer's selection; `placement`
-   * files the new thread in a section and pin state (omitted: unpinned,
+   * `projectId` makes that project the composer's selection. When omitted,
+   * use the current or remembered project, then recent project activity.
+   * `placement` files the new thread in a section and pin state (omitted: unpinned,
    * outside sections); `environmentId` reuses that environment and `hostId`
    * picks a machine for a new one (`environmentId` wins when both are set).
    */
