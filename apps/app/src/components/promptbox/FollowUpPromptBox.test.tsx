@@ -115,6 +115,10 @@ vi.mock("@/components/promptbox/PromptBoxInternal", () => ({
       onModifierSubmit?: () => void;
       swapSubmitActions?: boolean;
       showModifierSubmitAction?: boolean;
+      secondaryAction?: {
+        onSubmit: () => void;
+        title: string;
+      };
       title?: string;
     };
     suppressPluginComposerCustomizations?: boolean;
@@ -175,11 +179,22 @@ vi.mock("@/components/promptbox/PromptBoxInternal", () => ({
         title={submission?.title}
         data-show-modifier-action={submission?.showModifierSubmitAction}
         onClick={
-          submission?.swapSubmitActions ? onSubmit : submission?.onModifierSubmit
+          submission?.swapSubmitActions
+            ? onSubmit
+            : submission?.onModifierSubmit
         }
       >
         Modifier submit
       </button>
+      {mocks.isPointerCoarse && submission?.secondaryAction ? (
+        <button
+          type="button"
+          aria-label={submission.secondaryAction.title}
+          onClick={submission.secondaryAction.onSubmit}
+        >
+          Mobile secondary submit
+        </button>
+      ) : null}
       {onCollapse ? (
         <button type="button" onClick={onCollapse}>
           Collapse prompt box
@@ -822,6 +837,47 @@ describe("FollowUpPromptBox", () => {
     expect(modifier.getAttribute("data-show-modifier-action")).toBe("false");
     fireEvent.click(modifier);
     expect(props.composer?.onModifierSubmit).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { setting: false, title: "Steer current run" },
+    { setting: true, title: "Queue follow-up" },
+  ])(
+    "exposes the modifier action as a touch control when steer-on-Enter is $setting",
+    ({ setting, title }) => {
+      mocks.isPointerCoarse = true;
+      const props = createFollowUpPromptBoxProps({
+        kind: "queue",
+        onStop: vi.fn(),
+      });
+      if (!props.composer) {
+        throw new Error("Expected follow-up composer props");
+      }
+      props.composer.steerActiveThreadOnEnter = setting;
+      render(<FollowUpPromptBox {...props} />);
+
+      fireEvent.click(screen.getByRole("button", { name: title }));
+      expect(
+        setting ? props.composer.onSubmit : props.composer.onModifierSubmit,
+      ).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps Queue available when Steer is unavailable", () => {
+    mocks.isPointerCoarse = true;
+    const props = createFollowUpPromptBoxProps({
+      kind: "queue",
+      onStop: vi.fn(),
+    });
+    if (!props.composer) {
+      throw new Error("Expected follow-up composer props");
+    }
+    props.composer.steerActiveThreadOnEnter = true;
+    props.composer.canModifierSubmit = false;
+    render(<FollowUpPromptBox {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue follow-up" }));
+    expect(props.composer.onSubmit).toHaveBeenCalledOnce();
   });
 
   it.each([

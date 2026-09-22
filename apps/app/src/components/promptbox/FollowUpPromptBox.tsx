@@ -598,6 +598,20 @@ function FollowUpPromptBoxWithComposer({
   const onModifierSubmit = composer.canModifierSubmit
     ? composer.onModifierSubmit
     : undefined;
+  const secondarySubmit = steerOnPrimarySubmit
+    ? composer.onSubmit
+    : composer.onModifierSubmit;
+  const canSecondarySubmit = steerOnPrimarySubmit
+    ? canSubmit
+    : composer.canModifierSubmit;
+  const secondaryAction =
+    canSecondarySubmit && secondarySubmit
+      ? {
+          icon: steerOnPrimarySubmit ? ("Clock" as const) : ("Zap" as const),
+          onSubmit: secondarySubmit,
+          title: steerOnPrimarySubmit ? "Queue follow-up" : "Steer current run",
+        }
+      : undefined;
   const modifierSubmitHint = (action: "queue" | "steer"): string =>
     onModifierSubmit ? `, ${modifierSubmitShortcutLabel()} to ${action}` : "";
   const executionControlsDisabled =
@@ -723,6 +737,7 @@ function FollowUpPromptBoxWithComposer({
           onModifierSubmit,
           swapSubmitActions: steerOnPrimarySubmit,
           showModifierSubmitAction: submitMode.kind === "queue",
+          secondaryAction,
           title: composer.isFollowUpSubmitting
             ? "Submitting..."
             : canSubmit && composer.submitTitle !== undefined
