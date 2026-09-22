@@ -157,7 +157,6 @@ import {
   promptCommandResourceFromSuggestion,
   promptEditorClipboardTextFromSlice,
   promptEditorContentFromValue,
-  promptEditorCopiedSlice,
   promptEditorInlineContentFromValue,
   promptEditorValueFromDoc,
   promptEditorValueFromSlice,
@@ -326,6 +325,11 @@ export interface PromptBoxSubmissionConfig {
   onModifierSubmit?: () => void;
   swapSubmitActions?: boolean;
   showModifierSubmitAction?: boolean;
+  secondaryAction?: {
+    icon: IconName;
+    onSubmit: () => void;
+    title: string;
+  };
 }
 
 function suppressTouchCompatibilityClick(ownerDocument: Document) {
@@ -349,6 +353,7 @@ function suppressTouchCompatibilityClick(ownerDocument: Document) {
 
 interface PromptSubmitButtonProps {
   canSubmit: boolean;
+  hasInput: boolean;
   className: string;
   disabledReason: string | undefined;
   icon: IconName | undefined;
@@ -363,6 +368,7 @@ interface PromptSubmitButtonProps {
 
 function PromptSubmitButton({
   canSubmit,
+  hasInput,
   className,
   disabledReason,
   icon,
@@ -383,7 +389,7 @@ function PromptSubmitButton({
       data-promptbox-submit-action=""
       type="submit"
       size={isCompact ? "icon" : "sm"}
-      variant="default"
+      variant={hasInput ? "default" : "ghost"}
       aria-label={title}
       aria-busy={isBusy}
       disabled={!canSubmit}
@@ -439,6 +445,8 @@ function PromptSubmitButton({
       }}
       className={cn(
         className,
+        !hasInput &&
+          "border border-border text-muted-foreground/50 disabled:opacity-100",
         label !== undefined && !isCompact && "size-auto h-8 gap-1.5 px-2.5",
       )}
     >
@@ -625,6 +633,7 @@ interface PromptBoxInternalProps {
   blurOnPointerSubmit?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  allowSoftKeyboardAutoFocus?: boolean;
   textEffects?: readonly ComposerTextEffectSource[];
   onComposerLayoutChange?: (layout: ComposerView["layout"]) => void;
   header?: ReactNode;
@@ -1267,6 +1276,7 @@ export function PromptBoxInternal({
   blurOnPointerSubmit = false,
   placeholder = "Ask anything. @ to mention files, folders, or sections",
   autoFocus = true,
+  allowSoftKeyboardAutoFocus = false,
   textEffects,
   onComposerLayoutChange,
   header,
@@ -1303,6 +1313,7 @@ export function PromptBoxInternal({
     onModifierSubmit: onDefaultModifierSubmit,
     swapSubmitActions = false,
     showModifierSubmitAction = false,
+    secondaryAction,
   } = submission;
   const draftSubmitAction = { onSubmit: onDefaultSubmit, requiresInput: true };
   const immediateSubmitAction = {
@@ -1370,6 +1381,8 @@ export function PromptBoxInternal({
   const isPointerCoarse = usePointerCoarse();
   const isIPadOSWebKitDevice = useMemo(isIPadOSWebKit, []);
   const editorEnterKeyHint = isPointerCoarse ? "enter" : "send";
+  const shouldAvoidSoftKeyboardAutofocus =
+    isPointerCoarse && !allowSoftKeyboardAutoFocus;
   const formRef = useRef<HTMLFormElement>(null);
   const typeaheadMenuRef = useRef<HTMLDivElement>(null);
   const reportQueuedEditorTypeaheadLayout = useContext(
@@ -2042,8 +2055,6 @@ export function PromptBoxInternal({
           ...(id ? { id } : {}),
           role: "textbox",
         },
-        transformCopied: (slice, view) =>
-          promptEditorCopiedSlice(slice, view.state.selection),
         clipboardTextSerializer: (slice, view) =>
           promptEditorClipboardTextFromSlice(slice, view.state.schema),
         handleDOMEvents: {
@@ -2417,7 +2428,7 @@ export function PromptBoxInternal({
       }
       return;
     }
-    if (isPointerCoarse) return;
+    if (shouldAvoidSoftKeyboardAutofocus) return;
 
     const focusEditor = () => {
       if (editor.isDestroyed) return;
@@ -2439,7 +2450,7 @@ export function PromptBoxInternal({
     editor,
     focusScopeKey,
     scheduleRevealEditorSelection,
-    isPointerCoarse,
+    shouldAvoidSoftKeyboardAutofocus,
   ]);
 
   useEffect(() => {
@@ -4091,48 +4102,75 @@ export function PromptBoxInternal({
                         <Icon name="Mic" className="size-4" />
                       </VoiceInputButton>
                     ) : (
-                      <ComposerSendMenu
-                        isPointerCoarse={isPointerCoarse}
-                        includePluginContributions={
-                          !suppressPluginComposerCustomizations
-                        }
-                        queue={swapSubmitActions}
-                        hasInput={hasSubmittableInput}
-                        canSubmit={canSubmit}
-                        onSubmit={
-                          showModifierSubmitAction && onModifierSubmit
-                            ? submitModifierPrompt
-                            : undefined
-                        }
-                      >
-                        <PromptSubmitButton
+                      <>
+                        {isPointerCoarse && secondaryAction ? (
+                          <Button
+                            data-promptbox-secondary-submit-action=""
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            aria-label={secondaryAction.title}
+                            onPointerDown={(event) => {
+                              if (event.button === 0) event.preventDefault();
+                            }}
+                            onClick={secondaryAction.onSubmit}
+                            className={cn(
+                              showCompactLayout
+                                ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
+                                : COARSE_POINTER_PROMPT_ICON_ACTION_BUTTON_CLASS,
+                              "transition-colors",
+                            )}
+                          >
+                            <Icon
+                              name={secondaryAction.icon}
+                              className="size-4"
+                            />
+                          </Button>
+                        ) : null}
+                        <ComposerSendMenu
+                          isPointerCoarse={isPointerCoarse}
+                          includePluginContributions={
+                            !suppressPluginComposerCustomizations
+                          }
+                          queue={swapSubmitActions}
+                          hasInput={hasSubmittableInput}
                           canSubmit={canSubmit}
-                          icon={submitIcon}
-                          label={submitLabel}
-                          className={cn(
-                            showCompactLayout
-                              ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
-                              : [
-                                  "ml-1",
-                                  COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
-                                ],
-                            "transition-colors",
-                          )}
-                          disabledReason={
-                            !canSubmit
-                              ? isAttaching
-                                ? attachmentUploadTitle
-                                : submitDisabledReason
+                          onSubmit={
+                            showModifierSubmitAction && onModifierSubmit
+                              ? submitModifierPrompt
                               : undefined
                           }
-                          isBusy={isSubmitting || isAttaching}
-                          isCompact={showCompactLayout}
-                          onPointerDown={handleSubmitPointerDown}
-                          onClick={handleSubmitClick}
-                          onTouchSubmit={handleTouchSubmit}
-                          title={effectiveSubmitTitle}
-                        />
-                      </ComposerSendMenu>
+                        >
+                          <PromptSubmitButton
+                            canSubmit={canSubmit}
+                            hasInput={hasSubmittableInput}
+                            icon={submitIcon}
+                            label={submitLabel}
+                            className={cn(
+                              showCompactLayout
+                                ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
+                                : [
+                                    "ml-1",
+                                    COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
+                                  ],
+                              "transition-colors",
+                            )}
+                            disabledReason={
+                              !canSubmit
+                                ? isAttaching
+                                  ? attachmentUploadTitle
+                                  : submitDisabledReason
+                                : undefined
+                            }
+                            isBusy={isSubmitting || isAttaching}
+                            isCompact={showCompactLayout}
+                            onPointerDown={handleSubmitPointerDown}
+                            onClick={handleSubmitClick}
+                            onTouchSubmit={handleTouchSubmit}
+                            title={effectiveSubmitTitle}
+                          />
+                        </ComposerSendMenu>
+                      </>
                     )}
                   </div>
                 </ComposerActionsSlot>
