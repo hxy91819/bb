@@ -520,6 +520,30 @@
       "reason": "Fork #10 specifies the /side composer action; no actual upstream feedback is recorded."
     },
     {
+      "id": "side-chat-main-composer-command",
+      "branch": "fix/side-chat-main-composer",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": {
+        "sourceCommit": "e3b30935a506755cb8913f91908b247106ea3071",
+        "aggregateCommit": "5e0503deee1dccdfeafb28c6a5940b1b6f0b3748"
+      },
+      "dependsOn": [
+        "side-chat-command"
+      ],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [
+        {
+          "repository": "hxy91819/bb",
+          "number": 10,
+          "feedbackUrl": "https://github.com/hxy91819/bb/issues/10"
+        }
+      ],
+      "disposition": "internal",
+      "reason": "Repairs the side-chat-command wiring: the /side panel command was attached to the inline queued-message composer instead of the primary composer, so it never appeared on forkable providers such as Codex."
+    },
+    {
       "id": "sidebar-pinned-new-thread",
       "branch": "feature/sidebar-pinned-new-thread",
       "module": "sidebar-recent",
