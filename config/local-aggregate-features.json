@@ -821,6 +821,32 @@
       "integration": {
         "domain": null
       }
+    },
+    {
+      "id": "sidebar-new-thread-project",
+      "branch": "fix/sidebar-new-thread-project",
+      "module": "sidebar-recent",
+      "status": "active",
+      "lastPackaged": null,
+      "dependsOn": [],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "needs-feedback",
+      "reason": "Preserves the active project when starting a thread from the Custom sidebar and falls back to the most recent project when no thread is selected; no upstream feedback is recorded yet.",
+      "source": {
+        "baseCommit": "11367d0ac09441f487074e1f3bd2618d7dda3186",
+        "versionCommit": "4955b021f9199f335b609d4bdcc0080f17c941d0",
+        "commits": [
+          {
+            "commit": "4955b021f9199f335b609d4bdcc0080f17c941d0",
+            "logicalPatch": "sidebar-new-thread-project-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
     }
   ],
   "retired": [
