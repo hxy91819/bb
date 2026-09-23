@@ -25,13 +25,14 @@ selection, cherry-picks, registry updates, and fork publication.
   build the new release in its own clean worktree and update both the JSON and
   service unit to that path only at cutover.
 - Determine whether the current aggregate is complete before doing source
-  maintenance. Run the aggregate status helper and compare every registered
-  source branch with `local/aggregate` using `git cherry -v`. When there are no
-  unregistered feature/fix branches and no `+` source patches, the published
-  aggregate is complete: proceed directly to this skill's build and cutover.
-  Do not rebase, rebuild, or repeat an upstream audit merely because upstream
-  changed. A pending source patch follows the aggregate-maintenance workflow,
-  unless the user explicitly authorizes deploying the present aggregate as-is.
+  maintenance. Run the aggregate status helper and compare the frozen train's
+  source-to-domain mappings and direct patch selection with the registered
+  source versions. `git cherry -v` is diagnostic only: a domain adaptation can
+  change a patch ID without leaving its feature unintegrated. When no registered
+  source delta or new feature/fix branch is pending, the published aggregate is
+  complete: proceed directly to this skill's build and cutover. A pending
+  source delta follows the aggregate-maintenance workflow unless the user
+  explicitly authorizes packaging the present aggregate as-is.
 - Complete the frozen train and its candidate verification, then promote that
   exact candidate commit to the publishing root `local/aggregate` and push it
   to `fork/local/aggregate` before any package build. Compare all three SHAs.

@@ -73,16 +73,16 @@
 精确的功能状态、模块、一级来源、聚合映射、依赖、领域适配、规格与反馈角色以
 [功能登记表](config/local-aggregate-features.json) 为唯一权威记录；稳定基线、完整补丁顺序和
 验证入口由登记的 `config/local-aggregate-trains/*.json` 冻结。不要在本文件复制会过期的 SHA 表。
-Provider 是首个两级领域，覆盖规格 #2、#5、#6、#8；其他低耦合补丁仍可直接进入列车。
+Provider 是首个两级领域，覆盖规格 #2、#5、#6、#8。后续产品功能按领域进入二级分支；仅独立的聚合维护补丁可直接进入列车。
 
 维护规则：
 
 1. 项目根目录的工作区必须永久停留在 `local/aggregate`；不得在这里切换到功能或修复分支，也不得在这里编写可回流的产品代码。聚合维护文档、登记表和脚本是唯一例外。
 2. 每项后续功能或修复（包括其测试）开始前，必须创建或复用一个独立的一级 `feature/*` 或 `fix/*` 来源及 worktree；登记的有序提交定义该功能拥有的补丁，不以完整 ancestry 代替。休眠一级来源不因每个稳定 tag 强制 rebase。
-3. 相关一级补丁可进入独立二级领域分支和 worktree；领域层拥有稳定版兼容适配。每项适配必须记录原因、受影响的功能 ID 和来源映射。新增产品行为返回一级来源，不能成为无归属的领域修补。低耦合补丁可以保持直接纳入。
+3. 产品功能的一级补丁进入对应的二级领域分支和 worktree；领域层拥有稳定版兼容适配。每项适配必须记录原因、受影响的功能 ID 和来源映射。新增产品行为返回一级来源，不能成为无归属的领域修补。独立的聚合维护补丁可以直接纳入。
 4. 一级和领域 worktree 负责实现、相关测试、提交、`$autoreview` 收尾和发布；在 review 无 accepted/actionable findings 前不算已验证。已验证来源、领域、贡献演练、不可变列车引用和候选须按清单发布到个人 fork；移动 ref 的已授权重建使用明确 lease，不得 force-push 上游。
 5. [config/local-aggregate-features.json](config/local-aggregate-features.json) 分别记录稳定功能 ID、一级补丁版本、依赖、领域映射、旧打包记录，以及 `specIssue`、`upstreamFeedback`、`relatedIssues`、`disposition` / `reason`。缺少反馈记录 `needs-feedback`，内部修复记录 `internal`。冻结列车锁定稳定 tag/SHA、领域成员、共享依赖、直接补丁和验证入口；打包凭据在源码提交后记录最终 SHA、列车摘要、工具链与产物摘要。
-6. 上游同步、领域升级和本地打包必须调用 [open-source-fork-maintenance](.bb/skills/open-source-fork-maintenance/SKILL.md)：先检查一级补丁增量或重写、领域状态、新分支、稳定版变化和反馈采纳信号。默认在领域层适配最新 `desktop-v*` 稳定 tag，再由锁定列车构造候选；`origin/main` 未进 tag 的提交只作为债务。用户明确不升级时可继续当前基线并报告债务。
+6. 上游同步、领域升级和本地打包必须调用 [open-source-fork-maintenance](.bb/skills/open-source-fork-maintenance/SKILL.md)：先检查一级补丁增量或重写、领域状态、新分支、稳定版变化和反馈采纳信号。升级时保留休眠一级来源，在各二级领域分支适配最新 `desktop-v*` 稳定 tag，再由锁定列车依次组合领域提交和独立维护补丁；不得把已归属领域的一级补丁重新直入列车。`origin/main` 未进 tag 的提交只作为债务。用户明确不升级时可继续当前基线并报告债务。
 7. 每次打包前必须先把已验证候选提升为根目录 `local/aggregate` 并推送到个人 fork；候选标签本身不能代替聚合发布。聚合根分支替换及个人 fork 发布无需再次授权；只有最终替换本机正在运行的 BB source 服务需要明确授权。以该服务为目标的打包、替换或替换后健康/回退验证必须调用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)；普通构建、测试和单纯聚合不调用它。另一环境从已聚合的不可变发布引用取得源码后仍须安装依赖并构建；发布、打包和部署状态必须分开记录。
 8. 贡献提取只组合目标功能、明确依赖、相关领域适配和测试，不继承完整领域或 aggregate。聚合冲突回到拥有它的一级来源、共享依赖或领域适配修复。上游仅部分采纳时按所选稳定 tag 的实际行为逐项退役，issue 关闭或 trunk 合并不能单独触发移除。
 9. fork 上登记的 issue 是本地规格记录；开源回流以上游仓库的 issue 为准。向 get-bb/bb 提交 issue 必须先经用户逐项确认：owner 可把改动归类为个人偏好或部署适配并保留 fork-only，该决定记入 feedback 文档。
