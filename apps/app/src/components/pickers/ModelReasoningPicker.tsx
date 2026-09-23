@@ -27,7 +27,6 @@ import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { Input } from "@bb/shared-ui/input";
 import {
-  COARSE_POINTER_COMPACT_ICON_SIZE_CLASS,
   COARSE_POINTER_ICON_SIZE_CLASS,
   COARSE_POINTER_PROVIDER_TAB_SIZE_CLASS,
   COARSE_POINTER_TEXT_SM_CLASS,
@@ -919,7 +918,6 @@ export function ModelReasoningPicker({
       disabled={disabled}
       {...ModelReasoningMenu.intentProps}
       onKeyDown={handleReasoningArrowKeyDown}
-      data-promptbox-shrinkable-control=""
       className={cn(
         OPTION_BASE_CLASS_NAME,
         OPTION_INTERACTIVE_CLASS_NAME,
@@ -992,8 +990,7 @@ export function ModelReasoningPicker({
         <Icon
           name="ChevronDown"
           className={cn(
-            COARSE_POINTER_COMPACT_ICON_SIZE_CLASS,
-            "shrink-0",
+            "size-3.5 shrink-0",
             muted ? "text-subtle-foreground/75" : "text-muted-foreground",
           )}
         />
