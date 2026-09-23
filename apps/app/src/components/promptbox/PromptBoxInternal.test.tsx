@@ -455,6 +455,46 @@ function mockPointerCoarse(matches: boolean): () => void {
   };
 }
 
+function stubDeferredAutofocus() {
+  const observers: {
+    callback: IntersectionObserverCallback;
+    disconnect: ReturnType<typeof vi.fn>;
+  }[] = [];
+  class DeferredIntersectionObserver {
+    readonly callback: IntersectionObserverCallback;
+    readonly disconnect = vi.fn();
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  vi.stubGlobal("IntersectionObserver", DeferredIntersectionObserver);
+  Object.defineProperty(HTMLElement.prototype, "checkVisibility", {
+    configurable: true,
+    writable: true,
+    value: function (this: HTMLElement) {
+      return this.closest("[hidden]") === null;
+    },
+  });
+  return {
+    observers,
+    fire() {
+      for (const observer of observers) {
+        observer.callback([], {} as IntersectionObserver);
+      }
+    },
+    restore() {
+      vi.unstubAllGlobals();
+      Reflect.deleteProperty(HTMLElement.prototype, "checkVisibility");
+    },
+  };
+}
+
 function mockNavigatorIdentity({
   userAgent,
   vendor,
@@ -1025,6 +1065,167 @@ describe("PromptBoxInternal controlled value sync", () => {
         expect(document.activeElement).not.toBe(getPromptEditorElement()),
       );
     } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("defers passive autofocus until a hidden composer becomes visible", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      const view = render(
+        <div hidden>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitFor(() =>
+        expect(getPromptEditorElement()).toBeInstanceOf(HTMLElement),
+      );
+      await waitFor(() =>
+        expect(deferred.observers.length).toBeGreaterThan(0),
+      );
+      expect(document.activeElement).not.toBe(getPromptEditorElement());
+
+      view.rerender(
+        <div>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+      act(() => deferred.fire());
+
+      await waitForPromptFocus();
+      expect(deferred.observers[0]?.disconnect).toHaveBeenCalledTimes(1);
+
+      const focusCalls = focusSpy.mock.calls.length;
+      act(() => deferred.fire());
+      expect(focusSpy.mock.calls.length).toBe(focusCalls);
+    } finally {
+      focusSpy.mockRestore();
+      deferred.restore();
+      restoreMatchMedia();
+    }
+  });
+
+  it("keeps passive autofocus immediate when only CSS visibility hides the composer", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    try {
+      render(
+        <div style={{ visibility: "hidden" }}>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitForPromptFocus();
+      expect(deferred.observers).toHaveLength(0);
+    } finally {
+      deferred.restore();
+      restoreMatchMedia();
+    }
+  });
+
+  it("keeps passive autofocus immediate when visibility detection is unavailable", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    Reflect.deleteProperty(HTMLElement.prototype, "checkVisibility");
+    try {
+      render(
+        <div hidden>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitForPromptFocus();
+      expect(deferred.observers).toHaveLength(0);
+    } finally {
+      deferred.restore();
+      restoreMatchMedia();
+    }
+  });
+
+  it("attempts autofocus immediately when IntersectionObserver is unavailable", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    vi.stubGlobal("IntersectionObserver", undefined);
+    try {
+      render(
+        <div hidden>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitForPromptFocus();
+    } finally {
+      deferred.restore();
+      restoreMatchMedia();
+    }
+  });
+
+  it("does not steal focus established elsewhere while the composer is hidden", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    const first = document.createElement("input");
+    const second = document.createElement("input");
+    document.body.append(first, second);
+    try {
+      first.focus();
+      const view = render(
+        <div hidden>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitFor(() =>
+        expect(deferred.observers.length).toBeGreaterThan(0),
+      );
+
+      second.focus();
+      view.rerender(
+        <div>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+      act(() => deferred.fire());
+
+      expect(document.activeElement).toBe(second);
+    } finally {
+      first.remove();
+      second.remove();
+      deferred.restore();
+      restoreMatchMedia();
+    }
+  });
+
+  it("disconnects the visibility observer once another path focuses the editor", async () => {
+    const restoreMatchMedia = mockPointerCoarse(false);
+    const deferred = stubDeferredAutofocus();
+    try {
+      const view = render(
+        <div hidden>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+
+      await waitFor(() =>
+        expect(deferred.observers.length).toBeGreaterThan(0),
+      );
+
+      act(() => {
+        getPromptEditorElement().focus();
+      });
+      view.rerender(
+        <div>
+          <PromptBoxInternal {...createPromptBoxProps()} />
+        </div>,
+      );
+      act(() => deferred.fire());
+
+      expect(deferred.observers[0]?.disconnect).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(getPromptEditorElement());
+    } finally {
+      deferred.restore();
       restoreMatchMedia();
     }
   });
