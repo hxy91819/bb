@@ -99,3 +99,8 @@ provider-recordings/raw/
 
 config/local-aggregate-web*.json
 !config/local-aggregate-web.example.json
+
+/firefox-profile.*/
+/docu-mermaid-*.html
+/docu-mermaid-*.png
+/memory/
