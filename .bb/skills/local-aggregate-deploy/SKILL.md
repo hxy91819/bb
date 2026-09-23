@@ -5,21 +5,25 @@ description: Package a complete BB local/aggregate snapshot and replace a config
 
 # Local aggregate deployment
 
-Run from the repository root. This skill owns the service cutover gates and
+Run from the package-source checkout root. This skill owns the service cutover gates and
 post-cutover local cleanup; `open-source-fork-maintenance` owns source-branch
 selection, cherry-picks, registry updates, and fork publication.
 
 ## Preconditions
 
-- Confirm the root checkout is `local/aggregate`; preserve parallel work and
-  untracked files. Never stash or autostash.
+- On the publishing machine, confirm the project root remains on
+  `local/aggregate`; preserve parallel work and untracked files. Never stash or
+  autostash. A remote target may prepare a detached immutable release worktree.
 - Select one local deployment target. The default is the ignored
   `config/local-aggregate-web.json`; when the request names a target, use the
   ignored `config/local-aggregate-web.<target>.json`. Each target has its own
   service unit, repository, data directory, Node executable, bind host, and
   ports. Treat the selected file as authoritative; never copy it, its data, or
   its secrets between targets or into Git. If the requested target file is
-  absent, stop after naming the missing local configuration.
+  absent, stop after naming the missing local configuration. On a remote target,
+  `repoPath` names the currently deployed checkout until an authorized cutover;
+  build the new release in its own clean worktree and update both the JSON and
+  service unit to that path only at cutover.
 - Determine whether the current aggregate is complete before doing source
   maintenance. Run the aggregate status helper and compare every registered
   source branch with `local/aggregate` using `git cherry -v`. When there are no
@@ -28,9 +32,21 @@ selection, cherry-picks, registry updates, and fork publication.
   Do not rebase, rebuild, or repeat an upstream audit merely because upstream
   changed. A pending source patch follows the aggregate-maintenance workflow,
   unless the user explicitly authorizes deploying the present aggregate as-is.
+- Complete the frozen train and its candidate verification, then promote that
+  exact candidate commit to the publishing root `local/aggregate` and push it
+  to `fork/local/aggregate` before any package build. Compare all three SHAs.
+  The candidate tag alone is not a packaged aggregate. Create an immutable
+  `fork-release/*` ref only after this equality is verified. Package from the
+  root only when its tracked and untracked status is clean; otherwise use a new
+  clean detached worktree at that release ref and preserve root user files. A
+  remote target may build that release ref after checking its credential records
+  the same promoted aggregate SHA and freshly reading `fork/local/aggregate`.
+  If the published aggregate has advanced or any SHA differs, stop before
+  installing or building and freeze a new current snapshot.
 - Before any restart, persist a checkpoint under the configured data directory.
-  Include old and candidate commits, service unit, health endpoints, rollback
-  owner, and the observed pre-cutover state. Keep it local.
+  Include old and package commits, the candidate/aggregate/release ref SHAs,
+  service unit, health endpoints, rollback owner, and the observed pre-cutover
+  state. Keep it local.
 - Install `assets/oom-policy-continue.conf` as an additional drop-in for the
   configured systemd unit and reload systemd before a cutover. Verify
   `OOMPolicy=continue`; this keeps an OOM-killed child from stopping the whole
@@ -42,14 +58,22 @@ selection, cherry-picks, registry updates, and fork publication.
 
 ## Build gate
 
-Keep the old service running while preparing the candidate. Use the Node 22
-executable from the local JSON, install frozen dependencies when the checkout
-does not already have the required dependency state, then run:
+Keep the old service running while preparing the promoted aggregate. Use the
+Node executable from the selected local JSON, install frozen dependencies when
+the checkout does not already have the required dependency state, then run:
 
 ```bash
 scripts/run-resource-isolated --profile package -- \
-  <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
+  <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs \
+  --repo . --aggregate-ref <aggregate-ref> --candidate-ref <candidate-ref>
 ```
+
+Use `refs/heads/local/aggregate` for a clean publishing root or the promoted
+`refs/tags/fork-release/<name>` for a clean detached worktree on either machine.
+The candidate ref is `refs/tags/fork-candidate/<name>`. The build helper rejects
+a missing ref, tracked or untracked changes, or a HEAD that differs from either
+ref or the freshly queried `fork/local/aggregate`. Record its source SHA in the
+checkpoint before continuing.
 
 The runner gives the serialized package build a separate finite-memory user
 scope. The helper limits the runtime build to the SDK, app, server, and host
@@ -82,8 +106,8 @@ BB thread may complete the preconditions, build gate, migration preparation,
 and checkpoint, but must stop before any command that stops, restarts, or
 replaces the configured BB service.
 
-Before stopping, update the checkpoint with the completed gates, candidate
-commit, exact next command, and remaining verification. Give the user a prompt
+Before stopping, update the checkpoint with the completed gates, packaged
+aggregate commit, exact next command, and remaining verification. Give the user a prompt
 for a new agent launched from a terminal or another agent host that is not a BB
 thread. That agent must verify that it has no `BB_*` thread context and that its
 process is outside the configured service's cgroup. If either check fails, it
@@ -100,9 +124,9 @@ confirming the build gate succeeded:
    it and reset its failed state before the new start.
 2. Poll the configured server `/health` and host-daemon `/health`; both must
    succeed before calling the deployment healthy.
-3. Confirm the unit is `active`, its main process works from the configured
-   repository, the deployed `local/aggregate` SHA contains the intended
-   package commits, and `NRestarts=0` after a short stability interval.
+3. Confirm the unit is `active`, its main process works from the selected
+   configuration's `repoPath`, the running HEAD equals the packaged aggregate
+   SHA, and `NRestarts=0` after a short stability interval.
 4. Query `/api/v1/system/version` for the running version. Keep Tailscale Serve
    Tailnet-only; inspect it only when the request includes proxy validation.
 5. For a change that affects persistence, migrations, or next-turn provider
@@ -126,8 +150,9 @@ the local aggregate to upstream.
 
 ## Post-cutover cleanup
 
-After a healthy cutover and fork publication, retain only the root
-`local/aggregate` checkout locally.
+After a healthy cutover and fork publication, retain the publishing root
+`local/aggregate` checkout and any worktree used by the running service. On a
+remote target, the active detached release worktree remains in use.
 
 1. Fetch the personal fork. For every non-root worktree branch, push its exact
    committed tip with an ordinary non-forced push when the remote ref is absent
@@ -140,8 +165,7 @@ After a healthy cutover and fork publication, retain only the root
 3. After its worktree is gone, delete the corresponding local branch only when
    its exact tip is available from the personal fork or the published aggregate.
    Delete local backup, rebuild, and upstream-tracking branches under the same
-   condition, leaving only `local/aggregate` checked out locally. Run
-   `git worktree prune` and verify the final branch/worktree list.
+   condition. Run `git worktree prune` and verify the final branch/worktree list.
 
 Report any dirty, active, divergent, or unpublished worktree as a cleanup
 blocker. Preserve it for a later run rather than using force, stash, or reset.

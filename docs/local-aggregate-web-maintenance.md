@@ -1,7 +1,7 @@
 # 本机聚合网页服务维护
 
 本说明适用于把 `local/aggregate` 作为本机 Tailnet 网页服务运行的场景。
-它是本地运维资料：可以在本地 Git 提交。只有在明确授权后才可推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
+它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
 
 ## 文件与保密边界
 
@@ -31,9 +31,9 @@ git check-ignore -v config/local-aggregate-web.json
 同一 checkout 可保存多个忽略的目标配置。未指定目标时使用
 `config/local-aggregate-web.json`；明确指定目标时使用
 `config/local-aggregate-web.<target>.json`。每个目标必须有独立的数据目录和
-服务单元；代码从用户指定、由外部发布凭据绑定精确 commit 的不可变个人 fork
-ref 获取，不得以可变的 `fork/local/aggregate` 代替，也不得共享正在使用的数据
-目录。
+服务单元；代码从用户指定、由外部发布凭据绑定精确聚合 commit 的不可变个人
+fork 发布 ref 获取，不得以可变的 `fork/local/aggregate` 或尚未提升的候选 ref
+代替，也不得共享正在使用的数据目录。
 
 ## 服务模型
 
@@ -56,11 +56,12 @@ ref 获取，不得以可变的 `fork/local/aggregate` 代替，也不得共享�
    <node-bin-directory>/corepack enable --install-directory <node-bin-directory>
    ```
 
-3. 在目标 worktree 安装依赖并执行运行时预构建：
+3. 先按下文完成聚合并核对不可变候选与聚合发布 ref 的 commit，再在目标
+   worktree 安装依赖并执行运行时预构建：
 
    ```bash
    scripts/run-resource-isolated --profile package -- <node-bin-directory>/pnpm install --frozen-lockfile
-   scripts/run-resource-isolated --profile package -- <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo .
+   scripts/run-resource-isolated --profile package -- <nodeExecutable> .bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs --repo . --aggregate-ref <aggregate-ref> --candidate-ref <candidate-ref>
    <nodeExecutable> scripts/ensure-native-modules.mjs --check
    ```
 
@@ -105,16 +106,35 @@ ref 获取，不得以可变的 `fork/local/aggregate` 代替，也不得共享�
 为唯一流程入口；它负责低内存预构建、持久检查点、切换门禁与回退边界。
 本节保留服务模型和本机配置的背景，不重复该技能的部署步骤。
 
-1. 发布机器先检查现场并在 `local/aggregate` 完成聚合。默认不 push；若已明确授权，只推送到个人 fork，并另行发布绑定精确源码 commit、不可变 ref 和工具链的外部凭据：
+1. 发布机器先冻结并验证列车候选，把候选的精确 commit 提升到根目录
+   `local/aggregate`。核对根目录、候选 ref 和 fork 上的聚合分支均为同一
+   commit，然后创建并推送指向该 commit 的不可变 `fork-release/*` ref。
+   只有这些核对完成后才能打包或签发绑定源码 commit、候选 ref、发布 ref、
+   聚合核对结果及工具链的外部凭据：
 
    ```bash
    git status --short
    git worktree list
    git branch --show-current
+   aggregate_sha=$(git rev-parse HEAD)
+   candidate_sha=$(git rev-parse 'refs/tags/fork-candidate/<name>^{commit}')
+   test "$aggregate_sha" = "$candidate_sha"
    git push fork local/aggregate:refs/heads/local/aggregate
+   fork_sha=$(git ls-remote fork refs/heads/local/aggregate | cut -f1)
+   test "$aggregate_sha" = "$fork_sha"
+   git tag fork-release/<name> "$aggregate_sha"
+   git push fork refs/tags/fork-release/<name>
    ```
 
-2. 目标机器只获取凭据指定的不可变 ref，在现有工作区之外创建 clean detached worktree，并核对其 HEAD 与凭据 commit。保留现有工作区的所有本地改动，不在其中构建。按该技能重新安装本机依赖并执行预构建；它不以全仓库构建替代运行时门禁。
+   若根目录有未跟踪的用户文件，保留它们，从刚发布的 ref 创建新的干净 detached
+   worktree 打包。构建门禁会拒绝任何未跟踪文件进入打包工作区。
+
+2. 目标机器获取凭据指定的不可变发布 ref 与候选 ref，在现有工作区之外创建
+   clean detached worktree，并核对两者和 HEAD 都等于凭据中的已聚合 commit。
+   打包前重新读取 fork 上的 `local/aggregate`，若它已前进或不等于该 commit，
+   停止旧版本打包并重新冻结当前快照。
+   保留现有工作区的所有本地改动，不在其中构建。按该技能重新安装本机依赖并
+   执行预构建；它不以全仓库构建替代运行时门禁。
 
 3. 没有明确服务部署授权时，到源码、构建和原生 ABI 准备完成为止，不修改 systemd、Tailscale 或本机目标配置。已有授权时才按该技能的外部 Agent 门禁更新 repoPath、常驻入口并切换服务。
 
@@ -122,7 +142,9 @@ ref 获取，不得以可变的 `fork/local/aggregate` 代替，也不得共享�
 
 ## 回退
 
-代码问题时，优先在聚合分支通过本地 `git revert` 回退对应聚合提交，重新构建后重启 systemd 服务。不要让两个服务同时访问同一数据目录，也不要为了回退删除数据目录。
+代码问题时，把修复或回退提交放回拥有该产品改动的一级来源，重新冻结列车、
+提升聚合并构建；服务回退仍遵守部署技能的授权和检查点。不要让两个服务同时访问
+同一数据目录，也不要为了回退删除数据目录。
 
 如果服务无法启动，先查看：
 

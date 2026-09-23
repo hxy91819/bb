@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { delimiter, dirname, resolve } from "node:path";
+import { verifyPackageSource } from "./verify-package-source.mjs";
 
 function parseArgs(args) {
   let repoPath = process.cwd();
   let dryRun = false;
+  let aggregateRef;
+  let candidateRef;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -21,10 +24,23 @@ function parseArgs(args) {
       dryRun = true;
       continue;
     }
+    if (arg === "--aggregate-ref" || arg === "--candidate-ref") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`${arg} requires a ref`);
+      }
+      if (arg === "--aggregate-ref") aggregateRef = value;
+      else candidateRef = value;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  return { dryRun, repoPath };
+  if (!aggregateRef || !candidateRef) {
+    throw new Error("--aggregate-ref and --candidate-ref are required before packaging");
+  }
+  return { aggregateRef, candidateRef, dryRun, repoPath };
 }
 
 function resolveNodeOptions(env) {
@@ -73,7 +89,8 @@ function run(command, args, options) {
 }
 
 async function main() {
-  const { dryRun, repoPath } = parseArgs(process.argv.slice(2));
+  const { aggregateRef, candidateRef, dryRun, repoPath } = parseArgs(process.argv.slice(2));
+  const source = verifyPackageSource({ repoPath, aggregateRef, candidateRef });
   const requireFromRepo = createRequire(resolve(repoPath, "package.json"));
   const turboEntrypoint = requireFromRepo.resolve("turbo/bin/turbo");
   const env = createBuildEnv(process.env);
@@ -95,6 +112,7 @@ async function main() {
     process.stdout.write(
       `${JSON.stringify({
         nodeOptions: env.NODE_OPTIONS,
+        source,
         runtimeBuild: [process.execPath, ...runtimeBuildArgs],
       })}\n`,
     );
