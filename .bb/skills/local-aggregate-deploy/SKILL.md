@@ -29,13 +29,17 @@ selection, cherry-picks, registry updates, and fork publication.
   source-to-domain mappings and direct patch selection with the registered
   source versions. `git cherry -v` is diagnostic only: a domain adaptation can
   change a patch ID without leaving its feature unintegrated. When no registered
-  source delta or new feature/fix branch is pending, the published aggregate is
-  complete: proceed directly to this skill's build and cutover. A pending
-  source delta follows the aggregate-maintenance workflow unless the user
-  explicitly authorizes packaging the present aggregate as-is.
-- Complete the frozen train and its candidate verification, then promote that
-  exact candidate commit to the publishing root `local/aggregate` and push it
-  to `fork/local/aggregate` before any package build. Compare all three SHAs.
+  source delta or new feature/fix branch is pending, reuse the published
+  aggregate only after confirming its frozen train, promoted candidate, and
+  fork SHA agree. Skip source reconstruction in that case. Stable-tag movement
+  follows the aggregate-maintenance selection policy. A pending source delta
+  follows that workflow unless the user explicitly authorizes packaging the
+  present aggregate as-is.
+- For a new source selection, complete the frozen train and its candidate
+  verification, then promote that exact candidate commit to the publishing
+  root `local/aggregate` and push it to `fork/local/aggregate` before any
+  package build. For an already published selection, verify the same equality
+  against its existing candidate. Compare all three SHAs.
   The candidate tag alone is not a packaged aggregate. Create an immutable
   `fork-release/*` ref only after this equality is verified. Package from the
   root only when its tracked and untracked status is clean; otherwise use a new
