@@ -857,6 +857,32 @@
       }
     },
     {
+      "id": "aggregate-package-order",
+      "branch": "fix/aggregate-package-order",
+      "module": "maintenance-process",
+      "status": "active",
+      "lastPackaged": null,
+      "dependsOn": [],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "internal",
+      "reason": "Requires a verified frozen candidate to be promoted and published as local/aggregate before package builds; the runtime build checks the current fork aggregate SHA.",
+      "source": {
+        "baseCommit": "37131c338d03927a936e047764eb11f57707e339",
+        "versionCommit": "138472f4c75c34f7d89611ef75e34da84e5ae28c",
+        "commits": [
+          {
+            "commit": "138472f4c75c34f7d89611ef75e34da84e5ae28c",
+            "logicalPatch": "aggregate-package-order-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
+    },
+    {
       "id": "sidebar-new-thread-project",
       "branch": "fix/sidebar-new-thread-project",
       "module": "sidebar-recent",
