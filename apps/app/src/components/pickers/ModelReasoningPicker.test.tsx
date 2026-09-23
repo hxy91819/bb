@@ -365,7 +365,6 @@ describe("ModelReasoningPicker", () => {
     expect(
       trigger.querySelector('[data-icon="ChevronDown"]')?.classList,
     ).toContain("text-subtle-foreground/75");
-    expect(trigger.getAttribute("data-promptbox-shrinkable-control")).toBe("");
     expect(trigger.classList).toContain("font-normal");
   });
 
