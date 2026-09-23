@@ -883,6 +883,32 @@
       }
     },
     {
+      "id": "ignore-local-artifacts",
+      "branch": "fix/ignore-local-artifacts",
+      "module": "maintenance-process",
+      "status": "active",
+      "lastPackaged": null,
+      "dependsOn": [],
+      "specIssue": null,
+      "upstreamFeedback": [],
+      "relatedIssues": [],
+      "disposition": "internal",
+      "reason": "Keeps local browser profiles, temporary Mermaid verification outputs, and agent memory out of Git status without deleting the memory note.",
+      "source": {
+        "baseCommit": "d1bf93156ec8bb8d13f8135368b40eed9ef0fc51",
+        "versionCommit": "025141a2639ad5061beb11905e45f3884cd83398",
+        "commits": [
+          {
+            "commit": "025141a2639ad5061beb11905e45f3884cd83398",
+            "logicalPatch": "ignore-local-artifacts-v1"
+          }
+        ]
+      },
+      "integration": {
+        "domain": null
+      }
+    },
+    {
       "id": "sidebar-new-thread-project",
       "branch": "fix/sidebar-new-thread-project",
       "module": "sidebar-recent",
