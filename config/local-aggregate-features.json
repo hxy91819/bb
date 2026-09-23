@@ -807,14 +807,18 @@
       "upstreamFeedback": [],
       "relatedIssues": [],
       "disposition": "needs-feedback",
-      "reason": "Sizes the mobile model-picker trigger. No specification issue or upstream feedback is recorded yet.",
+      "reason": "Constrains the mobile model-picker trigger and custom ACP provider logo so the model label and chevron remain visible. No specification issue or upstream feedback is recorded yet.",
       "source": {
         "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
-        "versionCommit": "5be76d569802981ec4cde245f4f03c51731431d9",
+        "versionCommit": "3b4f935d381dcd66be5e515585b145869f48f9ac",
         "commits": [
           {
             "commit": "5be76d569802981ec4cde245f4f03c51731431d9",
             "logicalPatch": "mobile-model-picker-v1"
+          },
+          {
+            "commit": "3b4f935d381dcd66be5e515585b145869f48f9ac",
+            "logicalPatch": "mobile-model-picker-v2"
           }
         ]
       },
