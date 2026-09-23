@@ -199,6 +199,8 @@ const PROMPTBOX_MIN_HEIGHT = 68;
 const PROMPTBOX_SELECTION_REVEAL_MARGIN = 12;
 const COMPACT_PROMPT_ACTION_BUTTON_CLASS =
   "size-8 p-0 transition-all [&_[data-icon-root]]:size-4 max-md:pointer-coarse:size-10";
+const TOUCH_PROMPT_SUBMIT_BUTTON_CLASS =
+  "size-11 shrink-0 p-0 transition-colors";
 const RICH_PASTE_BLOCK_TAGS = new Set([
   "ADDRESS",
   "ARTICLE",
@@ -4058,7 +4060,10 @@ export function PromptBoxInternal({
                   ) : null}
                   <div
                     data-promptbox-submit-group=""
-                    className="flex shrink-0 flex-row items-center"
+                    className={cn(
+                      "flex shrink-0 flex-row items-center",
+                      isPointerCoarse && secondaryAction && "gap-3",
+                    )}
                   >
                     {showStop ? (
                       <Button
@@ -4114,12 +4119,7 @@ export function PromptBoxInternal({
                               if (event.button === 0) event.preventDefault();
                             }}
                             onClick={secondaryAction.onSubmit}
-                            className={cn(
-                              showCompactLayout
-                                ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
-                                : COARSE_POINTER_PROMPT_ICON_ACTION_BUTTON_CLASS,
-                              "transition-colors",
-                            )}
+                            className={TOUCH_PROMPT_SUBMIT_BUTTON_CLASS}
                           >
                             <Icon
                               name={secondaryAction.icon}
@@ -4147,12 +4147,14 @@ export function PromptBoxInternal({
                             icon={submitIcon}
                             label={submitLabel}
                             className={cn(
-                              showCompactLayout
-                                ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
-                                : [
-                                    "ml-1",
-                                    COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
-                                  ],
+                              isPointerCoarse && secondaryAction && !submitLabel
+                                ? TOUCH_PROMPT_SUBMIT_BUTTON_CLASS
+                                : showCompactLayout
+                                  ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
+                                  : [
+                                      "ml-1",
+                                      COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
+                                    ],
                               "transition-colors",
                             )}
                             disabledReason={
