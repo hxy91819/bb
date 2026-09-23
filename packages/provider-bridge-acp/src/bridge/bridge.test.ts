@@ -1490,11 +1490,11 @@ describe("acp bridge", () => {
     expect(agentMessageTexts()).toContain("selected-model:fake/strong");
   });
 
-  it("falls back to session/set_model when the model config option errors", async () => {
+  it("falls back to session/set_model when session/set_config_option is unavailable", async () => {
     const { providerThreadId } = await startThread({
       envVars: {
         FAKE_ACP_MODEL_CONFIG: "1",
-        FAKE_ACP_SET_CONFIG_MODEL_ERROR: "1",
+        FAKE_ACP_SET_CONFIG_MODEL_ERROR: "method-not-found",
       },
       model: "fake/strong",
     });
@@ -1505,6 +1505,30 @@ describe("acp bridge", () => {
     await waitForTurnCompleted();
 
     expect(agentMessageTexts()).toContain("selected-model:fake/strong");
+  });
+
+  it("preserves a model config rejection instead of hiding it behind session/set_model", async () => {
+    nextThreadSerial += 1;
+    const id = sendRequest("thread/start", {
+      threadId: `thread-${nextThreadSerial}`,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        model: "fake/strong",
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_MODEL_CONFIG: "1",
+              FAKE_ACP_SET_CONFIG_MODEL_ERROR: "fixed",
+            },
+          }),
+        },
+      }),
+    });
+
+    const response = await waitForResponse(id);
+    expect(response.error?.message).toContain("Amp mode is fixed after the first prompt");
+    expect(response.error?.message).not.toContain("session/set_model");
   });
 
   it("selects ACP-native models from session models state", async () => {

@@ -1229,7 +1229,13 @@ async function selectAcpNativeModel(args: {
             resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
           });
           setModel = false;
-        } catch {
+        } catch (error) {
+          if (
+            !(error instanceof AcpAgentResponseError) ||
+            error.code !== -32601
+          ) {
+            throw error;
+          }
           setModel = true;
         }
       }
