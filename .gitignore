@@ -98,3 +98,11 @@ provider-recordings/raw/
 /plugins/*/.bundled-runtime/
 
 .ci-health/
+
+config/local-aggregate-web*.json
+!config/local-aggregate-web.example.json
+
+/firefox-profile.*/
+/docu-mermaid-*.html
+/docu-mermaid-*.png
+/memory/
