@@ -111,4 +111,6 @@ exec systemd-run --user --scope --collect --quiet \
   -p OOMPolicy=continue \
   -p CPUQuota=300% \
   -p TasksMax=1024 \
-  env BB_RESOURCE_SCOPE_ACTIVE=1 "$@"
+  env BB_RESOURCE_SCOPE_ACTIVE=1 \
+  bash -c 'systemctl --user set-property --runtime "$1.scope" "MemoryHigh=$2" MemorySwapMax=0 || exit; shift 2; exec "$@"' \
+  bash "${unit_name}" "${memory_high}" "$@"
