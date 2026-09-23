@@ -807,10 +807,10 @@
       "upstreamFeedback": [],
       "relatedIssues": [],
       "disposition": "needs-feedback",
-      "reason": "Constrains the mobile model-picker trigger and custom ACP provider logo so the model label and chevron remain visible. No specification issue or upstream feedback is recorded yet.",
+      "reason": "The original trigger-shrink change did not fix custom ACP logo overflow and was reverted. The retained icon-width fix keeps the model label and chevron visible. No specification issue or upstream feedback is recorded yet.",
       "source": {
         "baseCommit": "e865697f56bea89f3413dd4cc7fae964850d20a0",
-        "versionCommit": "3b4f935d381dcd66be5e515585b145869f48f9ac",
+        "versionCommit": "d9d5a451cce2a210c7b24da5feb926902126d532",
         "commits": [
           {
             "commit": "5be76d569802981ec4cde245f4f03c51731431d9",
@@ -819,6 +819,10 @@
           {
             "commit": "3b4f935d381dcd66be5e515585b145869f48f9ac",
             "logicalPatch": "mobile-model-picker-v2"
+          },
+          {
+            "commit": "d9d5a451cce2a210c7b24da5feb926902126d532",
+            "logicalPatch": "mobile-model-picker-v3-revert-trigger-sizing"
           }
         ]
       },
