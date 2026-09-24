@@ -103,6 +103,28 @@ git check-ignore -v config/local-aggregate-web.json
 - 没有明确服务部署授权时，到构建和原生 ABI 检查完成为止，不修改 systemd、Tailscale 或本机目标配置。
 - 切换后，在浏览器强制刷新一次以加载新的前端 bundle，并打开一个既有会话确认数据可见。
 
+## 外部 Cursor SDK 适配器
+
+`Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用该仓库 `local/aggregate` 的构建入口。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
+
+在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。
+
+```json
+{
+  "id": "cursor-sdk",
+  "displayName": "Cursor (SDK)",
+  "command": "node",
+  "args": ["/data/code/cursor-acp/dist/index.js"],
+  "steeringMode": "auto",
+  "nativeSkillRoots": {
+    "user": [".cursor/skills"],
+    "project": [".cursor/skills"]
+  }
+}
+```
+
+该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。
+
 ## 回退
 
 代码问题：修复或回退提交放回拥有该改动的 `feature/*`/`fix/*` 分支，重新聚合并构建；
