@@ -10,9 +10,11 @@ import type { ThreadEventWithMeta } from "../src/build-event-projection.js";
 function goalUpdatedEvent({
   objective,
   seq,
+  kind = LEGACY_CODEX_GOAL_EXTENSION_KIND,
 }: {
   objective: string;
   seq: number;
+  kind?: `${string}/${string}`;
 }): ThreadEventWithMeta {
   return {
     event: {
@@ -20,7 +22,7 @@ function goalUpdatedEvent({
       threadId: "thread-1",
       providerThreadId: "provider-thread-1",
       scope: threadScope(),
-      kind: LEGACY_CODEX_GOAL_EXTENSION_KIND,
+      kind,
       payload: {
         objective,
         status: "active",
@@ -149,5 +151,17 @@ describe("extractThreadTimelineGoal", () => {
         },
       ])?.objective,
     ).toBe("Goal");
+  });
+
+  it("reads Goal state from an ACP provider extension", () => {
+    expect(
+      extractThreadTimelineGoal([
+        goalUpdatedEvent({
+          seq: 1,
+          objective: "ACP goal",
+          kind: "account-limits/goal",
+        }),
+      ])?.objective,
+    ).toBe("ACP goal");
   });
 });
