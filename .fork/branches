@@ -28,4 +28,5 @@ feature/sidebar-pinned-new-thread      needs-feedback                           
 fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
 fix/mobile-model-picker                needs-feedback                                             # 移动端模型选择器触发区
 feature/mobile-queue-action            needs-feedback                                             # 移动端排队消息发送
+fix/mobile-composer-top-clearance      needs-feedback                                             # 移动端长输入框避让顶部左右按钮
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
