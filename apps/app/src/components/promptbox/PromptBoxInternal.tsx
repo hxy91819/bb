@@ -147,6 +147,8 @@ const PROMPTBOX_MIN_HEIGHT = 68;
 const PROMPTBOX_SELECTION_REVEAL_MARGIN = 12;
 const COMPACT_PROMPT_ACTION_BUTTON_CLASS =
   "size-8 p-0 transition-all [&_[data-icon-root]]:size-4";
+const TOUCH_PROMPT_SUBMIT_BUTTON_CLASS =
+  "size-11 shrink-0 p-0 transition-colors";
 const RICH_PASTE_BLOCK_TAGS = new Set([
   "ADDRESS",
   "ARTICLE",
@@ -241,6 +243,11 @@ export interface PromptBoxSubmissionConfig {
   onModifierSubmit?: () => void;
   swapSubmitActions?: boolean;
   showModifierSubmitAction?: boolean;
+  secondaryAction?: {
+    icon: IconName;
+    onSubmit: () => void;
+    title: string;
+  };
 }
 
 interface PromptSubmitButtonProps {
@@ -342,7 +349,10 @@ function PromptSubmitButton({
       )}
     >
       {isBusy ? (
-        <Icon name="Loading" className="size-4 animate-spin motion-reduce:animate-none" />
+        <Icon
+          name="Loading"
+          className="size-4 animate-spin motion-reduce:animate-none"
+        />
       ) : (
         <>
           <Icon name={icon ?? "CornerDownLeft"} className="size-4" />
@@ -1249,6 +1259,7 @@ export function PromptBoxInternal({
     onModifierSubmit: onDefaultModifierSubmit,
     swapSubmitActions = false,
     showModifierSubmitAction = false,
+    secondaryAction,
   } = submission;
   const draftSubmitAction = { onSubmit: onDefaultSubmit, requiresInput: true };
   const immediateSubmitAction = {
@@ -3448,7 +3459,10 @@ export function PromptBoxInternal({
                   ) : null}
                   <div
                     data-promptbox-submit-group=""
-                    className="flex shrink-0 flex-row items-center"
+                    className={cn(
+                      "flex shrink-0 flex-row items-center",
+                      isPointerCoarse && secondaryAction && "gap-3",
+                    )}
                   >
                     {showStop ? (
                       <Button
@@ -3492,49 +3506,72 @@ export function PromptBoxInternal({
                         <Icon name="Mic" className="size-4" />
                       </Button>
                     ) : (
-                      <ComposerSendMenu
-                        isPointerCoarse={isPointerCoarse}
-                        includePluginContributions={
-                          !suppressPluginComposerCustomizations
-                        }
-                        queue={swapSubmitActions}
-                        hasInput={hasSubmittableInput}
-                        canSubmit={canSubmit}
-                        onSubmit={
-                          showModifierSubmitAction && onModifierSubmit
-                            ? submitModifierPrompt
-                            : undefined
-                        }
-                      >
-                        <PromptSubmitButton
-                          canSubmit={canSubmit}
+                      <>
+                        {isPointerCoarse && secondaryAction ? (
+                          <Button
+                            data-promptbox-secondary-submit-action=""
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            aria-label={secondaryAction.title}
+                            onPointerDown={(event) => {
+                              if (event.button === 0) event.preventDefault();
+                            }}
+                            onClick={secondaryAction.onSubmit}
+                            className={TOUCH_PROMPT_SUBMIT_BUTTON_CLASS}
+                          >
+                            <Icon
+                              name={secondaryAction.icon}
+                              className="size-4"
+                            />
+                          </Button>
+                        ) : null}
+                        <ComposerSendMenu
+                          isPointerCoarse={isPointerCoarse}
+                          includePluginContributions={
+                            !suppressPluginComposerCustomizations
+                          }
+                          queue={swapSubmitActions}
                           hasInput={hasSubmittableInput}
-                          icon={submitIcon}
-                          label={submitLabel}
-                          className={cn(
-                            showCompactLayout
-                              ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
-                              : [
-                                  "ml-1",
-                                  COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
-                                ],
-                            "transition-colors",
-                          )}
-                          disabledReason={
-                            !canSubmit
-                              ? isAttaching
-                                ? attachmentUploadTitle
-                                : submitDisabledReason
+                          canSubmit={canSubmit}
+                          onSubmit={
+                            showModifierSubmitAction && onModifierSubmit
+                              ? submitModifierPrompt
                               : undefined
                           }
-                          isBusy={isSubmitting || isAttaching}
-                          isCompact={showCompactLayout}
-                          onPointerDown={handleSubmitPointerDown}
-                          onClick={handleSubmitClick}
-                          onTouchSubmit={handleTouchSubmit}
-                          title={effectiveSubmitTitle}
-                        />
-                      </ComposerSendMenu>
+                        >
+                          <PromptSubmitButton
+                            canSubmit={canSubmit}
+                            hasInput={hasSubmittableInput}
+                            icon={submitIcon}
+                            label={submitLabel}
+                            className={cn(
+                              isPointerCoarse && secondaryAction && !submitLabel
+                                ? TOUCH_PROMPT_SUBMIT_BUTTON_CLASS
+                                : showCompactLayout
+                                  ? COMPACT_PROMPT_ACTION_BUTTON_CLASS
+                                  : [
+                                      "ml-1",
+                                      COARSE_POINTER_PROMPT_ACTION_BUTTON_CLASS,
+                                    ],
+                              "transition-colors",
+                            )}
+                            disabledReason={
+                              !canSubmit
+                                ? isAttaching
+                                  ? attachmentUploadTitle
+                                  : submitDisabledReason
+                                : undefined
+                            }
+                            isBusy={isSubmitting || isAttaching}
+                            isCompact={showCompactLayout}
+                            onPointerDown={handleSubmitPointerDown}
+                            onClick={handleSubmitClick}
+                            onTouchSubmit={handleTouchSubmit}
+                            title={effectiveSubmitTitle}
+                          />
+                        </ComposerSendMenu>
+                      </>
                     )}
                   </div>
                 </ComposerActionsSlot>
