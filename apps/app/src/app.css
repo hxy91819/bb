@@ -468,6 +468,17 @@
     padding: 0;
   }
 
+  @media (pointer: coarse) {
+    [data-follow-up-composer]
+      [data-promptbox-submit-group]:has(
+        [data-promptbox-secondary-submit-action]
+      )
+      [data-promptbox-submit-action] {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+  }
+
   [data-follow-up-composer] [data-promptbox-submit-label] {
     display: none;
   }
