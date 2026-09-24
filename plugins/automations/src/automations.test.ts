@@ -44,7 +44,11 @@ import {
   mapScriptResultToRun,
   scriptPathEnv,
 } from "./script-runner.js";
-import { executeScriptRun, reconcileRunningAutomationRuns } from "./run.js";
+import {
+  executeScriptRun,
+  markAutomationSession,
+  reconcileRunningAutomationRuns,
+} from "./run.js";
 import { createScriptWorkingDirectoryResolver } from "./working-directory.js";
 import { sweepDueAutomations } from "./sweep.js";
 import { createAutomationService } from "./service.js";
@@ -2519,6 +2523,17 @@ describe("script project context", () => {
     });
     expect(withoutMissingBbCliWarning(result.closed?.output)).toBe(
       "stdout kept\n\n  missing project file  \nlater detail\n",
+    );
+  });
+});
+
+describe("session marker", () => {
+  it("marks session text once and idempotently", () => {
+    expect(markAutomationSession("summarize the inbox")).toBe(
+      "[auto] summarize the inbox",
+    );
+    expect(markAutomationSession("[auto] already marked")).toBe(
+      "[auto] already marked",
     );
   });
 });
