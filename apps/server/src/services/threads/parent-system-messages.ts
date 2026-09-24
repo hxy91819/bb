@@ -12,6 +12,7 @@ import type {
   SystemMessageKind,
   SystemMessageSubject,
   Thread,
+  ThreadExecutionOptions,
 } from "@bb/domain";
 import type { HostDaemonCommand } from "@bb/host-daemon-contract";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
@@ -482,6 +483,7 @@ export async function queueParentSystemMessage(
 }
 
 interface DeliverParentSystemMessageArgs extends ParentSystemMessageTaxonomy {
+  execution?: ThreadExecutionOptions;
   input: PromptInput[];
   parentThread: Thread;
 }
@@ -509,13 +511,9 @@ async function deliverParentSystemMessageWithContextGuard(
 ): Promise<boolean> {
   const { parentThread } = args;
   const { environment } = requireThreadEnvironment(deps.db, parentThread.id);
-  const execution = await buildExecutionOptions(
-    deps,
-    {},
-    {
-      threadId: parentThread.id,
-    },
-  );
+  const execution = await buildExecutionOptions(deps, args.execution ?? {}, {
+    threadId: parentThread.id,
+  });
   if (
     await dispatchTurnDuringReprovision({
       deps,
