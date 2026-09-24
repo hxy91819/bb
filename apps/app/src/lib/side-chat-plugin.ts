@@ -4,6 +4,8 @@ export const SIDE_CHAT_PLUGIN_ID = "side-chat";
 
 export const SIDE_CHAT_PLUGIN_PANEL_ACTION_ID = "side-chat";
 
+export const SIDE_CHAT_COMMAND_NAME = "side";
+
 export function isPluginSideChatSenderThread(
   metadata: SenderThreadMetadata | null,
 ): boolean {
