@@ -107,7 +107,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 `Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用该仓库 `local/aggregate` 的构建入口。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
 
-在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。
+在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。`nativeSkillRoots` 与内置 `acp-cursor` 的已知 agent 定义对齐（四族根、`recursive`，project 侧加 `ancestors`）；只配 `.cursor/skills` 会导致技能自动发现为空——本机用户技能实际在 `~/.agents/skills` 等根下。`~/.cursor/skills-cursor`（Cursor 自带技能）由适配器在会话内直接传给 SDK，不进 BB 列表，与原 provider 行为一致。
 
 ```json
 {
@@ -117,13 +117,23 @@ git check-ignore -v config/local-aggregate-web.json
   "args": ["/data/code/cursor-acp/dist/index.js"],
   "steeringMode": "auto",
   "nativeSkillRoots": {
-    "user": [".cursor/skills"],
-    "project": [".cursor/skills"]
+    "user": [
+      {"path": ".cursor/skills", "recursive": true},
+      {"path": ".agents/skills", "recursive": true},
+      {"path": ".claude/skills", "recursive": true, "skipIfManifest": ".claude-plugin/plugin.json"},
+      {"path": ".codex/skills", "recursive": true}
+    ],
+    "project": [
+      {"path": ".cursor/skills", "recursive": true, "ancestors": true},
+      {"path": ".agents/skills", "recursive": true, "ancestors": true},
+      {"path": ".claude/skills", "recursive": true, "ancestors": true, "skipIfManifest": ".claude-plugin/plugin.json"},
+      {"path": ".codex/skills", "recursive": true, "ancestors": true}
+    ]
   }
 }
 ```
 
-该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。
+该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。命令菜单与原 `acp-cursor` 对等：`/clear` 加技能条目；适配器自身的 `/help`、`/model` 等 ACP 命令 BB 不消费（对原 provider 同样如此），`supportsManualCompaction` 不设（与原 provider 一致，`/compact` 同样隐藏）。
 
 ## 回退
 
