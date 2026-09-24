@@ -151,6 +151,8 @@ interface RenderSidebarItemsOptions {
   initialEntries?: string[];
   initialLayout?: SplitLayout;
   onCompactCustomizeModeChange?: (isCustomizing: boolean) => void;
+  pinnedContainer?: HTMLElement | null;
+  pinnedKeys?: readonly string[];
   splitEnabled?: boolean;
 }
 
@@ -176,6 +178,8 @@ function PluginNavSidebarItemsHarness({
     <PluginNavSidebarItems
       builtInEntries={options.builtInEntries}
       splitEnabled={options.splitEnabled}
+      pinnedContainer={options.pinnedContainer ?? null}
+      pinnedKeys={options.pinnedKeys}
       {...compactControlProps}
     />
   );
@@ -1767,6 +1771,135 @@ describe("PluginNavSidebarItems", () => {
         subPath: "",
       }),
     ).not.toBeNull();
+  });
+
+  describe("pinned navigation rows", () => {
+    function createPinnedHost(): HTMLElement {
+      const host = document.createElement("div");
+      host.dataset.testid = "pinned-navigation-host";
+      document.body.appendChild(host);
+      return host;
+    }
+
+    it("renders a pinned built-in row into the pinned container instead of the items list", () => {
+      const pinnedHost = createPinnedHost();
+      try {
+        renderSidebarItems({
+          builtInEntries: [
+            builtInEntry("new-thread", "New thread"),
+            builtInEntry("extensions", "Plugins"),
+          ],
+          pinnedContainer: pinnedHost,
+          pinnedKeys: ["__bb__/new-thread"],
+        });
+
+        expect(
+          pinnedHost.querySelector(
+            '[data-sidebar-navigation-item="__bb__/new-thread"]',
+          ),
+        ).not.toBeNull();
+        expect(
+          within(pinnedHost).getByRole("button", { name: "New thread" }),
+        ).toBeTruthy();
+        expect(visibleRowKeys()).toEqual(["__bb__/extensions"]);
+      } finally {
+        pinnedHost.remove();
+      }
+    });
+
+    it("keeps a hidden pinned row under More instead of pinning it", async () => {
+      const pinnedHost = createPinnedHost();
+      try {
+        renderSidebarItems({
+          builtInEntries: [
+            builtInEntry("new-thread", "New thread"),
+            builtInEntry("extensions", "Plugins"),
+          ],
+          storedOrder: ["__bb__/new-thread", "__bb__/extensions"],
+          storedVisibleKeys: ["__bb__/extensions"],
+          pinnedContainer: pinnedHost,
+          pinnedKeys: ["__bb__/new-thread"],
+        });
+
+        expect(pinnedHost.childElementCount).toBe(0);
+        expect(visibleRowKeys()).toEqual(["__bb__/extensions"]);
+        const moreItems = await openMoreMenu();
+        expect(
+          moreItems.some(
+            (item) =>
+              item.getAttribute("data-sidebar-navigation-more-item") ===
+              "__bb__/new-thread",
+          ),
+        ).toBe(true);
+      } finally {
+        pinnedHost.remove();
+      }
+    });
+
+    it("unpins the row when it is hidden from the pinned row's context menu", async () => {
+      const pinnedHost = createPinnedHost();
+      try {
+        renderSidebarItems({
+          builtInEntries: [
+            builtInEntry("new-thread", "New thread"),
+            builtInEntry("extensions", "Plugins"),
+          ],
+          pinnedContainer: pinnedHost,
+          pinnedKeys: ["__bb__/new-thread"],
+        });
+
+        const pinnedRow = pinnedHost.querySelector<HTMLElement>(
+          '[data-sidebar-navigation-item="__bb__/new-thread"]',
+        );
+        expect(pinnedRow).not.toBeNull();
+        fireEvent.contextMenu(pinnedRow as HTMLElement);
+        fireEvent.click(
+          await screen.findByRole("menuitem", { name: "Hide from sidebar" }),
+        );
+
+        await waitFor(() => expect(pinnedHost.childElementCount).toBe(0));
+        expect(visibleRowKeys()).toEqual(["__bb__/extensions"]);
+        const moreItems = await openMoreMenu();
+        expect(
+          moreItems.some(
+            (item) =>
+              item.getAttribute("data-sidebar-navigation-more-item") ===
+              "__bb__/new-thread",
+          ),
+        ).toBe(true);
+      } finally {
+        pinnedHost.remove();
+      }
+    });
+
+    it("returns the pinned row to the customize list while customizing", async () => {
+      const pinnedHost = createPinnedHost();
+      try {
+        renderSidebarItems({
+          builtInEntries: [
+            builtInEntry("new-thread", "New thread"),
+            builtInEntry("extensions", "Plugins"),
+          ],
+          pinnedContainer: pinnedHost,
+          pinnedKeys: ["__bb__/new-thread"],
+        });
+
+        const pinnedRow = pinnedHost.querySelector<HTMLElement>(
+          '[data-sidebar-navigation-item="__bb__/new-thread"]',
+        );
+        expect(pinnedRow).not.toBeNull();
+        await openCustomizeFromContextMenu(pinnedRow as HTMLElement);
+
+        expect(pinnedHost.childElementCount).toBe(0);
+        expect(
+          customizeRows().some((row) =>
+            row.textContent?.includes("New thread"),
+          ),
+        ).toBe(true);
+      } finally {
+        pinnedHost.remove();
+      }
+    });
   });
 });
 
