@@ -46,7 +46,51 @@ function useCompactHomeMetrics() {
     const scrollViewport = scrollViewportRef.current;
     const bottomSpacer = bottomSpacerRef.current;
     if (!region || !composer || !scrollViewport || !bottomSpacer) return;
+    let selectionFrame: number | null = null;
+    const keepSelectionVisible = () => {
+      selectionFrame = null;
+      const editor = composer.querySelector<HTMLElement>(
+        "[data-promptbox-editor-scroll]",
+      );
+      const selection = window.getSelection();
+      if (
+        !editor ||
+        !document.activeElement ||
+        !editor.contains(document.activeElement) ||
+        !selection?.isCollapsed ||
+        selection.rangeCount === 0 ||
+        !editor.contains(selection.anchorNode)
+      ) {
+        return;
+      }
+      const editorRect = editor.getBoundingClientRect();
+      const selectionRect = selection.getRangeAt(0).getBoundingClientRect();
+      if (selectionRect.bottom > editorRect.bottom - 4) {
+        editor.scrollTop += selectionRect.bottom - editorRect.bottom + 4;
+      } else if (selectionRect.top < editorRect.top + 4) {
+        editor.scrollTop -= editorRect.top - selectionRect.top + 4;
+      }
+    };
     const measure = () => {
+      const editor = composer.querySelector<HTMLElement>(
+        "[data-promptbox-editor-scroll]",
+      );
+      if (editor) {
+        const surroundingHeight = composer.offsetHeight - editor.offsetHeight;
+        const availableEditorHeight = Math.max(
+          0,
+          region.offsetHeight -
+            COMPACT_HOME_CHROME_OFFSET_PX -
+            surroundingHeight,
+        );
+        composer.style.setProperty(
+          "--bb-compact-home-editor-max-height",
+          `${availableEditorHeight}px`,
+        );
+        if (selectionFrame !== null)
+          window.cancelAnimationFrame(selectionFrame);
+        selectionFrame = window.requestAnimationFrame(keepSelectionVisible);
+      }
       const composerHeight = composer.offsetHeight;
       scrollViewport.style.top = `${getCompactHomeScrollViewportTop({
         regionHeight: region.offsetHeight,
@@ -55,11 +99,16 @@ function useCompactHomeMetrics() {
       bottomSpacer.style.height = `${composerHeight}px`;
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(region);
-    observer.observe(composer);
-    return () => observer.disconnect();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(region);
+    observer?.observe(composer);
+    return () => {
+      observer?.disconnect();
+      if (selectionFrame !== null) window.cancelAnimationFrame(selectionFrame);
+    };
   }, []);
 
   return { regionRef, composerRef, scrollViewportRef, bottomSpacerRef };

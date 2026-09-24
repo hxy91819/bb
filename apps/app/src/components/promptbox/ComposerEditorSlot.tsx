@@ -16,6 +16,8 @@ const COMPOSER_EDITOR_MAX_HEIGHT_BY_LAYOUT: Record<
   thread: "calc(50dvh - 3rem)",
   "root-compose": "calc(70dvh - 3rem)",
 };
+const COMPACT_HOME_EDITOR_MAX_HEIGHT =
+  "var(--bb-compact-home-editor-max-height, 9999px)";
 
 export function blurPromptEditor(editor: Editor | null | undefined): void {
   editor?.view.dom.blur();
@@ -51,11 +53,13 @@ export function ComposerEditorSlot({
         isCompactLayout && "h-12 overflow-hidden pb-0 pr-14 pt-0",
       )}
       style={{
-        minHeight: isCompactLayout ? "48px" : `${minHeight}px`,
+        minHeight: isCompactLayout
+          ? "48px"
+          : `min(${minHeight}px, ${COMPACT_HOME_EDITOR_MAX_HEIGHT})`,
         height: isCompactLayout ? "48px" : undefined,
         maxHeight: isCompactLayout
           ? "48px"
-          : COMPOSER_EDITOR_MAX_HEIGHT_BY_LAYOUT[layout],
+          : `min(${COMPOSER_EDITOR_MAX_HEIGHT_BY_LAYOUT[layout]}, ${COMPACT_HOME_EDITOR_MAX_HEIGHT})`,
       }}
     >
       <PromptMentionLinkContext.Provider value={resolveMentionLink ?? null}>
