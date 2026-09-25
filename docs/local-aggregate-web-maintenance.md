@@ -107,7 +107,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 `Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用该仓库 `local/aggregate` 的构建入口。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
 
-在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。`nativeSkillRoots` 统一按 `.agents` 标准单根配置（2026-09-24 owner 决定）：共享技能只从 `.agents/skills` 发现（`recursive`，project 侧加 `ancestors`），不配 `.cursor`/`.claude`/`.codex` 多族根，避免对平行目录/符号链接农场的重复发现。额外声明 Cursor 专属根 `.cursor/skills-cursor`（Cursor 自带技能，其他 provider 不会扫到，不会重复）：BB 的 Skills 面板按扫描到的文件路径跨 provider 去重、先注册的 provider 先得，codex 等更早注册的 provider 会先占用 `.agents/skills` 的顶层文件，Cursor (SDK) 靠这个专属根才在面板上有自己的 user scope 技能（19 个）；在 composer 的 `/` 菜单里两个根的技能都可用，与归属无关。`~/.cursor/skills-cursor` 同时也由适配器在会话内传给 SDK，与原 provider 行为一致。
+在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。`nativeSkillRoots` 只决定 composer `/` 菜单列出哪些技能；全局提示词和技能是否进入 SDK 模型上下文由适配器负责。技能根不写 `recursive`：BB 的递归扫描会跳过软链接技能目录，非递归的用户根才会跟随软链接；`.agents/skills/.system` 因此单独列出。原则、分工和验证方法以 cursor-acp 仓库的 [docs/environment-discovery.md](https://github.com/hxy91819/cursor-acp/blob/fork-tooling/docs/environment-discovery.md) 为准，增删技能根时同步核对适配器实际加载的目录。
 
 ```json
 {
@@ -117,23 +117,15 @@ git check-ignore -v config/local-aggregate-web.json
   "args": ["/data/code/cursor-acp/dist/index.js"],
   "steeringMode": "auto",
   "nativeSkillRoots": {
-    "user": [
-      {"path": ".agents/skills", "recursive": true},
-      {"path": ".cursor/skills-cursor", "recursive": true}
-    ],
-    "project": [
-      {"path": ".agents/skills", "recursive": true, "ancestors": true}
-    ]
+    "user": [".agents/skills", ".agents/skills/.system", ".cursor/skills-cursor"],
+    "project": [{"path": ".agents/skills", "ancestors": true}]
   }
 }
 ```
 
 该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。命令菜单与原 `acp-cursor` 对等：`/clear` 加技能条目；适配器自身的 `/help`、`/model` 等 ACP 命令 BB 不消费（对原 provider 同样如此），`supportsManualCompaction` 不设（与原 provider 一致，`/compact` 同样隐藏）。
 
-**配置后自检（欠配不报错，只会静默变空）**：
-1. `find ~/.agents/skills ~/.cursor/skills-cursor -maxdepth 2 -name SKILL.md | head` 有输出，说明声明的根真实存在；为空则根配错了（换成机器上实际有技能的目录；不要为了填空去列 `.claude`/`.codex` 等平行目录，会造成重复发现）。
-2. 在 Cursor (SDK) 线程输入 `/`，技能菜单非空即通过。
-3. Tools → Skills 面板 Cursor (SDK) 分组非空：面板按扫描到的文件路径跨 provider 去重、先注册者先得，共享根的技能可能归属给更早注册的 provider，专属根（`.cursor/skills-cursor`）保证这个分组有自己的技能。
+**配置后自检（欠配不报错，只会静默变空）**：按 cursor-acp `docs/environment-discovery.md` 的“验证方法”执行；至少确认 Cursor (SDK) 线程输入 `/` 能看到软链接技能（如 `ppt-visual-review`、`tdd`），并用一次最短真调用确认模型拿到了全局提示词。Skills 面板按文件路径跨 provider 去重、先注册者先得，Cursor (SDK) 分组显示多少不代表可用性。
 
 ## 回退
 
