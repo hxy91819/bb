@@ -655,6 +655,15 @@ bb plugin config provider-acp set customAgents '[
 ]'
 ```
 
+To give a custom agent a declared plugin icon, for example the icon shipped
+with the ACP providers plugin for a Cursor SDK adapter:
+
+```bash
+bb plugin config provider-acp set customAgents '[
+  {"id": "cursor-sdk", "displayName": "Cursor (SDK)", "command": "node", "args": ["/path/to/adapter.js"], "icon": "provider-acp/cursor", "iconTint": {"light": "#111827", "dark": "#F5F5F5"}}
+]'
+```
+
 Each entry needs `id` (lowercase letters, digits and dashes), `displayName`,
 and `command`. bb derives the provider id `acp-<id>`; it never changes once a
 thread has used it. An id bb always lists (`cursor`) is reserved; an id bb
@@ -663,8 +672,11 @@ lists only where the agent is installed (`opencode`, `omp`, `grok`,
 A replacing entry keeps the shipped agent's `nativeSkillRoots` unless it sets
 its own, and bb still lists the roots that agent's host config names (its
 config directory, compat trees, configured paths, plugins) either way.
-Optional fields: `args`, `env`, `cwd`, `modelCli` (CLI model listing and
-selection), `reasoningCli` (launch-time reasoning flags), `nativeReasoning`
+Optional fields: `icon` (a nonempty host glyph name or an icon declared by this
+plugin, such as `provider-acp/cursor`; omitted entries use `Toolbox`),
+`iconTint` (`{"light": "...", "dark": "..."}` with nonempty color values;
+omitted entries use the normal theme color), `args`, `env`, `cwd`, `modelCli`
+(CLI model listing and selection), `reasoningCli` (launch-time reasoning flags), `nativeReasoning`
 (ACP `session/set_config_option` reasoning), `nativeSkillRoots` (native skills
 in the composer, as `{"user": [...], "project": [...]}` relative paths; an
 entry is a path or `{"path": ..., "recursive": true, "ancestors": true}` for
