@@ -130,6 +130,11 @@ git check-ignore -v config/local-aggregate-web.json
 
 该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。命令菜单与原 `acp-cursor` 对等：`/clear` 加技能条目；适配器自身的 `/help`、`/model` 等 ACP 命令 BB 不消费（对原 provider 同样如此），`supportsManualCompaction` 不设（与原 provider 一致，`/compact` 同样隐藏）。
 
+**配置后自检（欠配不报错，只会静默变空）**：
+1. `find ~/.agents/skills ~/.cursor/skills-cursor -maxdepth 2 -name SKILL.md | head` 有输出，说明声明的根真实存在；为空则根配错了（换成机器上实际有技能的目录；不要为了填空去列 `.claude`/`.codex` 等平行目录，会造成重复发现）。
+2. 在 Cursor (SDK) 线程输入 `/`，技能菜单非空即通过。
+3. Tools → Skills 面板 Cursor (SDK) 分组非空：面板按扫描到的文件路径跨 provider 去重、先注册者先得，共享根的技能可能归属给更早注册的 provider，专属根（`.cursor/skills-cursor`）保证这个分组有自己的技能。
+
 ## 回退
 
 代码问题：修复或回退提交放回拥有该改动的 `feature/*`/`fix/*` 分支，重新聚合并构建；
