@@ -107,7 +107,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 `Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用该仓库 `local/aggregate` 的构建入口。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
 
-在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。`nativeSkillRoots` 统一按 `.agents` 标准单根配置（2026-09-24 owner 决定）：不再列 `.cursor`/`.claude`/`.codex` 多族根，避免对平行目录/符号链接农场的重复发现；`recursive` + project 侧 `ancestors` 覆盖工作区及其祖先链。已用项目 commands API 差分验证：本机该配置与内置 `acp-cursor` 的技能/命令列表完全一致（26 条）。`~/.cursor/skills-cursor`（Cursor 自带技能）由适配器在会话内直接传给 SDK，不进 BB 列表，与原 provider 行为一致。
+在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。原 `acp-cursor` 保持并存。`nativeSkillRoots` 统一按 `.agents` 标准单根配置（2026-09-24 owner 决定）：共享技能只从 `.agents/skills` 发现（`recursive`，project 侧加 `ancestors`），不配 `.cursor`/`.claude`/`.codex` 多族根，避免对平行目录/符号链接农场的重复发现。额外声明 Cursor 专属根 `.cursor/skills-cursor`（Cursor 自带技能，其他 provider 不会扫到，不会重复）：BB 的 Skills 面板按扫描到的文件路径跨 provider 去重、先注册的 provider 先得，codex 等更早注册的 provider 会先占用 `.agents/skills` 的顶层文件，Cursor (SDK) 靠这个专属根才在面板上有自己的 user scope 技能（19 个）；在 composer 的 `/` 菜单里两个根的技能都可用，与归属无关。`~/.cursor/skills-cursor` 同时也由适配器在会话内传给 SDK，与原 provider 行为一致。
 
 ```json
 {
@@ -118,7 +118,8 @@ git check-ignore -v config/local-aggregate-web.json
   "steeringMode": "auto",
   "nativeSkillRoots": {
     "user": [
-      {"path": ".agents/skills", "recursive": true}
+      {"path": ".agents/skills", "recursive": true},
+      {"path": ".cursor/skills-cursor", "recursive": true}
     ],
     "project": [
       {"path": ".agents/skills", "recursive": true, "ancestors": true}
