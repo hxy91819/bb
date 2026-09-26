@@ -1184,6 +1184,11 @@ function focusEditorAtEnd(editor: Editor): void {
   editor.view.focus();
 }
 
+function isPromptEditorFocusable(dom: HTMLElement): boolean {
+  if (typeof dom.checkVisibility !== "function") return true;
+  return dom.checkVisibility();
+}
+
 const SAFARI_POST_COMPOSITION_KEYDOWN_WINDOW_MS = 500;
 
 function isIPadOSWebKit(): boolean {
@@ -1995,13 +2000,54 @@ export function PromptBoxInternal({
       scheduleRevealEditorSelection();
     };
 
-    if (typeof window.requestAnimationFrame !== "function") {
+    let visibilityObserver: IntersectionObserver | null = null;
+    let deferredFocusOrigin: Element | null = null;
+    const stopDeferredFocus = () => {
+      visibilityObserver?.disconnect();
+      visibilityObserver = null;
+      deferredFocusOrigin = null;
+    };
+    const focusEditorWhenVisible = () => {
+      if (
+        editor.isDestroyed ||
+        document.activeElement === editor.view.dom
+      ) {
+        stopDeferredFocus();
+        return;
+      }
+      if (
+        !isPromptEditorFocusable(editor.view.dom) &&
+        typeof IntersectionObserver === "function"
+      ) {
+        if (visibilityObserver === null) {
+          deferredFocusOrigin = document.activeElement;
+          visibilityObserver = new IntersectionObserver(focusEditorWhenVisible);
+          visibilityObserver.observe(editor.view.dom);
+        }
+        return;
+      }
+      const activeElement = document.activeElement;
+      const focusMovedElsewhere =
+        deferredFocusOrigin !== null &&
+        activeElement !== deferredFocusOrigin &&
+        activeElement !== null &&
+        activeElement !== document.body &&
+        activeElement !== document.documentElement;
+      stopDeferredFocus();
+      if (focusMovedElsewhere) return;
       focusEditor();
-      return;
+    };
+
+    if (typeof window.requestAnimationFrame !== "function") {
+      focusEditorWhenVisible();
+      return () => visibilityObserver?.disconnect();
     }
 
-    const handle = window.requestAnimationFrame(focusEditor);
-    return () => window.cancelAnimationFrame(handle);
+    const handle = window.requestAnimationFrame(focusEditorWhenVisible);
+    return () => {
+      window.cancelAnimationFrame(handle);
+      visibilityObserver?.disconnect();
+    };
   }, [
     autoFocus,
     editor,
