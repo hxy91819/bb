@@ -110,7 +110,7 @@ const unmappedReasoningConfig =
   process.env.FAKE_ACP_UNMAPPED_REASONING_CONFIG === "1";
 const acceptNativeReasoning =
   process.env.FAKE_ACP_ACCEPT_NATIVE_REASONING === "1";
-const setConfigModelError = process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR === "1";
+const setConfigModelError = process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR;
 const setConfigFastError = process.env.FAKE_ACP_SET_CONFIG_FAST_ERROR === "1";
 const cursorParameterizedModels =
   process.env.FAKE_ACP_CURSOR_PARAMETERIZED_MODELS === "1";
@@ -950,7 +950,11 @@ async function handleMessage(message) {
           send({
             jsonrpc: "2.0",
             id: message.id,
-            error: { code: -32603, message: "model config probe failed" },
+            error: setConfigModelError === "method-not-found"
+              ? { code: -32601, message: "Method not found" }
+              : setConfigModelError === "fixed"
+                ? { code: -32602, message: "Amp mode is fixed after the first prompt" }
+                : { code: -32603, message: "model config probe failed" },
           });
           return;
         }
