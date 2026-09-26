@@ -59,6 +59,7 @@ function renderCreationOptions(
     preferReadyProviderWhenUnset?: boolean;
     scope?: "new-thread" | "component-local";
     initialProviderId?: string;
+    newThreadSelection?: boolean;
   } = {},
 ) {
   const harness = createQueryClientTestHarness();
@@ -69,6 +70,7 @@ function renderCreationOptions(
         initialProviderId: options.initialProviderId,
         preferReadyProviderWhenUnset:
           options.preferReadyProviderWhenUnset ?? false,
+        newThreadSelection: options.newThreadSelection,
       }),
     { wrapper: harness.wrapper },
   );
@@ -171,6 +173,53 @@ describe("useThreadCreationOptions with hiddenProviders", () => {
     });
     await waitFor(() => expect(result.current.providerOptions).toHaveLength(3));
     expect(result.current.selectedProviderId).toBe("gamma");
+  });
+
+  it("rechecks a cached ready provider against the current hidden list", async () => {
+    seedConfig([]);
+    const { result, queryClient } = renderCreationOptions({
+      preferReadyProviderWhenUnset: true,
+    });
+    await waitFor(() =>
+      expect(result.current.selectedProviderId).toBe("alpha"),
+    );
+
+    queryClient.setQueryData(
+      systemConfigQueryKey(),
+      makeSystemConfig({
+        generalSettings: { ...defaultAppSettings, hiddenProviders: ["alpha"] },
+      }),
+    );
+    await waitFor(() => expect(result.current.selectedProviderId).toBe("beta"));
+  });
+
+  it("falls back from a hidden plugin new-thread seed in component-local scope", async () => {
+    seedConfig(["gamma"]);
+    const { result } = renderCreationOptions({
+      scope: "component-local",
+      initialProviderId: "gamma",
+      newThreadSelection: true,
+    });
+    await waitFor(() => expect(result.current.providerOptions).toHaveLength(2));
+    expect(result.current.selectedProviderId).toBe("alpha");
+  });
+
+  it("keeps a switch target for a thread on a hidden provider with one visible provider", async () => {
+    mocks.executionOptions.mockImplementation(async () =>
+      executionOptionsResponse([provider("gamma"), provider("beta")]),
+    );
+    seedConfig(["gamma"]);
+    const { result } = renderCreationOptions({
+      scope: "component-local",
+      initialProviderId: "gamma",
+    });
+    await waitFor(() =>
+      expect(result.current.selectedProviderId).toBe("gamma"),
+    );
+    expect(
+      result.current.providerOptions.map((option) => option.value),
+    ).toEqual(["beta"]);
+    expect(result.current.hasMultipleProviders).toBe(true);
   });
 
   it("resolves the first visible ready provider when the unset preference resolves", async () => {
