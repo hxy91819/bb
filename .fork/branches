@@ -1,0 +1,33 @@
+# Fork 分支清单：scripts/fork-aggregate 从 base 开始，按顺序 merge 下列分支生成 local/aggregate。
+# 格式：<分支>  <上游状态>  [上游链接]  # 一句话说明
+# 上游状态：needs-feedback（未反馈）| reported（已提 issue）| pr-open（已提 PR）| fork-only（个人偏好，不回流）| internal（fork 维护/部署）
+# 叠放分支（基于另一 fork 分支）必须排在其基础分支之后，说明里写 "叠在 <分支> 上"。
+
+base desktop-v0.43.4
+
+fork-tooling                           internal                                                   # fork 维护规则、聚合脚本、部署 skill
+fix/local-aggregate-server-startup     internal                                                   # 服务先监听再做启动恢复
+fix/vite-cve-2026-39363                reported        https://github.com/get-bb/bb/issues/1780   # Vite 6.4.1 CVE 覆盖到 6.4.3
+feature/mermaid-elk-layout             reported        https://github.com/get-bb/bb/issues/3382   # Mermaid 使用 ELK 布局
+feature/automation-auto-marker         fork-only                                                  # 自动化会话标记 [auto]
+fix/official-catalog-date-utc          needs-feedback                                             # 官方插件目录日期按 UTC 解析
+fix/environment-switch-auto-continue   needs-feedback                                             # 切换环境后自动继续一次
+fix/markdown-table-breakout            reported        https://github.com/get-bb/bb/issues/1705   # Markdown 表格列内滚动/展开
+feature/side-chat-command              needs-feedback                                             # /side 侧聊命令
+fix/side-chat-main-composer            internal                                                   # 主输入框提供 /side；叠在 feature/side-chat-command 上
+feature/dsh-acp-provider               needs-feedback                                             # DSH ACP provider
+fix/acp-fast-mode                      needs-feedback                                             # ACP Fast 配置；叠在 feature/dsh-acp-provider 上
+fix/acp-codex-goal                     needs-feedback                                             # ACP Codex goal；叠在 fix/acp-fast-mode 上
+fix/acp-mid-turn-steering              needs-feedback                                             # ACP 回合中 steer；叠在 fix/acp-codex-goal 上
+fix/acp-model-config-error             needs-feedback                                             # 保留 ACP 模型配置拒绝错误；叠在 fix/acp-mid-turn-steering 上
+feature/thread-project-label           needs-feedback                                             # 线程行显示项目标签
+fix/sidebar-parent-row-hover-archive   fork-only       https://github.com/get-bb/bb/issues/3821   # 父线程行不显示快速归档（桌面偏好）
+fix/sidebar-touch-hover-actions        reported        https://github.com/get-bb/bb/issues/3832   # 触屏不显示悬停归档
+fix/sidebar-touch-navigation           needs-feedback                                             # 触屏点击导航而非重命名；叠在 fix/sidebar-parent-row-hover-archive 上
+feature/sidebar-pinned-new-thread      needs-feedback                                             # New thread 固定在侧栏顶部
+fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
+fix/mobile-model-picker                needs-feedback                                             # 移动端模型选择器触发区
+feature/mobile-queue-action            needs-feedback                                             # 移动端排队消息发送
+fix/mobile-composer-top-clearance      needs-feedback                                             # 移动端长输入框避让顶部左右按钮
+fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
+feature/acp-custom-agent-icon          needs-feedback                                             # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）
