@@ -79,6 +79,10 @@ import {
   updateThreadPromptSelections,
 } from "./thread-creation-options/selection-state";
 import {
+  selectVisibleProviders,
+  visibleProviderId,
+} from "./thread-creation-options/visible-providers";
+import {
   resolveModelCatalogSelection,
   resolveModelReasoningLevel,
 } from "./thread-creation-options/model-catalog-selection";
@@ -327,6 +331,14 @@ export function useThreadCreationOptions(
   const selectedProviderIdBeforeReadyFallback = usesStoredCreateSelections
     ? storedProviderId || renderedThreadSelections.selectedProviderId
     : renderedThreadSelections.selectedProviderId;
+  const systemConfig = useSystemConfig();
+  const hiddenProviderIds = systemConfig.data?.generalSettings?.hiddenProviders;
+  const preferredProviderId = usesStoredCreateSelections
+    ? visibleProviderId(
+        selectedProviderIdBeforeReadyFallback,
+        hiddenProviderIds,
+      )
+    : selectedProviderIdBeforeReadyFallback;
   const rawPermissionMode = usesStoredCreateSelections
     ? storedPermissionMode || renderedThreadSelections.permissionMode
     : renderedThreadSelections.permissionMode;
@@ -378,7 +390,7 @@ export function useThreadCreationOptions(
     executionOptionsQueryEnabled &&
     scope === "new-thread" &&
     preferReadyProviderWhenUnset &&
-    selectedProviderIdBeforeReadyFallback.length === 0;
+    preferredProviderId.length === 0;
   const shouldResolveReadyProvider =
     canResolveReadyProvider && initialReadyProvider.status === "unresolved";
   const providerStatesQuery = useSystemProviderStates({
@@ -387,9 +399,11 @@ export function useThreadCreationOptions(
     poll: false,
   });
   const queriedReadyProviderId = shouldResolveReadyProvider
-    ? providerStatesQuery.data?.providers.find(
-        (provider) => provider.status === "ready",
-      )?.providerId
+    ? selectVisibleProviders(
+        providerStatesQuery.data?.providers ?? [],
+        hiddenProviderIds,
+        (provider) => provider.providerId,
+      ).find((provider) => provider.status === "ready")?.providerId
     : undefined;
   const readyProviderId =
     initialReadyProvider.status === "resolved"
@@ -412,8 +426,7 @@ export function useThreadCreationOptions(
     queriedReadyProviderId,
     shouldResolveReadyProvider,
   ]);
-  const rawSelectedProviderId =
-    selectedProviderIdBeforeReadyFallback || readyProviderId || "";
+  const rawSelectedProviderId = preferredProviderId || readyProviderId || "";
   const executionOptionsProviderId = executionOptionsQueryEnabled
     ? rawSelectedProviderId || undefined
     : undefined;
@@ -433,8 +446,16 @@ export function useThreadCreationOptions(
     projectId: executionOptionsProjectId,
   });
   const hostsQuery = useHosts();
-  const systemConfig = useSystemConfig();
   const providers = executionOptionsQuery.data?.providers ?? EMPTY_PROVIDERS;
+  const visibleProviders = useMemo(
+    () =>
+      selectVisibleProviders(
+        providers,
+        hiddenProviderIds,
+        (provider) => provider.id,
+      ),
+    [providers, hiddenProviderIds],
+  );
   const isLoadingModels =
     executionOptionsQueryEnabled &&
     (executionOptionsQuery.isLoading ||
@@ -458,7 +479,7 @@ export function useThreadCreationOptions(
     executionOptionsQuery.data !== undefined &&
     !executionOptionsQuery.isPlaceholderData &&
     !executionOptionsQuery.isError;
-  const hasMultipleProviders = providers.length >= 2;
+  const hasMultipleProviders = visibleProviders.length >= 2;
 
   const effectiveProviderId = useMemo(() => {
     if (
@@ -467,8 +488,8 @@ export function useThreadCreationOptions(
     ) {
       return rawSelectedProviderId;
     }
-    return providers[0]?.id ?? "";
-  }, [providers, rawSelectedProviderId]);
+    return visibleProviders[0]?.id ?? "";
+  }, [providers, visibleProviders, rawSelectedProviderId]);
 
   const { setValue: setStoredSelectedModel, value: storedSelectedModel } =
     usePromptBoxModelPreference(effectiveProviderId);
@@ -526,7 +547,7 @@ export function useThreadCreationOptions(
 
   const providerOptions = useMemo(
     (): ProviderPickerOption[] =>
-      providers.map((p) => ({
+      visibleProviders.map((p) => ({
         value: p.id,
         label: p.displayName,
         icon: getProviderIconInfo("agent", p.id, p)?.icon,
@@ -540,7 +561,7 @@ export function useThreadCreationOptions(
           ? {}
           : { installUrl: p.strings.installUrl }),
       })),
-    [providers],
+    [visibleProviders],
   );
 
   const activeProviderCapabilities = selectedProviderInfo?.capabilities;
