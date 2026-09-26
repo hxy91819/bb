@@ -292,10 +292,16 @@ name a hidden provider explicitly (SDK, CLI, or a thread already running on
 it) keep working. `hiddenProviders` is orthogonal to `providerOrder`: the
 order decides the sequence of visible providers, and a provider may appear in
 both lists. When a new-thread picker would select a hidden provider — the
-stored preference, a fork or project default, or the default provider — the
-picker falls back to the first visible provider in picker order without an
-error and without rewriting the stored setting; restore the provider to
-select it again. An update payload that omits `hiddenProviders` (as older
+stored preference, a fork or project default, the default provider, or a
+resolved ready provider — the picker falls back to the first visible provider
+in picker order without an error and without rewriting the stored setting;
+restore the provider to select it again. The fallback re-checks against the
+current hidden list on every render, so hiding a provider the composer had
+already resolved switches the selection immediately. A thread that already
+runs on a hidden provider keeps that provider selected; when only one other
+provider is visible, the composer still offers switching to it (including the
+cycle command), because the hidden provider counts as a switch source. An
+update payload that omits `hiddenProviders` (as older
 SDK clients do) keeps the stored list instead of clearing it. Set it with
 `bb settings general hiddenProviders '["acp-cursor"]'` (or `[]` to clear).
 

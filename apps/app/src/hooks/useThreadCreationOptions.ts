@@ -231,6 +231,7 @@ export function useThreadCreationOptions(
     initialPermissionMode,
     initialReasoningLevel,
     initialServiceTier,
+    newThreadSelection,
     preferReadyProviderWhenUnset = false,
     preferenceProjectId,
     resolveProviderRouting,
@@ -318,7 +319,9 @@ export function useThreadCreationOptions(
     : renderedThreadSelections.selectedProviderId;
   const systemConfig = useSystemConfig();
   const hiddenProviderIds = systemConfig.data?.generalSettings?.hiddenProviders;
-  const preferredProviderId = usesStoredCreateSelections
+  const prefersVisibleProviderSelection =
+    usesStoredCreateSelections || newThreadSelection === true;
+  const preferredProviderId = prefersVisibleProviderSelection
     ? visibleProviderId(
         selectedProviderIdBeforeReadyFallback,
         hiddenProviderIds,
@@ -372,7 +375,10 @@ export function useThreadCreationOptions(
     : undefined;
   const readyProviderId =
     initialReadyProvider.status === "resolved"
-      ? (initialReadyProvider.providerId ?? undefined)
+      ? visibleProviderId(
+          initialReadyProvider.providerId ?? "",
+          hiddenProviderIds,
+        ) || undefined
       : queriedReadyProviderId;
   useEffect(() => {
     if (!shouldResolveReadyProvider || providerStatesQuery.isPending) {
@@ -434,7 +440,7 @@ export function useThreadCreationOptions(
     executionOptionsQuery.data !== undefined &&
     !executionOptionsQuery.isPlaceholderData &&
     !executionOptionsQuery.isError;
-  const hasMultipleProviders = visibleProviders.length >= 2;
+  const hasMultipleProviders = providers.length >= 2;
 
   const effectiveProviderId = useMemo(() => {
     if (
