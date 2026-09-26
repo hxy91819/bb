@@ -340,6 +340,35 @@ provider new threads use when neither the caller nor the project chose one
 `bb settings general providerOrder '["claude-code","codex"]'` and
 `bb settings general defaultProviderId claude-code` (or `null`).
 
+The eye toggle in each Providers row hides a provider from every picker that
+selects an agent provider: the new-thread composer, the follow-up composer in
+a thread, embedded chats, plugin provider/model pickers, and provider cycling.
+Hidden providers keep their plugins, models, and settings. The following
+surfaces deliberately keep listing every provider: Settings → Providers (with
+a `Hidden` badge and a one-click restore), the collapse-finished-turns and
+usage-limits settings, machine management, the skills library's provider
+filter, and status or icon displays for threads that already run on the
+provider. An existing thread keeps running on a hidden provider: its composer
+still shows and sends with that provider even though the picker no longer
+offers it as a new choice. Hiding is a UI filter only: `/system/providers`
+and the execution-options APIs still return every provider, and callers that
+name a hidden provider explicitly (SDK, CLI, or a thread already running on
+it) keep working. `hiddenProviders` is orthogonal to `providerOrder`: the
+order decides the sequence of visible providers, and a provider may appear in
+both lists. When a new-thread picker would select a hidden provider — the
+stored preference, a fork or project default, the default provider, or a
+resolved ready provider — the picker falls back to the first visible provider
+in picker order without an error and without rewriting the stored setting;
+restore the provider to select it again. The fallback re-checks against the
+current hidden list on every render, so hiding a provider the composer had
+already resolved switches the selection immediately. A thread that already
+runs on a hidden provider keeps that provider selected; when only one other
+provider is visible, the composer still offers switching to it (including the
+cycle command), because the hidden provider counts as a switch source. An
+update payload that omits `hiddenProviders` (as older
+SDK clients do) keeps the stored list instead of clearing it. Set it with
+`bb settings general hiddenProviders '["acp-cursor"]'` (or `[]` to clear).
+
 The "Collapse finished turns" switches in Settings → Providers choose, per
 provider, how a finished turn appears in the thread timeline. Collapsed, the
 turn's work folds into one "Worked for" row and the final answer stays
