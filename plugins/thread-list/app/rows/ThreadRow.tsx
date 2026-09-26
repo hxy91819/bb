@@ -338,8 +338,16 @@ function ThreadRowComponent({
     onSave: handleRename,
   });
   const { editor, isEditing, startEditing } = rename;
+  const titlePointerType = useRef("mouse");
+  const recordTitlePointer: PointerEventHandler<HTMLElement> = (event) => {
+    titlePointerType.current = event.pointerType;
+    if (event.pointerType !== "mouse") {
+      lastSidebarTitleClick = null;
+    }
+  };
   const startTitleEditing = useCallback(
     (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+      if (titlePointerType.current !== "mouse") return;
       event.preventDefault();
       event.stopPropagation();
       startEditing();
@@ -511,6 +519,7 @@ function ThreadRowComponent({
           data-sidebar-thread-shortcut-target=""
           data-sidebar-thread-id={thread.id}
           data-sidebar-rename-anchor=""
+          onPointerDownCapture={recordTitlePointer}
           onClick={(event) => {
             if (isEditing) {
               event.preventDefault();
@@ -522,7 +531,10 @@ function ThreadRowComponent({
               openInSplit();
               return;
             }
-            if (consumeSidebarTitleDoubleClick(thread.id)) {
+            const isMouseClick =
+              titlePointerType.current === "mouse" && event.detail > 0;
+            if (!isMouseClick) lastSidebarTitleClick = null;
+            if (isMouseClick && consumeSidebarTitleDoubleClick(thread.id)) {
               event.preventDefault();
               event.stopPropagation();
               startEditing();
@@ -549,6 +561,7 @@ function ThreadRowComponent({
             <span
               className="bb-thread-title"
               title={labelTitle}
+              onPointerDownCapture={recordTitlePointer}
               onDoubleClick={startTitleEditing}
             >
               <ThreadTitle threadId={thread.id} />
