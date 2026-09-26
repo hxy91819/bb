@@ -507,6 +507,16 @@ const unscopedProviderEventSchema = z.discriminatedUnion("type", [
       scope: threadEventScopeSchema,
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("turn/input/delivery"),
+      threadId: z.string(),
+      providerThreadId: z.string(),
+      clientRequestId: clientTurnRequestIdSchema,
+      delivery: z.enum(["steer", "interrupted", "queued"]),
+      scope: threadEventScopeSchema,
+    })
+    .strict(),
   z.object({
     type: z.literal("thread/name/updated"),
     threadId: z.string(),

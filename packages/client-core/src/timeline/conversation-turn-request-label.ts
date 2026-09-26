@@ -8,5 +8,7 @@ export function turnRequestLabel(
   }
   if (turnRequest.status === "pending") return "Steer pending";
   if (turnRequest.status === "rejected") return "Steer failed";
+  if (turnRequest.delivery === "interrupted") return "Interrupted and sent";
+  if (turnRequest.delivery === "queued") return "Queued";
   return "Steer";
 }
