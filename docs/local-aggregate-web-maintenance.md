@@ -115,6 +115,8 @@ git check-ignore -v config/local-aggregate-web.json
   "displayName": "Cursor (SDK)",
   "command": "node",
   "args": ["/data/code/cursor-acp/dist/index.js"],
+  "icon": "provider-acp/cursor",
+  "iconTint": {"light": "#111827", "dark": "#F5F5F5"},
   "steeringMode": "auto",
   "nativeSkillRoots": {
     "user": [".agents/skills", ".agents/skills/.system", ".cursor/skills-cursor"],
@@ -123,7 +125,7 @@ git check-ignore -v config/local-aggregate-web.json
 }
 ```
 
-该条目注册 provider `acp-cursor-sdk`。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。命令菜单与原 `acp-cursor` 对等：`/clear` 加技能条目；适配器自身的 `/help`、`/model` 等 ACP 命令 BB 不消费（对原 provider 同样如此），`supportsManualCompaction` 不设（与原 provider 一致，`/compact` 同样隐藏）。
+该条目注册 provider `acp-cursor-sdk`。`icon`/`iconTint` 与内置 Cursor 相同，依赖 `feature/acp-custom-agent-icon`；运行中的服务不含该分支时，严格解析会拒绝这两个字段，先部署再写入。模型选用 `composer-2.5`；不设置 `dialect`，适配器不发 Cursor 原生 ACP 扩展。命令菜单与原 `acp-cursor` 对等：`/clear` 加技能条目；适配器自身的 `/help`、`/model` 等 ACP 命令 BB 不消费（对原 provider 同样如此），`supportsManualCompaction` 不设（与原 provider 一致，`/compact` 同样隐藏）。
 
 **配置后自检（欠配不报错，只会静默变空）**：按 cursor-acp `docs/environment-discovery.md` 的“验证方法”执行；至少确认 Cursor (SDK) 线程输入 `/` 能看到软链接技能（如 `ppt-visual-review`、`tdd`），并用一次最短真调用确认模型拿到了全局提示词。Skills 面板按文件路径跨 provider 去重、先注册者先得，Cursor (SDK) 分组显示多少不代表可用性。
 
