@@ -30,3 +30,4 @@ fix/mobile-model-picker                needs-feedback                           
 feature/mobile-queue-action            needs-feedback                                             # 移动端排队消息发送
 fix/mobile-composer-top-clearance      needs-feedback                                             # 移动端长输入框避让顶部左右按钮
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
+feature/acp-custom-agent-icon          needs-feedback                                             # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）
