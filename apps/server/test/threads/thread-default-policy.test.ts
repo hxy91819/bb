@@ -104,6 +104,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
         "acp-omp",
         "acp-grok",
         "acp-hermes-agent",
+        "acp-dsh",
       ],
     });
   });
@@ -127,6 +128,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
       "acp-omp",
       "acp-grok",
       "acp-hermes-agent",
+      "acp-dsh",
     ]);
     expect(
       resolveCreateThreadExecutionDefaults(userRegistry, {
@@ -170,6 +172,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
       "acp-omp",
       "acp-grok",
       "acp-hermes-agent",
+      "acp-dsh",
     ]);
   });
 
@@ -243,6 +246,7 @@ describe("resolveCreateThreadExecutionDefaults", () => {
         "acp-omp",
         "acp-grok",
         "acp-hermes-agent",
+        "acp-dsh",
       ],
     });
   });
