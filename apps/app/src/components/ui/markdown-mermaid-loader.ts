@@ -4,9 +4,14 @@ let mermaidImportPromise: Promise<Mermaid> | null = null;
 
 export function loadMermaid(): Promise<Mermaid> {
   if (mermaidImportPromise === null) {
-    mermaidImportPromise = import("mermaid").then(
-      (mermaidModule) => mermaidModule.default,
-    );
+    mermaidImportPromise = Promise.all([
+      import("mermaid"),
+      import("@mermaid-js/layout-elk"),
+    ]).then(([mermaidModule, elkLayoutsModule]) => {
+      const mermaid = mermaidModule.default;
+      mermaid.registerLayoutLoaders(elkLayoutsModule.default);
+      return mermaid;
+    });
   }
 
   return mermaidImportPromise;
