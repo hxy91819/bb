@@ -66,6 +66,17 @@ describe("app settings data", () => {
     expect(getAppKeybindingOverrides(db)).toEqual(overrides);
   });
 
+  it("round-trips hidden providers and restores visibility with an empty list", () => {
+    setAppSettings(db, {
+      ...defaultAppSettings,
+      hiddenProviders: ["acp-cursor", "codex"],
+    });
+    expect(getAppSettings(db).hiddenProviders).toEqual(["acp-cursor", "codex"]);
+
+    setAppSettings(db, { ...defaultAppSettings, hiddenProviders: [] });
+    expect(getAppSettings(db).hiddenProviders).toEqual([]);
+  });
+
   it("ignores retired keys and falls back per key on an unreadable value", () => {
     setAppSettings(db, {
       ...defaultAppSettings,
