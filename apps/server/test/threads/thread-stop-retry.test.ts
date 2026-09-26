@@ -1,5 +1,10 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { getThread, listEvents, markThreadDeleted } from "@bb/db";
+import {
+  getQueuedThreadMessage,
+  getThread,
+  listEvents,
+  markThreadDeleted,
+} from "@bb/db";
 import type { EnvironmentRow } from "@bb/db";
 import type { Thread } from "@bb/domain";
 import { describe, expect, it } from "vitest";
@@ -19,9 +24,11 @@ import {
   seedEnvironment,
   seedHostSession,
   seedProjectWithSource,
+  seedQueuedMessage,
   seedThread,
   seedTurnStarted,
 } from "../helpers/seed.js";
+import { textInput } from "../helpers/prompt-input.js";
 import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
 
 interface ActiveThreadStopFixture {
@@ -76,6 +83,30 @@ async function waitForStopRpcIdle(args: WaitForStopRpcIdleArgs): Promise<void> {
 }
 
 describe("thread stop dispatch", () => {
+  it("cancels a pending environment continuation on manual stop", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedActiveThreadStopFixture({
+        harness,
+        value: 5,
+      });
+      const continuation = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("continue after switching"),
+        waitingOn: { kind: "thread-busy" },
+        systemNotice: { kind: "environment-switched", subject: null },
+      });
+
+      requestThreadStopForCurrentState(harness.deps, thread, environment);
+
+      expect(getQueuedThreadMessage(harness.db, continuation.id)).toBeNull();
+      await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "thread.stop" && command.threadId === thread.id,
+      );
+    });
+  });
+
   it("keeps a deleted thread tombstone until storage deletion succeeds", async () => {
     await withTestHarness(async (harness) => {
       const { environment, thread } = seedActiveThreadStopFixture({

@@ -737,6 +737,26 @@ export function hasQueuedThreadMessages(
   );
 }
 
+export function hasUnclaimedOrdinaryQueuedThreadMessages(
+  db: DbQueryConnection,
+  threadId: string,
+): boolean {
+  return (
+    db
+      .select({ id: queuedThreadMessages.id })
+      .from(queuedThreadMessages)
+      .where(
+        and(
+          eq(queuedThreadMessages.threadId, threadId),
+          isNull(queuedThreadMessages.systemNotice),
+          liveQueuedThreadMessage(),
+        ),
+      )
+      .limit(1)
+      .get() !== undefined
+  );
+}
+
 function manuallyStoppedQueuePauseQuery(
   db: DbQueryConnection,
   threadId: string | typeof threads.id,
@@ -2045,6 +2065,22 @@ export function hasQueuedRetryOfTurnRequest(
       .limit(1)
       .get() !== undefined
   );
+}
+
+export function deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction(
+  db: DbTransaction,
+  args: { threadId: string; kind: QueuedMessageSystemNotice["kind"] },
+): number {
+  return db
+    .delete(queuedThreadMessages)
+    .where(
+      and(
+        eq(queuedThreadMessages.threadId, args.threadId),
+        liveQueuedThreadMessage(),
+        sql`json_extract(${queuedThreadMessages.systemNotice}, '$.kind') = ${args.kind}`,
+      ),
+    )
+    .run().changes;
 }
 
 /**

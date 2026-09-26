@@ -616,7 +616,7 @@ describe("core environment orchestration", () => {
               currentEnvironment: current,
               thread,
               turnId: "turn_admission",
-              input: { path: target.path },
+              input: { path: target.path, continueCurrentTask: false },
             },
           );
           expect(result).toMatchObject({
@@ -971,7 +971,10 @@ describe("core environment orchestration", () => {
           currentEnvironment: current,
           thread: { ...fixture.thread, environmentId: currentId },
           turnId: "turn_directory",
-          input: { path: "/tmp/same-project-worktree" },
+          input: {
+            path: "/tmp/same-project-worktree",
+            continueCurrentTask: false,
+          },
         },
       );
       expect(result.success).toBe(true);
