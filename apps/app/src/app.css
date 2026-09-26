@@ -520,6 +520,12 @@
   }
 
   [data-follow-up-composer]:not([data-follow-up-composer-expanded])
+    [data-promptbox]:has([data-promptbox-secondary-submit-action])
+    [data-promptbox-editor-scroll] {
+    padding-right: 4.5rem;
+  }
+
+  [data-follow-up-composer]:not([data-follow-up-composer-expanded])
     [data-promptbox]:not([data-promptbox-voice-active])
     [data-promptbox-editor-content] {
     display: flex;
