@@ -157,6 +157,47 @@ describe("ProvidersSettingsSection", () => {
     });
   });
 
+  it("hides a provider from the pickers and keeps it listed for restore", () => {
+    mocks.providers = [provider("alpha", "Alpha"), provider("beta", "Beta")];
+    const onChange = vi.fn();
+    render(
+      <ProvidersSettingsSection
+        disabled={false}
+        generalSettings={defaultAppSettings}
+        onGeneralSettingsChange={onChange}
+      />,
+    );
+    expect(screen.queryByText("Hidden")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide Beta" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...defaultAppSettings,
+      hiddenProviders: ["beta"],
+    });
+  });
+
+  it("marks a hidden provider and restores it with one click", () => {
+    mocks.providers = [provider("alpha", "Alpha"), provider("beta", "Beta")];
+    const onChange = vi.fn();
+    render(
+      <ProvidersSettingsSection
+        disabled={false}
+        generalSettings={{
+          ...defaultAppSettings,
+          hiddenProviders: ["beta"],
+        }}
+        onGeneralSettingsChange={onChange}
+      />,
+    );
+    expect(screen.getByText("Hidden")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Beta" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...defaultAppSettings,
+      hiddenProviders: [],
+    });
+  });
+
   it("builds the complete picker order after a drag", () => {
     expect(
       reorderProviderIds(["alpha", "beta", "gamma"], "gamma", "alpha"),

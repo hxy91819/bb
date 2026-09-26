@@ -306,6 +306,7 @@ export function registerSystemRoutes(
         : undefined;
     const updatedSettings = appSettingsSchema.parse({
       ...settings,
+      hiddenProviders: settings.hiddenProviders ?? current.hiddenProviders,
       telemetryEnabled: settings.telemetryEnabled ?? current.telemetryEnabled,
       showDiagnosticEvents:
         diagnosticValue === undefined ||
