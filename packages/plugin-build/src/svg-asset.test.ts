@@ -19,6 +19,7 @@ const FIRST_PARTY_BRANDING_SVGS = [
   "plugins/plugin-api-docs/icons/ai-generative.svg",
   "plugins/provider-acp/icons/acp.svg",
   "plugins/provider-acp/icons/cursor.svg",
+  "plugins/provider-acp/icons/dsh.svg",
   "plugins/provider-acp/icons/grok.svg",
   "plugins/provider-acp/icons/hermes-agent.svg",
   "plugins/provider-acp/icons/omp.svg",
