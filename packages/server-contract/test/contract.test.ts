@@ -54,7 +54,7 @@ const OPTIONAL_SERVER_FIELD_GROUP_LIMIT = 46;
 const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   {
     reason:
-      "Older parent notices have no per-child outcomes. New notices omit interruption details for completed, failed, or unclassified turns; a recorded host-connection-loss cause is optional even when the interruption reason is known.",
+      "Older parent notices have no per-child outcomes. New notices omit interruption details for completed, failed, or unclassified turns; a recorded host-connection-loss cause is optional even when the interruption reason is known. directUserInput appears only on outcomes whose turn recorded input sent by the user directly in the child thread; absence means none was recorded or the notice predates the field.",
     fields: [
       "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes",
       "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes.interruption",
@@ -65,6 +65,9 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
       "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes.interruption",
       "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes.interruption.cause",
       "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes.interruption.cause",
+      "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes.directUserInput",
+      "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes.directUserInput",
+      "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes.directUserInput",
     ],
   },
   {
@@ -597,8 +600,9 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      "sendAt is present only when the caller is scheduling the dispatch; omission means attempt the dispatch now, which allocates no queued row at all when nothing blocks it.",
+      "sendAt is present only when the caller is scheduling the dispatch, and draft only when it is saving the input as a draft thread instead; omission of both means attempt the dispatch now, which allocates no queued row at all when nothing blocks it.",
     fields: [
+      "createThreadRequestSchema.draft",
       "createThreadRequestSchema.sendAt",
       "sendMessageRequestSchema.sendAt",
     ],

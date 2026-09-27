@@ -1939,6 +1939,39 @@ export function getStoredTurnRequestEventForTurn(
   );
 }
 
+export function listStoredTurnRequestEventsForTurn(
+  db: DbQueryConnection,
+  args: GetStoredTurnRequestEventForTurnArgs,
+): StoredTurnRequestEventRow[] {
+  const accepted = alias(events, "accepted_turn_inputs");
+  const requested = alias(events, "requested_turn_inputs");
+  return db
+    .select({
+      data: requested.data,
+      sequence: requested.sequence,
+      threadId: requested.threadId,
+      type: requested.type,
+    })
+    .from(accepted)
+    .innerJoin(
+      requested,
+      and(
+        eq(requested.threadId, accepted.threadId),
+        eq(requested.type, "client/turn/requested"),
+        sql`json_extract(${requested.data}, '$.requestId') = json_extract(${accepted.data}, '$.clientRequestId')`,
+      ),
+    )
+    .where(
+      and(
+        eq(accepted.threadId, args.threadId),
+        eq(accepted.turnId, args.turnId),
+        eq(accepted.type, "turn/input/accepted"),
+      ),
+    )
+    .orderBy(accepted.sequence)
+    .all();
+}
+
 export interface StoredThreadEventDataRow {
   data: string;
   sequence: number;
