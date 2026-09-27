@@ -67,6 +67,48 @@ describe("parseCustomAcpAgents", () => {
     expect(parsed.problems[0]).toContain("is not a valid agent");
   });
 
+  it("accepts an icon and tint without changing agents that omit them", () => {
+    const parsed = parseCustomAcpAgents({
+      entries: [
+        {
+          id: "cursor-sdk",
+          displayName: "Cursor (SDK)",
+          command: "node",
+          icon: "provider-acp/cursor",
+          iconTint: { light: "#111827", dark: "#F5F5F5" },
+        },
+        { id: "amp", displayName: "Amp", command: "amp" },
+      ],
+      reservedProviderIds: reserved,
+    });
+
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.agents[0]).toMatchObject({
+      icon: "provider-acp/cursor",
+      iconTint: { light: "#111827", dark: "#F5F5F5" },
+    });
+    expect(parsed.agents[1]).not.toHaveProperty("iconTint");
+  });
+
+  it.each([
+    ["empty icon", { icon: "" }],
+    ["blank icon", { icon: "  " }],
+    ["empty light tint", { iconTint: { light: "", dark: "#fff" } }],
+    ["missing dark tint", { iconTint: { light: "#000" } }],
+    [
+      "extra tint key",
+      { iconTint: { light: "#000", dark: "#fff", extra: "x" } },
+    ],
+  ])("rejects %s", (_label, extra) => {
+    const parsed = parseCustomAcpAgents({
+      entries: [{ id: "amp", displayName: "Amp", command: "amp", ...extra }],
+      reservedProviderIds: reserved,
+    });
+
+    expect(parsed.agents).toEqual([]);
+    expect(parsed.problems).toHaveLength(1);
+  });
+
   it("only accepts entries whose launch spec the bridge will parse", () => {
     const parsed = parseCustomAcpAgents({
       entries: [
@@ -137,6 +179,29 @@ describe("parseCustomAcpAgents", () => {
 });
 
 describe("customAcpAgentDefinition", () => {
+  it("passes an explicit icon and tint into the provider declaration", () => {
+    const [agent] = parseCustomAcpAgents({
+      entries: [
+        {
+          id: "cursor-sdk",
+          displayName: "Cursor (SDK)",
+          command: "node",
+          icon: "provider-acp/cursor",
+          iconTint: { light: "#111827", dark: "#F5F5F5" },
+        },
+      ],
+      reservedProviderIds: reserved,
+    }).agents;
+    if (agent === undefined) throw new Error("expected the agent to parse");
+
+    const definition = customAcpAgentDefinition(agent);
+    expect(definition.icon).toBe("provider-acp/cursor");
+    expect(definition.iconTint).toEqual({ light: "#111827", dark: "#F5F5F5" });
+    const declaration = acpProviderDeclaration(definition);
+    expect(declaration.icon).toBe("provider-acp/cursor");
+    expect(declaration.strings?.iconTint).toEqual(definition.iconTint);
+  });
+
   it("carries the launch spec and drops a model CLI with nothing to list", () => {
     const [agent] = parseCustomAcpAgents({
       entries: [
@@ -166,6 +231,8 @@ describe("customAcpAgentDefinition", () => {
     });
     expect(definition.supportsManualCompaction).toBe(true);
     expect(definition.fork).toBe("none");
+    expect(definition.icon).toBe("Toolbox");
+    expect(definition.iconTint).toBeUndefined();
   });
 });
 

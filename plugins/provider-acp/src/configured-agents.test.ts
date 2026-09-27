@@ -232,6 +232,25 @@ describe("a configured entry that replaces a shipped agent", () => {
     expect(declaration.experimental_resolvesNativeRoots).toBe(true);
   });
 
+  it("uses the entry's icon and tint when replacing a shipped agent", () => {
+    const agent = onlyAgent(
+      replacing({
+        id: "opencode",
+        displayName: "My opencode",
+        command: "/opt/opencode",
+        icon: "provider-acp/cursor",
+        iconTint: { light: "#111827", dark: "#F5F5F5" },
+      }),
+    );
+
+    expect(agent.icon).toBe("provider-acp/cursor");
+    expect(agent.icon).not.toBe(shipped("acp-opencode").icon);
+    expect(agent.iconTint).toEqual({ light: "#111827", dark: "#F5F5F5" });
+    expect(acpProviderDeclaration(agent).strings?.iconTint).toEqual(
+      agent.iconTint,
+    );
+  });
+
   it("gives a new id nothing to inherit", () => {
     const bare = onlyAgent(replacing(amp("Amp", "amp")));
     expect(bare.launch.nativeSkillRoots).toBeUndefined();
