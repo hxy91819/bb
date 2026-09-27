@@ -2,6 +2,7 @@ import type {
   PromptInput,
   SystemMessageSubject,
   ThreadEventTurnStatus,
+  TurnRequestEventData,
 } from "@bb/domain";
 import { listActiveBackgroundTaskCountsByThreadIds } from "@bb/db";
 import { renderTemplate } from "@bb/templates";
@@ -24,11 +25,55 @@ import { getLastThreadOutput } from "./thread-data.js";
 
 export type ChildThreadNotificationSource = ParentSystemThreadMentionSource;
 
+export interface ChildThreadTurnAuthor {
+  hasDirectUserInput: boolean;
+  hasParentInput: boolean;
+  hasOtherAgentInput: boolean;
+  userInputExcerpt: string | null;
+}
+
+export function summarizeChildThreadTurnAuthor(
+  requests: Pick<
+    TurnRequestEventData,
+    "source" | "initiator" | "senderThreadId" | "input"
+  >[],
+  parentThreadId: string,
+): ChildThreadTurnAuthor {
+  const directUserRequests = requests.filter(
+    (request) =>
+      request.source === "tell" &&
+      request.initiator === "user" &&
+      request.senderThreadId === null,
+  );
+  const userText = directUserRequests
+    .flatMap((request) => request.input)
+    .filter((input) => input.visibility !== "agent-only")
+    .filter((input) => input.type === "text")
+    .map((input) => input.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  return {
+    hasDirectUserInput: directUserRequests.length > 0,
+    hasParentInput: requests.some(
+      (request) =>
+        request.source === "spawn" || request.senderThreadId === parentThreadId,
+    ),
+    hasOtherAgentInput: requests.some(
+      (request) =>
+        request.source === "tell" &&
+        request.senderThreadId !== null &&
+        request.senderThreadId !== parentThreadId,
+    ),
+    userInputExcerpt: userText || null,
+  };
+}
+
 export interface ChildThreadTurnNotificationBatchItem {
   activeWorkflowCount: number;
   childThread: ChildThreadNotificationSource;
   terminalOutput: string | null;
   turnStatus: ThreadEventTurnStatus;
+  author: ChildThreadTurnAuthor | null;
 }
 
 interface ChildThreadTurnNotificationBatch {
@@ -62,6 +107,7 @@ interface QueueChildThreadTurnNotificationArgs {
   childThread: ChildThreadNotificationSource;
   parentThreadId: string;
   turnStatus: ThreadEventTurnStatus;
+  author: ChildThreadTurnAuthor | null;
 }
 
 interface QueueChildThreadNeedsAttentionNotificationArgs {
@@ -76,12 +122,19 @@ const CHILD_THREAD_OUTCOME_BATCH_UPDATES_SLOT =
 const CHILD_THREAD_MENTION_SLOT = "__BB_CHILD_THREAD_MENTION__";
 const CHILD_THREAD_TERMINAL_OUTPUT_EXCERPT_CHAR_LIMIT = 4_000;
 const CHILD_THREAD_OUTPUT_TRUNCATION_MARKER = "\n\n[... output truncated ...]";
+const CHILD_THREAD_USER_INPUT_TRUNCATION_MARKER =
+  "\n\n[... input truncated ...]";
+const CHILD_THREAD_USER_INPUT_EXCERPT_CHAR_LIMIT = 1_000;
 const CHILD_THREAD_INSPECTION_GUIDANCE =
   "Review the thread before deciding next steps.";
 const CHILD_THREAD_INTERRUPTED_GUIDANCE =
   "If the user stopped it manually, do not resume, restart, retry, replace, or continue the work unless the user explicitly asks.";
 const CHILD_THREAD_BATCH_INTERRUPTED_GUIDANCE =
   "If the user stopped any interrupted thread manually, do not resume, restart, retry, replace, or continue the work unless the user explicitly asks.";
+const CHILD_THREAD_DIRECT_USER_GUIDANCE =
+  "The user's direct instructions to this thread take precedence over your earlier instructions. Review the thread before sending corrective, stop, or reassignment instructions.";
+const CHILD_THREAD_BATCH_DIRECT_USER_GUIDANCE =
+  "The user's direct instructions to those threads take precedence over your earlier instructions. Review each affected thread before sending corrective, stop, or reassignment instructions.";
 const CHILD_THREAD_NEEDS_ATTENTION_FALLBACK_SUMMARY =
   "It is blocked on a pending interaction.";
 const CHILD_THREAD_RUNNING_WORKFLOW_GUIDANCE =
@@ -136,6 +189,47 @@ function formatChildThreadCompletionOutputExcerpt(
   );
 }
 
+function formatChildThreadAuthorIntroduction(
+  author: ChildThreadTurnAuthor | null,
+  includeUserExcerpt: boolean,
+): string {
+  if (author?.hasDirectUserInput) {
+    const excerpt = includeUserExcerpt ? author.userInputExcerpt?.trim() : null;
+    const quotedInput = excerpt
+      ? `\n\nUser message:\n${truncateChildThreadOutput(excerpt, CHILD_THREAD_USER_INPUT_EXCERPT_CHAR_LIMIT).replace(CHILD_THREAD_OUTPUT_TRUNCATION_MARKER, CHILD_THREAD_USER_INPUT_TRUNCATION_MARKER)}`
+      : "";
+    return `This turn included input from the user directly in this thread; you did not initiate that input.${quotedInput}\n\n`;
+  }
+  return author?.hasOtherAgentInput
+    ? "This turn included input from another agent thread.\n\n"
+    : "";
+}
+
+function formatChildThreadBatchUserInput(
+  author: ChildThreadTurnAuthor | null,
+): string {
+  const excerpt = author?.hasDirectUserInput
+    ? author.userInputExcerpt?.trim()
+    : null;
+  if (!excerpt) {
+    return "";
+  }
+  const truncated = truncateChildThreadOutput(
+    excerpt,
+    CHILD_THREAD_USER_INPUT_EXCERPT_CHAR_LIMIT,
+  ).replace(
+    CHILD_THREAD_OUTPUT_TRUNCATION_MARKER,
+    CHILD_THREAD_USER_INPUT_TRUNCATION_MARKER,
+  );
+  return `\n  User message:\n  ${truncated.replace(/\n/g, "\n  ")}`;
+}
+
+function directUserGuidance(author: ChildThreadTurnAuthor | null): string {
+  return author?.hasDirectUserInput
+    ? `\n\n${CHILD_THREAD_DIRECT_USER_GUIDANCE}`
+    : "";
+}
+
 function formatChildThreadNeedsAttentionSummary(
   summary: string | null,
 ): string {
@@ -172,7 +266,7 @@ function buildSingleChildThreadTurnStatusSegments(
         { kind: "mention", mention: line.mention },
         {
           kind: "text",
-          text: ` completed${workflowClause}:\n\n${formatChildThreadCompletionOutputExcerpt(line.item.terminalOutput)}${workflowGuidance}`,
+          text: ` completed${workflowClause}:\n\n${formatChildThreadAuthorIntroduction(line.item.author, true)}${formatChildThreadCompletionOutputExcerpt(line.item.terminalOutput)}${workflowGuidance}${directUserGuidance(line.item.author)}`,
         },
       ];
     }
@@ -181,7 +275,7 @@ function buildSingleChildThreadTurnStatusSegments(
         { kind: "mention", mention: line.mention },
         {
           kind: "text",
-          text: ` failed.\n\n${CHILD_THREAD_INSPECTION_GUIDANCE}`,
+          text: ` failed.\n\n${formatChildThreadAuthorIntroduction(line.item.author, false)}${CHILD_THREAD_INSPECTION_GUIDANCE}${directUserGuidance(line.item.author)}`,
         },
       ];
     case "interrupted":
@@ -189,7 +283,7 @@ function buildSingleChildThreadTurnStatusSegments(
         { kind: "mention", mention: line.mention },
         {
           kind: "text",
-          text: ` was interrupted.\n\n${CHILD_THREAD_INSPECTION_GUIDANCE}\n\n${CHILD_THREAD_INTERRUPTED_GUIDANCE}`,
+          text: ` was interrupted.\n\n${formatChildThreadAuthorIntroduction(line.item.author, false)}${CHILD_THREAD_INSPECTION_GUIDANCE}\n\n${CHILD_THREAD_INTERRUPTED_GUIDANCE}${directUserGuidance(line.item.author)}`,
         },
       ];
     default: {
@@ -210,7 +304,7 @@ function buildChildThreadBatchStatusLineSegments(
     { kind: "mention", mention: line.mention },
     {
       kind: "text",
-      text: ` ${childThreadTurnStatusLabel(line.item.turnStatus)}${workflowClause}.`,
+      text: ` ${childThreadTurnStatusLabel(line.item.turnStatus)}${workflowClause}${line.item.author?.hasDirectUserInput ? " (turn included direct user input)" : line.item.author?.hasOtherAgentInput ? " (turn included input from another agent)" : ""}.${formatChildThreadBatchUserInput(line.item.author)}`,
     },
   ];
 }
@@ -254,6 +348,12 @@ function buildChildThreadTurnStatusBatchSegments(
     segments.push({
       kind: "text",
       text: `\n\n${CHILD_THREAD_BATCH_INTERRUPTED_GUIDANCE}`,
+    });
+  }
+  if (args.lines.some((line) => line.item.author?.hasDirectUserInput)) {
+    segments.push({
+      kind: "text",
+      text: `\n\n${CHILD_THREAD_BATCH_DIRECT_USER_GUIDANCE}`,
     });
   }
   if (args.lines.some((line) => line.item.activeWorkflowCount > 0)) {
@@ -406,6 +506,7 @@ function queueChildThreadTurnNotificationBatchItem(
     childThread: args.childThread,
     terminalOutput: getChildThreadCompletionOutput(deps, args),
     turnStatus: args.turnStatus,
+    author: args.author,
   };
   const existingBatch = childThreadTurnNotificationBatches.get(
     args.parentThreadId,

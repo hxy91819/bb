@@ -120,6 +120,7 @@ describe("Family B emit-site discriminator stamping", () => {
           childThread: child,
           parentThreadId: fixture.parentThreadId,
           turnStatus,
+          author: null,
         });
 
         const stamped = await waitForStampedSystemMessage(
@@ -154,11 +155,13 @@ describe("Family B emit-site discriminator stamping", () => {
         childThread: childA,
         parentThreadId: fixture.parentThreadId,
         turnStatus: "completed",
+        author: null,
       });
       await queueChildThreadTurnNotificationBestEffort(harness.deps, {
         childThread: childB,
         parentThreadId: fixture.parentThreadId,
         turnStatus: "interrupted",
+        author: null,
       });
 
       const stamped = await waitForStampedSystemMessage(

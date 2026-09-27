@@ -186,6 +186,7 @@ describe("child outcome reconciliation", () => {
           childThread: fixture.child,
           parentThreadId: fixture.parent.id,
           turnStatus: "failed",
+          author: null,
         });
       }
 
