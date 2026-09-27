@@ -126,6 +126,16 @@ function SortableProviderRow({
   const isDefault =
     generalSettings.defaultProviderId === provider.id ||
     (generalSettings.defaultProviderId === null && index === 0);
+  const isHidden = generalSettings.hiddenProviders.includes(provider.id);
+  const toggleHidden = (): void => {
+    const hiddenProviders = isHidden
+      ? generalSettings.hiddenProviders.filter((id) => id !== provider.id)
+      : [...generalSettings.hiddenProviders, provider.id];
+    void onGeneralSettingsChange({
+      ...generalSettings,
+      hiddenProviders,
+    });
+  };
 
   return (
     <SettingsRow
@@ -142,6 +152,7 @@ function SortableProviderRow({
         {provider.displayName}
       </span>
       {!provider.available ? <SettingsBadge>Unavailable</SettingsBadge> : null}
+      {isHidden ? <SettingsBadge>Hidden</SettingsBadge> : null}
       {isDefault ? (
         <SettingsBadge>Default</SettingsBadge>
       ) : (
@@ -159,6 +170,23 @@ function SortableProviderRow({
           Make default
         </Button>
       )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 text-subtle-foreground"
+        aria-label={
+          isHidden
+            ? `Show ${provider.displayName}`
+            : `Hide ${provider.displayName}`
+        }
+        disabled={disabled}
+        onClick={toggleHidden}
+      >
+        <Icon
+          name={isHidden ? "Eye" : "EyeOff"}
+          className={COARSE_POINTER_ICON_SIZE_CLASS}
+        />
+      </Button>
     </SettingsRow>
   );
 }
@@ -237,7 +265,7 @@ export function ProvidersSettingsSection({
     <>
       <SettingsSection
         title="Providers"
-        description="Set the default agent and its order in provider pickers. Configure each provider on its plugin page under Plugins."
+        description="Set the default agent and its order in provider pickers. Hidden providers stay listed here so you can restore them. Configure each provider on its plugin page under Plugins."
       >
         {providersQuery.isPending ? (
           <p className="text-sm text-muted-foreground">Loading providers…</p>

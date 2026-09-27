@@ -517,6 +517,22 @@ describe("ModelReasoningPicker", () => {
     expect(onSelectedProviderChange).toHaveBeenCalledWith("claude-code");
   });
 
+  it("cycles to the only visible provider when the selected one is hidden from the picker", () => {
+    const { onSelectedProviderChange } = renderPicker({
+      pickerProviderOptions: [{ value: "codex", label: "Codex" }],
+      selectedProviderId: "acp-cursor",
+    });
+    const trigger = screen.getByRole("button", {
+      name: "Provider, model and reasoning",
+    });
+    fireEvent.click(trigger);
+
+    expect(
+      commandHandlers.get("modelPicker.cycleProvider")?.({ target: trigger }),
+    ).toBe(true);
+    expect(onSelectedProviderChange).toHaveBeenCalledWith("codex");
+  });
+
   it("keeps search focused and clears it when switching providers", () => {
     const alternateProviderModels = [
       "claude-opus-4-7",
