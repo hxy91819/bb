@@ -1187,6 +1187,38 @@ describe("acp bridge", () => {
     ]);
   });
 
+  it("keeps ACP-native discovered models when per-model reasoning discovery errors", async () => {
+    const modelListId = sendModelList({
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+        FAKE_ACP_THOUGHT_LEVEL_CONFIG: "1",
+        FAKE_ACP_SET_CONFIG_MODEL_ERROR: "1",
+      },
+    });
+
+    expect((await waitForResponse(modelListId)).result).toMatchObject({
+      models: [
+        {
+          id: "fake/default",
+          model: "fake/default",
+          displayName: "Fake Default",
+          isDefault: true,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [{ reasoningEffort: "medium" }],
+        },
+        {
+          id: "fake/strong",
+          model: "fake/strong",
+          displayName: "Fake Strong",
+          isDefault: false,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [{ reasoningEffort: "medium" }],
+        },
+      ],
+      selectedOnlyModels: [],
+    });
+  });
+
   it("times out hung ACP-native discovery, kills the child, and reports the timeout", async () => {
     const readyFile = join(workspaceDir, "discovery-agent-ready.txt");
     let modelListId: number;
