@@ -164,6 +164,7 @@ describe("child thread notifications", () => {
           childThread: testThread({ id: "thr_child_two", title: "Review" }),
           terminalOutput: "Reviewed.",
           turnStatus: "completed",
+          author: null,
         },
       ],
     });
@@ -190,6 +191,7 @@ describe("child thread notifications", () => {
           childThread: testThread({ id: "thr_child", title: "Cleanup" }),
           terminalOutput: null,
           turnStatus: "failed",
+          author: null,
         },
       ],
     });
@@ -238,6 +240,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Implemented the requested change.",
           turnStatus: "completed",
+          author: null,
         },
       ],
     });
@@ -263,6 +266,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Deploy script failed on preflight.",
           turnStatus: "failed",
+          author: null,
         },
       ],
     });
@@ -288,6 +292,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Stopped after writing the checkout summary.",
           turnStatus: "interrupted",
+          author: null,
         },
       ],
     });
@@ -318,6 +323,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Checkout flow is fixed.",
           turnStatus: "completed",
+          author: null,
         },
         {
           activeWorkflowCount: 0,
@@ -327,6 +333,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Deploy script failed on preflight.",
           turnStatus: "failed",
+          author: null,
         },
       ],
     });
@@ -356,6 +363,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Checkout flow is fixed.",
           turnStatus: "completed",
+          author: null,
         },
         {
           activeWorkflowCount: 0,
@@ -365,6 +373,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Deploy script failed.",
           turnStatus: "failed",
+          author: null,
         },
       ],
     });
@@ -421,6 +430,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Checkout flow is fixed.",
           turnStatus: "completed",
+          author: null,
         },
         {
           activeWorkflowCount: 0,
@@ -430,6 +440,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Deploy script failed.",
           turnStatus: "failed",
+          author: null,
         },
       ],
     });
@@ -464,6 +475,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: null,
           turnStatus: "completed",
+          author: null,
         },
       ],
     });
@@ -488,6 +500,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Kicked off the balance pass.",
           turnStatus: "completed",
+          author: null,
         },
       ],
     });
@@ -514,6 +527,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Kicked off two workflows.",
           turnStatus: "completed",
+          author: null,
         },
         {
           activeWorkflowCount: 0,
@@ -523,6 +537,7 @@ describe("child thread notifications", () => {
           }),
           terminalOutput: "Deploy script failed on preflight.",
           turnStatus: "failed",
+          author: null,
         },
       ],
     });

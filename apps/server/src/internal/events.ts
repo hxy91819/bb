@@ -220,7 +220,7 @@ interface ResolveActivePruneCandidatesArgs {
 }
 
 interface AddParentTurnNotificationFollowUpArgs {
-  author?: ChildThreadTurnAuthor;
+  author: ChildThreadTurnAuthor | null;
   failedParentNotificationThreadIds: Set<string>;
   followUps: EventEffectFollowUp[];
   thread: NonNullable<ReturnType<typeof getThread>>;
@@ -229,7 +229,7 @@ interface AddParentTurnNotificationFollowUpArgs {
 
 interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
-  author?: ChildThreadTurnAuthor;
+  author: ChildThreadTurnAuthor | null;
   childThreadId: string;
   projectId: string;
   parentThreadId: string;
@@ -507,6 +507,7 @@ async function applyEventEffects(
         });
         if (outcome.applied) {
           addParentTurnNotificationFollowUp({
+            author: null,
             failedParentNotificationThreadIds,
             followUps,
             thread,

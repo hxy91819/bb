@@ -72,7 +72,7 @@ export interface ChildThreadTurnNotificationBatchItem {
   childThread: ChildThreadNotificationSource;
   terminalOutput: string | null;
   turnStatus: ThreadEventTurnStatus;
-  author?: ChildThreadTurnAuthor;
+  author: ChildThreadTurnAuthor | null;
 }
 
 interface ChildThreadTurnNotificationBatch {
@@ -106,7 +106,7 @@ interface QueueChildThreadTurnNotificationArgs {
   childThread: ChildThreadNotificationSource;
   parentThreadId: string;
   turnStatus: ThreadEventTurnStatus;
-  author?: ChildThreadTurnAuthor;
+  author: ChildThreadTurnAuthor | null;
 }
 
 interface QueueChildThreadNeedsAttentionNotificationArgs {
@@ -189,7 +189,7 @@ function formatChildThreadCompletionOutputExcerpt(
 }
 
 function formatChildThreadAuthorIntroduction(
-  author: ChildThreadTurnAuthor | undefined,
+  author: ChildThreadTurnAuthor | null,
   includeUserExcerpt: boolean,
 ): string {
   if (author?.hasDirectUserInput) {
@@ -204,7 +204,7 @@ function formatChildThreadAuthorIntroduction(
     : "";
 }
 
-function directUserGuidance(author: ChildThreadTurnAuthor | undefined): string {
+function directUserGuidance(author: ChildThreadTurnAuthor | null): string {
   return author?.hasDirectUserInput
     ? `\n\n${CHILD_THREAD_DIRECT_USER_GUIDANCE}`
     : "";

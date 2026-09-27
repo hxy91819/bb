@@ -860,6 +860,7 @@ function settleThreadCommandFailure(
     postCommitActions.push({
       run: (deps) =>
         queueChildThreadTurnNotificationBestEffort(deps, {
+          author: null,
           childThread: thread,
           parentThreadId,
           turnStatus: "failed",
