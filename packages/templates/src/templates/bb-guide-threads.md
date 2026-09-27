@@ -67,6 +67,11 @@ Spawning:
   explicit sandbox and approval bypass. Plan mode is separate from permissions.
   Subagents inherit the parent's permission mode by default, adapted to the child provider's supported modes. Explicit requests and a thread's recorded mode take precedence; nesting a thread does not cap its permissions. The host permission ceiling still applies.
   Parenting is opt-in. Inside a thread, pass --parent-self to parent the new thread to the current thread.
+  The user can also speak directly to a child thread. Its completion notice to
+  the parent says when that turn included direct user input. The user's direct
+  instructions to the child take precedence over the parent's earlier ones;
+  do not send corrective or stop instructions because of that notice unless
+  the user asks. Review the child thread first.
   Hidden threads are for plugin/background workers. They remain addressable by
   ID while staying out of sidebar organization and unread/pending favicon
   attention. Thread lists exclude them unless

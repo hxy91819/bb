@@ -65,6 +65,10 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
   inherited value. A hidden child still reports its turns and blockers to its
   parent thread; only forks and side chats stay silent. Promote or hide an
   existing thread with `bb thread update <id> --visibility visible|hidden`.
+  The user can also message a child thread directly. The completion notice
+  then says the turn included direct user input; those instructions take
+  precedence over the parent's earlier ones, so do not send corrective or stop
+  instructions because of that notice unless the user asks.
 - Stop a finished hidden worker with `bb thread stop <id>` to release its agent
   runtime promptly. Archive it first when it no longer belongs in active thread
   lists. Stop preserves the thread and supports a later resume.

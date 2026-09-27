@@ -20,6 +20,7 @@ import {
   environments,
   events,
   getEnvironment,
+  getHost,
   getLatestThreadInterruptedReason,
   getThread,
   listThreadIdsWithLatestHostDaemonRestartInterruption,
@@ -97,7 +98,10 @@ import { createAsyncDeduper } from "../lib/async-deduper.js";
 import { requestQueuedMessageDispatch } from "./queued-message-dispatch.js";
 import { throwThreadNotWritable } from "../lib/lifecycle-api-errors.js";
 import { NotificationBuffer } from "../lib/notification-buffer.js";
-import { queueChildThreadTurnNotificationBestEffort } from "./child-thread-notifications.js";
+import {
+  getChildThreadTurnAuthor,
+  queueChildThreadTurnNotificationBestEffort,
+} from "./child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "./thread-parent.js";
 import {
   clearThreadProvisionSchedule,
@@ -867,6 +871,7 @@ function settleThreadCommandFailure(
     postCommitActions.push({
       run: (deps) =>
         queueChildThreadTurnNotificationBestEffort(deps, {
+          author: null,
           childThread: thread,
           parentThreadId,
           turnStatus: "failed",
@@ -1111,7 +1116,12 @@ export function requestThreadStorageDeletion(
     reason: "thread-deleted",
   });
   abortPluginToolCallsForThreads([thread.id], "thread-deleted");
-  if (thread.environmentId === null) {
+  const host =
+    environment === null ? null : getHost(deps.db, environment.hostId);
+  if (
+    thread.environmentId === null ||
+    (host !== null && host.destroyedAt !== null)
+  ) {
     markThreadStorageDeleted(deps.db, { threadId: thread.id });
     finalizeStoppedThread(deps, { threadId: thread.id });
     return;
@@ -1732,10 +1742,7 @@ function interruptActiveTurnForThreadInTransaction(
 }
 
 function interruptActiveThreads(
-  deps: Pick<
-    AppDeps,
-    "db" | "hub" | "logger" | "pendingInteractions" | "providerRegistry"
-  >,
+  deps: LoggedPendingInteractionWorkSessionDeps,
   args: InterruptActiveThreadsArgs,
 ): InterruptActiveThreadsResult {
   if (args.threads.length === 0) {
@@ -1856,16 +1863,33 @@ function interruptActiveThreads(
         ...(thread ? buildThreadStatusChangeMetadata(deps, thread) : {}),
       },
     );
+    if (
+      result.interruptedTurnId !== null &&
+      thread &&
+      isParentNotifiableChildThread(thread)
+    ) {
+      void queueChildThreadTurnNotificationBestEffort(deps, {
+        author: getChildThreadTurnAuthor(deps, {
+          threadId: thread.id,
+          turnId: result.interruptedTurnId,
+          parentThreadId: thread.parentThreadId,
+        }),
+        childThread: thread,
+        parentThreadId: thread.parentThreadId,
+        turnStatus: "interrupted",
+        interruption: {
+          reason: args.reason,
+          ...(args.cause ? { cause: args.cause } : {}),
+        },
+      });
+    }
   }
 
   return { threads: results };
 }
 
 export function interruptActiveThreadsForHost(
-  deps: Pick<
-    AppDeps,
-    "db" | "hub" | "logger" | "pendingInteractions" | "providerRegistry"
-  >,
+  deps: LoggedPendingInteractionWorkSessionDeps,
   args: InterruptActiveThreadsForHostArgs,
 ): InterruptActiveThreadsResult {
   const activeThreads = deps.db
