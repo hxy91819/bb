@@ -68,6 +68,11 @@ export type PromptMentionSuggestion =
       replacement: string;
     };
 
+export interface ProviderCommandPanelAction {
+  pluginId: string;
+  actionId: string;
+}
+
 export interface ProviderCommandSuggestion {
   kind: "command";
   name: string;
@@ -76,6 +81,7 @@ export interface ProviderCommandSuggestion {
   description: string | null;
   argumentHint: string | null;
   pluginId?: string;
+  panelAction?: ProviderCommandPanelAction;
 }
 
 export function toProviderCommandSuggestion(
