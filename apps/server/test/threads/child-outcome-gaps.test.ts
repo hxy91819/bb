@@ -3,10 +3,18 @@ import {
   listEvents,
   listQueuedThreadMessages,
 } from "@bb/db";
-import { threadScope, turnScope, turnRequestEventDataSchema } from "@bb/domain";
+import {
+  encodeClientTurnRequestIdNumber,
+  threadScope,
+  turnScope,
+  turnRequestEventDataSchema,
+} from "@bb/domain";
 import { groupHostDaemonEvents } from "@bb/host-daemon-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { finalizeStoppedThread } from "../../src/services/threads/thread-lifecycle.js";
+import {
+  finalizeStoppedThread,
+  interruptActiveThreadsForHost,
+} from "../../src/services/threads/thread-lifecycle.js";
 import { queueChildThreadTurnNotificationBestEffort } from "../../src/services/threads/child-thread-notifications.js";
 import { interruptEnvironmentProvisioningForHost } from "../../src/services/environments/environment-engine.js";
 import { failThreadProvisioning } from "../../src/services/threads/thread-provisioning-environment.js";
@@ -16,6 +24,7 @@ import {
   seedEnvironment,
   seedEvent,
   seedHost,
+  seedStoredEvent,
   seedThread,
   seedThreadFixture,
   seedThreadRuntimeState,
@@ -169,6 +178,7 @@ describe("child outcomes without provider completion", () => {
 
       vi.useFakeTimers();
       await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+        author: null,
         childThread: child,
         parentThreadId: parent.id,
         turnStatus: "interrupted",
@@ -178,11 +188,13 @@ describe("child outcomes without provider completion", () => {
         },
       });
       await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+        author: null,
         childThread: child,
         parentThreadId: parent.id,
         turnStatus: "interrupted",
       });
       await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+        author: null,
         childThread: sibling,
         parentThreadId: parent.id,
         turnStatus: "interrupted",
@@ -216,6 +228,248 @@ describe("child outcomes without provider completion", () => {
       );
       expect(JSON.stringify(notice?.input)).toContain(
         `@thread:${sibling.id} was interrupted because its host daemon restarted`,
+      );
+    });
+  });
+
+  it("names direct user input on a host-interrupted child outcome", async () => {
+    await withTestHarness(async (harness) => {
+      const { parent, child, environment } = seedParentAndChild(
+        harness,
+        "active",
+      );
+      const requestId = encodeClientTurnRequestIdNumber({ value: 1 });
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        sequence: 1,
+        type: "client/turn/requested",
+        scope: threadScope(),
+        data: {
+          direction: "outbound",
+          requestId,
+          source: "tell",
+          initiator: "user",
+          senderThreadId: null,
+          input: textInput("You may delete the old files."),
+          target: { kind: "new-turn" },
+          request: { method: "turn/start", params: {} },
+          execution: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            permissionMode: "full",
+            source: "client/turn/requested",
+          },
+        },
+      });
+      seedTurnStarted(harness.deps, {
+        environmentId: environment.id,
+        threadId: child.id,
+        turnId: "child-turn",
+        sequence: 2,
+      });
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-child-turn",
+        sequence: 3,
+        type: "turn/input/accepted",
+        scope: turnScope("child-turn"),
+        data: { clientRequestId: requestId },
+      });
+
+      vi.useFakeTimers();
+      interruptActiveThreadsForHost(harness.deps, {
+        hostId: environment.hostId,
+        reason: "host-daemon-restarted",
+        includeStopping: false,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      const [notice] = parentSystemRequests(harness, parent.id);
+      expect(notice?.systemMessageKind).toBe("child-interrupted");
+      expect(notice?.systemMessageSubject).toMatchObject({
+        outcomes: [
+          {
+            threadId: child.id,
+            status: "interrupted",
+            directUserInput: true,
+            interruption: { reason: "host-daemon-restarted" },
+          },
+        ],
+      });
+      const noticeText = JSON.stringify(notice?.input);
+      expect(noticeText).toContain(
+        "This turn included input from the user directly in this thread",
+      );
+      expect(noticeText).toContain(
+        "direct instructions to this thread take precedence",
+      );
+    });
+  });
+
+  it("attributes a retried turn to the original requester", async () => {
+    await withTestHarness(async (harness) => {
+      const { parent, child, environment } = seedParentAndChild(
+        harness,
+        "active",
+      );
+      const originalRequestId = encodeClientTurnRequestIdNumber({ value: 1 });
+      const retryRequestId = encodeClientTurnRequestIdNumber({ value: 2 });
+      const requestExecution = {
+        model: "gpt-5",
+        serviceTier: "default",
+        reasoningLevel: "medium",
+        permissionMode: "full",
+        source: "client/turn/requested",
+      };
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        sequence: 1,
+        type: "client/turn/requested",
+        scope: threadScope(),
+        data: {
+          direction: "outbound",
+          requestId: originalRequestId,
+          source: "tell",
+          initiator: "user",
+          senderThreadId: null,
+          input: textInput("You may delete the old files."),
+          target: { kind: "new-turn" },
+          request: { method: "turn/start", params: {} },
+          execution: requestExecution,
+        },
+      });
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        sequence: 2,
+        type: "client/turn/requested",
+        scope: threadScope(),
+        data: {
+          direction: "outbound",
+          requestId: retryRequestId,
+          retryOfRequestId: originalRequestId,
+          retryAttempt: 2,
+          source: "tell",
+          initiator: "system",
+          senderThreadId: null,
+          input: textInput("You may delete the old files."),
+          target: { kind: "new-turn" },
+          request: { method: "turn/start", params: {} },
+          execution: requestExecution,
+        },
+      });
+      seedTurnStarted(harness.deps, {
+        environmentId: environment.id,
+        threadId: child.id,
+        turnId: "child-turn",
+        sequence: 3,
+      });
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-child-turn",
+        sequence: 4,
+        type: "turn/input/accepted",
+        scope: turnScope("child-turn"),
+        data: { clientRequestId: retryRequestId },
+      });
+
+      vi.useFakeTimers();
+      interruptActiveThreadsForHost(harness.deps, {
+        hostId: environment.hostId,
+        reason: "host-daemon-restarted",
+        includeStopping: false,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      const [notice] = parentSystemRequests(harness, parent.id);
+      expect(notice?.systemMessageSubject).toMatchObject({
+        outcomes: [
+          { threadId: child.id, status: "interrupted", directUserInput: true },
+        ],
+      });
+      expect(JSON.stringify(notice?.input)).toContain(
+        "This turn included input from the user directly in this thread",
+      );
+    });
+  });
+
+  it("still notifies the parent when a stored turn request is malformed", async () => {
+    await withTestHarness(async (harness) => {
+      const { parent, child, environment } = seedParentAndChild(
+        harness,
+        "active",
+      );
+      const requestId = encodeClientTurnRequestIdNumber({ value: 1 });
+      seedStoredEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        sequence: 1,
+        type: "client/turn/requested",
+        scope: threadScope(),
+        data: {
+          direction: "outbound",
+          requestId,
+          source: "tell",
+          senderThreadId: null,
+          input: textInput("Delete the old files."),
+          target: { kind: "new-turn" },
+          request: { method: "turn/start", params: {} },
+          execution: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            permissionMode: "full",
+            source: "client/turn/requested",
+          },
+        },
+      });
+      seedTurnStarted(harness.deps, {
+        environmentId: environment.id,
+        threadId: child.id,
+        turnId: "child-turn",
+        sequence: 2,
+      });
+      seedEvent(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-child-turn",
+        sequence: 3,
+        type: "turn/input/accepted",
+        scope: turnScope("child-turn"),
+        data: { clientRequestId: requestId },
+      });
+
+      vi.useFakeTimers();
+      interruptActiveThreadsForHost(harness.deps, {
+        hostId: environment.hostId,
+        reason: "host-daemon-restarted",
+        includeStopping: false,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      const [notice] = parentSystemRequests(harness, parent.id);
+      expect(notice?.systemMessageKind).toBe("child-interrupted");
+      expect(notice?.systemMessageSubject).toMatchObject({
+        outcomes: [
+          {
+            threadId: child.id,
+            status: "interrupted",
+            interruption: { reason: "host-daemon-restarted" },
+          },
+        ],
+      });
+      const outcome =
+        notice?.systemMessageSubject?.kind === "thread"
+          ? notice.systemMessageSubject.outcomes?.[0]
+          : undefined;
+      expect(outcome).not.toHaveProperty("directUserInput");
+      expect(JSON.stringify(notice?.input)).not.toContain(
+        "did not initiate that input",
       );
     });
   });
