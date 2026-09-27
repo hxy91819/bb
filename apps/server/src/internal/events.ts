@@ -25,10 +25,11 @@ import {
   type HostDaemonRejectedEvent,
 } from "@bb/host-daemon-contract";
 import {
+  parseStoredThreadEvent,
   requireThreadEventScopeTurnId,
+  threadScope,
   type ThreadEventType,
   type ThreadEventTurnStatus,
-  turnRequestEventDataSchema,
 } from "@bb/domain";
 import type { Hono } from "hono";
 import { ApiError } from "../errors.js";
@@ -56,6 +57,7 @@ import {
   runtimeErrorLogFields,
 } from "../services/lib/error-log-fields.js";
 import { applyLoggedThreadLifecycleEvent } from "../services/threads/lifecycle-outcome.js";
+import { parseStoredEventPayload } from "../services/threads/thread-data.js";
 import { applyTurnCompletedEvent } from "./turn-completed-events.js";
 import {
   getInactiveSessionLogFields,
@@ -389,7 +391,18 @@ function getChildThreadTurnAuthor(
   args: { threadId: string; turnId: string; parentThreadId: string },
 ): ChildThreadTurnAuthor {
   const requests = listStoredTurnRequestEventsForTurn(deps.db, args).map(
-    (row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)),
+    (row) => {
+      const event = parseStoredThreadEvent({
+        data: parseStoredEventPayload(row),
+        scope: threadScope(),
+        threadId: row.threadId,
+        type: "client/turn/requested",
+      });
+      if (event.type !== "client/turn/requested") {
+        throw new Error("Stored turn request parsed as another event type");
+      }
+      return event;
+    },
   );
   return summarizeChildThreadTurnAuthor(requests, args.parentThreadId);
 }

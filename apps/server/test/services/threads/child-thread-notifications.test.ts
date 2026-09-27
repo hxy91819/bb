@@ -66,7 +66,15 @@ describe("child thread notifications", () => {
             source: "tell",
             initiator: "user",
             senderThreadId: null,
-            input: [{ type: "text", text: "You may delete.", mentions: [] }],
+            input: [
+              { type: "text", text: "You may delete.", mentions: [] },
+              {
+                type: "text",
+                text: "Private plugin context.",
+                mentions: [],
+                visibility: "agent-only",
+              },
+            ],
           },
           {
             source: "tell",
@@ -176,6 +184,8 @@ describe("child thread notifications", () => {
         "Child thread updates:",
         "",
         "- @thread:thr_child_one completed (turn included direct user input).",
+        "  User message:",
+        "  Delete the old files.",
         "- @thread:thr_child_two completed.",
         "",
         "The user's direct instructions to those threads take precedence over your earlier instructions. Review each affected thread before sending corrective, stop, or reassignment instructions.",

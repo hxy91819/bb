@@ -47,6 +47,7 @@ export function summarizeChildThreadTurnAuthor(
   );
   const userText = directUserRequests
     .flatMap((request) => request.input)
+    .filter((input) => input.visibility !== "agent-only")
     .filter((input) => input.type === "text")
     .map((input) => input.text.trim())
     .filter(Boolean)
@@ -204,6 +205,25 @@ function formatChildThreadAuthorIntroduction(
     : "";
 }
 
+function formatChildThreadBatchUserInput(
+  author: ChildThreadTurnAuthor | null,
+): string {
+  const excerpt = author?.hasDirectUserInput
+    ? author.userInputExcerpt?.trim()
+    : null;
+  if (!excerpt) {
+    return "";
+  }
+  const truncated = truncateChildThreadOutput(
+    excerpt,
+    CHILD_THREAD_USER_INPUT_EXCERPT_CHAR_LIMIT,
+  ).replace(
+    CHILD_THREAD_OUTPUT_TRUNCATION_MARKER,
+    CHILD_THREAD_USER_INPUT_TRUNCATION_MARKER,
+  );
+  return `\n  User message:\n  ${truncated.replace(/\n/g, "\n  ")}`;
+}
+
 function directUserGuidance(author: ChildThreadTurnAuthor | null): string {
   return author?.hasDirectUserInput
     ? `\n\n${CHILD_THREAD_DIRECT_USER_GUIDANCE}`
@@ -284,7 +304,7 @@ function buildChildThreadBatchStatusLineSegments(
     { kind: "mention", mention: line.mention },
     {
       kind: "text",
-      text: ` ${childThreadTurnStatusLabel(line.item.turnStatus)}${workflowClause}${line.item.author?.hasDirectUserInput ? " (turn included direct user input)" : line.item.author?.hasOtherAgentInput ? " (turn included input from another agent)" : ""}.`,
+      text: ` ${childThreadTurnStatusLabel(line.item.turnStatus)}${workflowClause}${line.item.author?.hasDirectUserInput ? " (turn included direct user input)" : line.item.author?.hasOtherAgentInput ? " (turn included input from another agent)" : ""}.${formatChildThreadBatchUserInput(line.item.author)}`,
     },
   ];
 }
