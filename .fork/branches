@@ -32,3 +32,4 @@ fix/mobile-composer-top-clearance      needs-feedback                           
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
 feature/acp-custom-agent-icon          needs-feedback                                             # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）
 fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
+feature/child-turn-author              needs-feedback                                             # 子线程完成通知标注回合是否由用户直接发起
