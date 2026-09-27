@@ -5,6 +5,7 @@ import {
   deriveStoredEventItemFields,
   getThread,
   listStoredTurnCompletedKeys,
+  listStoredTurnRequestEventsForTurn,
   listThreadEnvironmentAssignmentsOnHost,
   MissingStoredTurnStartedError,
   events as storedEvents,
@@ -27,6 +28,7 @@ import {
   requireThreadEventScopeTurnId,
   type ThreadEventType,
   type ThreadEventTurnStatus,
+  turnRequestEventDataSchema,
 } from "@bb/domain";
 import type { Hono } from "hono";
 import { ApiError } from "../errors.js";
@@ -38,7 +40,11 @@ import {
   isActivePruneTriggerThreadEventType,
   maybePruneActiveThreadEventHistory,
 } from "../services/system/event-pruning.js";
-import { queueChildThreadTurnNotificationBestEffort } from "../services/threads/child-thread-notifications.js";
+import {
+  queueChildThreadTurnNotificationBestEffort,
+  summarizeChildThreadTurnAuthor,
+  type ChildThreadTurnAuthor,
+} from "../services/threads/child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "../services/threads/thread-parent.js";
 import {
   runQueuedMessageDispatch,
@@ -214,6 +220,7 @@ interface ResolveActivePruneCandidatesArgs {
 }
 
 interface AddParentTurnNotificationFollowUpArgs {
+  author?: ChildThreadTurnAuthor;
   failedParentNotificationThreadIds: Set<string>;
   followUps: EventEffectFollowUp[];
   thread: NonNullable<ReturnType<typeof getThread>>;
@@ -222,6 +229,7 @@ interface AddParentTurnNotificationFollowUpArgs {
 
 interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
+  author?: ChildThreadTurnAuthor;
   childThreadId: string;
   projectId: string;
   parentThreadId: string;
@@ -367,12 +375,23 @@ function addParentTurnNotificationFollowUp(
   }
   args.followUps.push({
     kind: "parent-turn-notification",
+    author: args.author,
     childThreadId: args.thread.id,
     projectId: args.thread.projectId,
     parentThreadId: args.thread.parentThreadId,
     title: args.thread.title,
     turnStatus: args.turnStatus,
   });
+}
+
+function getChildThreadTurnAuthor(
+  deps: LoggedPendingInteractionWorkSessionDeps,
+  args: { threadId: string; turnId: string; parentThreadId: string },
+): ChildThreadTurnAuthor {
+  const requests = listStoredTurnRequestEventsForTurn(deps.db, args).map(
+    (row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)),
+  );
+  return summarizeChildThreadTurnAuthor(requests, args.parentThreadId);
 }
 
 async function applyEventEffects(
@@ -445,6 +464,11 @@ async function applyEventEffects(
             });
           if (!alreadyHandledByCommandFailure) {
             addParentTurnNotificationFollowUp({
+              author: getChildThreadTurnAuthor(deps, {
+                threadId: turnCompleted.thread.id,
+                turnId,
+                parentThreadId: turnCompleted.thread.parentThreadId,
+              }),
               failedParentNotificationThreadIds,
               followUps,
               thread: turnCompleted.thread,
@@ -513,6 +537,7 @@ async function executeEventFollowUpBestEffort(
     switch (followUp.kind) {
       case "parent-turn-notification":
         await queueChildThreadTurnNotificationBestEffort(deps, {
+          author: followUp.author,
           childThread: {
             id: followUp.childThreadId,
             projectId: followUp.projectId,

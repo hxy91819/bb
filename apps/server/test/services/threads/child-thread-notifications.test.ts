@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildChildThreadNeedsAttentionInput,
   buildChildThreadTurnStatusBatchInput,
+  summarizeChildThreadTurnAuthor,
   type ChildThreadNotificationSource,
   type ChildThreadTurnNotificationBatchItem,
 } from "../../../src/services/threads/child-thread-notifications.js";
@@ -30,6 +31,202 @@ function renderBatchMessage(args: {
 }
 
 describe("child thread notifications", () => {
+  it("treats a spawn as parent input even when its persisted initiator is user", () => {
+    expect(
+      summarizeChildThreadTurnAuthor(
+        [
+          {
+            source: "spawn",
+            initiator: "user",
+            senderThreadId: null,
+            input: [{ type: "text", text: "Investigate only.", mentions: [] }],
+          },
+        ],
+        "thr_parent",
+      ),
+    ).toEqual({
+      hasDirectUserInput: false,
+      hasParentInput: true,
+      hasOtherAgentInput: false,
+      userInputExcerpt: null,
+    });
+  });
+
+  it("retains both authors and ordered user text after a parent tell and user steers", () => {
+    expect(
+      summarizeChildThreadTurnAuthor(
+        [
+          {
+            source: "tell",
+            initiator: "agent",
+            senderThreadId: "thr_parent",
+            input: [{ type: "text", text: "Investigate only.", mentions: [] }],
+          },
+          {
+            source: "tell",
+            initiator: "user",
+            senderThreadId: null,
+            input: [{ type: "text", text: "You may delete.", mentions: [] }],
+          },
+          {
+            source: "tell",
+            initiator: "user",
+            senderThreadId: null,
+            input: [{ type: "text", text: "Include backups.", mentions: [] }],
+          },
+        ],
+        "thr_parent",
+      ),
+    ).toEqual({
+      hasDirectUserInput: true,
+      hasParentInput: true,
+      hasOtherAgentInput: false,
+      userInputExcerpt: "You may delete.\n\nInclude backups.",
+    });
+  });
+
+  it("explains direct user input before a completed output and guides the parent afterward", () => {
+    const message = renderBatchMessage({
+      items: [
+        {
+          activeWorkflowCount: 0,
+          childThread: testThread({ id: "thr_child", title: "Cleanup" }),
+          terminalOutput: "Deleted the old files.",
+          turnStatus: "completed",
+          author: {
+            hasDirectUserInput: true,
+            hasParentInput: true,
+            hasOtherAgentInput: false,
+            userInputExcerpt: "You may delete the old files.",
+          },
+        },
+      ],
+    });
+
+    expect(message).toBe(
+      [
+        "[bb system]",
+        "",
+        "@thread:thr_child completed:",
+        "",
+        "This turn included input from the user directly in this thread; you did not initiate that input.",
+        "",
+        "User message:",
+        "You may delete the old files.",
+        "",
+        "Deleted the old files.",
+        "",
+        "The user's direct instructions to this thread take precedence over your earlier instructions. Review the thread before sending corrective, stop, or reassignment instructions.",
+      ].join("\n"),
+    );
+  });
+
+  it("preserves the original completed text for a parent initiated turn", () => {
+    const message = renderBatchMessage({
+      items: [
+        {
+          activeWorkflowCount: 0,
+          childThread: testThread({ id: "thr_child", title: "Cleanup" }),
+          terminalOutput: "Read the old files.",
+          turnStatus: "completed",
+          author: {
+            hasDirectUserInput: false,
+            hasParentInput: true,
+            hasOtherAgentInput: false,
+            userInputExcerpt: null,
+          },
+        },
+      ],
+    });
+
+    expect(message).toBe(
+      "[bb system]\n\n@thread:thr_child completed:\n\nRead the old files.",
+    );
+  });
+
+  it("marks direct user input in a batch and adds one parent instruction", () => {
+    const message = renderBatchMessage({
+      items: [
+        {
+          activeWorkflowCount: 0,
+          childThread: testThread({ id: "thr_child_one", title: "Cleanup" }),
+          terminalOutput: "Deleted the old files.",
+          turnStatus: "completed",
+          author: {
+            hasDirectUserInput: true,
+            hasParentInput: false,
+            hasOtherAgentInput: false,
+            userInputExcerpt: "Delete the old files.",
+          },
+        },
+        {
+          activeWorkflowCount: 0,
+          childThread: testThread({ id: "thr_child_two", title: "Review" }),
+          terminalOutput: "Reviewed.",
+          turnStatus: "completed",
+        },
+      ],
+    });
+
+    expect(message).toBe(
+      [
+        "[bb system]",
+        "",
+        "Child thread updates:",
+        "",
+        "- @thread:thr_child_one completed (turn included direct user input).",
+        "- @thread:thr_child_two completed.",
+        "",
+        "The user's direct instructions to those threads take precedence over your earlier instructions. Review each affected thread before sending corrective, stop, or reassignment instructions.",
+      ].join("\n"),
+    );
+  });
+
+  it("leaves author wording out when provenance is unavailable", () => {
+    const message = renderBatchMessage({
+      items: [
+        {
+          activeWorkflowCount: 0,
+          childThread: testThread({ id: "thr_child", title: "Cleanup" }),
+          terminalOutput: null,
+          turnStatus: "failed",
+        },
+      ],
+    });
+    expect(message).toBe(
+      "[bb system]\n\n@thread:thr_child failed.\n\nReview the thread before deciding next steps.",
+    );
+  });
+
+  it.each(["failed", "interrupted"] as const)(
+    "identifies direct user input for a %s turn without repeating the excerpt",
+    (turnStatus) => {
+      const message = renderBatchMessage({
+        items: [
+          {
+            activeWorkflowCount: 0,
+            childThread: testThread({ id: "thr_child", title: "Cleanup" }),
+            terminalOutput: null,
+            turnStatus,
+            author: {
+              hasDirectUserInput: true,
+              hasParentInput: false,
+              hasOtherAgentInput: false,
+              userInputExcerpt: "Delete the old files.",
+            },
+          },
+        ],
+      });
+      expect(message).toContain(
+        "This turn included input from the user directly in this thread; you did not initiate that input.",
+      );
+      expect(message).toContain(
+        "Review the thread before sending corrective, stop, or reassignment instructions.",
+      );
+      expect(message).not.toContain("Delete the old files.");
+    },
+  );
+
   it("keeps final output for a single completed outcome", () => {
     const message = renderBatchMessage({
       items: [
