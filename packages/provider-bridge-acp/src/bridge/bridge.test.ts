@@ -1079,7 +1079,39 @@ describe("acp bridge", () => {
     ]);
   });
 
-  it("times out hung ACP-native discovery, kills the child, and falls back to the synthetic model", async () => {
+  it("keeps ACP-native discovered models when per-model reasoning discovery errors", async () => {
+    const modelListId = sendModelList({
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+        FAKE_ACP_THOUGHT_LEVEL_CONFIG: "1",
+        FAKE_ACP_SET_CONFIG_MODEL_ERROR: "1",
+      },
+    });
+
+    expect((await waitForResponse(modelListId)).result).toMatchObject({
+      models: [
+        {
+          id: "fake/default",
+          model: "fake/default",
+          displayName: "Fake Default",
+          isDefault: true,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [{ reasoningEffort: "medium" }],
+        },
+        {
+          id: "fake/strong",
+          model: "fake/strong",
+          displayName: "Fake Strong",
+          isDefault: false,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [{ reasoningEffort: "medium" }],
+        },
+      ],
+      selectedOnlyModels: [],
+    });
+  });
+
+  it("times out hung ACP-native discovery, kills the child, and reports the failure", async () => {
     const readyFile = join(workspaceDir, "discovery-agent-ready.txt");
     let modelListId: number;
 
@@ -1097,11 +1129,52 @@ describe("acp bridge", () => {
       vi.useRealTimers();
     }
 
-    expect((await waitForResponse(modelListId!)).result).toMatchObject({
-      models: [{ id: "acp-default", isDefault: true }],
-      selectedOnlyModels: [],
-    });
+    const response = await waitForResponse(modelListId!);
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain("model discovery timed out");
     await waitForAgentExit(readyFile);
+  });
+
+  it("reports ACP-native model discovery errors instead of a synthetic success", async () => {
+    const response = await waitForResponse(
+      sendModelList({
+        envVars: { FAKE_ACP_SESSION_NEW_ERROR: "Model catalog unavailable" },
+      }),
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain("Model catalog unavailable");
+  });
+
+  it("reports missing ACP-native discovery executables", async () => {
+    const response = await waitForResponse(
+      sendModelList({
+        agent: { command: "/nonexistent/acp-discovery-agent", args: [] },
+      }),
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain("ENOENT");
+  });
+
+  it("reports agent exits during ACP-native model discovery", async () => {
+    const response = await waitForResponse(
+      sendModelList({
+        envVars: { FAKE_ACP_EXIT_ON_SESSION_NEW: "1" },
+      }),
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain("exited");
+  });
+
+  it("preserves authentication recovery for ACP-native model discovery", async () => {
+    const response = await waitForResponse(
+      sendModelList({
+        envVars: { FAKE_ACP_AUTH_METHODS: "cursor_login" },
+      }),
+    );
+    expect(response.result).toBeUndefined();
+    expect(response.error?.data).toMatchObject({
+      recovery: { kind: "authRequired", retryable: false },
+    });
   });
 
   it("serves ACP-native discovered models from cache within the TTL and re-discovers after it", async () => {
