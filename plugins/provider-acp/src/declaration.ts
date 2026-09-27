@@ -65,6 +65,9 @@ export function acpProviderDeclaration(
       : { experimental_resolvesNativeRoots: true }),
     experimental_bridgeOptions: {
       ...(agent.dialect === undefined ? {} : { acpDialect: agent.dialect }),
+      ...(agent.steeringMode === undefined
+        ? {}
+        : { acpSteeringMode: agent.steeringMode }),
       ...(agent.parameterizedModelPicker === true
         ? { parameterizedModelPicker: true }
         : {}),
