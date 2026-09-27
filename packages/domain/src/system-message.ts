@@ -40,6 +40,7 @@ export type SystemThreadInterruptedReason = z.infer<
 export const childThreadOutcomeSchema = z.object({
   threadId: z.string(),
   status: z.enum(["completed", "failed", "interrupted"]),
+  directUserInput: z.literal(true).optional(),
   interruption: z
     .object({
       reason: systemThreadInterruptedReasonSchema,

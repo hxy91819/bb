@@ -43,7 +43,11 @@ import {
   isActivePruneTriggerThreadEventType,
   maybePruneActiveThreadEventHistory,
 } from "../services/system/event-pruning.js";
-import { queueChildThreadTurnNotificationBestEffort } from "../services/threads/child-thread-notifications.js";
+import {
+  getChildThreadTurnAuthor,
+  queueChildThreadTurnNotificationBestEffort,
+  type ChildThreadTurnAuthor,
+} from "../services/threads/child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "../services/threads/thread-parent.js";
 import {
   runQueuedMessageDispatch,
@@ -229,6 +233,7 @@ interface ResolveActivePruneCandidatesArgs {
 }
 
 interface AddParentTurnNotificationFollowUpArgs {
+  author: ChildThreadTurnAuthor | null;
   failedParentNotificationThreadIds: Set<string>;
   followUps: EventEffectFollowUp[];
   thread: NonNullable<ReturnType<typeof getThread>>;
@@ -238,6 +243,7 @@ interface AddParentTurnNotificationFollowUpArgs {
 
 interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
+  author: ChildThreadTurnAuthor | null;
   childThreadId: string;
   projectId: string;
   parentThreadId: string;
@@ -385,6 +391,7 @@ function addParentTurnNotificationFollowUp(
   }
   args.followUps.push({
     kind: "parent-turn-notification",
+    author: args.author,
     childThreadId: args.thread.id,
     projectId: args.thread.projectId,
     parentThreadId: args.thread.parentThreadId,
@@ -502,6 +509,11 @@ async function applyEventEffects(
               }));
           if (!alreadyHandledByCommandFailure && !manuallyStopped) {
             addParentTurnNotificationFollowUp({
+              author: getChildThreadTurnAuthor(deps, {
+                threadId: turnCompleted.thread.id,
+                turnId,
+                parentThreadId: turnCompleted.thread.parentThreadId,
+              }),
               failedParentNotificationThreadIds,
               followUps,
               thread: turnCompleted.thread,
@@ -541,6 +553,7 @@ async function applyEventEffects(
         });
         if (outcome.applied) {
           addParentTurnNotificationFollowUp({
+            author: null,
             failedParentNotificationThreadIds,
             followUps,
             thread,
@@ -571,6 +584,7 @@ async function executeEventFollowUpBestEffort(
     switch (followUp.kind) {
       case "parent-turn-notification":
         await queueChildThreadTurnNotificationBestEffort(deps, {
+          author: followUp.author,
           childThread: {
             id: followUp.childThreadId,
             projectId: followUp.projectId,
