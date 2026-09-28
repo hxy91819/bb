@@ -72,6 +72,8 @@ export function AppSidebar({
   const { isCompactViewport, openMobile } = useSidebar();
   const [isFooterCustomizing, setFooterCustomizing] = useState(false);
   const [isNavigationCustomizing, setNavigationCustomizing] = useState(false);
+  const [pinnedNavigationHost, setPinnedNavigationHost] =
+    useState<HTMLDivElement | null>(null);
   const customizeFocusReturnRef = useRef<HTMLElement | null>(null);
   const [threadShortcutKeysById, setThreadShortcutKeysById] = useState<
     ReadonlyMap<string, SidebarThreadShortcutPresentation>
@@ -208,21 +210,33 @@ export function AppSidebar({
           />
         )}
       />
-      <SidebarNavigationRegion
-        isCustomizing={isNavigationCustomizing}
-        onCustomizingChange={setNavigationCustomizing}
-        focusReturnTargetRef={customizeFocusReturnRef}
-        onNavigate={closeOnMobile}
+      <div
+        ref={setPinnedNavigationHost}
+        data-testid="app-sidebar-pinned-navigation"
+        hidden={isNavigationCustomizing}
+        className="shrink-0 px-2 pt-2 empty:hidden"
       />
-      <SidebarContent
-        className={cn(isCompactCustomizeModeActive && "hidden")}
-        aria-hidden={isCompactCustomizeModeActive ? true : undefined}
-        inert={isCompactCustomizeModeActive ? true : undefined}
-      >
-        <PluginThreadList
-          replacement={threadListReplacement}
+      <SidebarContent>
+        <SidebarNavigationRegion
+          isCustomizing={isNavigationCustomizing}
+          onCustomizingChange={setNavigationCustomizing}
+          focusReturnTargetRef={customizeFocusReturnRef}
           onNavigate={closeOnMobile}
+          pinnedNavigationHost={pinnedNavigationHost}
         />
+        <div
+          className={cn(
+            "flex shrink-0 flex-col",
+            isCompactCustomizeModeActive && "hidden",
+          )}
+          aria-hidden={isCompactCustomizeModeActive ? true : undefined}
+          inert={isCompactCustomizeModeActive ? true : undefined}
+        >
+          <PluginThreadList
+            replacement={threadListReplacement}
+            onNavigate={closeOnMobile}
+          />
+        </div>
       </SidebarContent>
       <SidebarFooter className="relative">
         <OverflowFade placement="above" tone="sidebar" size="sm" />
