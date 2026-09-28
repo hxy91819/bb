@@ -2646,8 +2646,10 @@ async function handleRequest(
               ...params.options.envVars,
             }
           : session.construction.envVars;
+      const permissionMode = params.options.permissionMode;
       if (
         session.restartAfterCancelError ||
+        permissionMode !== session.construction.permissionMode ||
         !isDeepStrictEqual(envVars ?? {}, session.construction.envVars ?? {})
       ) {
         const previousProviderThreadId = session.providerThreadId;
@@ -2656,7 +2658,7 @@ async function handleRequest(
           : "Execution settings changed; the ACP session was rebuilt to apply them.";
         session = await startAgentSession({
           kind: "resume",
-          params: { ...session.construction, envVars },
+          params: { ...session.construction, envVars, permissionMode },
           resumeProviderThreadId: previousProviderThreadId,
         });
         sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {
