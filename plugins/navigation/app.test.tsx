@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type {
@@ -145,12 +151,22 @@ describe("navigation plugin", () => {
       );
       const navigation = screen.getByTestId("plugin-nav-sidebar-items");
 
-      expect(within(host).getByRole("button", { name: "New thread (⌘N)" })).toBeDefined();
-      expect(within(navigation).queryByRole("button", { name: "New thread (⌘N)" })).toBeNull();
-      expect(within(navigation).getByRole("button", { name: "Docs" })).toBeDefined();
-      expect(screen.getByTestId("navigation-divider").parentElement).toBe(navigation.parentElement);
+      expect(
+        within(host).getByRole("button", { name: "New thread (⌘N)" }),
+      ).toBeDefined();
+      expect(
+        within(navigation).queryByRole("button", { name: "New thread (⌘N)" }),
+      ).toBeNull();
+      expect(
+        within(navigation).getByRole("button", { name: "Docs" }),
+      ).toBeDefined();
+      expect(screen.getByTestId("navigation-divider").parentElement).toBe(
+        navigation.parentElement,
+      );
 
-      fireEvent.click(within(host).getByRole("button", { name: "New thread (⌘N)" }));
+      fireEvent.click(
+        within(host).getByRole("button", { name: "New thread (⌘N)" }),
+      );
       expect(view.inspection.sidebarNavigationCalls).toContainEqual({
         method: "activate",
         itemId: "__bb__/new-thread",
