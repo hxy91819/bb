@@ -19,6 +19,7 @@ export const appSettingsSchema = z
     steerActiveThreadOnEnter: z.boolean(),
     showDiagnosticEvents: z.boolean(),
     providerOrder: z.array(z.string().min(1)),
+    hiddenProviders: z.array(z.string().min(1)),
     defaultProviderId: z.string().min(1).nullable(),
     providerCompletedTurnDisplay: z.record(
       z.string().min(1),
@@ -50,6 +51,7 @@ export const defaultAppSettings: AppSettings = {
   steerActiveThreadOnEnter: true,
   showDiagnosticEvents: false,
   providerOrder: [],
+  hiddenProviders: [],
   defaultProviderId: null,
   providerCompletedTurnDisplay: {},
   streamerMode: false,
@@ -62,10 +64,12 @@ export const defaultAppSettings: AppSettings = {
 
 export const appSettingsUpdateSchema = z.union([
   appSettingsSchema.extend({
+    hiddenProviders: z.array(z.string().min(1)).optional(),
     telemetryEnabled: z.boolean().optional(),
     showUnhandledProviderEvents: z.boolean().optional(),
   }),
   appSettingsSchema.omit({ showDiagnosticEvents: true }).extend({
+    hiddenProviders: z.array(z.string().min(1)).optional(),
     telemetryEnabled: z.boolean().optional(),
     showUnhandledProviderEvents: z.boolean(),
   }),

@@ -304,10 +304,13 @@ export function ModelReasoningPicker({
     modelLoadError?.providerId === selectedProviderId;
   const selectedModelLoadFailed =
     modelLoadFailed || selectedModelLoadErrorMatches;
+  const selectedProviderIsHiddenFromPicker =
+    selectedProviderId.length > 0 &&
+    !providerOptions.some((option) => option.value === selectedProviderId);
   const canSwitchProviders =
     hasMultipleProviders &&
     onSelectedProviderChange !== undefined &&
-    providerOptions.length > 1;
+    (providerOptions.length > 1 || selectedProviderIsHiddenFromPicker);
   const queryClient = useQueryClient();
   const prefetchRoutingEnvironmentId = providerRouting?.environmentId;
   const prefetchRoutingHostId = providerRouting?.hostId;
