@@ -28,6 +28,7 @@ interface PinnedThreadRootReorderCallbacks {
 
 export interface PinnedThreadTreeProps {
   rootNodes: readonly ProjectThreadNode[];
+  showProjectName: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
@@ -47,6 +48,7 @@ interface SortablePinnedRootItemProps {
   disabled: boolean;
   displace?: boolean;
   node: ProjectThreadNode;
+  showProjectName: boolean;
   onProjectSelect?: () => void;
   onToggleEnvironmentCollapsed: (environmentId: string) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
@@ -74,6 +76,7 @@ const PinnedRootItem = memo(function PinnedRootItem({
   consumeClickSuppression,
   dragBindings,
   node,
+  showProjectName,
   onProjectSelect,
   onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
@@ -88,6 +91,7 @@ const PinnedRootItem = memo(function PinnedRootItem({
       node={node}
       depthOffset={0}
       isEnvGrouped={false}
+      showProjectName={showProjectName}
       sectionDnd={sectionDnd}
       selectedThreadId={selectedThreadId}
       collapsedThreadIds={collapsedThreadIds}
@@ -133,6 +137,7 @@ const SortablePinnedRootItem = memo(function SortablePinnedRootItem({
 
 export const PinnedThreadTree = memo(function PinnedThreadTree({
   rootNodes,
+  showProjectName,
   selectedThreadId,
   collapsedThreadIds,
   collapsedEnvironmentIds,
@@ -203,6 +208,7 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
             <SortablePinnedRootItem
               key={getPinnedRootNodeId(node)}
               node={node}
+              showProjectName={showProjectName}
               disabled={chronologicalDnd.pinnedReorderPending}
               displace={false}
               sectionDnd={chronologicalDnd}
@@ -235,6 +241,7 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
               <SortablePinnedRootItem
                 key={getPinnedRootNodeId(node)}
                 node={node}
+                showProjectName={showProjectName}
                 disabled={standaloneReorderDisabled}
                 selectedThreadId={selectedThreadId}
                 collapsedThreadIds={collapsedThreadIds}
@@ -251,6 +258,7 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
           <PinnedRootItem
             key={getPinnedRootNodeId(node)}
             node={node}
+            showProjectName={showProjectName}
             selectedThreadId={selectedThreadId}
             collapsedThreadIds={collapsedThreadIds}
             collapsedEnvironmentIds={collapsedEnvironmentIds}
