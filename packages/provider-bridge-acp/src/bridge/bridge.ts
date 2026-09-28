@@ -2216,7 +2216,10 @@ async function applyAcpServiceTierForTurn(
   session: AcpThreadSession,
   serviceTier: ServiceTier | undefined,
 ): Promise<void> {
-  if (serviceTier === undefined) {
+  if (
+    serviceTier === undefined ||
+    serviceTier === session.construction.serviceTier
+  ) {
     return;
   }
   session.configOptions = await selectAcpNativeServiceTier({
