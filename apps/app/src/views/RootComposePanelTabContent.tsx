@@ -28,6 +28,7 @@ import {
   type FileOpenerOriginalTab,
 } from "@/components/plugin/file-opener-tabs";
 import { useEnvironment } from "@/hooks/queries/environment-queries";
+import { useThreadStorageLocation } from "@/hooks/queries/thread-queries";
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import { useHostDaemon } from "@/hooks/useHostDaemon";
 import { useLocalOpenTargets } from "@/hooks/useLocalOpenTargets";
@@ -308,6 +309,9 @@ function RootComposeFilePreviewTabContent({
     fileListEnabled: storageThreadId !== null,
     threadId: storageThreadId ?? undefined,
   });
+  const storageLocation = useThreadStorageLocation(storageThreadId ?? "", {
+    enabled: storageThreadId !== null,
+  }).data;
   const projectPreviewId =
     tab.kind === "workspace-file-preview" && tab.environmentId === null
       ? fileOpenerSource?.kind === "workspace"
@@ -364,7 +368,19 @@ function RootComposeFilePreviewTabContent({
   const openContext =
     tab.kind === "workspace-file-preview" && tab.environmentId === null
       ? projectOpenContext
-      : environmentOpenContext;
+      : tab.kind === "host-file-preview" && tab.hostId
+        ? resolveHostOpenContext({
+            hostId: tab.hostId,
+            isLocal: isLocalDaemonHost(tab.hostId),
+            serverOrigin,
+          })
+        : tab.kind === "thread-storage-file-preview"
+          ? resolveHostOpenContext({
+              hostId: storageLocation?.hostId ?? null,
+              isLocal: isLocalDaemonHost(storageLocation?.hostId),
+              serverOrigin,
+            })
+          : environmentOpenContext;
   const { canOpenPreferredFileTarget, openPathInPreferredFileTarget } =
     useLocalOpenTargets({
       enabled: openContext !== null,

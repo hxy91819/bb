@@ -125,7 +125,7 @@ export function CommandPalette({ threadId, projectId }: CommandPaletteProps) {
     action.run();
     return true;
   });
-  const settingsSections = useSettingsNavSections(pluginSlots.fileOpeners);
+  const settingsSections = useSettingsNavSections();
   const pluginSettingsEntries = useMemo(
     () =>
       buildPluginSettingsEntries({

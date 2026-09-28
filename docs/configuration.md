@@ -60,6 +60,16 @@ Use `--host-id` when the server has more than one machine; copy the ID from
 `bb machine list`. Omit it to preserve the single-machine auto-selection for
 `set`, or to remove every mapping for that server with `remove`.
 
+For browsers without a local helper, Settings → Files → VS Code over SSH maps
+each BB machine to a Host alias in this computer's SSH config. Saving enables
+VS Code Remote-SSH links for that machine's workspaces and files; clearing the
+alias restores the existing local-helper behavior. VS Code and Remote-SSH must
+be installed locally. This mapping lives only in this browser's localStorage
+for the BB origin, not in server settings or `~/.bb/client.json`. It does not
+request local network access. `bb file vscode-url /absolute/path --ssh-host
+devbox [--file --line 12 --column 3]` and SDK `buildVsCodeRemoteUrl` generate
+the same URL without reading or changing browser mappings.
+
 ## Precedence
 
 Configuration is resolved in this order:
@@ -524,8 +534,8 @@ Example:
 
 When a remote bb page asks the local helper to open a work-host path, the helper
 uses this mapping to launch remote-capable editors and terminals over SSH.
-Browsers or devices without a helper can still use bb; local editor actions are
-simply unavailable.
+Browsers without a helper can instead use the browser-local VS Code over SSH
+mapping above; other local editor and terminal actions require the helper.
 
 ## Custom ACP Agents
 

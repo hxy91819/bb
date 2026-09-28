@@ -20,6 +20,7 @@ import {
   type Experiments,
   type FaviconColorPreference,
   type PluginThemeMeta,
+  type Host,
 } from "@bb/domain";
 import type {
   WorkspaceOpenTarget,
@@ -81,6 +82,8 @@ import {
 } from "@/hooks/mutations/settings-mutations";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
 import { useWorkspaceOpenTargets } from "@/hooks/useWorkspaceOpenTargets";
+import { useHosts } from "@/hooks/queries/host-queries";
+import { useBrowserSshHosts, isValidSshHost } from "@/lib/browser-ssh-hosts";
 import { isDesktopBrowserAvailable } from "@/lib/bb-desktop";
 import {
   FAVICON_COLOR_VALUES,
@@ -139,6 +142,7 @@ export interface LocalOpenTargetSettingsSectionProps {
   directoryTargetId: StoredWorkspaceOpenTargetPreference;
   fileTargetId: StoredWorkspaceOpenTargetPreference;
   hasDaemon: boolean;
+  hosts?: readonly Host[];
   onDirectoryTargetChange: (targetId: WorkspaceOpenTargetId) => void;
   onFileTargetChange: (targetId: WorkspaceOpenTargetId) => void;
   onRequestAccess: () => Promise<boolean>;
@@ -478,16 +482,41 @@ export function LocalOpenTargetSettingsSection({
   directoryTargetId,
   fileTargetId,
   hasDaemon,
+  hosts = [],
   onDirectoryTargetChange,
   onFileTargetChange,
   onRequestAccess,
   targets,
 }: LocalOpenTargetSettingsSectionProps) {
   const [accessRequestPending, setAccessRequestPending] = useState(false);
-
-  if (accessState === "unavailable") {
-    return null;
-  }
+  const [sshHosts, setSshHosts] = useBrowserSshHosts();
+  const sshSettings = (
+    <div className="space-y-3">
+      <div>
+        <div className="font-medium">VS Code over SSH</div>
+        <p className="text-sm text-muted-foreground">
+          Enter a Host alias from this computer’s SSH config. Requires VS Code
+          and Remote-SSH. Saved only in this browser.
+        </p>
+      </div>
+      {hosts.map((host) => (
+        <SshHostInput
+          key={host.id}
+          id={host.id}
+          name={host.name}
+          value={sshHosts[host.id] ?? ""}
+          onSave={(alias) => {
+            setSshHosts((current) => {
+              const next = { ...current };
+              if (alias) next[host.id] = alias;
+              else delete next[host.id];
+              return next;
+            });
+          }}
+        />
+      ))}
+    </div>
+  );
 
   const handleRequestAccess = async () => {
     setAccessRequestPending(true);
@@ -498,7 +527,7 @@ export function LocalOpenTargetSettingsSection({
     }
   };
 
-  if (!hasDaemon) {
+  if (!hasDaemon && accessState !== "unavailable") {
     const accessDenied = accessState === "denied";
     const accessAvailable = accessState === "available";
     const descriptionText = accessDenied
@@ -518,41 +547,44 @@ export function LocalOpenTargetSettingsSection({
 
     return (
       <SettingsSection title="File Preferences">
-        <SettingsWithControl
-          label="Local editor integration"
-          description={
-            <>
-              {descriptionText}{" "}
-              <a
-                href={LOCAL_EDITOR_INTEGRATION_DOCS_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                onClick={(event) => {
-                  event.preventDefault();
-                  openUrlInExternalBrowser(LOCAL_EDITOR_INTEGRATION_DOCS_URL);
-                }}
-              >
-                Setup guide
-                <Icon
-                  name="ExternalLink"
-                  className="size-3 shrink-0"
-                  aria-hidden
-                />
-              </a>
-            </>
-          }
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={accessRequestPending || accessDenied}
-            onClick={handleRequestAccess}
+        <div className="space-y-5">
+          <SettingsWithControl
+            label="Local editor integration"
+            description={
+              <>
+                {descriptionText}{" "}
+                <a
+                  href={LOCAL_EDITOR_INTEGRATION_DOCS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openUrlInExternalBrowser(LOCAL_EDITOR_INTEGRATION_DOCS_URL);
+                  }}
+                >
+                  Setup guide
+                  <Icon
+                    name="ExternalLink"
+                    className="size-3 shrink-0"
+                    aria-hidden
+                  />
+                </a>
+              </>
+            }
           >
-            {buttonLabel}
-          </Button>
-        </SettingsWithControl>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={accessRequestPending || accessDenied}
+              onClick={handleRequestAccess}
+            >
+              {buttonLabel}
+            </Button>
+          </SettingsWithControl>
+          {sshSettings}
+        </div>
       </SettingsSection>
     );
   }
@@ -560,20 +592,83 @@ export function LocalOpenTargetSettingsSection({
   return (
     <SettingsSection title="File Preferences">
       <div className="space-y-5">
-        <LocalOpenTargetPreferenceControl
-          definition={DIRECTORY_TARGET_PREFERENCE}
-          onTargetChange={onDirectoryTargetChange}
-          preferredTargetId={directoryTargetId}
-          targets={targets}
-        />
-        <LocalOpenTargetPreferenceControl
-          definition={FILE_TARGET_PREFERENCE}
-          onTargetChange={onFileTargetChange}
-          preferredTargetId={fileTargetId}
-          targets={targets}
-        />
+        {hasDaemon && (
+          <LocalOpenTargetPreferenceControl
+            definition={DIRECTORY_TARGET_PREFERENCE}
+            onTargetChange={onDirectoryTargetChange}
+            preferredTargetId={directoryTargetId}
+            targets={targets}
+          />
+        )}
+        {hasDaemon && (
+          <LocalOpenTargetPreferenceControl
+            definition={FILE_TARGET_PREFERENCE}
+            onTargetChange={onFileTargetChange}
+            preferredTargetId={fileTargetId}
+            targets={targets}
+          />
+        )}
+        {sshSettings}
       </div>
     </SettingsSection>
+  );
+}
+
+function SshHostInput({
+  id,
+  name,
+  value,
+  onSave,
+}: {
+  id: string;
+  name: string;
+  value: string;
+  onSave: (alias: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [previousValue, setPreviousValue] = useState(value);
+  if (value !== previousValue) {
+    setPreviousValue(value);
+    setDraft(value);
+  }
+  const alias = draft.trim();
+  const valid = alias === "" || isValidSshHost(alias);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="min-w-36 text-sm" htmlFor={`ssh-host-${id}`}>
+        {name}
+      </label>
+      <Input
+        id={`ssh-host-${id}`}
+        aria-label={`${name} SSH Host`}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="devbox"
+        aria-invalid={!valid}
+        className="max-w-56"
+      />
+      {alias && alias !== value && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!valid}
+          onClick={() => onSave(alias)}
+        >
+          Save
+        </Button>
+      )}
+      {value && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onSave("")}
+        >
+          Clear
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -1116,6 +1211,7 @@ export function SettingsView() {
   const { workspaceOpenTargets } = useWorkspaceOpenTargets({
     enabled: hasDaemon,
   });
+  const { data: hosts = [] } = useHosts();
   const [directoryTargetId, setDirectoryTargetId] =
     useWorkspaceOpenTargetPreference(workspaceOpenTargets);
   const [fileTargetId, setFileTargetId] =
@@ -1229,6 +1325,7 @@ export function SettingsView() {
           directoryTargetId={directoryTargetId}
           fileTargetId={fileTargetId}
           hasDaemon={hasDaemon}
+          hosts={hosts}
           onDirectoryTargetChange={setDirectoryTargetId}
           onFileTargetChange={setFileTargetId}
           onRequestAccess={requestAccess}

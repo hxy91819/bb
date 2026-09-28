@@ -32,6 +32,10 @@ import {
 
 export type * from "./public-types.js";
 export { createBuiltinPlanCommandTextInput } from "@bb/domain";
+export {
+  buildVsCodeRemoteUrl,
+  type VsCodeRemoteUrlArgs,
+} from "./vscode-remote-url.js";
 
 export interface CreateBbSdkArgs {
   context?: BbSdkContext;
