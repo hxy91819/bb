@@ -35,3 +35,4 @@ feature/acp-custom-agent-icon          needs-feedback                           
 fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
 feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；基于 origin/main 的移植版在 upstream/child-turn-author（df903740f），下次升基线到含 #4356 的 tag 时用它 rebase 替换本分支
 fix/acp-permission-mode                 needs-feedback                                             # ACP 权限切换时重建会话，使 permissionCli 使用当前 BB 模式
+feature/browser-remote-editor         needs-feedback                                             # 按浏览器配置工作机 SSH 别名，直接唤起 VS Code，无需本地 helper
