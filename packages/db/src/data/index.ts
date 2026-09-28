@@ -286,6 +286,7 @@ export {
   type StoredProviderThreadClaimClass,
   getLastStoredTurnRequestEvent,
   getStoredTurnRequestEventForTurn,
+  listStoredTurnRequestEventsForTurn,
   getLatestThreadOutputEventRow,
   getLatestStoredConversationOutlineSequence,
   getLatestCompletedThreadContextClearSequence,
