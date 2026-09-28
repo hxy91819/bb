@@ -1,12 +1,15 @@
-import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
-import { compareStandardThreads } from "./projectThreadGroups.js";
+import { PERSONAL_PROJECT_ID } from "@bb/domain";
+import {
+  compareStandardThreads,
+  type StandardThreadSortFields,
+} from "./projectThreadGroups.js";
 
 export function resolveSidebarNewThreadProjectId({
   recentThreads,
   rememberedProjectId,
   routeProjectId,
 }: {
-  recentThreads: readonly ThreadListEntry[];
+  recentThreads: readonly (StandardThreadSortFields & { projectId: string })[];
   rememberedProjectId: string;
   routeProjectId: string | null | undefined;
 }): string {
