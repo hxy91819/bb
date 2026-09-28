@@ -261,13 +261,6 @@ const acpConfigOptionSelectOptionSchema = z
   })
   .passthrough();
 
-const acpConfigOptionSelectGroupSchema = z
-  .object({
-    group: z.string(),
-    options: z.array(z.unknown()),
-  })
-  .passthrough();
-
 function flattenAcpConfigSelectOptions(
   options: unknown,
 ): z.infer<typeof acpConfigOptionSelectOptionSchema>[] {
