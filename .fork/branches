@@ -24,6 +24,7 @@ feature/thread-project-label           needs-feedback                           
 fix/sidebar-parent-row-hover-archive   fork-only       https://github.com/get-bb/bb/issues/3821   # 父线程行不显示快速归档（桌面偏好）
 fix/sidebar-touch-hover-actions        reported        https://github.com/get-bb/bb/issues/3832   # 触屏不显示悬停归档
 fix/sidebar-touch-navigation           needs-feedback                                             # 触屏点击导航而非重命名；叠在 fix/sidebar-parent-row-hover-archive 上
+feature/sidebar-pinned-new-thread      needs-feedback                                             # New thread 固定；其余导航与线程列表共用滚动区，desktop-v0.44.0 未完全吸收
 fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
 fix/mobile-model-picker                needs-feedback                                             # 移动端模型选择器触发区
 feature/mobile-queue-action            needs-feedback                                             # 移动端排队消息发送
