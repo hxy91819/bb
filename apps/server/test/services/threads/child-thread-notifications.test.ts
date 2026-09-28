@@ -291,7 +291,7 @@ describe("child thread notifications", () => {
     expect(message).not.toContain("Deploy script failed on preflight.");
   });
 
-  it("omits output and preserves manual-stop safety guidance for a single interrupted outcome", () => {
+  it("omits output for a single interrupted outcome", () => {
     const message = renderBatchMessage({
       items: [
         {
@@ -312,8 +312,6 @@ describe("child thread notifications", () => {
         "@thread:thr_child was interrupted.",
         "",
         "Review the thread before deciding next steps.",
-        "",
-        "If the user stopped it manually, do not resume, restart, retry, replace, or continue the work unless the user explicitly asks.",
       ].join("\n"),
     );
     expect(message).not.toContain("Child thread updates:");

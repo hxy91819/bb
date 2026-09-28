@@ -3,6 +3,7 @@ import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   appendDaemonEventsInTransaction,
   deriveStoredEventItemFields,
+  getLatestThreadInterruptedReason,
   getThread,
   listStoredTurnCompletedKeys,
   listThreadEnvironmentAssignmentsOnHost,
@@ -25,6 +26,7 @@ import {
 } from "@bb/host-daemon-contract";
 import {
   requireThreadEventScopeTurnId,
+  type ChildThreadOutcome,
   type ThreadEventType,
   type ThreadEventTurnStatus,
 } from "@bb/domain";
@@ -221,6 +223,7 @@ interface AddParentTurnNotificationFollowUpArgs {
   author: ChildThreadTurnAuthor | null;
   failedParentNotificationThreadIds: Set<string>;
   followUps: EventEffectFollowUp[];
+  interruption?: ChildThreadOutcome["interruption"];
   thread: NonNullable<ReturnType<typeof getThread>>;
   turnStatus: ThreadEventTurnStatus;
 }
@@ -229,6 +232,7 @@ interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
   author: ChildThreadTurnAuthor | null;
   childThreadId: string;
+  interruption?: ChildThreadOutcome["interruption"];
   projectId: string;
   parentThreadId: string;
   title: string | null;
@@ -375,6 +379,7 @@ function addParentTurnNotificationFollowUp(
     kind: "parent-turn-notification",
     author: args.author,
     childThreadId: args.thread.id,
+    ...(args.interruption ? { interruption: args.interruption } : {}),
     projectId: args.thread.projectId,
     parentThreadId: args.thread.parentThreadId,
     title: args.thread.title,
@@ -450,7 +455,16 @@ async function applyEventEffects(
               threadId: turnCompleted.thread.id,
               turnId,
             });
-          if (!alreadyHandledByCommandFailure) {
+          const interruptionReason =
+            event.status === "interrupted"
+              ? getLatestThreadInterruptedReason(deps.db, {
+                  threadId: turnCompleted.thread.id,
+                })
+              : null;
+          if (
+            !alreadyHandledByCommandFailure &&
+            interruptionReason !== "manual-stop"
+          ) {
             addParentTurnNotificationFollowUp({
               author: getChildThreadTurnAuthor(deps, {
                 threadId: turnCompleted.thread.id,
@@ -459,6 +473,9 @@ async function applyEventEffects(
               }),
               failedParentNotificationThreadIds,
               followUps,
+              ...(interruptionReason
+                ? { interruption: { reason: interruptionReason } }
+                : {}),
               thread: turnCompleted.thread,
               turnStatus: event.status,
             });
@@ -532,6 +549,9 @@ async function executeEventFollowUpBestEffort(
             projectId: followUp.projectId,
             title: followUp.title,
           },
+          ...(followUp.interruption
+            ? { interruption: followUp.interruption }
+            : {}),
           parentThreadId: followUp.parentThreadId,
           turnStatus: followUp.turnStatus,
         });
