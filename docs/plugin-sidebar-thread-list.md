@@ -12,18 +12,20 @@ Every member below ships with the `experimental_` prefix and an entry in
 
 ## 1. What the plugin owns, and what the host keeps
 
-`AppSidebar` renders five regions from top to bottom:
+`AppSidebar` renders these regions from top to bottom:
 
 | Region                                     | Owner today                | After this change |
 | ------------------------------------------ | -------------------------- | ----------------- |
 | Top reserve / window drag row              | host                       | host, always      |
-| Primary actions (New thread, search)       | `BuiltInSidebarNavigation` | host, always      |
-| Plugin nav rows (Tools, Docs, Tasks)       | `PluginNavSidebarItems`    | host, always      |
+| Pinned New thread row                      | `BuiltInSidebarNavigation` | host, always      |
+| Scrolling nav rows (Search, Plugins, panels) | `PluginNavSidebarItems`  | host, always      |
 | **Scrolling thread list**                  | `ProjectList`              | **the plugin**    |
 | Footer (Settings, plugin actions, updates) | host                       | host, always      |
 
-The plugin replaces the scroll area only. The host keeps the chrome, so
-every sidebar looks like bb, resizes like bb, and collapses like bb.
+The plugin replaces the thread-list region inside the shared scroll area
+only. The host keeps the chrome, so every sidebar looks like bb, resizes
+like bb, and collapses like bb. The New thread row stays pinned above the
+scroll area while the remaining nav rows scroll away with the list.
 
 Two reasons the host keeps the rest. The nav rows and footer are other
 plugins' surfaces — Docs, Tasks, and every sidebar footer item live there —
