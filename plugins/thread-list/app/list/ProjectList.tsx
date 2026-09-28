@@ -31,6 +31,7 @@ import {
 import { AppThreadSectionMoveProvider } from "../rows/ThreadSectionMoveProvider.js";
 import { useDialogState } from "../ui/useDialogState.js";
 import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
+import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import {
   buildProjectThreadGroups,
   getProjectThreadItemDescendants,
