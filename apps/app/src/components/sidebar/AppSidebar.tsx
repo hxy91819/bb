@@ -219,6 +219,7 @@ export function AppSidebar({
           pinnedNavigationHost={pinnedNavigationHost}
         />
         <div
+          data-testid="app-sidebar-thread-list"
           className={cn(
             "flex shrink-0 flex-col",
             isCompactCustomizeModeActive && "hidden",
