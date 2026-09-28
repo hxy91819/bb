@@ -290,6 +290,7 @@ Sidebar width and open state are per window and stay local to the browser.
 Host files and voice transcription
 
   bb file read|write|list|paths|mkdir|move|remove ...
+  bb file vscode-url /absolute/remote/path --ssh-host devbox [--file --line 12 --column 3]
   bb voice transcribe <audio-file> [--type <mime>] [--prompt <context>]
                                    --type defaults to audio/webm
 
@@ -356,3 +357,5 @@ change), then run `bb settings experiment performanceDiagnostics true|false`.
 Collection needs both; it adds overhead and writes CPU profiles every 30 seconds
 to `$BB_DATA_DIR/logs/performance/` (kept 12 hours), which contain local paths.
 Open a `.cpuprofile` in Chrome DevTools.
+
+Settings → Files maps BB machines to local SSH config Host aliases for VS Code Remote-SSH. These mappings belong to this browser and BB origin; no local helper is required.
