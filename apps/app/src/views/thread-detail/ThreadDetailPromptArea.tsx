@@ -853,6 +853,7 @@ export function ThreadDetailPromptArea({
     currentThreadId: thread.id,
     selectedProviderComposerActions,
     resolveMentionLink,
+    sideChatCommand: { enabled: isForkAvailable },
   });
   const {
     typeaheadConfig: inlineTypeaheadConfig,
@@ -867,7 +868,6 @@ export function ThreadDetailPromptArea({
       (provider) => provider.id === thread.providerId,
     )?.composerActions,
     resolveMentionLink,
-    sideChatCommand: { enabled: isForkAvailable },
   });
   const runtimeDisplayStatus = thread.runtime.displayStatus;
   const shouldSteerWhenReady =
