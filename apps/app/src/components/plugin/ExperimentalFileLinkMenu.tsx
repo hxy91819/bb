@@ -15,6 +15,7 @@ import {
   getExperimentalFileLocationStart,
 } from "@/lib/live-file-navigation";
 import { usePluginSlots } from "@/lib/plugin-slots";
+import { useBrowserSshHosts } from "@/lib/browser-ssh-hosts";
 
 function getFileExtension(path: string): string | null {
   const name = getFileBasename(path);
@@ -30,6 +31,7 @@ export function ExperimentalFileLinkMenu({
   intent: ExperimentalFileOpenOptions;
 }) {
   const navigation = useAppNavigationHost();
+  const [sshHosts] = useBrowserSshHosts();
   const resolved = useResolvedLiveFileTarget(intent.target, { enabled: true });
   const localTargets = useLocalOpenTargets({
     enabled: resolved.status === "available",
@@ -86,7 +88,21 @@ export function ExperimentalFileLinkMenu({
           localTargets.isLoading ||
           !localTargets.canOpenPreferredFileTarget
         }
-        onSelect={() => navigation.openFileExternally(intent)}
+        onSelect={() => {
+          if (
+            resolved.status === "available" &&
+            resolved.openContext.kind === "remote-ssh" &&
+            sshHosts[resolved.openContext.hostId]
+          ) {
+            void localTargets.openPathInPreferredFileTarget({
+              columnNumber: location.columnNumber,
+              lineNumber: location.lineNumber,
+              path: resolved.absolutePath,
+            });
+          } else {
+            navigation.openFileExternally(intent);
+          }
+        }}
       >
         Open externally
       </ContextMenuItem>

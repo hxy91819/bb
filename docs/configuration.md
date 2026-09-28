@@ -454,6 +454,8 @@ the current model's supported efforts from low to high.
 
 ## Client SSH Targets
 
+In Settings → Files, map each BB machine to a local SSH config Host alias. Browser-local mappings open paths through VS Code Remote-SSH without a local helper. `bb file vscode-url /absolute/path --ssh-host devbox` prints the URL without opening it.
+
 `~/.bb/client.json` is local to the machine showing the UI; the remote server
 does not read it. It maps a server and work host to an SSH target (the value
 that works after `ssh`, such as `devbox`, `user@devbox`, or a `Host` entry in
