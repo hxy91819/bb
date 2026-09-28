@@ -1131,6 +1131,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
 
 interface PinnedEnvironmentThreadGroupRowProps {
   group: EnvironmentThreadGroup;
+  showProjectName: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
@@ -1142,6 +1143,7 @@ interface PinnedEnvironmentThreadGroupRowProps {
 export const PinnedEnvironmentThreadGroupRow = memo(
   function PinnedEnvironmentThreadGroupRow({
     group,
+    showProjectName,
     selectedThreadId,
     collapsedThreadIds,
     collapsedEnvironmentIds,
@@ -1160,6 +1162,7 @@ export const PinnedEnvironmentThreadGroupRow = memo(
       <EnvironmentThreadGroupRow
         projectId={group.nodes[0].thread.projectId}
         environmentThreadGroup={group}
+        showProjectName={showProjectName}
         sectionDnd={sectionDnd ?? undefined}
         dragBindings={dragBindings}
         sortableRef={setNodeRef}
