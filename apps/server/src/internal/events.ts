@@ -3,6 +3,7 @@ import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   appendDaemonEventsInTransaction,
   deriveStoredEventItemFields,
+  getLatestThreadInterruptedReason,
   getThread,
   listStoredTurnCompletedKeys,
   listThreadEnvironmentAssignmentsOnHost,
@@ -232,6 +233,7 @@ interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
   author: ChildThreadTurnAuthor | null;
   childThreadId: string;
+  interruption?: ChildThreadOutcome["interruption"];
   projectId: string;
   parentThreadId: string;
   title: string | null;
@@ -379,6 +381,7 @@ function addParentTurnNotificationFollowUp(
     kind: "parent-turn-notification",
     author: args.author,
     childThreadId: args.thread.id,
+    ...(args.interruption ? { interruption: args.interruption } : {}),
     projectId: args.thread.projectId,
     parentThreadId: args.thread.parentThreadId,
     title: args.thread.title,
