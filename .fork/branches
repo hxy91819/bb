@@ -36,3 +36,4 @@ fix/acp-model-discovery-errors         needs-feedback                           
 feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；已从 upstream/child-turn-author 移植到含 #4356 的基线
 fix/acp-permission-mode                 needs-feedback                                             # ACP 权限切换时重建会话，使 permissionCli 使用当前 BB 模式
 feature/browser-remote-editor         needs-feedback                                             # 按浏览器配置工作机 SSH 别名，直接唤起 VS Code，无需本地 helper
+fix/acp-skills-prompt-paths            reported        https://github.com/get-bb/bb/issues/4481   # ACP 会话指令按 skill root 分组，根目录只声明一次，不再每行重复绝对路径
