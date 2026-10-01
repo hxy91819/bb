@@ -77,7 +77,62 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --co
 3. 某个分支 rebase 后变空，说明上游已经包含它：从清单删除这一行，删除分支（fork 上的也删），在提交说明里写明被上游哪个版本吸收。
 4. 验证、`--promote`，提交并推送 `fork-tooling` 上的新 `base`。
 
-## 3. 向上游反馈
+## 3. 发布预编译聚合包
+
+`.github/workflows/fork-release.yml` 只在 `hxy91819/bb` 的 `fork-v*` tag 推送时运行。它直接构建 tag 对应的聚合代码，不在 CI 里重新聚合或 rebase，也不发布到 npm。
+
+### 发布
+
+先按上一节完成聚合、验证及提升，确保聚合已经包含最新版 `fork-tooling` 的发布流程，再给这个聚合 commit 打 tag：
+
+```bash
+git status --short
+git show local/aggregate:.github/workflows/fork-release.yml
+git tag -a fork-v0.44.0-20261001.1 local/aggregate -m "BB fork aggregate 2026-10-01"
+git push fork refs/tags/fork-v0.44.0-20261001.1
+```
+
+tag 以 `fork-v` 和数字开头，后面使用字母、数字、点、下划线或连字符。建议包含上游基线版本、日期、当天的发布序号。每次发布用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
+
+在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。只有全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
+
+| 包名后缀              | 目标机器                                              |
+| --------------------- | ----------------------------------------------------- |
+| `linux-x64.tar.gz`    | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
+| `linux-arm64.tar.gz`  | Linux aarch64，glibc ≥ 2.35                           |
+| `darwin-x64.tar.gz`   | Intel Mac，macOS 15 或更新                            |
+| `darwin-arm64.tar.gz` | Apple Silicon Mac，macOS 15 或更新                    |
+
+这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
+
+流程仅使用 GitHub 自带的 `GITHUB_TOKEN`，发布 job 获得 `contents: write`；无需 npm token、Apple 签名证书或上游的 Blacksmith runner。Fork 的 Actions 需已启用。
+
+### 在其他机器安装
+
+从 Release 下载匹配平台的 `.tar.gz` 和同名 `.sha256`。例如 Linux x64：
+
+```bash
+tag=fork-v0.44.0-20261001.1
+asset="bb-${tag}-linux-x64.tar.gz"
+curl -fLO "https://github.com/hxy91819/bb/releases/download/${tag}/${asset}"
+curl -fLO "https://github.com/hxy91819/bb/releases/download/${tag}/${asset}.sha256"
+sha256sum --check "${asset}.sha256"
+mkdir -p "$HOME/.local/opt/bb"
+tar -xzf "$asset" -C "$HOME/.local/opt/bb"
+"$HOME/.local/opt/bb/bb-${tag}-linux-x64/bin/bb-app"
+```
+
+macOS 对应换成 `darwin-x64` 或 `darwin-arm64`，校验命令用 `shasum -a 256 --check "${asset}.sha256"`。保持解压目录完整，直接调用其中的 `bin/bb-app`、`bin/bb-server`、`bin/bb-host-daemon`、`bin/bb`；可以把该目录的 `bin` 加入 `PATH`，不要把启动脚本软链接到别处。脚本始终用包内的 Node，因此不受系统 Node 版本影响。
+
+升级时下载并解压新包，停下旧实例，再让现有 service 的启动命令指向新包的 `bin/bb-app`（或原先使用的单独 server/host-daemon 启动入口）。默认仍使用 `~/.bb`；原有启动参数、数据目录和 service 环境变量应保留。包不会安装或重启服务。数据库 schema 变化时沿用部署流程的备份与迁移规则，同一个数据目录只运行一个实例。本机现有服务的切换仍按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 执行。
+
+### 失败后重跑
+
+构建或验证失败时修复所属分支，重新聚合后使用新 tag 发布。纯网络或 runner 故障可在 Actions 重跑原 tag。
+
+上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和资产清单，不覆盖已发布包。需要修订已发布版本时使用新 tag。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
+
+## 4. 向上游反馈
 
 分支本身就是上游 PR 的材料，这也是分支必须保持独立、基于 tag 的原因。
 
