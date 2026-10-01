@@ -341,10 +341,7 @@ function rememberGrokContextWindow(
   }
 }
 
-function emitGrokContextWindow(
-  session: AcpThreadSession,
-  used: number,
-): void {
+function emitGrokContextWindow(session: AcpThreadSession, used: number): void {
   if (
     session.dialect.id !== "grok" ||
     session.grokContextWindowSize === undefined
@@ -3121,33 +3118,48 @@ async function handleRequest(
         sendError(request.id, -32000, "A turn is already active");
         return;
       }
-      if (Object.keys(params.options.envVars ?? {}).length > 0) {
-        const envVars = {
-          ...(decodeLaunchSpec(params.options.providerOptions)?.env ?? {}),
-          ...params.options.envVars,
-        };
-        if (!isDeepStrictEqual(envVars, session.construction.envVars ?? {})) {
-          const previousProviderThreadId = session.providerThreadId;
-          const construction =
-            params.options.serviceTier === undefined
-              ? session.construction
-              : {
-                  ...session.construction,
-                  serviceTier: params.options.serviceTier,
-                };
-          session = await startAgentSession({
-            kind: "resume",
-            params: { ...construction, envVars },
-            resumeProviderThreadId: previousProviderThreadId,
-          });
-          sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {
-            threadId: params.threadId,
-            providerThreadId: session.providerThreadId,
-            reason:
-              "Execution settings changed; the ACP session was rebuilt to apply them.",
-            contextLost: session.providerThreadId !== previousProviderThreadId,
-          });
-        }
+      const envVars =
+        Object.keys(params.options.envVars ?? {}).length > 0
+          ? {
+              ...(decodeLaunchSpec(params.options.providerOptions)?.env ?? {}),
+              ...params.options.envVars,
+            }
+          : session.construction.envVars;
+      const permissionMode = params.options.permissionMode;
+      if (permissionMode === "auto") {
+        sendError(
+          request.id,
+          -32602,
+          "ACP does not support permission mode auto",
+        );
+        return;
+      }
+      if (
+        !isDeepStrictEqual(envVars ?? {}, session.construction.envVars ?? {}) ||
+        permissionMode !== session.construction.permissionMode ||
+        (params.options.serviceTier !== undefined &&
+          params.options.serviceTier !== session.construction.serviceTier)
+      ) {
+        const previousProviderThreadId = session.providerThreadId;
+        session = await startAgentSession({
+          kind: "resume",
+          params: {
+            ...session.construction,
+            envVars,
+            permissionMode,
+            ...(params.options.serviceTier === undefined
+              ? {}
+              : { serviceTier: params.options.serviceTier }),
+          },
+          resumeProviderThreadId: previousProviderThreadId,
+        });
+        sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {
+          threadId: params.threadId,
+          providerThreadId: session.providerThreadId,
+          reason:
+            "Execution settings changed; the ACP session was rebuilt to apply them.",
+          contextLost: session.providerThreadId !== previousProviderThreadId,
+        });
       }
       const pending: AcpPendingTurnInput = {
         clientRequestId: params.clientRequestId,
