@@ -69,6 +69,31 @@ afterEach(() => {
 });
 
 describe("preferences sync", () => {
+  it("persists and synchronizes date grouping without legacy settings", async () => {
+    const store = getDefaultStore();
+    const groupingAtom = createSyncedPreferenceAtom("dateGrouping");
+    expect(store.get(groupingAtom)).toBe(true);
+    const rpc = fakeRpc({ dateGrouping: false });
+    await hydratePreferences(rpc);
+    expect(store.get(groupingAtom)).toBe(false);
+    store.set(groupingAtom, true);
+    await flushPreferenceWritesForTest();
+    expect(rpc.calls.filter((call) => call.method === "setPreference")).toEqual(
+      [
+        {
+          method: "setPreference",
+          input: { key: "dateGrouping", value: true },
+        },
+      ],
+    );
+    applyRemotePreferenceSignal({ key: "dateGrouping", value: false });
+    expect(store.get(groupingAtom)).toBe(false);
+    expect(
+      JSON.parse(mirror.getItem(MIRROR_KEY) ?? "{}")
+        .dateGrouping,
+    ).toBe(false);
+  });
+
   it("hydrates from the server, marks ready, and mirrors to localStorage", async () => {
     const store = getDefaultStore();
     const modeAtom = createSyncedPreferenceAtom("organizationMode");

@@ -25,6 +25,21 @@ function setup(options: {
 }
 
 describe("thread-list preferences rpc", () => {
+  it("accepts dateGrouping false through the CLI and resets it through RPC", async () => {
+    const { bb, harness } = setup();
+    await plugin(bb);
+    await expect(harness.behavior.runCli(["prefs", "get", "dateGrouping"])).resolves.toMatchObject({
+      exitCode: 0, stdout: "true",
+    });
+    await expect(harness.behavior.runCli(["prefs", "set", "dateGrouping", "false"])).resolves.toMatchObject({
+      exitCode: 0, stdout: "dateGrouping = false",
+    });
+    await expect(bb.storage.kv.get("preference:dateGrouping")).resolves.toBe(false);
+    await expect(harness.behavior.runCli(["prefs", "set", "dateGrouping", "0"])).resolves.toMatchObject({ exitCode: 1 });
+    await expect(bb.storage.kv.get("preference:dateGrouping")).resolves.toBe(false);
+    await expect(harness.behavior.callRpc("resetPreference", { key: "dateGrouping" })).resolves.toEqual({ key: "dateGrouping", value: true });
+  });
+
   it("lists defaults on a fresh install and round-trips a valid write", async () => {
     const { bb, harness } = setup();
     await plugin(bb);
