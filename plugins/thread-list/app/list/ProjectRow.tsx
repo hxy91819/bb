@@ -22,6 +22,7 @@ import {
   Fragment,
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -131,14 +132,18 @@ import {
 } from "../model/project-thread-groups.js";
 import { buildSidebarEntitySectionId } from "../model/sidebar-section-order.js";
 import { SidebarWindowedItems } from "./SidebarWindowedItems.js";
+import { getDateGroupLabels } from "./dateGroups.js";
 import { SidebarSectionRow } from "./SidebarSectionRow.js";
 import { TopLevelSidebarSection } from "./TopLevelSidebarSection.js";
 import {
+  sidebarChronologicalSortAtom,
   sidebarCollapsedThreadSectionsAtom,
+  sidebarDateGroupingAtom,
   sidebarGroupThreadsByEnvironmentAtom,
 } from "../preferences/atoms.js";
 import {
   SIDEBAR_PROJECT_GROUP_LINE_CLASS,
+  SIDEBAR_STANDARD_ROW_PADDING_CLASS,
   SIDEBAR_ROW_BASE_CLASS,
   getSidebarThreadGroupLineLeft,
   getSidebarThreadRowPaddingLeft,
@@ -1802,8 +1807,11 @@ function ThreadTreeLoadingSkeleton() {
   );
 }
 
+const DATE_GROUP_HEADING_CLASS = `pointer-events-none flex h-5 select-none items-center text-2xs font-medium uppercase tracking-wider text-subtle-foreground ${SIDEBAR_STANDARD_ROW_PADDING_CLASS}`;
+
 interface SectionThreadTreeItemsProps {
   items: readonly ProjectThreadItem[];
+  dateGroups?: boolean;
   sectionDnd: SectionThreadDndState | null;
   variant: ProjectThreadTreeVariant;
   projectId?: string;
@@ -1904,6 +1912,7 @@ function useWindowedThreadItems({
 
 function SectionThreadTreeItems({
   items,
+  dateGroups = false,
   sectionDnd,
   variant,
   projectId,
@@ -1919,6 +1928,33 @@ function SectionThreadTreeItems({
   onCreateThreadInSection,
   onRemoveSection,
 }: SectionThreadTreeItemsProps) {
+  const dateGrouping = useAtomValue(sidebarDateGroupingAtom);
+  const sort = useAtomValue(sidebarChronologicalSortAtom);
+  const enabled = dateGroups && dateGrouping && sort !== "alpha";
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      clearTimeout(timer);
+      const current = new Date();
+      setNow(current);
+      const midnight = new Date(current);
+      midnight.setHours(24, 0, 0, 0);
+      timer = setTimeout(refresh, midnight.getTime() - current.getTime());
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [enabled]);
+  const labels = useMemo(
+    () =>
+      enabled ? getDateGroupLabels(items, sort, now) : items.map(() => null),
+    [enabled, items, sort, now],
+  );
   const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
     useWindowedThreadItems({
       items,
@@ -1926,10 +1962,14 @@ function SectionThreadTreeItems({
       collapsedEnvironmentIds,
       selectedThreadId,
     });
+  const estimateGroupedRows = useCallback(
+    (index: number) => estimateRows(index) + (labels[index] ? 1 : 0),
+    [estimateRows, labels],
+  );
   const rows = (
     <SidebarWindowedItems
       itemKeys={itemKeys}
-      estimateRows={estimateRows}
+      estimateRows={estimateGroupedRows}
       getNavigationEntries={getNavigationEntries}
       alwaysMountedKeys={alwaysMountedKeys}
       renderItem={(index) => {
@@ -1940,6 +1980,16 @@ function SectionThreadTreeItems({
         const itemKey = getSidebarItemKey(item);
         return (
           <Fragment key={itemKey}>
+            {labels[index] && (
+              <div
+                className={cn(
+                  DATE_GROUP_HEADING_CLASS,
+                  index > 0 && "mt-3",
+                )}
+              >
+                {labels[index]}
+              </div>
+            )}
             <SectionDndItemRow
               projectId={projectId ?? getItemProjectId(item)}
               item={item}
@@ -2150,9 +2200,13 @@ export const ChronologicalSectionThreadSections = memo(
     const looseItems = rootItems.filter((item) => item.kind !== "section");
     const looseThreads = getProjectThreadItemDescendants(looseItems);
 
-    const renderItems = (items: readonly ProjectThreadItem[]) => (
+    const renderItems = (
+      items: readonly ProjectThreadItem[],
+      dateGroups = false,
+    ) => (
       <SectionThreadTreeItems
         items={items}
+        dateGroups={dateGroups}
         sectionDnd={renderedSectionDnd}
         variant="section"
         showProjectName
@@ -2185,7 +2239,7 @@ export const ChronologicalSectionThreadSections = memo(
           items={looseItems.map(getSidebarDndItemId)}
           strategy={verticalListSortingStrategy}
         >
-          {renderItems(looseItems)}
+          {renderItems(looseItems, true)}
         </SortableContext>
       ) : (
         looseEmptyState

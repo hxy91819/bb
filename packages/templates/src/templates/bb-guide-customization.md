@@ -96,6 +96,9 @@ Organize → Rows → Provider icons toggles the icon before each title, and
 The `threadLifecycles` preference defaults
 to `["active"]`; `bb thread-list prefs set threadLifecycles '["archived"]'`
 shows archived threads, and `'["active","archived"]'` shows both.
+`dateGrouping` defaults to `true`: Custom's Threads section shows date headings
+with Updated or Created sorting. Toggle Organize → Rows → Date groups or use
+`bb thread-list prefs set dateGrouping false`; Alphabetical disables grouping.
 
 The sidebar navigation rows (New thread, Search, Plugins, Skills, plugin
 panels) are drawn by the Navigation builtin plugin. Their order and

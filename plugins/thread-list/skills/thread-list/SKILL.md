@@ -7,7 +7,7 @@ description: "Inspect or change the sidebar thread list's layout preferences: or
 
 The Thread list plugin owns the sidebar's layout state. Read it with
 `bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`, `organizationMode`,
-`environmentGrouping`, `chronologicalSort`, `sortDirection`, `sectionOrder`,
+`environmentGrouping`, `chronologicalSort`, `dateGrouping`, `sortDirection`, `sectionOrder`,
 `manualSectionOrder`, `machineSectionOrder`, `hiddenGroups` (including the
 built-in `threads` group),
 `collapsedSections`, `collapsedProjects`, `collapsedThreads`,
@@ -41,3 +41,20 @@ Organize → Rows → Provider icons toggles the icon before each thread title.
 `showProviderIcons` defaults to `false`; use
 `bb thread-list prefs set showProviderIcons true` to show them. Unknown
 provider ids have no icon.
+
+## Date groups
+
+`dateGrouping` defaults to `true`. Organize → Rows → Date groups toggles it;
+`bb thread-list prefs set dateGrouping false` or `setPreference` RPC does the same.
+It only groups root entries in Custom's built-in Threads section. Pinned,
+custom sections, By project, and By machine are unchanged. Alphabetical sorting
+disables the toggle and hides date groups without changing the saved preference.
+
+Updated sorting uses `updatedAt`; Created sorting uses `createdAt`. Buckets use
+local calendar days: Today, Yesterday, localized full weekday names for 2–6 days
+ago, Previous 30 days for 7–29 days ago, then localized full month and numeric
+year (for example, September 2026). Nested children and worktree siblings stay
+with their root thread or environment representative's date. Archived threads
+share the same buckets when included by Filter. Headings are display-only, not
+collapsible, draggable, or keyboard jump targets; there are no priority or
+needs-input buckets. Dates refresh at local midnight and on window focus.
