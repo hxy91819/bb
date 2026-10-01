@@ -1,4 +1,4 @@
-import { LEGACY_CODEX_GOAL_EXTENSION_KIND } from "@bb/domain";
+import { isGoalExtensionKind } from "@bb/domain";
 import type { ThreadEvent } from "@bb/domain";
 
 interface PendingGoalClearWaiter {
@@ -64,7 +64,7 @@ export class RuntimeThreadGoalState {
   observe(event: ThreadEvent): void {
     if (
       event.type !== "thread/extensionState/updated" ||
-      event.kind !== LEGACY_CODEX_GOAL_EXTENSION_KIND ||
+      !isGoalExtensionKind(event.kind) ||
       event.payload !== null
     ) {
       return;
