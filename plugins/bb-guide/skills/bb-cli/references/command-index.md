@@ -244,6 +244,7 @@ move and downloads the new server's bb-app package for its service.
 ## file
 
 - `bb file`
+- `bb file vscode-url`
 - `bb file read`
 - `bb file write`
 - `bb file list`

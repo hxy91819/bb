@@ -282,7 +282,14 @@ permission; OS notification settings still control whether a banner appears.
 Host files and voice transcription
 
   bb file read|write|list|paths|mkdir|move|remove ...
+  bb file vscode-url /absolute/remote/path --ssh-host devbox [--file --line 12 --column 3]
   bb voice transcribe <audio-file> [--prompt <context>]
+
+`bb file vscode-url` prints a VS Code Remote-SSH URL without opening VS Code or
+changing browser settings. In Settings → Files, map each BB machine to an SSH
+config Host alias on this computer to open its paths from this browser. This
+requires VS Code and Remote-SSH; mappings are stored only in this browser's
+local storage for this BB origin. Other browsers need their own mappings.
 
 Voice transcription uses the Voice input service chosen with
 `bb settings ai-services set voice <automatic|off|service-id>`. bb accepts

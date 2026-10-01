@@ -4,7 +4,9 @@ import type {
   WorkspaceOpenTarget,
   WorkspaceOpenTargetId,
 } from "@bb/host-daemon-contract";
+import { buildVsCodeRemoteUrl } from "@bb/sdk/browser";
 import { appToast } from "@/components/ui/app-toast";
+import { useBrowserSshHosts } from "@/lib/browser-ssh-hosts";
 import {
   resolvePreferredWorkspaceOpenFileTarget,
   resolvePreferredWorkspaceOpenTarget,
@@ -23,6 +25,23 @@ const LOCAL_DAEMON_UNAVAILABLE_OPEN_DESCRIPTION =
 const LOCAL_NO_FILE_OPEN_TARGETS_DESCRIPTION = "No local app can open files.";
 const LOCAL_NO_DIRECTORY_OPEN_TARGETS_DESCRIPTION =
   "No local app can open directories.";
+const BROWSER_VSCODE_TARGET: WorkspaceOpenTarget = {
+  id: "vscode",
+  label: "VS Code",
+  kind: "editor",
+  capabilities: {
+    openDirectory: true,
+    openFile: true,
+    openFileAtLine: true,
+    openFileAtColumn: true,
+  },
+  remoteSshCapabilities: {
+    openDirectory: true,
+    openFile: true,
+    openFileAtLine: true,
+    openFileAtColumn: true,
+  },
+};
 
 interface UseLocalOpenTargetsArgs {
   enabled: boolean;
@@ -228,13 +247,28 @@ export function useLocalOpenTargets(
     [openContextHostId, openContextKind, openContextServerOrigin],
   );
   const contextKind = openContext.kind;
+  const [sshHosts] = useBrowserSshHosts();
+  const sshHost =
+    args.enabled && openContext.kind === "remote-ssh"
+      ? sshHosts[openContext.hostId]
+      : undefined;
   const { hasDaemon } = useHostDaemon();
   const {
     fetchWorkspaceOpenTargetsForPath,
-    isLoading,
+    isLoading: daemonLoading,
     openWorkspace,
-    workspaceOpenTargets,
+    workspaceOpenTargets: daemonTargets,
   } = useWorkspaceOpenTargets(args);
+  const workspaceOpenTargets = useMemo(
+    () =>
+      sshHost === undefined
+        ? daemonTargets
+        : [
+            BROWSER_VSCODE_TARGET,
+            ...daemonTargets.filter((target) => target.id !== "vscode"),
+          ],
+    [daemonTargets, sshHost],
+  );
   const [preferredDirectoryTargetId, setPreferredDirectoryTargetId] =
     useWorkspaceOpenTargetPreference(workspaceOpenTargets);
   const [preferredFileTargetId, setPreferredFileTargetId] =
@@ -246,8 +280,10 @@ export function useLocalOpenTargets(
     preferredFileTarget,
   } = useOpenTargetResolution({
     contextKind,
-    preferredDirectoryTargetId,
-    preferredFileTargetId,
+    preferredDirectoryTargetId:
+      sshHost === undefined ? preferredDirectoryTargetId : "vscode",
+    preferredFileTargetId:
+      sshHost === undefined ? preferredFileTargetId : "vscode",
     workspaceOpenTargets,
   });
   const rememberPreferredOpenTarget = useCallback(
@@ -276,6 +312,27 @@ export function useLocalOpenTargets(
 
   const openPathInAvailableTarget = useCallback(
     async (request: OpenPathInAvailableTargetArgs) => {
+      if (sshHost !== undefined && request.target.id === "vscode") {
+        try {
+          const url = buildVsCodeRemoteUrl({
+            sshHost,
+            path: request.path,
+            kind:
+              request.targetKind === "file-open-target" ? "file" : "directory",
+            lineNumber: request.lineNumber,
+            columnNumber: request.columnNumber,
+          });
+          const link = document.createElement("a");
+          link.href = url;
+          link.click();
+          return true;
+        } catch (error) {
+          dispatchOpenFailureToast({
+            description: error instanceof Error ? error.message : undefined,
+          });
+          return false;
+        }
+      }
       if (!openWorkspace) {
         dispatchOpenFailureToast({
           description: getOpenUnavailableDescription({
@@ -317,6 +374,7 @@ export function useLocalOpenTargets(
       openWorkspace,
       openContext,
       rememberPreferredOpenTarget,
+      sshHost,
     ],
   );
 
@@ -398,6 +456,14 @@ export function useLocalOpenTargets(
   );
   const openPathInPreferredFileTarget = useCallback(
     async (request: OpenLocalPathRequest) => {
+      if (sshHost !== undefined) {
+        return openPathInAvailableTarget({
+          ...request,
+          rememberTarget: false,
+          target: BROWSER_VSCODE_TARGET,
+          targetKind: "file-open-target",
+        });
+      }
       const fileTargets =
         contextKind === "local" && fetchWorkspaceOpenTargetsForPath !== null
           ? await fetchWorkspaceOpenTargetsForPath(request.path).catch(
@@ -438,6 +504,7 @@ export function useLocalOpenTargets(
       openPathInAvailableTarget,
       preferredFileTargetId,
       workspaceOpenTargets,
+      sshHost,
     ],
   );
 
@@ -446,7 +513,7 @@ export function useLocalOpenTargets(
     canOpenPreferredFileTarget: preferredFileTarget !== null,
     directoryOpenTargets,
     fileOpenTargets,
-    isLoading,
+    isLoading: sshHost === undefined && daemonLoading,
     openPathInDirectoryTarget,
     openPathInFileTarget,
     openPathInPreferredDirectoryTarget,
