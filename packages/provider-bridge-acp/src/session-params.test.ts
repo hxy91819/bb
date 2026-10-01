@@ -204,6 +204,32 @@ describe("buildAcpSessionParams", () => {
     });
   });
 
+  it("keeps the service tier for a native ACP session without a picker", () => {
+    expect(
+      buildAcpSessionParams({
+        additionalWorkspaceWriteRoots: [],
+        cwd: "/workspace",
+        options: {
+          ...BASE_OPTIONS,
+          model: "requested-model",
+          serviceTier: "fast",
+        },
+        parameterizedModelPicker: false,
+        launchSpec: launchSpecFor({
+          displayName: "Custom ACP",
+          command: "custom-agent",
+          args: ["serve"],
+          env: {},
+        }),
+        providerLabel: "acp-custom",
+        threadId: "thread-1",
+      }),
+    ).toMatchObject({
+      serviceTier: "fast",
+      modelSelection: { modelId: "requested-model", serviceTier: "fast" },
+    });
+  });
+
   it("pins the launch reasoning level only when the spec has a reasoning CLI", () => {
     const reasoningCli: NonNullable<AcpLaunchSpec["reasoningCli"]> = {
       flag: "--reasoning-effort",
