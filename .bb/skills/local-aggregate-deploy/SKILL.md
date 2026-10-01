@@ -24,6 +24,8 @@ scripts/run-resource-isolated --profile package -- \
 
 `build-runtime.mjs` refuses a dirty tree or a HEAD different from `fork/local/aggregate`, then builds only the SDK, app, server, host daemon, and bundled plugins with one Turbo task at a time. If the build is OOM-killed, leave the service running and retry after reducing competing load; never kill unrelated user processes. Before the first cutover on a machine, install `assets/oom-policy-continue.conf` as a drop-in for the unit and run `node .bb/skills/local-aggregate-deploy/scripts/test-resource-isolation.mjs`.
 
+After a successful build and native-module check, complete the default [tag release steps](../../../docs/fork-maintenance.md#3-发布预编译聚合包) for the recorded new SHA and include the Release link in the handoff. Those steps define authorization, reuse of an existing release, and failure handling; service replacement still requires the authorization above.
+
 If the new aggregate changes the database schema, back up `<dataDir>/bb.db*` before cutover. Migrations run automatically at service start; do not run ad-hoc SQL against the ledger.
 
 ## 3. Cutover from outside BB

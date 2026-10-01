@@ -55,7 +55,8 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --co
 
 全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住几十分钟。
 测试只跑本次改动或冲突涉及的包；各分支自己的测试在分支上已经跑过。
-提升与推送到 fork 不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
+打包成功后的默认收尾是第 3 节的 tag 发布；聚合脚本本身只生成和提升分支，不自动打 tag。
+提升、推送到 fork 和打包后的 tag 发布不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
 
 ### 冲突怎么解决
 
@@ -83,16 +84,26 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --co
 
 ### 发布
 
-先按上一节完成聚合、验证及提升，确保聚合已经包含最新版 `fork-tooling` 的发布流程，再给这个聚合 commit 打 tag：
+用户要求聚合打包或为聚合版构建部署包时，发布是打包任务的默认收尾，已经授权，无需再次确认。用户明确要求仅验证、不发布时跳过；构建或必要验证失败时先修复，不给失败结果打发布 tag。
+
+1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `local/aggregate` 被其他任务移动，也使用这个已验证的 SHA。
+2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
+3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
+4. 核对远端 tag 解引用后的 commit SHA，跟踪 `Release fork aggregate` 到结束，确认 Release 已公开且四个平台的包和校验文件齐全。
+5. 交付 tag、聚合 SHA 和 Release 链接。tag 推送成功只代表已触发构建；流水线失败、无法查询或资产不全时，明确报告发布未完成。
+
+以下是新发布的命令示例，版本、日期、序号和聚合 SHA 以本次打包结果为准：
 
 ```bash
 git status --short
-git show local/aggregate:.github/workflows/fork-release.yml
-git tag -a fork-v0.44.0-20261001.1 local/aggregate -m "BB fork aggregate 2026-10-01"
+aggregate_sha='<本次打包时记录的聚合SHA>'
+git show "${aggregate_sha}:.github/workflows/fork-release.yml"
+git tag -a fork-v0.44.0-20261001.1 "$aggregate_sha" -m "BB fork aggregate 2026-10-01"
 git push fork refs/tags/fork-v0.44.0-20261001.1
+git ls-remote fork 'refs/tags/fork-v0.44.0-20261001.1^{}'
 ```
 
-tag 以 `fork-v` 和数字开头，后面使用字母、数字、点、下划线或连字符。建议包含上游基线版本、日期、当天的发布序号。每次发布用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
+workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
 
 在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。只有全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
 
