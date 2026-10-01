@@ -2587,6 +2587,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
           : null
       }
       composerFocusRequestNonce={composerFocusRequestNonce}
+      isForkAvailable={isForkAvailable}
       sendMessage={sendMessage}
       sentMessageEdit={sentMessageEdit}
       steerActiveThreadOnEnter={
