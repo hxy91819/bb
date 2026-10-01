@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   screen,
@@ -11,6 +12,7 @@ import type { ReactNode } from "react";
 import type { SidebarThread } from "../model/sidebar-thread.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { Provider, createStore } from "jotai";
 import {
   installTestPluginRuntime,
@@ -30,6 +32,8 @@ import {
   type SidebarThreadOverrides,
 } from "../model/fixtures.js";
 import {
+  sidebarChronologicalSortAtom,
+  sidebarDateGroupingAtom,
   sidebarHiddenGroupsAtom,
   sidebarManualSectionOrderAtom,
   sidebarOrganizationModeAtom,
@@ -45,6 +49,7 @@ const {
 const { useSidebarModeSectionOrder } =
   await import("./useSidebarModeSectionOrder.js");
 const { SidebarHeaderControls } = await import("./SidebarHeaderControls.js");
+const { SidebarHeaderMenuContents } = await import("./SidebarViewItems.js");
 const { ThreadListVisibilityMenuItems } =
   await import("./ThreadListVisibility.js");
 
@@ -322,6 +327,123 @@ describe("ProjectRow interactions", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("groups only loose roots and reacts to the preference and alphabetical sorting", () => {
+    const current = Date.now();
+    const threads = [
+      makeThread({ id: "thr_loose", updatedAt: current }),
+      makeThread({
+        id: "thr_child",
+        parentThreadId: "thr_loose",
+        updatedAt: 1,
+      }),
+      makeThread({
+        id: "thr_section",
+        sectionId: "sec_building",
+        updatedAt: current,
+      }),
+    ];
+    const store = createStore();
+    renderTree(
+      <CustomSectionsVisibilityProbe
+        threads={threads}
+        onProjectSelect={vi.fn()}
+      />,
+      { threads, store },
+    );
+    expect(screen.getAllByText("Today")).toHaveLength(1);
+    const heading = screen.getByText("Today");
+    expect(
+      heading.closest(
+        'a, button, [tabindex]:not([tabindex="-1"]), [draggable="true"]',
+      ),
+    ).toBeNull();
+    expect(
+      screen.queryByText(
+        new Intl.DateTimeFormat(undefined, {
+          month: "long",
+          year: "numeric",
+        }).format(new Date(1)),
+      ),
+    ).toBeNull();
+    act(() => store.set(sidebarDateGroupingAtom, false));
+    expect(screen.queryByText("Today")).toBeNull();
+    act(() => {
+      store.set(sidebarDateGroupingAtom, true);
+      store.set(sidebarChronologicalSortAtom, "alpha");
+    });
+    expect(screen.queryByText("Today")).toBeNull();
+    act(() => store.set(sidebarChronologicalSortAtom, "created"));
+    expect(screen.queryByText("Today")).toBeNull();
+  });
+
+  it("disables Date groups outside Custom or with Alphabetical without changing its saved value", () => {
+    const store = createStore();
+    renderTree(
+      <DropdownMenu open>
+        <DropdownMenuContent>
+          <SidebarHeaderMenuContents
+            creation={{}}
+            compact
+            page="organize"
+            onPageChange={vi.fn()}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>,
+      { store },
+    );
+    const toggle = screen.getByRole("menuitemcheckbox", {
+      name: "Date groups",
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(toggle.getAttribute("aria-disabled")).not.toBe("true");
+    for (const mode of ["project", "machine"] as const) {
+      act(() => store.set(sidebarOrganizationModeAtom, mode));
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
+    }
+    act(() => {
+      store.set(sidebarOrganizationModeAtom, "chronological");
+      store.set(sidebarChronologicalSortAtom, "alpha");
+    });
+    expect(toggle.getAttribute("aria-disabled")).toBe("true");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    act(() => store.set(sidebarChronologicalSortAtom, "updated"));
+    expect(toggle.getAttribute("aria-disabled")).not.toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("refreshes date headings at midnight and on focus, and removes the focus listener on unmount", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    try {
+      vi.setSystemTime(new Date(2026, 9, 1, 23, 59, 59));
+      const threads = [
+        makeThread({ updatedAt: new Date(2026, 9, 1, 12).getTime() }),
+      ];
+      const result = renderTree(
+        <CustomSectionsVisibilityProbe
+          threads={threads}
+          onProjectSelect={vi.fn()}
+        />,
+        { threads },
+      );
+      expect(screen.getByText("Today")).toBeTruthy();
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(screen.getByText("Yesterday")).toBeTruthy();
+      vi.setSystemTime(new Date(2026, 9, 10, 12));
+      fireEvent.focus(window);
+      expect(screen.getByText("Previous 30 days")).toBeTruthy();
+      const removeListener = vi.spyOn(window, "removeEventListener");
+      result.unmount();
+      expect(removeListener.mock.calls.some(([type]) => type === "focus")).toBe(
+        true,
+      );
+      removeListener.mockRestore();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 
   it("previews the dragged thread as a child of a valid nest target", () => {
