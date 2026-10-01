@@ -13,7 +13,7 @@ Use the ignored `config/local-aggregate-web.json`, or `config/local-aggregate-we
 
 ## 2. Build (old service keeps running)
 
-Build from a clean checkout whose HEAD equals `fork/local/aggregate`: the root checkout when it is clean, otherwise `git worktree add --detach <path> fork/local/aggregate`. Record the old running SHA and the new SHA for rollback.
+`scripts/fork-package` normally leaves a built checkout at `.worktrees/aggregate-deploy-<short sha>` whose HEAD equals `fork/local/aggregate`; reuse it and skip to the cutover prompt it printed. Otherwise build from a clean checkout at that commit: `git worktree add --detach .worktrees/aggregate-deploy-<short sha> fork/local/aggregate`. Record the old running SHA and the new SHA for rollback.
 
 ```bash
 scripts/run-resource-isolated --profile package -- <nodeExecutable> <node-bin>/pnpm install --frozen-lockfile
@@ -42,4 +42,4 @@ On a failed health gate: stop the restart loop, keep the data directory and unit
 
 ## 5. Cleanup
 
-Afterwards, remove only worktrees that are clean, not used by the running service, and whose branch tip is on the fork. Use `git worktree remove` without `--force`; report anything dirty or unpublished instead of forcing it.
+Afterwards, remove only worktrees that are clean and not used by the running service: superseded `aggregate-deploy-*` checkouts are regenerated artifacts and can go once the service runs elsewhere; feature worktrees must have their branch tip on the fork. Use `git worktree remove` without `--force`; report anything dirty or unpublished instead of forcing it.

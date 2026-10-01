@@ -27,6 +27,26 @@ current_cgroup() {
   awk -F: '$1 == "0" {print $3}' /proc/self/cgroup
 }
 
+release_idle_scope() {
+  local load_state active_state control_group procs
+  load_state="$(systemctl --user show "${unit_name}.scope" -p LoadState --value 2>/dev/null || true)"
+  [[ "${load_state}" == 'loaded' ]] || return 0
+  active_state="$(systemctl --user show "${unit_name}.scope" -p ActiveState --value)"
+  control_group="$(systemctl --user show "${unit_name}.scope" -p ControlGroup --value)"
+  procs=''
+  if [[ -n "${control_group}" && -r "/sys/fs/cgroup${control_group}/cgroup.procs" ]]; then
+    procs="$(<"/sys/fs/cgroup${control_group}/cgroup.procs")"
+  fi
+  if [[ -n "${procs}" ]]; then
+    printf 'Another %s job is still running (pids: %s); wait for it or stop it first\n' \
+      "${unit_name}" "$(tr '\n' ' ' <<<"${procs}")" >&2
+    exit 1
+  fi
+  printf 'Releasing idle %s.scope (%s)\n' "${unit_name}" "${active_state}" >&2
+  systemctl --user stop "${unit_name}.scope" >/dev/null 2>&1 || true
+  systemctl --user reset-failed "${unit_name}.scope" >/dev/null 2>&1 || true
+}
+
 if [[ "${1:-}" == '--help' || "${1:-}" == '-h' ]]; then
   usage
   exit 0
@@ -100,6 +120,9 @@ command -v systemd-run >/dev/null 2>&1 || {
 }
 
 user_manager_env
+release_idle_scope
+
+export TURBO_CACHE_DIR="${TURBO_CACHE_DIR:-${HOME}/.cache/bb-turbo}"
 
 exec systemd-run --user --scope --collect --quiet \
   --unit="${unit_name}" \
