@@ -63,6 +63,7 @@ import {
 import {
   type ThreadProvisioningDeps,
   ensureWorkspaceReadyEventInTransaction,
+  queueChildSetupFailureNotification,
 } from "../threads/thread-provisioning-environment.js";
 import { toEnvironmentResponse } from "./environment-response.js";
 import {
@@ -1446,10 +1447,7 @@ export function settleEnvironmentProvisionCancelCommandResult(
 }
 
 function interruptUnrecoverableEnvironmentProvisioning(
-  deps: Pick<
-    CommandResultSideEffectsDeps,
-    "db" | "hub" | "logger" | "pendingInteractions"
-  >,
+  deps: CommandResultSideEffectsDeps,
   args: InterruptUnrecoverableEnvironmentProvisioningArgs,
 ): void {
   const environment = getEnvironment(deps.db, args.environmentId);
@@ -1457,10 +1455,13 @@ function interruptUnrecoverableEnvironmentProvisioning(
     return;
   }
 
+  const startingThreads = listLiveEnvironmentThreads(deps, environment.id)
+    .filter((thread) => thread.status === "starting")
+    .map((thread) => thread.id);
   const now = Date.now();
-  deps.db.transaction(
+  const failed = deps.db.transaction(
     (tx) => {
-      recordEnvironmentProvisioningFailureInTransaction(
+      return recordEnvironmentProvisioningFailureInTransaction(
         {
           ...deps,
           db: tx,
@@ -1482,13 +1483,18 @@ function interruptUnrecoverableEnvironmentProvisioning(
     },
     { behavior: "immediate" },
   );
+  if (failed) {
+    for (const threadId of startingThreads) {
+      const thread = getThread(deps.db, threadId);
+      if (thread?.status === "error") {
+        queueChildSetupFailureNotification(deps, thread);
+      }
+    }
+  }
 }
 
 export function interruptEnvironmentProvisioningForHost(
-  deps: Pick<
-    CommandResultSideEffectsDeps,
-    "db" | "hub" | "logger" | "pendingInteractions"
-  >,
+  deps: CommandResultSideEffectsDeps,
   args: InterruptEnvironmentProvisioningForHostArgs,
 ): void {
   const environmentIds = deps.db
