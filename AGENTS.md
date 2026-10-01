@@ -66,7 +66,7 @@
 
 - 根目录永远检出 `local/aggregate`：它是 `scripts/fork-aggregate` 每次从稳定 tag 重新生成的产物。不在这里写产品代码，不从它拉分支，不从它提上游 PR。
 - 新功能/修复：从 `.fork/branches` 的 `base` tag 拉 `feature/<name>` 或 `fix/<name>`，放在 `.worktrees/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `fork`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
-- 聚合打包：`scripts/fork-aggregate [--promote]`。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
+- 聚合打包：`scripts/fork-package` 一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
 - 打包收尾：用户要求聚合打包或为聚合版构建部署包时，成功后必须按 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包) 给实际打包的聚合 SHA 打 `fork-v*` tag 并推送到 `fork`，核对远端 SHA 和 Release 结果；这是默认授权，无需再次询问。同一 SHA 已发布则复用；用户明确要求仅验证、不发布时跳过。
 - 上游反馈：分支就是 PR 材料；向 get-bb/bb 提 issue/评论/PR 前必须经用户逐项确认，状态记在 `.fork/branches`。
 - 替换本机运行中的 BB 服务需要用户明确授权，并使用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)。

@@ -40,22 +40,38 @@ git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<
 ## 2. 聚合打包
 
 ```bash
-scripts/fork-aggregate            # 生成 .worktrees/aggregate-next 上的 aggregate/next
-scripts/fork-aggregate --promote  # 成功后移动根目录 local/aggregate 并推送到 fork
+scripts/fork-package                       # 聚合 → 验证 → 提升 → 构建 → 发布 tag → 打印 cutover 提示
+scripts/fork-package --no-release          # 只验证、提升、构建，不打 tag
+scripts/fork-package --test-filter <pkg>   # 覆盖默认的测试范围，可重复
 ```
 
-脚本从基线 tag 开始，依次 `merge --no-ff` 清单中的分支。每次都从头生成，没有中间状态需要维护。
-验证通过后再 `--promote`。在 `.worktrees/aggregate-next` 里：
+`fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
+Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
+
+1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。
+2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
+3. `pnpm install --frozen-lockfile`、全仓 `typecheck --concurrency=1`、`test`。测试默认只跑 `--filter='[<上一次 local/aggregate>]'`，即相对上次聚合有文件改动的包；各分支自己的测试在分支上已经跑过。
+4. `scripts/fork-aggregate --promote-only`：把根目录 `local/aggregate` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
+5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
+6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
+7. 打印聚合 SHA、部署检出路径和在 BB 外终端执行 cutover 的命令。
+
+Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-runtime.mjs` 都默认设置 `TURBO_CACHE_DIR`），
+所以每次只有被改动分支触及的包及其下游会真正重新 typecheck 和构建，其余命中缓存。缓存目录可以随时删除，只影响速度。
+
+手工分步时等价于：
 
 ```bash
+scripts/fork-aggregate                      # 只生成 aggregate/next
 scripts/run-resource-isolated --profile package -- pnpm install --frozen-lockfile
 scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --output-logs=errors-only
-scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --output-logs=errors-only --filter=<本次冲突/改动涉及的包>
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --output-logs=errors-only --filter=<涉及的包>
+scripts/fork-aggregate --promote-only       # 提升验证过的 aggregate/next
+scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升，SHA 会因时间戳变化，不要在验证之后用
 ```
 
-全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住几十分钟。
-测试只跑本次改动或冲突涉及的包；各分支自己的测试在分支上已经跑过。
-打包成功后的默认收尾是第 3 节的 tag 发布；聚合脚本本身只生成和提升分支，不自动打 tag。
+全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住。
+`run-resource-isolated` 启动前会释放上一次遗留的空 scope；scope 里仍有进程时它会拒绝并列出 pid，说明另一个验证还在跑。
 提升、推送到 fork 和打包后的 tag 发布不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
 
 ### 冲突怎么解决

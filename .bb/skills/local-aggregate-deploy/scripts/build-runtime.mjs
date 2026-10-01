@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { delimiter, dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { verifyPackageSource } from "./verify-package-source.mjs";
 
 function parseArgs(args) {
@@ -42,6 +43,7 @@ function createBuildEnv(env) {
   return {
     ...env,
     NODE_OPTIONS: resolveNodeOptions(env),
+    TURBO_CACHE_DIR: env.TURBO_CACHE_DIR || join(homedir(), ".cache", "bb-turbo"),
     PATH: pathEntries.includes(nodeBin)
       ? path
       : [nodeBin, path].filter(Boolean).join(delimiter),
@@ -96,6 +98,7 @@ async function main() {
     process.stdout.write(
       `${JSON.stringify({
         nodeOptions: env.NODE_OPTIONS,
+        turboCacheDir: env.TURBO_CACHE_DIR,
         source,
         runtimeBuild: [process.execPath, ...runtimeBuildArgs],
       })}\n`,

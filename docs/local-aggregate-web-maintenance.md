@@ -66,7 +66,10 @@ git check-ignore -v config/local-aggregate-web.json
    没有明确服务部署授权时，首次配置也在本步骤后停止；以下 systemd 和
    Tailscale 步骤只在已有该授权时执行。
 
-4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值：
+4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值。`repoPath` 是仓库根目录，
+   只用于首次配置；之后每次 cutover 都把 `WorkingDirectory` 改成 `fork-package`
+   生成的 `.worktrees/aggregate-deploy-<短 SHA>` 检出，实际运行目录以 `systemctl show
+   <unit> -p WorkingDirectory` 为准。
 
    ```ini
    [Service]
