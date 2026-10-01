@@ -2085,6 +2085,19 @@ The Thread list plugin's `threadLifecycles` preference selects `["active"]`
 `bb thread-list prefs set threadLifecycles '["archived"]'` or the header's
 Filter menu. It syncs to every window and rejects empty or duplicate values.
 
+### Thread list date groups
+
+The Thread list plugin's `dateGrouping` preference defaults to `true`. Toggle
+Organize → Rows → Date groups or use `bb thread-list prefs set dateGrouping false`.
+It syncs across windows and only affects Custom's built-in Threads section with
+Updated or Created sorting; Alphabetical disables it. Enabling `dateGrouping`
+or `groupByReadStatus` through the UI, CLI, or RPC turns the other off. Resetting
+`dateGrouping` restores date groups and turns read-status grouping off. Older
+saved values with both enabled use read-status grouping without date headings.
+See the plugin's
+[Date groups rules](../plugins/thread-list/skills/thread-list/SKILL.md#date-groups)
+for local-calendar buckets and root-entry grouping.
+
 ## Desktop browser cookie discovery
 
 The desktop app combines known-browser definitions with schema-based discovery

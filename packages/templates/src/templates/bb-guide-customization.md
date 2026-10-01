@@ -108,6 +108,13 @@ read ones, keeping the selected sort within each group.
 The `threadLifecycles` preference defaults
 to `["active"]`; `bb thread-list prefs set threadLifecycles '["archived"]'`
 shows archived threads, and `'["active","archived"]'` shows both.
+`dateGrouping` defaults to `true`: Custom's Threads section shows date headings
+with Updated or Created sorting. Toggle Organize → Rows → Date groups or use
+`bb thread-list prefs set dateGrouping false`; Alphabetical disables grouping.
+Enabling `dateGrouping` or `groupByReadStatus` through the UI, CLI, or RPC turns
+the other off. Resetting `dateGrouping` restores date groups and turns read-status
+grouping off. Older saved values with both enabled use read-status grouping
+without date headings.
 
 A vertical rail of destinations sits on the left edge of the sidebar on every
 screen size. Home is at the top and returns to the last thread; the visible
