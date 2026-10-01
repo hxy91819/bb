@@ -54,6 +54,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Activate each destination through bb, including split placement and a split mini-map for supported items",
           "Hide, show, and reorder destinations, open bb's customize editor, and open or disable the plugin behind a panel",
           "Draw bb's icons and plugin branding, and each panel's live sidebar accessory",
+          "Keep New thread above the shared navigation and thread-list scroll area through experimental_pinnedNavigationHost",
           "Put controls, such as navigation icons, in the header row beside the sidebar toggle with experimental_sidebarHeader, and have the navigation slot render nothing while that header is mounted",
           "Start from bb's own rows: they ship as the bundled Navigation plugin, which uses only this API",
           "Leave the thread list, footer, drawer, and resize handle under bb's control",

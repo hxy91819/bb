@@ -344,6 +344,7 @@ const FRONTEND_SLOT_PROP_FIELDS = {
   sidebarFooterAction: [],
   experimental_sidebarNavigation: [
     "isCompactViewport",
+    "experimental_pinnedNavigationHost",
     "experimental_Original",
   ],
   experimental_sidebarHeader: ["width", "controlSize", "isCompactViewport"],
