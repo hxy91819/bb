@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
+import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
 import { useNavigate } from "react-router-dom";
 import { OverflowFade } from "@/components/ui/overflow-fade.js";
 import {
@@ -46,6 +47,8 @@ import {
 } from "./SidebarNavigationRegion";
 import { SidebarNavigationModelProvider } from "./SidebarNavigationModel";
 import { SidebarHeaderSlot } from "./SidebarHeaderSlot";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import { useRootComposeProjectId } from "@/lib/root-compose-selection";
 
 const BUG_REPORT_NEW_ISSUE_URL = "https://github.com/get-bb/bb/issues/new";
 
@@ -63,7 +66,25 @@ export function AppSidebar({
   mobileHosted,
 }: AppSidebarProps) {
   const threadListReplacement = useThreadListReplacement();
-  const { threadId: activeThreadId } = useRouteState();
+  const { projectId: routeProjectId, threadId: activeThreadId } =
+    useRouteState();
+  const sidebarNavigation = useSidebarNavigation();
+  const [rootComposeProjectId, setRootComposeProjectId] =
+    useRootComposeProjectId();
+  const defaultNewThreadProjectId = useMemo(
+    () =>
+      resolveSidebarNewThreadProjectId({
+        recentThreads: sidebarNavigation.data
+          ? [
+              ...sidebarNavigation.data.projects,
+              sidebarNavigation.data.personalProject,
+            ].flatMap((project) => project.threads)
+          : [],
+        rememberedProjectId: rootComposeProjectId,
+        routeProjectId,
+      }),
+    [rootComposeProjectId, routeProjectId, sidebarNavigation.data],
+  );
   const navigate = useNavigate();
   const closeOnMobile = useCloseMobileSidebar();
   const { isCompactViewport, openMobile } = useSidebar();
@@ -86,11 +107,17 @@ export function AppSidebar({
   const pluginSidebarFooter = usePluginSidebarFooterDisclosure();
 
   const handleNewChat = useCallback(() => {
+    setRootComposeProjectId(defaultNewThreadProjectId);
     closeOnMobile();
     void navigate(getRootComposeRoutePath(), {
       state: { focusPrompt: true },
     });
-  }, [closeOnMobile, navigate]);
+  }, [
+    closeOnMobile,
+    defaultNewThreadProjectId,
+    navigate,
+    setRootComposeProjectId,
+  ]);
 
   const showThreadShortcuts = useCallback(() => {
     const targets = getSidebarThreadShortcutTargets(sidebarRef.current);

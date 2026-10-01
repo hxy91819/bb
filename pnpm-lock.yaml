@@ -5011,6 +5011,12 @@ importers:
 
   plugins/thread-list:
     dependencies:
+      '@bb/client-core':
+        specifier: workspace:*
+        version: link:../../packages/client-core
+      '@bb/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@bb/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui

@@ -94,7 +94,7 @@ describe("creating a sidebar section", () => {
 
     expect(inspection.sidebarActionCalls).toContainEqual({
       method: "openNewThread",
-      options: { sectionId: "sec_a", focusPrompt: true },
+      options: { sectionId: "sec_a", projectId: "proj_test", focusPrompt: true },
     });
   });
 

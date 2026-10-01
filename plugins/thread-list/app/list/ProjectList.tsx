@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import type { SidebarThread } from "../model/sidebar-thread.js";
 import {
   experimental_useSidebarThreadActions,
+  useBbContext,
   useSdk,
   useSidebarThreadDraftIds,
 } from "@get-bb/plugin-sdk/app";
@@ -29,6 +30,8 @@ import {
 } from "../rows/SidebarInlineRename.js";
 import { AppThreadSectionMoveProvider } from "../rows/ThreadSectionMoveProvider.js";
 import { useDialogState } from "../ui/useDialogState.js";
+import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
+import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import {
   buildProjectThreadGroups,
   getProjectThreadItemDescendants,
@@ -1345,6 +1348,7 @@ function ProjectListComponent({
   onProjectSelect,
 }: ProjectListProps) {
   const sdk = useSdk();
+  const { projectId: routeProjectId } = useBbContext();
   const sidebarActions = experimental_useSidebarThreadActions();
   const { status, sections, projects, personalProject, archived } =
     useSidebarData();
@@ -1352,6 +1356,15 @@ function ProjectListComponent({
   const threads = useMemo<SidebarThread[]>(
     () => projects.flatMap((project) => project.threads),
     [projects],
+  );
+  const defaultNewThreadProjectId = useMemo(
+    () =>
+      resolveSidebarNewThreadProjectId({
+        recentThreads: threads,
+        rememberedProjectId: PERSONAL_PROJECT_ID,
+        routeProjectId,
+      }),
+    [routeProjectId, threads],
   );
   const draftThreadIds = useSidebarThreadDraftIds();
   const preferencesReady = usePreferencesReady();
@@ -1407,13 +1420,13 @@ function ProjectListComponent({
     [openRootComposeForProject],
   );
   const handleCreateProjectlessThread = useCallback(() => {
-    openRootComposeForProject(personalProjectId);
-  }, [openRootComposeForProject, personalProjectId]);
+    openRootComposeForProject(defaultNewThreadProjectId);
+  }, [defaultNewThreadProjectId, openRootComposeForProject]);
   const handleCreateThreadInSection = useCallback(
     (sectionId: string) => {
-      openRootComposeForProject(null, sectionId);
+      openRootComposeForProject(defaultNewThreadProjectId, sectionId);
     },
-    [openRootComposeForProject],
+    [defaultNewThreadProjectId, openRootComposeForProject],
   );
   const [isSectionCreateDialogOpen, setIsSectionCreateDialogOpen] =
     useState(false);
