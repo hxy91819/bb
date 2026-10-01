@@ -137,6 +137,7 @@ import {
 } from "../preferences/atoms.js";
 import {
   SIDEBAR_PROJECT_GROUP_LINE_CLASS,
+  SIDEBAR_STANDARD_ROW_PADDING_CLASS,
   SIDEBAR_ROW_BASE_CLASS,
   getSidebarThreadGroupLineLeft,
   getSidebarThreadRowPaddingLeft,
@@ -1783,6 +1784,8 @@ function ThreadTreeLoadingSkeleton() {
   );
 }
 
+const DATE_GROUP_HEADING_CLASS = `pointer-events-none flex h-5 select-none items-center text-2xs font-medium uppercase tracking-wider text-subtle-foreground ${SIDEBAR_STANDARD_ROW_PADDING_CLASS}`;
+
 interface SectionThreadTreeItemsProps {
   items: readonly ProjectThreadItem[];
   dateGroups?: boolean;
@@ -1954,7 +1957,10 @@ function SectionThreadTreeItems({
           <Fragment key={itemKey}>
             {labels[index] && (
               <div
-                className={`pointer-events-none flex h-7 items-center px-2 text-xs font-medium ${SIDEBAR_GROUP_TEXT_CLASS}`}
+                className={cn(
+                  DATE_GROUP_HEADING_CLASS,
+                  index > 0 && "mt-3",
+                )}
               >
                 {labels[index]}
               </div>
