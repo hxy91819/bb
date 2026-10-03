@@ -4,11 +4,15 @@ import type { ComponentProps, ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createHostFilePreviewFixedPanelTab,
   createTerminalFixedPanelTab,
+  createThreadStorageFilePreviewFixedPanelTab,
   createWorkspaceFilePreviewFixedPanelTab,
 } from "@/lib/fixed-panel-tabs-state";
 import { buildFileOpenerPanelTab } from "@/components/plugin/file-opener-tabs";
 import { RootComposePanelTabContent } from "./RootComposePanelTabContent";
+
+const openTargetsArgs = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/secondary-panel/lazySecondaryPanelComponents", () => ({
   LazyFilePreview: () => null,
@@ -71,18 +75,21 @@ vi.mock("@/hooks/queries/environment-queries", () => ({
 }));
 
 vi.mock("@/hooks/queries/thread-queries", () => ({
-  useThreadStorageLocation: () => ({ data: undefined }),
+  useThreadStorageLocation: () => ({ data: { hostId: "host-storage" } }),
 }));
 
 vi.mock("@/hooks/useHostDaemon", () => ({
-  useHostDaemon: () => ({ isLocalDaemonHost: () => true }),
+  useHostDaemon: () => ({ isLocalDaemonHost: (id: string) => id === "host-current" }),
 }));
 
 vi.mock("@/hooks/useLocalOpenTargets", () => ({
-  useLocalOpenTargets: () => ({
-    canOpenPreferredFileTarget: false,
-    openPathInPreferredFileTarget: vi.fn(),
-  }),
+  useLocalOpenTargets: (args: unknown) => {
+    openTargetsArgs(args);
+    return {
+      canOpenPreferredFileTarget: false,
+      openPathInPreferredFileTarget: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("@/components/commands/AppCommandProvider", () => ({
@@ -122,9 +129,33 @@ const baseProps = {
   },
 } satisfies Omit<PanelContentProps, "pane" | "tab">;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  openTargetsArgs.mockClear();
+});
 
 describe("RootComposePanelTabContent", () => {
+  it("routes host and thread-storage files to their owning machine instead of the active environment", () => {
+    const hostTab = createHostFilePreviewFixedPanelTab({
+      environmentId: "env-current", hostId: "host-other", threadId: "thread-current",
+      tab: { path: "/home/other/readme", lineRange: null },
+    });
+    const storageTab = createThreadStorageFilePreviewFixedPanelTab({
+      environmentId: "env-current", threadId: "thread-current", isPinned: false,
+      tab: { path: "report.txt", lineRange: null },
+    });
+    render(<>
+      <RootComposePanelTabContent {...baseProps} pane={{ isFocused: true, onFocusPane: noop }} tab={hostTab} />
+      <RootComposePanelTabContent {...baseProps} pane={{ isFocused: false, onFocusPane: noop }} tab={storageTab} />
+    </>);
+    expect(openTargetsArgs).toHaveBeenCalledWith({ enabled: true, openContext: {
+      kind: "remote-ssh", hostId: "host-other", serverOrigin: location.origin,
+    } });
+    expect(openTargetsArgs).toHaveBeenCalledWith({ enabled: true, openContext: {
+      kind: "remote-ssh", hostId: "host-storage", serverOrigin: location.origin,
+    } });
+  });
+
   it("renders each visible split pane from its own file tab model", () => {
     const firstTab = createWorkspaceFilePreviewFixedPanelTab({
       environmentId: "env-first",

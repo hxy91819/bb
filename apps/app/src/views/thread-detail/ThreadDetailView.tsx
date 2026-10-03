@@ -1919,6 +1919,43 @@ function ThreadDetailViewInternal(
         serverOrigin: window.location.origin,
         threadEnvironmentIsLocal,
       });
+  const storageHostId = threadStorageLocationQuery.data?.hostId;
+  const storageOpenContext = storageHostId
+    ? isLocalDaemonHost(storageHostId)
+      ? { kind: "local" as const }
+      : {
+          kind: "remote-ssh" as const,
+          hostId: storageHostId,
+          serverOrigin: window.location.origin,
+        }
+    : null;
+  const activeHostId =
+    activeFixedSecondaryTab?.kind === "host-file-preview"
+      ? activeFixedSecondaryTab.hostId
+      : null;
+  const hostFileOpenContext = activeHostId
+    ? isLocalDaemonHost(activeHostId)
+      ? { kind: "local" as const }
+      : {
+          kind: "remote-ssh" as const,
+          hostId: activeHostId,
+          serverOrigin: window.location.origin,
+        }
+    : threadOpenContext;
+  const {
+    canOpenPreferredFileTarget: canOpenHostFileTarget,
+    openPathInPreferredFileTarget: openHostFileInTarget,
+  } = useLocalOpenTargets({
+    enabled: hostFileOpenContext !== null,
+    ...(hostFileOpenContext ? { openContext: hostFileOpenContext } : {}),
+  });
+  const {
+    canOpenPreferredFileTarget: canOpenStorageFileTarget,
+    openPathInPreferredFileTarget: openStorageFileInTarget,
+  } = useLocalOpenTargets({
+    enabled: storageOpenContext !== null,
+    ...(storageOpenContext ? { openContext: storageOpenContext } : {}),
+  });
   const {
     canOpenPreferredDirectoryTarget,
     canOpenPreferredFileTarget,
@@ -2199,23 +2236,19 @@ function ThreadDetailViewInternal(
     () =>
       buildOpenInEditorHandler({
         rootPath: threadStorageRootPath,
-        canOpenPreferredTarget: canOpenPreferredFileTarget,
-        openInPreferredTarget: openPathInPreferredFileTarget,
+        canOpenPreferredTarget: canOpenStorageFileTarget,
+        openInPreferredTarget: openStorageFileInTarget,
       }),
-    [
-      canOpenPreferredFileTarget,
-      openPathInPreferredFileTarget,
-      threadStorageRootPath,
-    ],
+    [canOpenStorageFileTarget, openStorageFileInTarget, threadStorageRootPath],
   );
   const handleOpenHostFileInEditor = useMemo<
     OpenInEditorHandler | undefined
   >(() => {
-    if (!canOpenPreferredFileTarget) {
+    if (!canOpenHostFileTarget) {
       return undefined;
     }
     return (path) => {
-      void openPathInPreferredFileTarget({
+      void openHostFileInTarget({
         lineNumber: getFilePreviewLineRangeStart({
           lineRange: activeHostFileLineRange,
         }),
@@ -2224,8 +2257,8 @@ function ThreadDetailViewInternal(
     };
   }, [
     activeHostFileLineRange,
-    canOpenPreferredFileTarget,
-    openPathInPreferredFileTarget,
+    canOpenHostFileTarget,
+    openHostFileInTarget,
   ]);
   const workspaceOpenPath = executionUnavailable
     ? null
