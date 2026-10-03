@@ -148,9 +148,9 @@ describe("useThreadCreationOptions with hiddenProviders", () => {
       result.current.providerOptions.map((option) => option.value),
     ).toEqual(["alpha", "beta"]);
     expect(result.current.selectedProviderId).toBe("alpha");
-    expect(result.current.executionInputSources.providerId).toBe(
-      "client-preference",
-    );
+    expect(result.current.executionInputSources).toMatchObject({
+      providerId: "client-preference",
+    });
     expect(window.localStorage.getItem("bb.promptbox.provider")).toBe("gamma");
   });
 
@@ -162,9 +162,9 @@ describe("useThreadCreationOptions with hiddenProviders", () => {
     });
     await waitFor(() => expect(result.current.providerOptions).toHaveLength(2));
     expect(result.current.selectedProviderId).toBe("alpha");
-    expect(result.current.executionInputSources.providerId).toBe(
-      "client-preference",
-    );
+    expect(result.current.executionInputSources).toMatchObject({
+      providerId: "client-preference",
+    });
   });
 
   it("keeps an existing thread's hidden provider selected in component-local scope", async () => {
