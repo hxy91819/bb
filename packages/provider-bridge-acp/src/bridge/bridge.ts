@@ -3139,8 +3139,14 @@ async function handleRequest(
               ...params.options.envVars,
             }
           : session.construction.envVars;
+      const permissionMode = params.options.permissionMode;
+      if (permissionMode === "auto") {
+        sendError(request.id, -32602, "ACP does not support permission mode auto");
+        return;
+      }
       if (
         session.restartAfterCancelError ||
+        permissionMode !== session.construction.permissionMode ||
         !isDeepStrictEqual(envVars ?? {}, session.construction.envVars ?? {})
       ) {
         const previousProviderThreadId = session.providerThreadId;
@@ -3156,7 +3162,7 @@ async function handleRequest(
                 };
         session = await startAgentSession({
           kind: "resume",
-          params: { ...construction, envVars },
+          params: { ...construction, envVars, permissionMode },
           resumeProviderThreadId: previousProviderThreadId,
         });
         sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {

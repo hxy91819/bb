@@ -16,6 +16,7 @@ import { createStandaloneBuiltinCompactCommandInput } from "@bb/domain";
 import type { DynamicTool, ReasoningLevel } from "@bb/domain";
 import {
   BRIDGE_JSON_RPC_ERRORS,
+  BRIDGE_NOTIFICATION_METHODS,
   PROVIDER_BRIDGE_PROTOCOL_VERSION,
   THREAD_DELTA_NOTIFICATION_METHOD,
 } from "@bb/provider-bridge-protocol";
@@ -40,6 +41,7 @@ let output: CapturedBridgeJsonRpcOutput;
 let workspaceDir: string;
 let nextThreadSerial = 0;
 const startedProviderThreadIds: string[] = [];
+const permissionModesByThreadId = new Map<string, "accept-edits" | "full">();
 let nextRequestId = 1;
 const realSetTimeout = setTimeout;
 
@@ -49,6 +51,19 @@ function requestId(): number {
 }
 
 function sendRequest(method: string, params: object): number {
+  if (method === "thread/start" || method === "thread/resume") {
+    const request = params as {
+      threadId?: unknown;
+      options?: { permissionMode?: unknown };
+    };
+    const mode = request.options?.permissionMode;
+    if (
+      typeof request.threadId === "string" &&
+      (mode === "full" || mode === "accept-edits")
+    ) {
+      permissionModesByThreadId.set(request.threadId, mode);
+    }
+  }
   const id = requestId();
   handleLine(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
   return id;
@@ -416,11 +431,14 @@ function sendTurnRequest(
   providerThreadId: string,
   params: Record<string, unknown>,
 ): number {
+  const bbThreadId = bbThreadIdFor(providerThreadId);
   return sendRequest(method, {
-    threadId: bbThreadIdFor(providerThreadId),
+    threadId: bbThreadId,
     providerThreadId,
     clientRequestId: CLIENT_REQUEST_ID,
-    options: executionOptions({}),
+    options: executionOptions({
+      permissionMode: permissionModesByThreadId.get(bbThreadId),
+    }),
     ...params,
   });
 }
@@ -1558,6 +1576,56 @@ describe("acp bridge", () => {
     await waitForTurnCompleted();
 
     expect(agentMessageTexts()).toContain("argv:");
+  });
+
+  it("rebuilds a live ACP session when permission mode changes", async () => {
+    chmodSync(FAKE_AGENT_PATH, 0o755);
+    const { providerThreadId, bbThreadId } = await startThread({
+      agent: { command: FAKE_AGENT_PATH, args: [] },
+      permissionMode: "full",
+      envVars: { FAKE_ACP_LOAD_SESSION: "1" },
+      permissionCli: {
+        full: ["--bb-permission-mode=full"],
+        workspaceWrite: ["--bb-permission-mode=accept-edits"],
+      },
+    });
+
+    const run = async (
+      permissionMode: "full" | "accept-edits",
+      completedCount: number,
+    ) => {
+      const id = sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "echo-argv", mentions: [] }],
+        options: executionOptions({ permissionMode }),
+      });
+      const response = await waitForResponse(id);
+      expect(response.error).toBeUndefined();
+      await waitFor(
+        () =>
+          threadEventsOfType("turn/completed").length >= completedCount ||
+          undefined,
+        "turn completion",
+      );
+    };
+
+    await run("full", 1);
+    await run("accept-edits", 2);
+    await run("full", 3);
+
+    const messages = agentMessageTexts().filter((text) =>
+      text.startsWith("argv:"),
+    );
+    expect(messages).toEqual([
+      "argv:--bb-permission-mode=full",
+      "argv:--bb-permission-mode=accept-edits",
+      "argv:--bb-permission-mode=full",
+    ]);
+    expect(
+      notifications(BRIDGE_NOTIFICATION_METHODS.sessionReplaced).filter(
+        (message) =>
+          (message.params as { threadId?: string }).threadId === bbThreadId,
+      ),
+    ).toHaveLength(2);
   });
 
   it("uses modelCli only for model selection when reasoningCli owns effort", async () => {
