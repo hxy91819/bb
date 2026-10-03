@@ -74,6 +74,12 @@ export const preferenceDefinitions = {
     "Show each thread's agent provider icon before its title.",
     null,
   ),
+  dateGrouping: definePreference(
+    z.boolean(),
+    true,
+    "Show date groups in Custom's Threads section when sorted by updated or created time.",
+    null,
+  ),
   threadLifecycles: definePreference(
     z
       .array(z.enum(["active", "archived"]))
