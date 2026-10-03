@@ -1,4 +1,3 @@
-import path from "node:path";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -429,7 +428,7 @@ describe("buildAcpSessionParams skill instructions", () => {
         SKILLS_PREAMBLE,
         "",
         "Available bb skills:",
-        `Skills root: ${path.normalize(root)}`,
+        `Skills root: ${root}`,
         "- release-notes: Use release-notes when /system_instructions tests run.",
         "- copywriting: Use when writing customer copy.",
       ].join("\n"),
@@ -459,7 +458,7 @@ describe("buildAcpSessionParams skill instructions", () => {
         SKILLS_PREAMBLE,
         "",
         "Available bb skills:",
-        `Skills root: ${path.normalize("/tmp/bb/runtime/global-skills/def456/skills")}`,
+        "Skills root: /tmp/bb/runtime/global-skills/def456/skills",
         "- debugging: Use when debugging runtime state.",
       ].join("\n"),
     );
@@ -507,9 +506,9 @@ describe("buildAcpSessionParams skill instructions", () => {
         SKILLS_PREAMBLE,
         "",
         "Available bb skills:",
-        `Skills root: ${path.normalize(globalRoot)}`,
+        `Skills root: ${globalRoot}`,
         "- release-notes: Write release notes.",
-        `Skills root: ${path.normalize(projectRoot)}`,
+        `Skills root: ${projectRoot}`,
         "- debugging: Use when debugging runtime state.",
         "- copywriting: Use when writing customer copy.",
       ].join("\n"),

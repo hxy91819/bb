@@ -2133,7 +2133,7 @@ describe("acp bridge", () => {
     );
     expect(prompt).toContain("Available bb skills:");
     expect(prompt).toContain(
-      `Skills root: ${join("/staged/acp-skills")}\n- deploy: Ship the app.`,
+      "Skills root: /staged/acp-skills\n- deploy: Ship the app.",
     );
     expect(String(prompt).split("/staged/acp-skills").length).toBe(2);
     await waitForResponse(sendRequest("skills/configure", { roots: [] }));
