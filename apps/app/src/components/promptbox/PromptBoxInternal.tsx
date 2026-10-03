@@ -2921,7 +2921,7 @@ export function PromptBoxInternal({
           end: activeTrigger.to,
           hasLeftRange: false,
         };
-        setActiveTrigger(null);
+        setComposerMenu(null);
         onMentionQueryChange(null, null);
         onCommandQueryChange(null, null);
         currentEditor
@@ -2962,6 +2962,7 @@ export function PromptBoxInternal({
       onCommandPanelAction,
       onCommandQueryChange,
       onMentionQueryChange,
+      setComposerMenu,
     ],
   );
 
