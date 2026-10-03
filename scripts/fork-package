@@ -78,7 +78,7 @@ step "安装依赖"
 "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
 
 step "全仓 typecheck"
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --output-logs=errors-only
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
 
 step "测试"
 if [ "${#test_filters[@]}" -eq 0 ]; then
@@ -86,7 +86,7 @@ if [ "${#test_filters[@]}" -eq 0 ]; then
 fi
 filter_args=()
 for f in "${test_filters[@]}"; do filter_args+=("--filter=$f"); done
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --output-logs=errors-only "${filter_args[@]}"
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --continue --output-logs=errors-only "${filter_args[@]}"
 
 if [ "$verify_only" = 1 ]; then
   step "仅验证，停止"
