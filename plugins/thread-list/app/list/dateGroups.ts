@@ -1,5 +1,16 @@
 import type { ProjectThreadItem } from "../model/project-thread-groups.js";
+import type { SidebarThread } from "../model/sidebar-thread.js";
 import type { ChronologicalSort } from "../../shared/preferences.js";
+
+function groupTimestamp(
+  thread: SidebarThread,
+  sort: "updated" | "created",
+  now: Date,
+): number {
+  if (sort === "created") return thread.createdAt;
+  if (thread.status === "active") return now.getTime();
+  return thread.latestAttentionAt;
+}
 
 export function getDateGroupLabels(
   items: readonly ProjectThreadItem[],
@@ -7,12 +18,12 @@ export function getDateGroupLabels(
   now: Date,
 ): (string | null)[] {
   if (sort === "alpha") return items.map(() => null);
-  const field = sort === "created" ? "createdAt" : "updatedAt";
+  const field = sort === "created" ? "created" : "updated";
   const calendarDay = (date: Date) =>
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
   const today = calendarDay(now);
-  const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-  const month = new Intl.DateTimeFormat(undefined, {
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+  const month = new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
   });
@@ -21,7 +32,7 @@ export function getDateGroupLabels(
     if (item.kind === "section") return null;
     const thread =
       item.kind === "thread" ? item.node.thread : item.group.nodes[0].thread;
-    const date = new Date(thread[field]);
+    const date = new Date(groupTimestamp(thread, field, now));
     const daysAgo = today - calendarDay(date);
     const bucket =
       daysAgo <= 0

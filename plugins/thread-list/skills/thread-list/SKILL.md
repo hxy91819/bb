@@ -65,11 +65,14 @@ It only groups root entries in Custom's built-in Threads section. Pinned,
 custom sections, By project, and By machine are unchanged. Alphabetical sorting
 disables the toggle and hides date groups without changing the saved preference.
 
-Updated sorting uses `updatedAt`; Created sorting uses `createdAt`. Buckets use
-local calendar days: Today, Yesterday, localized full weekday names for 2–6 days
-ago, Previous 30 days for 7–29 days ago, then localized full month and numeric
-year (for example, September 2026). Nested children and worktree siblings stay
-with their root thread or environment representative's date. Archived threads
+Updated sorting groups by the same key it sorts by: a thread's latest activity
+(`latestAttentionAt`), with running threads counted as today; metadata edits such
+as pinning do not move a thread. Created sorting uses `createdAt`. Buckets use
+local calendar days: Today, Yesterday, English weekday names for 2–6 days ago,
+Previous 30 days for 7–29 days ago, then English month and numeric year (for
+example, September 2026). Headings are always English, matching the rest of the
+sidebar, regardless of the browser locale. Nested children and worktree siblings
+stay with their root thread or environment representative's date. Archived threads
 share the same buckets when included by Filter. Headings are display-only, not
 collapsible, draggable, or keyboard jump targets; there are no priority or
 needs-input buckets. Dates refresh at local midnight and on window focus.

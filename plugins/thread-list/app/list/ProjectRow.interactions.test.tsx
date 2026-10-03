@@ -337,16 +337,16 @@ describe("ProjectRow interactions", () => {
   it("groups only loose roots and reacts to the preference and alphabetical sorting", () => {
     const current = Date.now();
     const threads = [
-      makeThread({ id: "thr_loose", updatedAt: current }),
+      makeThread({ id: "thr_loose", latestAttentionAt: current }),
       makeThread({
         id: "thr_child",
         parentThreadId: "thr_loose",
-        updatedAt: 1,
+        latestAttentionAt: 1,
       }),
       makeThread({
         id: "thr_section",
         sectionId: "sec_building",
-        updatedAt: current,
+        latestAttentionAt: current,
       }),
     ];
     const store = createStore();
@@ -424,7 +424,9 @@ describe("ProjectRow interactions", () => {
     try {
       vi.setSystemTime(new Date(2026, 9, 1, 23, 59, 59));
       const threads = [
-        makeThread({ updatedAt: new Date(2026, 9, 1, 12).getTime() }),
+        makeThread({
+          latestAttentionAt: new Date(2026, 9, 1, 12).getTime(),
+        }),
       ];
       const result = renderTree(
         <CustomSectionsVisibilityProbe

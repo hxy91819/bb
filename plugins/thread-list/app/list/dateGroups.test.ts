@@ -15,7 +15,7 @@ function itemsAt(...dates: Date[]): ProjectThreadItem[] {
       makeSidebarThread({
         id: `thr_${index}`,
         createdAt: date.getTime(),
-        updatedAt: date.getTime(),
+        latestAttentionAt: date.getTime(),
       }),
     ),
     () => 0,
@@ -41,11 +41,7 @@ describe("date groups", () => {
           "updated",
           new Date(2026, 2, 9, 0, 30),
         ),
-      ).toEqual([
-        new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
-          new Date(2026, 2, 7),
-        ),
-      ]);
+      ).toEqual(["Saturday"]);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -61,20 +57,10 @@ describe("date groups", () => {
     ).toEqual(["Today", "Yesterday"]);
     expect(
       getDateGroupLabels(items, "updated", new Date(2026, 9, 2, 0)),
-    ).toEqual([
-      "Yesterday",
-      new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
-        new Date(2026, 8, 30),
-      ),
-    ]);
+    ).toEqual(["Yesterday", "Wednesday"]);
   });
 
   it("labels both sides of the 2, 7, and 30-day boundaries and keeps same-month buckets distinct", () => {
-    const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-    const month = new Intl.DateTimeFormat(undefined, {
-      month: "long",
-      year: "numeric",
-    });
     const now = new Date(2026, 9, 31, 12);
     const items = itemsAt(
       new Date(2026, 9, 31),
@@ -93,26 +79,78 @@ describe("date groups", () => {
       "Today",
       null,
       "Yesterday",
-      weekday.format(new Date(2026, 9, 29)),
-      weekday.format(new Date(2026, 9, 25)),
+      "Thursday",
+      "Sunday",
       "Previous 30 days",
       null,
-      month.format(new Date(2026, 9, 1)),
-      month.format(new Date(2026, 8, 1)),
+      "October 2026",
+      "September 2026",
       null,
-      month.format(new Date(2025, 8, 1)),
+      "September 2025",
     ]);
     expect(getDateGroupLabels([...items].reverse(), "updated", now)).toEqual([
-      month.format(new Date(2025, 8, 1)),
-      month.format(new Date(2026, 8, 1)),
+      "September 2025",
+      "September 2026",
       null,
-      month.format(new Date(2026, 9, 1)),
+      "October 2026",
       "Previous 30 days",
       null,
-      weekday.format(new Date(2026, 9, 25)),
-      weekday.format(new Date(2026, 9, 29)),
+      "Sunday",
+      "Thursday",
       "Yesterday",
       "Today",
+      null,
+    ]);
+  });
+
+  it("groups updated sorting by latest activity so metadata edits do not move a thread", () => {
+    const now = new Date(2026, 9, 3, 12);
+    const items = buildSectionThreadList(
+      [
+        makeSidebarThread({
+          id: "thr_unpinned",
+          createdAt: new Date(2026, 8, 24).getTime(),
+          latestAttentionAt: new Date(2026, 9, 1, 9).getTime(),
+          updatedAt: now.getTime(),
+        }),
+      ],
+      () => 0,
+      [],
+      false,
+    );
+    expect(getDateGroupLabels(items, "updated", now)).toEqual(["Thursday"]);
+  });
+
+  it("counts running threads as today even when their last attention is older", () => {
+    const now = new Date(2026, 9, 3, 12);
+    const items = buildSectionThreadList(
+      [
+        makeSidebarThread({
+          id: "thr_running",
+          status: "active",
+          createdAt: new Date(2026, 9, 1).getTime(),
+          latestAttentionAt: new Date(2026, 9, 1).getTime(),
+        }),
+        makeSidebarThread({
+          id: "thr_idle",
+          createdAt: new Date(2026, 9, 1, 8).getTime(),
+          latestAttentionAt: new Date(2026, 9, 2).getTime(),
+        }),
+      ],
+      (left, right) => (left.id === "thr_running" ? -1 : right.id === "thr_running" ? 1 : 0),
+      [],
+      false,
+    );
+    expect(items.map((item) => item.kind === "thread" && item.node.thread.id)).toEqual([
+      "thr_running",
+      "thr_idle",
+    ]);
+    expect(getDateGroupLabels(items, "updated", now)).toEqual([
+      "Today",
+      "Yesterday",
+    ]);
+    expect(getDateGroupLabels(items, "created", now)).toEqual([
+      "Thursday",
       null,
     ]);
   });
@@ -123,26 +161,23 @@ describe("date groups", () => {
         makeSidebarThread({
           id: "thr_a",
           createdAt: new Date(2025, 11, 1).getTime(),
-          updatedAt: new Date(2026, 0, 10).getTime(),
+          latestAttentionAt: new Date(2026, 0, 10).getTime(),
         }),
         makeSidebarThread({
           id: "thr_b",
           createdAt: new Date(2025, 11, 2).getTime(),
-          updatedAt: new Date(2026, 0, 10).getTime(),
+          latestAttentionAt: new Date(2026, 0, 10).getTime(),
           archivedAt: 1,
         }),
       ],
       () => 0,
       [],
-        false,
+      false,
     );
     const now = new Date(2026, 0, 10, 12);
     expect(getDateGroupLabels(items, "updated", now)).toEqual(["Today", null]);
     expect(getDateGroupLabels(items, "created", now)).toEqual([
-      new Intl.DateTimeFormat(undefined, {
-        month: "long",
-        year: "numeric",
-      }).format(new Date(2025, 11, 1)),
+      "December 2025",
       null,
     ]);
     expect(getDateGroupLabels(items, "alpha", now)).toEqual([null, null]);
@@ -153,11 +188,11 @@ describe("date groups", () => {
     const recent = new Date(2026, 0, 10).getTime();
     const items = buildSectionThreadList(
       [
-        makeSidebarThread({ id: "thr_parent", updatedAt: old }),
+        makeSidebarThread({ id: "thr_parent", latestAttentionAt: old }),
         makeSidebarThread({
           id: "thr_child",
           parentThreadId: "thr_parent",
-          updatedAt: recent,
+          latestAttentionAt: recent,
         }),
         makeSidebarThread({
           id: "thr_env_a",
@@ -165,7 +200,7 @@ describe("date groups", () => {
             id: "env_a",
             isWorktree: true,
           }),
-          updatedAt: old,
+          latestAttentionAt: old,
         }),
         makeSidebarThread({
           id: "thr_env_b",
@@ -173,22 +208,16 @@ describe("date groups", () => {
             id: "env_a",
             isWorktree: true,
           }),
-          updatedAt: recent,
+          latestAttentionAt: recent,
         }),
       ],
       () => 0,
       [],
-        true,
+      true,
     );
     expect(items.map((item) => item.kind)).toEqual(["thread", "environment"]);
     expect(getDateGroupLabels(items, "updated", new Date(2026, 0, 10))).toEqual(
-      [
-        new Intl.DateTimeFormat(undefined, {
-          month: "long",
-          year: "numeric",
-        }).format(new Date(2025, 11, 1)),
-        null,
-      ],
+      ["December 2025", null],
     );
   });
 });
