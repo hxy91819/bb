@@ -43,6 +43,14 @@ export const customAcpAgentSchema = z
   .object({
     id: z.string().regex(SLUG_PATTERN),
     displayName: z.string().min(1),
+    icon: z.string().trim().min(1).optional(),
+    iconTint: z
+      .object({
+        light: z.string().trim().min(1),
+        dark: z.string().trim().min(1),
+      })
+      .strict()
+      .optional(),
     command: z.string().min(1),
     args: z.array(z.string()).default([]),
     env: z.record(z.string().regex(ENV_NAME_PATTERN), z.string()).default({}),
@@ -71,7 +79,8 @@ export function customAcpAgentDefinition(
   return {
     id: formatCustomAcpProviderId(agent.id),
     displayName: agent.displayName,
-    icon: CUSTOM_AGENT_GLYPH,
+    icon: agent.icon ?? CUSTOM_AGENT_GLYPH,
+    ...(agent.iconTint === undefined ? {} : { iconTint: agent.iconTint }),
     launch: {
       displayName: agent.displayName,
       command: agent.command,
