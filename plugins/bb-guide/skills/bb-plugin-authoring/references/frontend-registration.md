@@ -210,10 +210,8 @@ is lost when the document navigates; check again when `url` changes.
 
 `app.slots.experimental_sidebarNavigation` replaces the navigation controls
 above the thread list. The component receives `isCompactViewport` and
-`experimental_Original`. Its optional `experimental_pinnedNavigationHost`
-is outside the shared navigation and thread-list scroll area. Render the
-visible New thread item there to keep it reachable while the other rows
-and divider scroll; render it once, in the host or in your navigation component.
+`experimental_Original`. The optional `experimental_pinnedNavigationHost` is outside the shared scroll area.
+Render New thread there once to keep it reachable while rows and dividers scroll, or render it in your navigation.
 BB keeps the drawer, thread list, footer, resize
 handle, and hidden-body shortcut policy. BB draws no divider below a replacement; draw your
 own if your layout wants one.
