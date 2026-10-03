@@ -347,12 +347,6 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     pendingServerMove === null
       ? installProviderModelCatalogPrewarm(sweepDeps)
       : null;
-  if (pendingServerMove === null) {
-    await runStartupRecoverySweep(sweepDeps).catch((error) => {
-      logger.error({ err: error }, "Startup recovery sweep failed");
-    });
-  }
-
   if (!isLoopbackHostname(serverConfig.BB_SERVER_BIND_HOST)) {
     logger.warn(
       { bindHost: serverConfig.BB_SERVER_BIND_HOST },
@@ -380,6 +374,9 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
   let sweepInterval: ReturnType<typeof setInterval> | null = null;
   if (pendingServerMove === null) {
     telemetry.capture({ name: "app_started" });
+    void runStartupRecoverySweep(sweepDeps).catch((error) => {
+      logger.error({ err: error }, "Startup recovery sweep failed");
+    });
     if (serverMoveRun?.kind === "completed") {
       logger.info(
         { moveId: serverMoveRun.run.status.moveId },
