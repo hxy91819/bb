@@ -1029,14 +1029,14 @@ export function ModelReasoningPicker({
           "flex min-h-0 flex-col p-0",
           MODEL_PICKER_MENU_WIDTH_CLASS_NAME,
           isCompactViewport
-            ? "overflow-y-hidden"
+            ? "flex-1 overflow-y-hidden pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
             : "max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-0.5rem))] overflow-hidden",
         )}
       >
         <ResetBrowseStateOnContentUnmount onReset={resetBrowseState} />
         {handoffMode ? <HandoffModeHeader onBack={exitHandoffMode} /> : null}
         {showProviderTabs ? (
-          <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-2.5 pt-1">
+          <div className="flex shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain border-b border-border bg-background px-2.5 pt-1">
             {providerOptions.map((provider) => {
               const TabIcon = provider.icon;
               const isActive = provider.value === activeProviderId;
@@ -1061,7 +1061,7 @@ export function ModelReasoningPicker({
                     handleProviderSelect(provider.value);
                   }}
                   className={cn(
-                    "flex items-center justify-center border-b-2 focus-visible:outline-none",
+                    "flex shrink-0 items-center justify-center border-b-2 focus-visible:outline-none",
                     LIST_HOVER_TRANSITION,
                     COARSE_POINTER_PROVIDER_TAB_SIZE_CLASS,
                     isActive
