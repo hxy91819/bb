@@ -20,7 +20,6 @@ function itemsAt(...dates: Date[]): ProjectThreadItem[] {
     ),
     () => 0,
     [],
-    new Set(),
     false,
   );
 }
@@ -135,8 +134,7 @@ describe("date groups", () => {
       ],
       () => 0,
       [],
-      new Set(),
-      false,
+        false,
     );
     const now = new Date(2026, 0, 10, 12);
     expect(getDateGroupLabels(items, "updated", now)).toEqual(["Today", null]);
@@ -180,8 +178,7 @@ describe("date groups", () => {
       ],
       () => 0,
       [],
-      new Set(),
-      true,
+        true,
     );
     expect(items.map((item) => item.kind)).toEqual(["thread", "environment"]);
     expect(getDateGroupLabels(items, "updated", new Date(2026, 0, 10))).toEqual(
