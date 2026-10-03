@@ -22,7 +22,7 @@ fix/acp-mid-turn-steering              needs-feedback                           
 fix/acp-model-config-error             needs-feedback                                             # 保留 ACP 模型配置拒绝错误；叠在 fix/acp-mid-turn-steering 上
 feature/thread-project-label           needs-feedback                                             # 线程行显示项目标签
 fix/sidebar-parent-row-hover-archive   fork-only       https://github.com/get-bb/bb/issues/3821   # 父线程行不显示快速归档（桌面偏好）
-fix/sidebar-touch-hover-actions        reported        https://github.com/get-bb/bb/issues/3832   # 触屏不显示悬停归档
+fix/sidebar-touch-hover-actions        reported        https://github.com/get-bb/bb/issues/3832   # 触屏不显示悬停归档；上游 #4114 只修 767px 以下，已评论说明剩余范围
 fix/sidebar-touch-navigation           needs-feedback                                             # 触屏点击导航而非重命名；叠在 fix/sidebar-parent-row-hover-archive 上
 feature/sidebar-pinned-new-thread      needs-feedback                                             # New thread 固定；其余导航与线程列表共用滚动区，desktop-v0.45.0 未完全吸收
 fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
@@ -33,11 +33,11 @@ feature/mobile-queue-action            needs-feedback                           
 fix/mobile-composer-top-clearance      needs-feedback                                             # 移动端长输入框避让顶部左右按钮
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
 feature/hidden-providers               needs-feedback                                             # hiddenProviders 隐藏选择器中的 provider，新线程回退到可见项，既有线程仍可切换
-feature/acp-custom-agent-icon          needs-feedback                                             # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）
+feature/acp-custom-agent-icon          reported        https://github.com/get-bb/bb/issues/2521                   # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）；已在 #2521 评论链接实现
 fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
-feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；已从 upstream/child-turn-author 移植到含 #4356 的基线
+feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；已从 upstream/child-turn-author 移植到含 #4356 的基线；已在 #4424 评论链接实现
 fix/acp-permission-mode                 needs-feedback                                             # ACP 权限切换时重建会话，使 permissionCli 使用当前 BB 模式
 feature/browser-remote-editor         needs-feedback                                             # 按浏览器配置工作机 SSH 别名，直接唤起 VS Code，无需本地 helper
-fix/acp-skills-prompt-paths            reported        https://github.com/get-bb/bb/issues/4481   # ACP 会话指令按 skill root 分组，根目录只声明一次，不再每行重复绝对路径
+fix/acp-skills-prompt-paths            reported        https://github.com/get-bb/bb/issues/4481   # ACP 会话指令按 skill root 分组，根目录只声明一次，不再每行重复绝对路径；已在 #4481 评论链接实现
 feature/sidebar-date-groups            needs-feedback                                                             # Custom 模式 Threads 区按日期分组（Today/Yesterday/星期/Previous 30 days/月份），偏好 dateGrouping
 fix/dependency-security                 needs-feedback                                             # 稳定基线运行依赖和工具链漏洞修复，保留主版本
