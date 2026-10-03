@@ -77,6 +77,7 @@ function activity(
 interface HarnessProps {
   thread: PluginSidebarThread;
   crossProjectId?: string | null;
+  showProjectName?: boolean;
   isActive?: boolean;
   options?: ThreadRowOptions;
   onRowEvent?: () => void;
@@ -87,6 +88,7 @@ interface HarnessProps {
 function ThreadRowHarness({
   thread,
   crossProjectId = null,
+  showProjectName = false,
   isActive = false,
   options = DEFAULT_OPTIONS,
   onRowEvent,
@@ -97,6 +99,7 @@ function ThreadRowHarness({
     <ThreadRow
       thread={thread}
       crossProjectId={crossProjectId}
+      showProjectName={showProjectName}
       isActive={isActive}
       options={options}
     />
@@ -1078,6 +1081,29 @@ describe("ThreadRow", () => {
     expect(
       screen.getByRole("link", { name: "Open Thread" }).getAttribute("href"),
     ).toBe("/projects/proj_other/threads/thr_test");
+  });
+
+  it("shows its project in chronological mode", () => {
+    const project = {
+      id: "proj_work",
+      name: "Web App",
+      isPersonal: false,
+      href: "/projects/proj_work",
+      settingsHref: "/projects/proj_work/settings",
+    };
+    const { container } = renderThreadRow({
+      thread: createThread({ projectId: project.id }),
+      projects: [project],
+      showProjectName: true,
+    });
+
+    expect(
+      container.querySelector("[data-sidebar-thread-project-name]")
+        ?.textContent,
+    ).toBe("Web App");
+    expect(
+      screen.getByRole("link", { name: "Open Thread in Web App" }),
+    ).not.toBeNull();
   });
 
   it("falls back to a generic label when the other project is unknown", () => {
