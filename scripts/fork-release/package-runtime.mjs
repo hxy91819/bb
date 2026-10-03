@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import {
   chmod,
@@ -75,6 +78,20 @@ try {
     ],
     runtime,
   );
+  const repairPath = join(repo, "scripts/repair-npm-bundled-dependencies.mjs");
+  if (existsSync(repairPath)) {
+    const { repairNpmBundledDependencies } = await import(
+      pathToFileURL(repairPath).href
+    );
+    const require = createRequire(
+      join(runtime, "node_modules/bb-app/package.json"),
+    );
+    await repairNpmBundledDependencies(
+      repo,
+      dirname(require.resolve("npm/package.json")),
+      join(runtime, "package-lock.json"),
+    );
+  }
   await copyFile(process.execPath, join(runtime, "bin/node"));
   await chmod(join(runtime, "bin/node"), 0o755);
   await copyFile(join(nodeRoot, "LICENSE"), join(runtime, "NODE-LICENSE"));
