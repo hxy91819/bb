@@ -1,4 +1,5 @@
 import type { ThreadListEntry } from "@bb/domain";
+import { compareCodepoint } from "../codepoint-compare.js";
 import {
   getCollapsedChildActivity,
   type CollapsedChildActivity,
