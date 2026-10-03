@@ -21,7 +21,7 @@
 
 ## 公告与核查范围
 
-核查使用 npm 官方 registry 的 `POST /-/npm/v1/security/advisories/bulk`，分别提交旧版/候选版、修复后目标版本和全部锁定 npm 包版本。使用 semver 将公告影响范围与实际锁定版本相交，统计包/公告关系，不统计依赖路径重复实例，也不等同于 npm/pnpm audit 的依赖实例计数或可利用性分析。
+核查使用 npm 官方 registry 的 `POST /-/npm/v1/security/advisories/bulk`，分别提交旧版/候选版、修复后目标版本和全部锁定 npm 包版本。使用 semver 将公告影响范围与实际锁定版本相交，按包名与 GHSA 去重后统计包/公告关系，不统计影响主版本分支或依赖路径的重复记录，也不等同于 npm/pnpm audit 的依赖实例计数或可利用性分析。
 
 完整 `pnpm audit --json` 尝试因约 2 GiB JavaScript 堆内存耗尽以退出码 134 失败，没有完整 audit 结果。官方接口目标核查仅剩 `node-forge`；以下全锁文件残余表包含范围外依赖，不能称为“全仓库审计通过”。本轮遵循指定最小范围，不将这些包的额外升级混入依赖修复。
 
@@ -32,6 +32,10 @@
 npm 最新 `node-forge` 仍为 `1.4.0`，没有可安装补丁版。[GHSA-86w9-cpqp-85rv / CVE-2026-85393](https://github.com/advisories/GHSA-86w9-cpqp-85rv) 影响 RSA PKCS#1 v1.5 签名验证：嵌套 DigestAlgorithm 多余元素可导致低指数 RSA 密钥的签名伪造。保留 `1.4.0`，没有降级或声称修复。实际路径为 mobile → Expo CLI → code-signing-certificates，以及 mobile → EAS CLI → node-forge / code-signing-certificates，涉及证书和代码签名工具。
 
 外部 `pi` 可执行程序对应安装包 `@earendil-works/pi-coding-agent@1.0.0`；包声明、npm-shrinkwrap 和已安装模块均为 `undici@8.10.2`。该安装另有 `brace-expansion@5.0.9`，官方接口返回三条仍适用公告（栈耗尽和 CPU DoS）。仓库 override 只修复仓库 Pi 开发/测试依赖，没有修改外部安装；也没有对外部 Pi 完整依赖或内嵌 bundle 做全量审计。
+
+### Node 运行时内置 undici
+
+本次使用的 Node `24.15.0` 通过 `process.versions.undici` 报告内置 `7.24.4`，pnpm override 不会替换 Node 内部的 fetch 实现。npm 官方 bulk 对 `undici@7.24.4` 返回 21 条不同 GHSA 的版本范围记录；这表示版本仍处于公告影响范围，并不表示 Node 的全局 fetch 暴露每一项 undici API 的漏洞。本轮没有升级 Node 运行时，该项与 npm 锁文件、外部 Pi 分开记录，后续需核对 Node 自身安全更新；不能声称所有运行时 undici 实现都已修复。
 
 ## 行为验证
 
@@ -55,19 +59,19 @@ Turbo 在 `scripts/run-resource-isolated --profile package` 下以 `--concurrenc
 
 合计 2675 个测试通过、2 个跳过。覆盖 CLI 真实请求与错误、账号池 HTTP/1.1 TLS 协商与取消及失败 POST 不重放、推送发送/错误处理、Modal 资源与配置、笔记/任务 Markdown 表格和编辑保存渲染、Pi RPC 与会话桥接。
 
-没有执行认证后的 Modal 云沙箱创建、真实 Expo 推送、外部 Pi 模型调用、独立浏览器手动编辑流程、原生 iOS/Android/EAS 构建、桌面安装包和 macOS/Windows 打包。Pi Bun runtime 用例因本机没有 Bun 而跳过；host daemon 的 macOS fd cleanup 用例因本机是 Linux 而跳过。组件测试与本地协议 smoke 不代表这些未执行的平台/外部服务检查通过。
+没有执行认证后的 Modal 云沙箱创建、真实 Expo 推送、外部 Pi 模型调用、独立浏览器手动编辑流程、原生 iOS/Android/EAS 构建、桌面安装包和 macOS/Windows 打包。Pi Bun runtime 用例因本机没有 Bun 而跳过；host daemon 的 macOS fd cleanup 用例因本机是 Linux 而跳过。Cloudflare Connect 的 143 个测试、Web 的 130 个测试、mobile 的 308 个测试通过。桌面完整测试尝试因缺少 Electron 44.3.0 二进制且下载缓慢未完成，约五分钟仅下载 28 MB，独立下载探针超时；终止所属下载/测试进程后退出码为 143，不能算通过。测试分组选项未能避免间接加载 Electron，桌面测试保留为阻塞项；未改变产品代码或用假二进制使检查通过。组件测试与本地协议 smoke 不代表这些未执行的平台/外部服务检查通过。
 
 ## 审查与源码交付
 
-`$autoreview` 经 `$bb-model-routing` 按 medium 派发，线程 `thr_vsh54m6gmt`（acp-amp / medium / medium）完整审查五个依赖文件的 `git diff desktop-v0.44.0`，结果无 P0/P1 可操作发现。主 Agent 核实目标安装版本及官方接口结果。维护登记、报告和聚合脚本的 `--no-autostash` 改动另行审查。
+`$autoreview` 经 `$bb-model-routing` 按 medium 派发，线程 `thr_vsh54m6gmt`（acp-amp / medium / medium）完整审查五个依赖文件的 `git diff desktop-v0.44.0`，结果无 P0/P1 可操作发现。主 Agent 核实目标安装版本及官方接口结果。维护登记、报告和聚合脚本的 `--no-autostash` 改动在 `thr_q6sa7cex3b`（codex / gpt-6.1-sol / medium）审查无发现；随后主 Agent 核查出公告主版本范围记录重复计数，报告按包名/GHSA 去重修正。
 
 只向个人远端 `fork` 推送；上游 issue / PR 未提交。源码聚合采用 `.fork/branches` 与 `scripts/fork-aggregate` 的 merge 流程，没有 cherry-pick。当前运行服务没有替换；源码提交和聚合不会自动更新独立部署目录中的服务。本轮交付源码和验证结果，没有发布新的预编译 runtime Release。
 
 ## 修复分支全锁文件残余公告
 
-共 146 条包/公告关系，涉及 39 个包；后续聚合另保留既有 Vite 修复分支。除 node-forge 无补丁外，其余均为指定范围外，留待独立修复。
+官方接口原始返回 146 条影响范围记录；按包名和 GHSA 去重后，修复分支有 138 条包/公告关系，涉及 39 个包。当前聚合保留既有 Vite 修复，原始返回 142 条范围记录，去重后为 136 条包/公告关系，仍涉及 39 个包。除 node-forge 无补丁外，其余为指定范围外，留待独立修复。
 
-| 包 | 受影响锁定版本 | 数量 / 严重度 | 公告 |
+| 包 | 受影响锁定版本 | 去重公告数 / 严重度 | 公告 |
 | --- | --- | --- | --- |
 | `@babel/core` | 7.29.0 | 1 / low | [GHSA-4x5r-pxfx-6jf8](https://github.com/advisories/GHSA-4x5r-pxfx-6jf8) |
 | `@hono/node-server` | 1.19.14 | 1 / moderate | [GHSA-frvp-7c67-39w9](https://github.com/advisories/GHSA-frvp-7c67-39w9) |
@@ -92,10 +96,10 @@ Turbo 在 `scripts/run-resource-isolated --profile package` 下以 `--concurrenc
 | `http-cache-semantics` | 4.2.0 | 1 / high | [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp) |
 | `image-size` | 1.2.1 | 2 / high | [GHSA-5p2g-fcmc-qvqq](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq), [GHSA-w3rx-r6r6-pgpr](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) |
 | `ip-address` | 10.2.0 | 7 / high, moderate | [GHSA-mwp4-54f8-5fhr](https://github.com/advisories/GHSA-mwp4-54f8-5fhr), [GHSA-4xrf-jv44-h6hh](https://github.com/advisories/GHSA-4xrf-jv44-h6hh), [GHSA-22jq-vg5j-6vgg](https://github.com/advisories/GHSA-22jq-vg5j-6vgg), [GHSA-rpw4-54j3-4h4q](https://github.com/advisories/GHSA-rpw4-54j3-4h4q), [GHSA-2vr4-cq9g-pvrc](https://github.com/advisories/GHSA-2vr4-cq9g-pvrc), [GHSA-j6r3-76f7-8jcv](https://github.com/advisories/GHSA-j6r3-76f7-8jcv), [GHSA-h3mg-xc3c-68pw](https://github.com/advisories/GHSA-h3mg-xc3c-68pw) |
-| `js-yaml` | 3.14.2, 4.1.1 | 8 / high, moderate | [GHSA-h67p-54hq-rp68](https://github.com/advisories/GHSA-h67p-54hq-rp68), [GHSA-h67p-54hq-rp68](https://github.com/advisories/GHSA-h67p-54hq-rp68), [GHSA-52cp-r559-cp3m](https://github.com/advisories/GHSA-52cp-r559-cp3m), [GHSA-52cp-r559-cp3m](https://github.com/advisories/GHSA-52cp-r559-cp3m), [GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj), [GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj), [GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh), [GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh) |
+| `js-yaml` | 3.14.2, 4.1.1 | 4 / high, moderate | [GHSA-h67p-54hq-rp68](https://github.com/advisories/GHSA-h67p-54hq-rp68), [GHSA-52cp-r559-cp3m](https://github.com/advisories/GHSA-52cp-r559-cp3m), [GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj), [GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh) |
 | `mermaid` | 11.15.0 | 5 / low, moderate | [GHSA-c4c3-pg64-4m4v](https://github.com/advisories/GHSA-c4c3-pg64-4m4v), [GHSA-6x64-9x62-f2gx](https://github.com/advisories/GHSA-6x64-9x62-f2gx), [GHSA-3rrr-jr9j-h3q3](https://github.com/advisories/GHSA-3rrr-jr9j-h3q3), [GHSA-2v8p-3f2j-5mp7](https://github.com/advisories/GHSA-2v8p-3f2j-5mp7), [GHSA-rhh3-jpg6-66xh](https://github.com/advisories/GHSA-rhh3-jpg6-66xh) |
 | `minimatch` | 5.1.2 | 3 / high | [GHSA-3ppc-4f35-3m26](https://github.com/advisories/GHSA-3ppc-4f35-3m26), [GHSA-7r86-cg39-jmmj](https://github.com/advisories/GHSA-7r86-cg39-jmmj), [GHSA-23c5-xmqv-rm74](https://github.com/advisories/GHSA-23c5-xmqv-rm74) |
-| `nanoid` | 3.3.16, 3.3.8, 5.1.6 | 5 / high | [GHSA-28wg-ghj8-5hjv](https://github.com/advisories/GHSA-28wg-ghj8-5hjv), [GHSA-28wg-ghj8-5hjv](https://github.com/advisories/GHSA-28wg-ghj8-5hjv), [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8), [GHSA-xwg4-73v4-xw9w](https://github.com/advisories/GHSA-xwg4-73v4-xw9w), [GHSA-xwg4-73v4-xw9w](https://github.com/advisories/GHSA-xwg4-73v4-xw9w) |
+| `nanoid` | 3.3.16, 3.3.8, 5.1.6 | 3 / high | [GHSA-28wg-ghj8-5hjv](https://github.com/advisories/GHSA-28wg-ghj8-5hjv), [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8), [GHSA-xwg4-73v4-xw9w](https://github.com/advisories/GHSA-xwg4-73v4-xw9w) |
 | `node-forge` | 1.4.0 | 1 / high | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) |
 | `postcss` | 8.5.15 | 2 / high, moderate | [GHSA-fxqj-rqcc-2cmp](https://github.com/advisories/GHSA-fxqj-rqcc-2cmp), [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849) |
 | `qs` | 6.15.3 | 2 / moderate | [GHSA-x5fp-wj9c-mxmx](https://github.com/advisories/GHSA-x5fp-wj9c-mxmx), [GHSA-4mjr-xmp4-gh2g](https://github.com/advisories/GHSA-4mjr-xmp4-gh2g) |
@@ -105,7 +109,6 @@ Turbo 在 `scripts/run-resource-isolated --profile package` 下以 `--concurrenc
 | `tar` | 7.5.19 | 1 / high | [GHSA-r292-9mhp-454m](https://github.com/advisories/GHSA-r292-9mhp-454m) |
 | `ts-deepmerge` | 6.2.0 | 1 / moderate | [GHSA-87mf-gv2c-c62c](https://github.com/advisories/GHSA-87mf-gv2c-c62c) |
 | `uuid` | 7.0.3, 8.3.2, 9.0.1 | 1 / moderate | [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) |
-| `vite` | 6.4.1, 8.0.12 | 6 / high, moderate | [GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3), [GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3), [GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9), [GHSA-p9ff-h696-f583](https://github.com/advisories/GHSA-p9ff-h696-f583), [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff), [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) |
+| `vite` | 6.4.1, 8.0.12 | 4 / high, moderate | [GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3), [GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9), [GHSA-p9ff-h696-f583](https://github.com/advisories/GHSA-p9ff-h696-f583), [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) |
 | `vitest` | 3.2.6, 4.1.1 | 1 / moderate | [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) |
 | `yaml` | 2.6.0, 2.8.2 | 1 / moderate | [GHSA-48c2-rrv3-qjmp](https://github.com/advisories/GHSA-48c2-rrv3-qjmp) |
-
