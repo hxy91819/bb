@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type {
@@ -131,6 +137,44 @@ describe("navigation plugin", () => {
       screen.getByRole("button", { name: "Docs" }).getAttribute("aria-current"),
     ).toBe("page");
     expect(screen.getByText("7")).toBeDefined();
+  });
+
+  it("keeps New thread in the pinned host while the remaining navigation stays in the scroll area", () => {
+    const host = document.createElement("div");
+    host.dataset.testid = "pinned-navigation";
+    document.body.appendChild(host);
+    try {
+      const view = renderSlot(
+        registration!,
+        { ...PROPS, experimental_pinnedNavigationHost: host },
+        { sidebarNavigation: { items: ITEMS, activeItemId: null } },
+      );
+      const navigation = screen.getByTestId("plugin-nav-sidebar-items");
+
+      expect(
+        within(host).getByRole("button", { name: "New thread (⌘N)" }),
+      ).toBeDefined();
+      expect(
+        within(navigation).queryByRole("button", { name: "New thread (⌘N)" }),
+      ).toBeNull();
+      expect(
+        within(navigation).getByRole("button", { name: "Docs" }),
+      ).toBeDefined();
+      expect(screen.getByTestId("navigation-divider").parentElement).toBe(
+        navigation.parentElement,
+      );
+
+      fireEvent.click(
+        within(host).getByRole("button", { name: "New thread (⌘N)" }),
+      );
+      expect(view.inspection.sidebarNavigationCalls).toContainEqual({
+        method: "activate",
+        itemId: "__bb__/new-thread",
+        openInSplit: false,
+      });
+    } finally {
+      host.remove();
+    }
   });
 
   it("does not mark New thread as the current page, like bb's rows", () => {

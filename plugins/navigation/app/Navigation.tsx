@@ -4,6 +4,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   experimental_SidebarNavigationIcon as NavigationIcon,
   experimental_useSidebarNavigation,
@@ -363,6 +364,7 @@ function OverflowItem({
 
 export function Navigation({
   isCompactViewport,
+  experimental_pinnedNavigationHost,
 }: ExperimentalSidebarNavigationProps) {
   const { actions, items } = experimental_useSidebarNavigation();
   const visible = items.filter((item) => item.isVisible);
@@ -407,14 +409,20 @@ export function Navigation({
             items={visibleIds}
             strategy={verticalListSortingStrategy}
           >
-            {visible.map((item) => (
-              <NavigationRow
-                key={item.id}
-                item={item}
-                isCompactViewport={isCompactViewport}
-                reorderDisabled={reorderDisabled}
-              />
-            ))}
+            {visible.map((item) => {
+              const row = (
+                <NavigationRow
+                  key={item.id}
+                  item={item}
+                  isCompactViewport={isCompactViewport}
+                  reorderDisabled={reorderDisabled}
+                />
+              );
+              return item.action.kind === "new-thread" &&
+                experimental_pinnedNavigationHost
+                ? createPortal(row, experimental_pinnedNavigationHost, item.id)
+                : row;
+            })}
           </SortableContext>
         </DndContext>
         {hidden.length > 0 ? (
