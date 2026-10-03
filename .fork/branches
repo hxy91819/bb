@@ -11,7 +11,7 @@ fix/vite-cve-2026-39363                reported        https://github.com/get-bb
 feature/mermaid-elk-layout             reported        https://github.com/get-bb/bb/issues/3382   # Mermaid 使用 ELK 布局
 feature/automation-auto-marker         fork-only                                                  # 自动化会话标记 [auto]
 fix/official-catalog-date-utc          needs-feedback                                             # 官方插件目录日期按 UTC 解析
-fix/environment-switch-auto-continue   needs-feedback                                             # 切换环境后自动继续一次
+fix/environment-switch-auto-continue   reported        https://github.com/get-bb/bb/issues/4778                   # 切换环境后自动继续一次；上游已有同题 issue，以评论链接实现
 fix/markdown-table-breakout            reported        https://github.com/get-bb/bb/issues/1705   # Markdown 表格列内滚动/展开
 feature/side-chat-command              reported        https://github.com/get-bb/bb/issues/4807                   # /side 侧聊命令
 fix/side-chat-main-composer            internal                                                   # 主输入框提供 /side；叠在 feature/side-chat-command 上
@@ -29,10 +29,10 @@ fix/sidebar-new-thread-project         needs-feedback                           
 fix/mobile-model-picker                needs-feedback                                             # 移动端模型选择器触发区
 fix/mobile-model-drawer                needs-feedback                                             # 模型抽屉底部安全区、长列表高度约束与 provider 横向滚动
 fix/provider-icon-hitbox               needs-feedback                                             # WebKit SVG 图标透明区域覆盖相邻 provider 点击区
-feature/mobile-queue-action            needs-feedback                                             # 移动端排队消息发送
+feature/mobile-queue-action            reported        https://github.com/get-bb/bb/issues/4812                   # 移动端排队消息发送；提 PR 前拆掉空草稿 ghost 按钮和未使用的 allowSoftKeyboardAutoFocus
 fix/mobile-composer-top-clearance      needs-feedback                                             # 移动端长输入框避让顶部左右按钮
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
-feature/hidden-providers               needs-feedback                                             # hiddenProviders 隐藏选择器中的 provider，新线程回退到可见项，既有线程仍可切换
+feature/hidden-providers               reported        https://github.com/get-bb/bb/issues/4811                   # hiddenProviders 隐藏选择器中的 provider，新线程回退到可见项，既有线程仍可切换
 feature/acp-custom-agent-icon          reported        https://github.com/get-bb/bb/issues/2521                   # ACP customAgents 可配置 icon/iconTint（Cursor (SDK) 用 Cursor 图标）；已在 #2521 评论链接实现
 fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
 feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；已从 upstream/child-turn-author 移植到含 #4356 的基线；已在 #4424 评论链接实现
