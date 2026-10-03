@@ -50,7 +50,7 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
 2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-3. `pnpm install --frozen-lockfile`、全仓 `typecheck --concurrency=1`、`test`。测试默认只跑 `--filter='[<上一次 local/aggregate>]'`，即相对上次聚合有文件改动的包；各分支自己的测试在分支上已经跑过。
+3. `pnpm install --frozen-lockfile`、全仓 `typecheck --concurrency=1`、`test`，都带 `--continue`：一个包失败不会中断其余包，一次就能看到全部失败，修完再重跑一次，而不是每次只暴露一个。测试默认只跑 `--filter='[<上一次 local/aggregate>]'`，即相对上次聚合有文件改动的包；各分支自己的测试在分支上已经跑过。
 4. `scripts/fork-aggregate --promote-only`：把根目录 `local/aggregate` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
 5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
@@ -67,8 +67,8 @@ Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-r
 ```bash
 scripts/fork-aggregate                      # 只生成 aggregate/next
 scripts/run-resource-isolated --profile package -- pnpm install --frozen-lockfile
-scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --output-logs=errors-only
-scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --output-logs=errors-only --filter=<涉及的包>
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --continue --output-logs=errors-only --filter=<涉及的包>
 scripts/fork-aggregate --promote-only       # 提升验证过的 aggregate/next
 scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升，SHA 会因时间戳变化，不要在验证之后用
 ```
@@ -108,7 +108,7 @@ scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升�
 1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `local/aggregate` 被其他任务移动，也使用这个已验证的 SHA。
 2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
 3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
-4. 核对远端 tag 解引用后的 commit SHA，跟踪 `Release fork aggregate` 到结束，确认 Release 已公开且四个平台的包和校验文件齐全。
+4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开且四个平台的包和校验文件齐全。
 5. 交付 tag、聚合 SHA 和 Release 链接。tag 推送成功只代表已触发构建；流水线失败、无法查询或资产不全时，明确报告发布未完成。
 
 以下是新发布的命令示例，版本、日期、序号和聚合 SHA 以本次打包结果为准：
