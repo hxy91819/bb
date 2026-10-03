@@ -385,13 +385,6 @@ function ThreadRowComponent({
     actions.open(thread.id, { split: true });
   }, [actions, thread.id]);
   const sectionMove = useThreadSectionMove();
-  const rowActionIds = visibleThreadRowActions(
-    useAtomValue(threadRowActionsAtom),
-    {
-      split: splitAvailable,
-      move: canMoveThreadToSection(sectionMove, thread),
-    },
-  );
   const parentOptions = options.kind === "parent" ? options : null;
   const isParentRow = parentOptions !== null;
   const isParentCollapsed = parentOptions?.isCollapsed ?? false;
@@ -399,6 +392,15 @@ function ThreadRowComponent({
   const childActivity =
     parentOptions?.childActivity ?? NO_COLLAPSED_CHILD_ACTIVITY;
   const hasChildren = childCount > 0;
+  const rowActionIds = visibleThreadRowActions(
+    useAtomValue(threadRowActionsAtom),
+    {
+      split: splitAvailable,
+      move: canMoveThreadToSection(sectionMove, thread),
+    },
+  ).filter(
+    (actionId) => !(isParentRow && hasChildren && actionId === "archive"),
+  );
   const reserveActionSpace =
     crossProjectLabel !== null || (isParentRow && hasChildren);
   const hasHiddenChildren = isParentRow && isParentCollapsed && hasChildren;
@@ -521,7 +523,7 @@ function ThreadRowComponent({
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
             !isEditing &&
-            !(parentOptions && hasChildren) &&
+            !(parentOptions && hasChildren && rowActionIds.length === 0) &&
             (reserveActionSpace
               ? "pr-(--bb-sidebar-hover-actions-inset) max-md:pointer-coarse:pr-0"
               : SIDEBAR_HOVER_ACTIONS_INSET_CLASS),
@@ -740,7 +742,6 @@ function ThreadRowComponent({
               >
                 <SidebarRowControls
                   primaryAction={
-                    parentOptions && hasChildren ? null : (
                     <ThreadRowQuickActions
                       actionIds={rowActionIds}
                       actions={actions}
@@ -750,7 +751,6 @@ function ThreadRowComponent({
                       onRename={startEditing}
                       onMenuOpenChange={setIsDropdownActionsOpen}
                     />
-                    )
                   }
                 >
                   <ThreadActionsMenu
