@@ -7,6 +7,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -22,7 +23,8 @@ const repo = dirname(dirname(fileURLToPath(import.meta.url)));
 test("repairs npm's physical modules and lock metadata while preserving library behavior", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "bb-npm-bundle-repair-"));
   const npmDirectory = join(temporary, "node_modules/npm");
-  const runtimeLock = join(temporary, "package-lock.json");
+  const lockAlias = join(temporary, "lock-alias");
+  const runtimeLock = join(lockAlias, "package-lock.json");
   const require = createRequire(join(repo, "packages/bb-app/package.json"));
   const installedNpm = dirname(require.resolve("npm/package.json"));
   const server = createServer((request, response) => {
@@ -31,6 +33,11 @@ test("repairs npm's physical modules and lock metadata while preserving library 
   });
   let agent;
   try {
+    await symlink(
+      temporary,
+      lockAlias,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     for (const [name, version] of [
       ["undici", "6.26.0"],
       ["brace-expansion", "5.0.6"],
