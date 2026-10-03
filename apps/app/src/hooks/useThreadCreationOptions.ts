@@ -635,10 +635,16 @@ export function useThreadCreationOptions(
   const environmentSelectionValue = rawEnvironmentSelectionValue;
   const touchedFieldsPendingReset =
     usesLocalThreadSelections && threadResetKeyRef.current !== resetKey;
+  const hiddenProviderFallback =
+    prefersVisibleProviderSelection &&
+    selectedProviderIdBeforeReadyFallback.length > 0 &&
+    preferredProviderId.length === 0 &&
+    effectiveProviderId.length > 0;
   const effectiveInitialProviderSource: ExecutionInputFieldSource | undefined =
-    canResolveReadyProvider &&
-    readyProviderId !== undefined &&
-    effectiveProviderId === readyProviderId
+    hiddenProviderFallback ||
+    (canResolveReadyProvider &&
+      readyProviderId !== undefined &&
+      effectiveProviderId === readyProviderId)
       ? "client-preference"
       : undefined;
   const executionInputSources = useMemo(
