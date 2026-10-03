@@ -79,6 +79,7 @@ function renderCreationOptions(
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   mocks.executionOptions.mockImplementation(async () =>
     executionOptionsResponse(providers),
   );
@@ -114,6 +115,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -152,6 +155,7 @@ describe("useThreadCreationOptions with hiddenProviders", () => {
       providerId: "client-preference",
     });
     expect(window.localStorage.getItem("bb.promptbox.provider")).toBe("gamma");
+    expect(window.sessionStorage.getItem("bb.promptbox.provider")).toBe("gamma");
   });
 
   it("submits the visible fallback when a hidden project default seeds a new thread", async () => {
