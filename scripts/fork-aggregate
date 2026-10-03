@@ -8,6 +8,7 @@ usage() {
 
 从 .fork/branches 的 base（或 --base）重新生成聚合：依次 merge 清单中的分支到
 .worktrees/aggregate-next 的 aggregate/next 分支。已解决过的冲突由 git rerere 自动复用。
+merge 提交的时间取基线与各分支 tip 中最新的提交时间，因此相同输入总是得到相同的聚合 SHA。
 --promote       成功后把根目录 local/aggregate 移到新结果，并推送到 fork（带 lease）。
 --promote-only  不重新生成，直接提升当前 aggregate/next 分支指向的提交；用于已验证的结果。
 清单读取自 fork-tooling 分支（本地优先，其次 fork/fork-tooling）。
@@ -97,8 +98,16 @@ else
   git worktree add --quiet -B aggregate/next "$wt" "refs/tags/$base"
 fi
 
+refs=()
 for branch in "${branches[@]}"; do
-  ref="$(resolve_ref "$branch")"
+  refs+=("$(resolve_ref "$branch")")
+done
+merge_date="$(git log -1 --format=%cI "refs/tags/$base" "${refs[@]}" | sort | tail -1)"
+export GIT_AUTHOR_DATE="$merge_date" GIT_COMMITTER_DATE="$merge_date"
+
+for i in "${!branches[@]}"; do
+  branch="${branches[$i]}"
+  ref="${refs[$i]}"
   if git -C "$wt" merge --no-autostash --quiet --no-ff --no-edit -m "Merge $branch" "$ref" >/dev/null 2>&1; then
     echo "merged   $branch"
     continue
