@@ -1274,6 +1274,7 @@ describe("environment creation placement", () => {
           group={groupId === "pinned-mixed" ? "pinned" : groupId}
         >
           <PinnedEnvironmentThreadGroupRow
+            showProjectName={false}
             group={group.group}
             collapsedThreadIds={new Set()}
             collapsedEnvironmentIds={new Set()}

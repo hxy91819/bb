@@ -351,7 +351,7 @@ function ThreadRowComponent({
     hasComposerDraft,
   );
   const labelTitle = thread.displayTitle;
-  const projectName = useSidebarProjectName(showProjectName ? projectId : null);
+  const projectName = useSidebarProjectName(showProjectName ? thread.projectId : null);
   const crossProjectName = useSidebarProjectName(crossProjectId);
   const crossProjectLabel =
     crossProjectId === null
