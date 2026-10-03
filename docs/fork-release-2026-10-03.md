@@ -122,3 +122,9 @@
 | `vite` | 8.0.12 | 2 | high, moderate | [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff), [GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3) |
 | `vitest` | 3.2.6, 4.1.1 | 1 | moderate | [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) |
 | `yaml` | 2.6.0, 2.8.2 | 1 | moderate | [GHSA-48c2-rrv3-qjmp](https://github.com/advisories/GHSA-48c2-rrv3-qjmp) |
+
+## 首次四平台发布失败后的补充
+
+首次正式 `fork-package` 已将 36 分支聚合 `c7c7de56d07186920b5060738f32622cfe4e35f6` 提升并推送到 fork，通过 frozen install、102 个 typecheck、104 个测试流程任务和 50 个运行时构建任务，打 tag `fork-v0.45.0-20261003.1`。两个 Linux 平台的打包与解压运行时检查成功，但 macOS arm64 在独立运行时 npm 锁条目同步处失败，未发布完整 Release，也未安装或切换本机服务。
+
+实际失败来自 macOS 的 `/var` 与 `/private/var` 目录别名：npm 的解析路径使用真实目录，package-lock 路径保留别名，按字符串计算 relative 产生了不存在的锁键。`fix/dependency-security` 的 `07c951f71` 对两端目录先 realpath，再计算并统一锁键分隔符；新增目录别名场景保留真实 HTTP、模式展开、硬链接与锁恢复断言。修复后的候选 `e202df9c5` 已完整通过 frozen install、102 个 typecheck 和 104 个测试流程任务，旧 tag 保留记录，后续发布使用新 tag。此补充记录时，修复审查和再次四平台发布仍未完成；不得把本地验证写成 Release 成功。
