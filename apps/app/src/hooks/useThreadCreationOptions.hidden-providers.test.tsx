@@ -148,7 +148,23 @@ describe("useThreadCreationOptions with hiddenProviders", () => {
       result.current.providerOptions.map((option) => option.value),
     ).toEqual(["alpha", "beta"]);
     expect(result.current.selectedProviderId).toBe("alpha");
+    expect(result.current.executionInputSources.providerId).toBe(
+      "client-preference",
+    );
     expect(window.localStorage.getItem("bb.promptbox.provider")).toBe("gamma");
+  });
+
+  it("submits the visible fallback when a hidden project default seeds a new thread", async () => {
+    seedConfig(["gamma"]);
+    const { result } = renderCreationOptions({
+      initialProviderId: "gamma",
+      preferReadyProviderWhenUnset: false,
+    });
+    await waitFor(() => expect(result.current.providerOptions).toHaveLength(2));
+    expect(result.current.selectedProviderId).toBe("alpha");
+    expect(result.current.executionInputSources.providerId).toBe(
+      "client-preference",
+    );
   });
 
   it("keeps an existing thread's hidden provider selected in component-local scope", async () => {
