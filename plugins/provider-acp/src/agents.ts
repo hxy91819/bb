@@ -95,7 +95,7 @@ export function customAcpAgentDefinition(
       ? {}
       : { nativeRootsResolver: shipped.nativeRootsResolver }),
     visibility: "always",
-    fork: agent.fork ?? "none",
+    fork: agent.fork,
     supportsManualCompaction: agent.supportsManualCompaction,
   };
 }

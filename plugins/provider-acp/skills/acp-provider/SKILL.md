@@ -60,8 +60,12 @@ Missing credentials, rejected keys, and collection errors remain unavailable
 states rather than zero usage. Never print API keys when diagnosing setup.
 
 Custom ACP agents are configured with `bb plugin config provider-acp set
-customAgents '[...]'`. To enable forks, set `"fork": "tip"` in the existing
-agent entry; omitted or `"none"` disables them. Preserve other entries when
-updating the list. Use `bb thread fork <thread-id>` or the UI fork action.
-The launched agent must advertise and implement ACP `session/fork`.
+customAgents '[...]'`. Forks follow the agent's ACP `session/fork` capability
+automatically after background discovery on connected hosts; omit `fork`.
+Use `bb thread fork <thread-id>` or the UI fork action. Optional `"fork": "none"`
+disables forks; `"fork": "tip"` declares support, still checked against the
+agent. Preserve other entries when updating the list. Launch changes are
+re-probed on the next host poll; reload the ACP providers plugin after upgrading
+an agent without changing its launch. A supported host enables automatic forks
+in the global provider catalog; the bridge verifies the chosen host at execution.
 ACP supports tip forks only; `--source-seq-end` checkpoint forks are rejected.

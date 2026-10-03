@@ -180,7 +180,8 @@ describe("customAcpAgentDefinition", () => {
       cwd: "/srv/amp",
     });
     expect(definition.supportsManualCompaction).toBe(true);
-    expect(definition.fork).toBe("none");
+    expect(definition.fork).toBeUndefined();
+    expect(acpProviderDeclaration(definition).capabilities.fork).toBe("none");
   });
 });
 

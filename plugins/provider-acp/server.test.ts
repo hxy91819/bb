@@ -1,10 +1,17 @@
 import { getEventListeners } from "node:events";
 import { readFileSync } from "node:fs";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
 import { KNOWN_ACP_AGENTS } from "./src/known-agents.js";
 import acpProvidersPlugin from "./server.js";
+import type { AcpAgentProbe } from "@get-bb/plugin-sdk/provider-bridge/acp";
+import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
+import acpHostEntry from "./src/host.js";
+import { acpHostContract } from "./src/contract.js";
 
 const PLUGIN_ID = "provider-acp";
 
@@ -47,7 +54,11 @@ function registeredIds(
 
 async function loadPlugin(options: {
   customAgents?: string;
-  probe?: (command: string) => unknown;
+  probe?: (
+    command: string,
+    hostId: string,
+    input: z.infer<typeof acpHostContract.probeAgent.input>,
+  ) => unknown;
   hosts?: { id: string; status: string }[];
 }) {
   const host = createFakePluginHost({
@@ -59,10 +70,13 @@ async function loadPlugin(options: {
     ...(options.probe === undefined
       ? {}
       : {
-          experimental_callHostRpc: (call: { input: unknown }) =>
-            options.probe?.(
-              (call.input as { command: string }).command,
-            ) as never,
+          experimental_callHostRpc: (call: {
+            input: unknown;
+            hostId: string;
+          }) => {
+            const input = acpHostContract.probeAgent.input.parse(call.input);
+            return options.probe?.(input.command, call.hostId, input) as never;
+          },
         }),
   });
   host.harness.sdk.stub("hosts.list", () =>
@@ -236,6 +250,341 @@ describe("the ACP plugin's registration bookkeeping", () => {
 });
 
 describe("the ACP plugin's capability probe", () => {
+  it.each([false, true])(
+    "discovers custom forks through a real ACP initialize response without a fork setting (custom cwd=%s)",
+    async (customCwd) => {
+      const fixtureDir = await mkdtemp(path.join(tmpdir(), "bb-auto-fork-"));
+      const cwd = customCwd ? path.join(fixtureDir, "agent") : fixtureDir;
+      await mkdir(cwd, { recursive: true });
+      await writeFile(path.join(cwd, "fork-marker"), "fixture");
+      const hostEntry = experimental_createHostEntryHarness(acpHostEntry, {
+        experimental_paths: { dataDir: fixtureDir, tempDir: fixtureDir },
+      });
+      const args = [
+        "-e",
+        `
+      let input = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => {
+        input += chunk;
+        let end;
+        while ((end = input.indexOf("\\n")) >= 0) {
+          const request = JSON.parse(input.slice(0, end));
+          input = input.slice(end + 1);
+          if (request.method === "initialize") {
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: request.id,
+              result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities:
+                require("node:fs").existsSync("fork-marker") ? { fork: {} } : {} } },
+            }) + "\\n");
+          }
+        }
+      });
+    `,
+      ];
+      const host = await loadPlugin({
+        customAgents: customAgents({
+          id: "fixture",
+          displayName: "Fixture",
+          command: process.execPath,
+          args,
+          ...(customCwd ? { cwd } : {}),
+        }),
+        hosts: [{ id: "host_1", status: "connected" }],
+        probe: (command, _hostId, input) =>
+          command === process.execPath
+            ? hostEntry.experimental_call("probeAgent", input)
+            : { reachable: false, reason: "not installed" },
+      });
+      expect(forkOf(host, "acp-fixture")).toBe("none");
+      const run = host.harness.runService("acp-capability-probe");
+      try {
+        await vi.waitFor(
+          () => expect(forkOf(host, "acp-fixture")).toBe("tip"),
+          {
+            timeout: 5_000,
+          },
+        );
+      } finally {
+        run.controller.abort();
+        await run.done;
+        await hostEntry.experimental_dispose();
+        await rm(fixtureDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
+    { reachable: true, fork: false },
+    { reachable: false, reason: "not installed" },
+  ])(
+    "leaves an automatically detected custom fork unavailable for %j",
+    async (probe) => {
+      const host = await loadPlugin({
+        customAgents: customAgents({
+          id: "amp",
+          displayName: "Amp",
+          command: "amp-acp",
+        }),
+        hosts: [{ id: "host_1", status: "connected" }],
+        probe: () => probe,
+      });
+      const run = host.harness.runService("acp-capability-probe");
+      try {
+        await vi.waitFor(() =>
+          expect(
+            host.harness.experimental_hostRpcCalls.some(
+              (call) =>
+                (call.input as { command: string }).command === "amp-acp",
+            ),
+          ).toBe(true),
+        );
+        expect(forkOf(host, "acp-amp")).toBe("none");
+      } finally {
+        run.controller.abort();
+        await run.done;
+      }
+    },
+  );
+
+  it("honors an explicit none override without probing the custom agent", async () => {
+    const probed: string[] = [];
+    const host = await loadPlugin({
+      customAgents: customAgents({
+        id: "amp",
+        displayName: "Amp",
+        command: "amp-acp",
+        fork: "none",
+      }),
+      hosts: [{ id: "host_1", status: "connected" }],
+      probe: (command) => {
+        probed.push(command);
+        return { reachable: true, fork: true };
+      },
+    });
+    const run = host.harness.runService("acp-capability-probe");
+    try {
+      await vi.waitFor(() => expect(probed.length).toBeGreaterThan(0));
+      expect(probed).not.toContain("amp-acp");
+      expect(forkOf(host, "acp-amp")).toBe("none");
+    } finally {
+      run.controller.abort();
+      await run.done;
+    }
+  });
+
+  it("probes the configured replacement instead of the shipped command", async () => {
+    const probed: string[] = [];
+    const host = await loadPlugin({
+      customAgents: customAgents({
+        id: "opencode",
+        displayName: "Wrapper",
+        command: "opencode-wrapper",
+      }),
+      hosts: [{ id: "host_1", status: "connected" }],
+      probe: (command) => {
+        probed.push(command);
+        return { reachable: true, fork: command === "opencode-wrapper" };
+      },
+    });
+    const run = host.harness.runService("acp-capability-probe");
+    try {
+      await vi.waitFor(() => expect(forkOf(host, "acp-opencode")).toBe("tip"));
+      expect(probed).toContain("opencode-wrapper");
+      expect(probed).not.toContain("opencode");
+    } finally {
+      run.controller.abort();
+      await run.done;
+    }
+  });
+
+  it("discovers new agents and changed commands without a host reconnect, and ignores a stale response", async () => {
+    let resolveOld: (probe: AcpAgentProbe) => void = () => {
+      throw new Error("probe not started");
+    };
+    const oldProbe = new Promise<AcpAgentProbe>((resolve) => {
+      resolveOld = resolve;
+    });
+    const probed: string[] = [];
+    const host = await loadPlugin({
+      customAgents: "[]",
+      hosts: [{ id: "host_1", status: "connected" }],
+      probe: (command) => {
+        probed.push(command);
+        if (command === "old-amp") return oldProbe;
+        return { reachable: true, fork: command === "new-amp" };
+      },
+    });
+    vi.useFakeTimers();
+    const run = host.harness.runService("acp-capability-probe");
+    try {
+      await vi.waitFor(() => expect(probed.length).toBeGreaterThan(0));
+      await host.harness.setSettings({
+        customAgents: customAgents({
+          id: "amp",
+          displayName: "Amp",
+          command: "old-amp",
+        }),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.waitFor(() => expect(probed).toContain("old-amp"));
+      await host.harness.setSettings({
+        customAgents: customAgents({
+          id: "amp",
+          displayName: "Amp",
+          command: "new-amp",
+        }),
+      });
+      resolveOld({ reachable: true, fork: true });
+      await Promise.resolve();
+      expect(forkOf(host, "acp-amp")).toBe("none");
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("tip"));
+      expect(probed).toContain("new-amp");
+      const before = probed.filter((command) => command === "new-amp").length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(probed.filter((command) => command === "new-amp")).toHaveLength(
+        before,
+      );
+      await host.harness.setSettings({ customAgents: "[]" });
+      await vi.waitFor(() =>
+        expect(registeredIds(host)).not.toContain("acp-amp"),
+      );
+    } finally {
+      resolveOld({ reachable: false, reason: "stopped" });
+      run.controller.abort();
+      await run.done;
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["args", "env"])(
+    "refreshes discovery after changing %s on the same command",
+    async (field) => {
+      const agent = { id: "amp", displayName: "Amp", command: "amp-acp" };
+      const host = await loadPlugin({
+        customAgents: customAgents(agent),
+        hosts: [{ id: "host_1", status: "connected" }],
+        probe: (_command, _hostId, input) => ({
+          reachable: true,
+          fork:
+            input.env.FORK_CAPABILITY === "1" ||
+            input.args.includes("--fork-capability"),
+        }),
+      });
+      vi.useFakeTimers();
+      const run = host.harness.runService("acp-capability-probe");
+      try {
+        await vi.waitFor(() =>
+          expect(
+            host.harness.experimental_hostRpcCalls.some(
+              (call) =>
+                (call.input as { command: string }).command === "amp-acp",
+            ),
+          ).toBe(true),
+        );
+        expect(forkOf(host, "acp-amp")).toBe("none");
+        const launch =
+          field === "env"
+            ? { env: { FORK_CAPABILITY: "1" } }
+            : { args: ["--fork-capability"] };
+        await host.harness.setSettings({
+          customAgents: customAgents({ ...agent, ...launch }),
+        });
+        await vi.advanceTimersByTimeAsync(5_000);
+        await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("tip"));
+        await host.harness.setSettings({
+          customAgents: customAgents({ ...agent, ...launch, fork: "none" }),
+        });
+        await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("none"));
+      } finally {
+        run.controller.abort();
+        await run.done;
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("discovers a previously disabled custom agent after it is enabled", async () => {
+    let enabled = false;
+    const probed: string[] = [];
+    const host = await loadPlugin({
+      customAgents: customAgents({
+        id: "amp",
+        displayName: "Amp",
+        command: "amp-acp",
+      }),
+      hosts: [{ id: "host_1", status: "connected" }],
+      probe: (command) => {
+        probed.push(command);
+        return { reachable: true, fork: true };
+      },
+    });
+    host.harness.sdk.stub("providers.catalog", () =>
+      Promise.resolve([{ id: "acp-amp", enabled }]),
+    );
+    vi.useFakeTimers();
+    const run = host.harness.runService("acp-capability-probe");
+    try {
+      await vi.waitFor(() => expect(probed.length).toBeGreaterThan(0));
+      expect(probed).not.toContain("amp-acp");
+      expect(forkOf(host, "acp-amp")).toBe("none");
+      enabled = true;
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("tip"));
+    } finally {
+      run.controller.abort();
+      await run.done;
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([false, true])(
+    "keeps custom forks available when any connected host supports them (supporting host first=%s)",
+    async (supportFirst) => {
+      const hosts = [
+        { id: "host_support", status: "connected" },
+        { id: "host_unsupported", status: "connected" },
+      ];
+      if (!supportFirst) hosts.reverse();
+      const host = await loadPlugin({
+        customAgents: customAgents({
+          id: "amp",
+          displayName: "Amp",
+          command: "amp-acp",
+        }),
+        hosts,
+        probe: (_command, hostId) => ({
+          reachable: true,
+          fork: hostId === "host_support",
+        }),
+      });
+      vi.useFakeTimers();
+      const run = host.harness.runService("acp-capability-probe");
+      try {
+        await vi.waitFor(() =>
+          expect(
+            host.harness.experimental_hostRpcCalls.filter(
+              (call) =>
+                (call.input as { command: string }).command === "amp-acp",
+            ),
+          ).toHaveLength(2),
+        );
+        expect(forkOf(host, "acp-amp")).toBe("tip");
+        for (const available of hosts) {
+          if (available.id === "host_support")
+            available.status = "disconnected";
+        }
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(forkOf(host, "acp-amp")).toBe("none");
+      } finally {
+        run.controller.abort();
+        await run.done;
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("narrows a declared fork the agent does not advertise", async () => {
     const host = await loadPlugin({
       hosts: [{ id: "host_1", status: "connected" }],
@@ -290,7 +639,7 @@ describe("the ACP plugin's capability probe", () => {
     await run.done;
 
     expect(probed).not.toContain("cursor-agent");
-    expect(probed).not.toContain("amp");
+    expect(probed).toContain("amp");
     expect(probed.length).toBeGreaterThan(0);
   });
 
