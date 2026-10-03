@@ -97,7 +97,15 @@ export const timelineConversationTurnRequestStatusValues = [
   "accepted",
   "rejected",
 ] as const;
+export const timelineConversationTurnRequestDeliveryValues = [
+  "steer",
+  "interrupted",
+  "queued",
+] as const;
 export const timelineConversationTurnRequestSchema = z.object({
+  delivery: z
+    .enum(timelineConversationTurnRequestDeliveryValues)
+    .optional(),
   isGrouped: z.boolean(),
   kind: z.enum(timelineConversationTurnRequestKindValues),
   status: z.enum(timelineConversationTurnRequestStatusValues),

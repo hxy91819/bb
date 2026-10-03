@@ -87,6 +87,7 @@ describe.skipIf(!corpusAvailable())(
             contextWindowEvents: [],
             acceptedClientRequestContext: {
               acceptedClientRequestEvents: [],
+              deliveryClientRequestEvents: [],
               rejectedClientRequestEvents: [],
             },
             options: {
