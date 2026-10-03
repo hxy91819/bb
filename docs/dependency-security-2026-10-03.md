@@ -61,6 +61,16 @@ Turbo 在 `scripts/run-resource-isolated --profile package` 下以 `--concurrenc
 
 没有执行认证后的 Modal 云沙箱创建、真实 Expo 推送、外部 Pi 模型调用、独立浏览器手动编辑流程、原生 iOS/Android/EAS 构建、桌面安装包和 macOS/Windows 打包。Pi Bun runtime 用例因本机没有 Bun 而跳过；host daemon 的 macOS fd cleanup 用例因本机是 Linux 而跳过。Cloudflare Connect 的 143 个测试、Web 的 130 个测试、mobile 的 308 个测试通过。桌面完整测试尝试因缺少 Electron 44.3.0 二进制且下载缓慢未完成，约五分钟仅下载 28 MB，独立下载探针超时；终止所属下载/测试进程后退出码为 143，不能算通过。测试分组选项未能避免间接加载 Electron，桌面测试保留为阻塞项；未改变产品代码或用假二进制使检查通过。组件测试与本地协议 smoke 不代表这些未执行的平台/外部服务检查通过。
 
+## 聚合集成验证
+
+候选聚合 `e76398ccae3156b9efdeb9db6927a2aaa052344e` 保留稳定基线和既有 Vite override，修复分支用 merge 纳入；两处 override 文本冲突只合并双方键值，rerere 重建结果一致。候选目录 frozen install 通过，锁文件 hash 在检查过程中保持不变。
+
+- 全仓 typecheck：99 个任务成功，4 个缓存命中。
+- App 与 8 个相关运行依赖包的测试：14 个任务成功，3 个缓存命中；7868 个测试通过、8 个跳过。App 为 5193 通过、6 跳过，其余 8 包为上表的 2675 通过、2 跳过。
+- App / Server / CLI / host daemon / Desktop / Web / Docs / Tasks 源码构建：55 个任务成功，5 个缓存命中。桌面源码构建通过不代表 Electron 原生测试或安装包构建通过。
+- App 跳过项为 sidebar benchmark 2 个、font preload 1 个、prompt paste performance 3 个；另两项为缺少 Bun 的 Pi runtime 与非 macOS 的 pty fd cleanup。
+- 最后的维护补充只改变本报告；最终聚合需要与该候选核对产品源码和锁文件一致后再提升。未执行 runtime 打包或服务 cutover。
+
 ## 审查与源码交付
 
 `$autoreview` 经 `$bb-model-routing` 按 medium 派发，线程 `thr_vsh54m6gmt`（acp-amp / medium / medium）完整审查五个依赖文件的 `git diff desktop-v0.44.0`，结果无 P0/P1 可操作发现。主 Agent 核实目标安装版本及官方接口结果。维护登记、报告和聚合脚本的 `--no-autostash` 改动在 `thr_q6sa7cex3b`（codex / gpt-6.1-sol / medium）审查无发现；随后主 Agent 核查出公告主版本范围记录重复计数，报告按包名/GHSA 去重修正。
