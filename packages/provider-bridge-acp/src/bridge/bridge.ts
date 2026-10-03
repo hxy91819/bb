@@ -2647,6 +2647,10 @@ async function handleRequest(
             }
           : session.construction.envVars;
       const permissionMode = params.options.permissionMode;
+      if (permissionMode === "auto") {
+        sendError(request.id, -32602, "ACP does not support permission mode auto");
+        return;
+      }
       if (
         session.restartAfterCancelError ||
         permissionMode !== session.construction.permissionMode ||
