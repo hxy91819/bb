@@ -115,13 +115,9 @@ function contrastRatio(foreground: OklchColor, background: OklchColor): number {
 }
 
 describe("theme.css neutral ramp", () => {
-  it("keeps coarse mobile sidebar titles stable under hover and open action states", () => {
-    const mobileRules = css.slice(
-      css.indexOf("@media (max-width: 767px) and (pointer: coarse)"),
-    );
-
-    expect(mobileRules).toMatch(
-      /\.bb-sidebar-hover-actions-row:is\(:hover, :has\(:focus-visible\)\)\s+\.bb-sidebar-hover-actions-inset,\s+\.bb-sidebar-hover-actions-row:has\(\s+\.bb-sidebar-hover-actions\[data-sidebar-hover-actions-open="true"\]\s+\)\s+\.bb-sidebar-hover-actions-inset\s*\{\s*padding-right:\s*0;/,
+  it("ignores touch hover without hiding focused or open sidebar actions", () => {
+    expect(css).toMatch(
+      /@media \(hover: none\)\s*\{\s*\.bb-sidebar-hover-actions-row:hover:not\(:has\(:focus-visible\)\):not\(\s*:has\(\s*\.bb-sidebar-hover-actions\[data-sidebar-hover-actions-open="true"\]\s*\)\s*\)\s*\.bb-sidebar-hover-actions-inset\s*\{\s*padding-right:\s*0;/,
     );
   });
 
@@ -357,6 +353,24 @@ describe("theme.css desktop portal hit testing", () => {
     expect(rule).toBeDefined();
     expect(rule).toMatch(/(?:^|\s)app-region:\s*no-drag;/);
     expect(rule).toMatch(/-webkit-app-region:\s*no-drag;/);
+  });
+});
+
+describe("theme.css sidebar hover actions", () => {
+  it("keeps touch hover from shifting rows at any viewport width", () => {
+    const start = css.indexOf("@media (hover: none) {");
+    const end = css.indexOf(
+      "[data-sidebar-sticky-stack] [data-sidebar-sticky-tier=\"label\"]",
+      start,
+    );
+    const noHoverRules = css.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(noHoverRules).toMatch(
+      /\.bb-sidebar-hover-actions-row:hover:not\(:has\(:focus-visible\)\):not\([\s\S]*?data-sidebar-hover-actions-open="true"[\s\S]*?\.bb-sidebar-hover-actions-inset\s*\{\s*padding-right:\s*0;/,
+    );
+    expect(noHoverRules).not.toContain("max-width");
   });
 });
 
