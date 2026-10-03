@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repairs = [
@@ -94,7 +94,9 @@ export async function repairNpmBundledDependencies(
   }
   if (repaired.length === 0) return;
   if (runtimeLock) {
-    const prefix = `${relative(dirname(runtimeLock), npmDirectory)}/node_modules/`;
+    const lockRoot = await realpath(dirname(runtimeLock));
+    const installedNpmRoot = await realpath(npmDirectory);
+    const prefix = `${relative(lockRoot, installedNpmRoot).split(sep).join("/")}/node_modules/`;
     await updateLock(runtimeLock, prefix, repaired);
   }
 }
