@@ -11,6 +11,12 @@ The same data is available through `bb settings usage --machine <id> --json`
 and `bb.sdk.system.usageLimits({ hostId, providerId: "acp-opencode" })`.
 Other OpenCode providers and pay-as-you-go spending are not included.
 
+Custom agents may opt into tip forks with `"fork": "tip"` in their
+`customAgents` entry (default `"none"`). This enables `bb thread fork` and the
+UI fork action; the bridge checks the agent's ACP `session/fork` capability
+before calling it. Checkpoint forks are unsupported. See the Custom ACP Agents
+chapter in `docs/configuration.md` for configuration.
+
 The plugin has no bridge of its own. Every agent it registers runs on the
 published ACP kit, `@get-bb/plugin-sdk/provider-bridge/acp`, which its
 `bb.host` entry re-exports (`src/host.ts`). That is the whole

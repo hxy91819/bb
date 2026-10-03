@@ -669,7 +669,9 @@ selection), `reasoningCli` (launch-time reasoning flags), `nativeReasoning`
 in the composer, as `{"user": [...], "project": [...]}` relative paths; an
 entry is a path or `{"path": ..., "recursive": true, "ancestors": true}` for
 an agent that nests skills or reads them from every ancestor directory),
-`permissionCli` (permission-mode launch flags), `supportsManualCompaction`
+`permissionCli` (permission-mode launch flags), `fork` (`"none"` by default,
+`"tip"` enables `bb thread fork` and the UI fork action; the agent must advertise
+ACP `session/fork`, and checkpoint forks are unsupported), `supportsManualCompaction`
 (only if the agent accepts an explicit compaction request — bb hides
 `/compact` otherwise), and `dialect` (the vendor side channels bb reads for
 the agent: `cursor`, `opencode`, `omp`, or `grok`).

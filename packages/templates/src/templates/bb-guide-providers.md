@@ -209,7 +209,9 @@ the vendor side channels bb reads. Use nativeSkillRoots to add native skills to
 the composer.
 Give it a user list and a project list. User roots resolve from the target host
 home directory. Project roots resolve from the selected workspace. Each root
-must use a relative path without dot segments. Set supportsManualCompaction to true only
+must use a relative path without dot segments. Set fork to "tip" to enable tip forks through `bb thread fork` and the UI;
+it defaults to "none". The adapter must advertise ACP `session/fork`;
+checkpoint forks are unsupported. Set supportsManualCompaction to true only
 if the agent accepts an explicit compaction request; it defaults to false, and
 bb hides the /compact command for agents that do not declare it. The plugin
 re-registers its providers as soon as the setting changes, so no restart or

@@ -12,6 +12,21 @@ import { experimental_acpLaunchSpecSchema } from "@get-bb/plugin-sdk/provider-br
 const reserved = RESERVED_ACP_PROVIDER_IDS;
 
 describe("parseCustomAcpAgents", () => {
+  it("rejects checkpoint fork declarations unsupported by ACP", () => {
+    const parsed = parseCustomAcpAgents({
+      entries: [
+        {
+          id: "amp",
+          displayName: "Amp",
+          command: "amp-acp",
+          fork: "checkpoint",
+        },
+      ],
+      reservedProviderIds: reserved,
+    });
+    expect(parsed.agents).toEqual([]);
+    expect(parsed.problems).toHaveLength(1);
+  });
   it("keeps a well-formed agent and defaults what it left out", () => {
     const parsed = parseCustomAcpAgents({
       entries: [{ id: "amp", displayName: "Amp", command: "amp" }],
@@ -191,7 +206,8 @@ describe("custom agents that report usage", () => {
 
     expect(customAcpAgentDefinition(agent).providerUsage).toBe(true);
     expect(
-      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance?.usage,
+      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance
+        ?.usage,
     ).toBe(true);
   });
 
@@ -205,7 +221,8 @@ describe("custom agents that report usage", () => {
 
     expect(customAcpAgentDefinition(agent).providerUsage).toBeUndefined();
     expect(
-      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance?.usage,
+      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance
+        ?.usage,
     ).toBe(false);
   });
 });

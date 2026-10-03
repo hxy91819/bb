@@ -87,6 +87,20 @@ describe("the ACP plugin's registrations", () => {
     expect(registeredIds(host)).toContain("acp-amp");
   });
 
+  it("updates the custom fork declaration when its setting changes", async () => {
+    const agent = { id: "amp", displayName: "Amp", command: "amp-acp" };
+    const host = await loadPlugin({ customAgents: customAgents(agent) });
+    expect(forkOf(host, "acp-amp")).toBe("none");
+    await host.harness.setSettings({
+      customAgents: customAgents({ ...agent, fork: "tip" }),
+    });
+    await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("tip"));
+    await host.harness.setSettings({
+      customAgents: customAgents({ ...agent, fork: "none" }),
+    });
+    await vi.waitFor(() => expect(forkOf(host, "acp-amp")).toBe("none"));
+  });
+
   it("removes a configured agent the setting no longer lists", async () => {
     const host = await loadPlugin({
       customAgents: customAgents({
