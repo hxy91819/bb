@@ -59,9 +59,9 @@ function MobilePicker({
           reasoningValue="medium"
           reasoningOptions={[{ value: "medium", label: "Medium" }]}
           onReasoningChange={() => {}}
-          fastModeEnabled={false}
-          onFastModeChange={() => {}}
-          showFastModeToggle={false}
+          serviceTierValue="default"
+          serviceTierOptions={[]}
+          onServiceTierChange={() => {}}
           handoff={{
             sourceProviderId: "codex",
             active: true,
