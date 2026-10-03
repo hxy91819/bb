@@ -18,6 +18,7 @@ import {
   sidebarThreadLifecyclesAtom,
   sidebarOrganizationModeAtom,
   sidebarChronologicalSortAtom,
+  sidebarDateGroupingAtom,
   sidebarSortDirectionAtom,
   sidebarGroupThreadsByEnvironmentAtom,
   sidebarEnvironmentGroupingAtom,
@@ -135,6 +136,7 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [lifecycles, setLifecycles] = useAtom(sidebarThreadLifecyclesAtom);
   const [organization, setOrganization] = useAtom(sidebarOrganizationModeAtom);
   const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
+  const [dateGrouping, setDateGrouping] = useAtom(sidebarDateGroupingAtom);
   const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const setEnvironmentGrouping = useSetAtom(sidebarEnvironmentGroupingAtom);
   const groupByEnvironment = useAtomValue(sidebarGroupThreadsByEnvironmentAtom);
@@ -229,6 +231,20 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
             Provider icons
             <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
               {showProviderIcons && <Icon name="Check" className="size-4" />}
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            role="menuitemcheckbox"
+            aria-checked={dateGrouping}
+            disabled={organization !== "chronological" || sort === "alpha"}
+            onSelect={(event) => {
+              event.preventDefault();
+              setDateGrouping(!dateGrouping);
+            }}
+          >
+            Date groups
+            <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
+              {dateGrouping && <Icon name="Check" className="size-4" />}
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
