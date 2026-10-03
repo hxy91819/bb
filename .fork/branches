@@ -41,4 +41,4 @@ feature/browser-remote-editor          reported        https://github.com/get-bb
 fix/acp-skills-prompt-paths            reported        https://github.com/get-bb/bb/issues/4481   # ACP 会话指令按 skill root 分组，根目录只声明一次，不再每行重复绝对路径；已在 #4481 评论链接实现
 feature/sidebar-date-groups            reported        https://github.com/get-bb/bb/issues/4809                   # Custom 模式 Threads 区按日期分组（Today/Yesterday/星期/Previous 30 days/月份），偏好 dateGrouping
 fix/dependency-security                 needs-feedback                                             # 稳定基线运行依赖和工具链漏洞修复，保留主版本
-feature/acp-custom-fork               needs-feedback                                             # ACP customAgents 支持 fork: tip，通过 session/fork 接入 UI 与 CLI
+feature/acp-custom-fork               needs-feedback                                             # ACP customAgents 默认自动发现 session/fork，现有配置无需填写 fork；保留显式 none/tip 覆盖
