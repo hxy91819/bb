@@ -48,13 +48,16 @@ scripts/fork-package --test-filter <pkg>   # 覆盖默认的测试范围，可�
 `fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
 Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
 
-1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。
+1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
 2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
 3. `pnpm install --frozen-lockfile`、全仓 `typecheck --concurrency=1`、`test`。测试默认只跑 `--filter='[<上一次 local/aggregate>]'`，即相对上次聚合有文件改动的包；各分支自己的测试在分支上已经跑过。
 4. `scripts/fork-aggregate --promote-only`：把根目录 `local/aggregate` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
 5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
-7. 打印聚合 SHA、部署检出路径和在 BB 外终端执行 cutover 的命令。
+7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `local/aggregate` 的那些。
+8. 打印聚合 SHA、部署检出路径和在 BB 外终端执行 cutover 的命令。
+
+修一次分支再重跑 `fork-package` 是常态：聚合 SHA 变了就换新检出，没变就复用旧检出和它的依赖。
 
 Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-runtime.mjs` 都默认设置 `TURBO_CACHE_DIR`），
 所以每次只有被改动分支触及的包及其下游会真正重新 typecheck 和构建，其余命中缓存。缓存目录可以随时删除，只影响速度。
