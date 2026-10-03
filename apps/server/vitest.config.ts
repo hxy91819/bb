@@ -5,6 +5,7 @@ import {
 
 export default defineWorkspaceTestConfig({
   test: {
+    maxWorkers: 1,
     silent: "passed-only",
     setupFiles: [
       "test/setup/stored-event-decode-freeze.ts",
