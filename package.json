@@ -7,7 +7,7 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "prepare": "turbo run generate:templates generate:plugin-scaffold generate generate:bb-official-marketplace --filter=@bb/templates --filter=@bb/plugin-build --filter=@bb/server --output-logs=errors-only --summarize=false",
+    "prepare": "node scripts/repair-npm-bundled-dependencies.mjs && turbo run generate:templates generate:plugin-scaffold generate generate:bb-official-marketplace --filter=@bb/templates --filter=@bb/plugin-build --filter=@bb/server --output-logs=errors-only --summarize=false",
     "scripts:prepare": "pnpm exec turbo run build --filter=@bb/scripts --output-logs=none --log-prefix=none --summarize=false",
     "cli:prepare": "pnpm exec turbo run build --filter=@bb/scripts --filter=@bb/cli --output-logs=none --log-prefix=none --summarize=false",
     "ensure-native-modules": "node scripts/ensure-native-modules.mjs",
@@ -57,6 +57,8 @@
     "dotenv-cli": "^11.0.0",
     "esbuild": "^0.28.0",
     "http-proxy-3": "^1.23.2",
+    "npm-bundled-brace-expansion": "npm:brace-expansion@5.0.12",
+    "npm-bundled-undici": "npm:undici@6.28.1",
     "oxfmt": "^0.64.0",
     "oxlint": "^1.79.0",
     "rimraf": "^6.1.0",
