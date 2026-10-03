@@ -4,7 +4,6 @@ import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   appendDaemonEventsInTransaction,
   deriveStoredEventItemFields,
-  getLatestThreadInterruptedReason,
   getThread,
   getLatestThreadSequence,
   listStoredTurnCompletedKeys,
