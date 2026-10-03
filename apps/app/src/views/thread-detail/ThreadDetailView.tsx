@@ -1665,9 +1665,6 @@ function ThreadDetailViewInternal(
         serverOrigin: window.location.origin,
         threadEnvironmentIsLocal,
       });
-  const storageLocation = useThreadStorageLocation(threadId, {
-    enabled: threadStorageRootPath !== null,
-  }).data;
   const storageHostId = threadStorageLocationQuery.data?.hostId;
   const storageOpenContext = storageHostId
     ? isLocalDaemonHost(storageHostId)
