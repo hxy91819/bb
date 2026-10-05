@@ -226,3 +226,66 @@ it("coalesces concurrent reads and makes a forced refresh wait for a fresh colle
     await harness.lifecycle.dispose();
   }
 });
+
+it("isolates bound usage resources with equal labels and refreshes the account identity after another login", async () => {
+  let suffix = "original";
+  const providers = ["codex-personal", "codex-work"].map((id) => ({
+    id,
+    displayName: "Same label",
+    pluginId: "provider-codex",
+  }));
+  const collect = vi.fn(
+    async ({ providerId }: { providerId?: string } = {}) => {
+      if (providerId === undefined) throw new Error("A provider is required");
+      return {
+        [providerId]: {
+          status: "ok" as const,
+          accountKey: `${providerId}:${suffix}`,
+          accountEmail: null,
+          planLabel: "Pro",
+          windows: [],
+        },
+      };
+    },
+  );
+  const { bb, harness } = createFakePluginHost({
+    sdk: {
+      hosts: {
+        list: async () => [
+          makeHostResponse({ id: "host", status: "connected" }),
+        ],
+        get: async () => makeHostResponse({ id: "host", status: "connected" }),
+      },
+      providers: { list: async () => providers },
+      system: { usageLimits: collect },
+    },
+  });
+  try {
+    plugin(bb);
+    const resources = usageResourceListSchema.parse(
+      await harness.behavior.callRpc(usageListMethod, {}),
+    ).resources;
+    expect(resources.map((resource) => resource.providerId)).toEqual([
+      "codex-personal",
+      "codex-work",
+    ]);
+    const read = async (providerId: string, refresh = false) =>
+      usageMeasurementSchema.parse(
+        await harness.behavior.callRpc(usageFetchMethod, {
+          resourceId: JSON.stringify(["host", providerId]),
+          refresh,
+        }),
+      );
+    expect((await read("codex-personal")).accountKey).toBe(
+      "codex-personal:original",
+    );
+    expect((await read("codex-work")).accountKey).toBe("codex-work:original");
+    suffix = "new-login";
+    expect((await read("codex-personal", true)).accountKey).toBe(
+      "codex-personal:new-login",
+    );
+    expect((await read("codex-work")).accountKey).toBe("codex-work:original");
+  } finally {
+    await harness.lifecycle.dispose();
+  }
+});

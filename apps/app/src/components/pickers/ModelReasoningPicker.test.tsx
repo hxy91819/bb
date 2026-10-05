@@ -286,6 +286,59 @@ afterEach(() => {
 describe("ModelReasoningPicker", () => {
   beforeAll(() => ModelReasoningMenu.preload());
 
+  it.each([false, true])(
+    "shows selectable names for multiple providers from one plugin (compact=%s)",
+    async (compact) => {
+      await vi.mocked(sdk.system.executionOptions).withImplementation(
+        async () =>
+          executionOptions({
+            models: [
+              availableModel({
+                value: "bound-model",
+                label: "Bound model",
+                isDefault: true,
+              }),
+            ],
+          }),
+        async () => {
+          const { onSelectedProviderChange } = renderPicker({
+            compact,
+            selectedProviderId: "codex-personal",
+            pickerProviderOptions: [
+              { value: "codex", label: "Codex", pluginId: "provider-codex" },
+              {
+                value: "codex-personal",
+                label: "Codex · Personal",
+                pluginId: "provider-codex",
+              },
+              {
+                value: "codex-work",
+                label: "Codex · Work",
+                pluginId: "provider-codex",
+              },
+            ],
+          });
+          const trigger = screen.getByRole("button", {
+            name: "Provider, model and reasoning",
+          });
+          expect(trigger.textContent).toContain("Codex · Personal");
+          fireEvent.click(trigger);
+          const work = await screen.findByRole("button", {
+            name: "Codex · Work",
+          });
+          expect(work.textContent).toContain("Codex · Work");
+          expect(
+            screen.getByRole("button", { name: "Codex · Personal" })
+              .textContent,
+          ).toContain("Codex · Personal");
+          fireEvent.click(work);
+          expect(onSelectedProviderChange).toHaveBeenCalledWith("codex-work");
+          await act(async () => {});
+        },
+      );
+    },
+  );
+
   it.each([
     ["ArrowRight", "medium", "high"],
     ["ArrowLeft", "high", "medium"],

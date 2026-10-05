@@ -441,6 +441,18 @@ threads as well as new ones, and to the conversation outline and
 `default` removes your entry, and list every provider's current display with
 `bb settings completed-turns`.
 
+### Named Codex homes
+
+The Codex provider plugin's `homeBindings` setting is a JSON list, default `[]`:
+
+```sh
+bb plugin config provider-codex set homeBindings '[{"id":"work","displayName":"Work","codexHome":"~/.codex-work"}]'
+```
+
+Each entry adds `codex-<id>` to the provider picker, CLI and SDK. The local Codex CLI uses that home for sessions, models, login state, usage and native skills. Paths resolve on each execution machine and must be absolute or start with `~/`. File authentication is required for BB's account and quota inspection; existing `auth.json` symlinks work without importing tokens.
+
+Display names may change. A binding ID retains its directory expression after deletion and restart; use a new ID for a different directory. Removal preserves history and Codex data; restoring the same binding permits continuation. Fork and Side chat use the source binding. Fixed bindings bypass Account Pooler, including inherited pool variables. Default `codex` and the Codex AI service keep their existing behavior. See the [Codex plugin overview](../plugins/provider-codex/PLUGIN_OVERVIEW.md) for preparation and examples.
+
 Each provider's own options live on its plugin: Codex memory and native
 subagents under the Codex provider plugin, and Claude Code memory, native
 subagents, and the Workflow tool under the Claude Code provider plugin.
