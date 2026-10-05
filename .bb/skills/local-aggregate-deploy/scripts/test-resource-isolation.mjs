@@ -130,7 +130,7 @@ try {
   assert.notEqual(concurrent.status, 0);
   assert.match(
     `${concurrent.stdout}\n${concurrent.stderr}`,
-    /already exists|already loaded/i,
+    /Another bb-local-verification job is still running|already exists|already loaded/i,
   );
   assert.deepEqual(await waitForExit(holder), { code: 0, signal: null });
 } finally {
