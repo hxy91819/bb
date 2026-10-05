@@ -2857,12 +2857,14 @@ describe("acp bridge", () => {
       cwd: workspaceDir,
       instructionMode: "append",
       options: executionOptions({
+        model: "fake/strong",
         providerOptions: {
           acpLaunchSpec: acpLaunchSpec({
             envVars: {
               FAKE_ACP_FORK_SESSION: "1",
               FAKE_ACP_CHECKPOINT_FORK: "1",
               FAKE_ACP_FORK_LOG: forkLog,
+              FAKE_ACP_MODELS_FIELD: "1",
             },
           }),
         },
@@ -2878,9 +2880,10 @@ describe("acp bridge", () => {
       _meta: { "cursor-acp/checkpoint": "old-checkpoint" },
     });
     sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "continue child", mentions: [] }],
+      input: [{ type: "text", text: "echo-selected-model", mentions: [] }],
     });
     await waitForTurnCompleted();
+    expect(agentMessageTexts()).toContain("selected-model:fake/strong");
     expect(threadEventsOfType("turn/completed").at(-1)).toMatchObject({
       providerCheckpointId: "fake-checkpoint",
     });

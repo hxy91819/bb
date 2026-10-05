@@ -289,6 +289,16 @@ function selectInheritedForkEventRows(
   });
 }
 
+export function readForkExecutionOptions(
+  deps: Pick<AppDeps, "db">,
+  args: { historyEndSequence: number; sourceThreadId: string },
+) {
+  const row = selectInheritedForkEventRows(deps, args).findLast(
+    (row) => row.type === "client/turn/requested",
+  );
+  return row ? parseStoredTurnRequestEvent(row).execution : null;
+}
+
 export function copyForkSourceHistory(
   deps: Pick<AppDeps, "db" | "hub">,
   args: {
