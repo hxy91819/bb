@@ -1751,6 +1751,7 @@ describe("buildThreadTimelineFromEvents", () => {
       null,
       {
         acceptedClientRequestEvents: acceptedContext,
+        deliveryClientRequestEvents: [],
         rejectedClientRequestEvents: [],
       },
     );
@@ -1776,6 +1777,7 @@ describe("buildThreadTimelineFromEvents", () => {
       null,
       {
         acceptedClientRequestEvents: [],
+        deliveryClientRequestEvents: [],
         rejectedClientRequestEvents: rejectedContext,
       },
     );
@@ -1809,6 +1811,7 @@ describe("buildThreadTimelineFromEvents", () => {
       null,
       {
         acceptedClientRequestEvents: acceptedContext,
+        deliveryClientRequestEvents: [],
         rejectedClientRequestEvents: [],
       },
     );
