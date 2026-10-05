@@ -76,6 +76,22 @@ test("cutover rejects a stale working directory and installed-to-source mismatch
   );
 });
 
+for (const dataDirectory of ["/data/bb", "/src/old/data"]) {
+  test(`documented relative source launcher preserves ${dataDirectory}`, () => {
+    const command = `ExecStart=/usr/bin/node --conditions=source --import tsx packages/bb-app/src/bin/bb-app.ts --data-dir ${dataDirectory}\n`;
+    const dropIn = `[Service]\nWorkingDirectory=/src/old\nExecStart=\n${command}`;
+    assert.equal(
+      replacementDropIn({
+        dropIn,
+        oldDirectory: "/src/old",
+        target: "/src/new",
+        release: false,
+      }),
+      `[Service]\nWorkingDirectory=/src/new\nExecStart=\n${command}`,
+    );
+  });
+}
+
 for (const dirty of ["legacy", "tracked", "untracked"]) {
   test(`promote refuses ${dirty} roots without changing files or HEAD`, () => {
     const root = mkdtempSync(join(tmpdir(), "bb-promote-"));
