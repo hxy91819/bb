@@ -150,6 +150,7 @@ export function minimalProviderRegistration(args: {
     extensionKinds: {},
     visibility: "always",
     fallbackModels: [],
+    cacheModels: true,
     envPassthrough: [],
     nativeSkillRoots: EMPTY_PROVIDER_NATIVE_ROOTS,
     nativeCommandRoots: EMPTY_PROVIDER_NATIVE_ROOTS,
