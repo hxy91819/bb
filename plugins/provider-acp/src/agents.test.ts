@@ -12,7 +12,7 @@ import { experimental_acpLaunchSpecSchema } from "@get-bb/plugin-sdk/provider-br
 const reserved = RESERVED_ACP_PROVIDER_IDS;
 
 describe("parseCustomAcpAgents", () => {
-  it("rejects checkpoint fork declarations unsupported by ACP", () => {
+  it("accepts a checkpoint fork declaration", () => {
     const parsed = parseCustomAcpAgents({
       entries: [
         {
@@ -24,8 +24,8 @@ describe("parseCustomAcpAgents", () => {
       ],
       reservedProviderIds: reserved,
     });
-    expect(parsed.agents).toEqual([]);
-    expect(parsed.problems).toHaveLength(1);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.agents[0]?.fork).toBe("checkpoint");
   });
   it("keeps a well-formed agent and defaults what it left out", () => {
     const parsed = parseCustomAcpAgents({
