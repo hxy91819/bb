@@ -279,6 +279,20 @@ export function ModelReasoningPicker({
     (p) => p.value === selectedProviderId,
   );
   const ProviderIcon = selectedProvider?.icon;
+  const providerPluginCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const provider of providerOptions) {
+      if (provider.pluginId !== undefined)
+        counts.set(provider.pluginId, (counts.get(provider.pluginId) ?? 0) + 1);
+    }
+    return counts;
+  }, [providerOptions]);
+  const showNamedProviderTabs = [...providerPluginCounts.values()].some(
+    (count) => count > 1,
+  );
+  const showSelectedProviderLabel =
+    selectedProvider?.pluginId !== undefined &&
+    (providerPluginCounts.get(selectedProvider.pluginId) ?? 0) > 1;
   const selectedModelOption = modelOptions.find((m) => m.value === modelValue);
   const selectedModelLabel = selectedModelOption?.label ?? modelValue;
   const hasSelectedModel = selectedModelLabel.trim().length > 0;
@@ -968,7 +982,9 @@ export function ModelReasoningPicker({
                 triggerModelValueIsDestructive && "text-destructive-text",
               )}
             >
-              {triggerModelBase}
+              {showSelectedProviderLabel
+                ? `${selectedProviderLabel}: ${triggerModelBase}`
+                : triggerModelBase}
             </span>
             {triggerModelTag ? (
               <span className="shrink-0 text-subtle-foreground">
@@ -1036,9 +1052,17 @@ export function ModelReasoningPicker({
         <ResetBrowseStateOnContentUnmount onReset={resetBrowseState} />
         {handoffMode ? <HandoffModeHeader onBack={exitHandoffMode} /> : null}
         {showProviderTabs ? (
-          <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-2.5 pt-1">
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-2.5 pt-1",
+              showNamedProviderTabs && "overflow-x-auto overscroll-x-contain",
+            )}
+          >
             {providerOptions.map((provider) => {
               const TabIcon = provider.icon;
+              const showLabel =
+                provider.pluginId !== undefined &&
+                (providerPluginCounts.get(provider.pluginId) ?? 0) > 1;
               const isActive = provider.value === activeProviderId;
               const isHandoffSource =
                 handoffMode &&
@@ -1048,6 +1072,11 @@ export function ModelReasoningPicker({
                 <button
                   key={provider.value}
                   type="button"
+                  aria-label={
+                    isHandoffSource
+                      ? `${provider.label} (current thread)`
+                      : provider.label
+                  }
                   title={
                     isHandoffSource
                       ? `${provider.label} (current thread)`
@@ -1064,6 +1093,7 @@ export function ModelReasoningPicker({
                     "flex items-center justify-center border-b-2 focus-visible:outline-none",
                     LIST_HOVER_TRANSITION,
                     COARSE_POINTER_PROVIDER_TAB_SIZE_CLASS,
+                    showLabel && "w-auto min-w-max gap-1.5 px-1.5",
                     isActive
                       ? "border-foreground text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
@@ -1071,7 +1101,7 @@ export function ModelReasoningPicker({
                 >
                   {TabIcon ? (
                     <TabIcon className={COARSE_POINTER_ICON_SIZE_CLASS} />
-                  ) : (
+                  ) : showLabel ? null : (
                     <span
                       className={cn(
                         "font-medium",
@@ -1081,6 +1111,11 @@ export function ModelReasoningPicker({
                       {provider.label.charAt(0)}
                     </span>
                   )}
+                  {showLabel ? (
+                    <span className={COARSE_POINTER_TEXT_SM_CLASS}>
+                      {provider.label}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

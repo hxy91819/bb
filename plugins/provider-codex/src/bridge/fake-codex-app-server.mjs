@@ -205,6 +205,11 @@ const scriptPath = scriptPathFromArgs(process.argv.slice(2));
 const script = scriptPath ? JSON.parse(readFileSync(scriptPath, "utf8")) : null;
 const scriptedTurns = script?.turns ?? null;
 const requestLogPath = script?.requestLogPath ?? null;
+if (script?.executionLogPath)
+  appendFileSync(
+    script.executionLogPath,
+    `${JSON.stringify({ pid: process.pid, codexHome: process.env.CODEX_HOME ?? null, sqliteHome: process.env.CODEX_SQLITE_HOME ?? null, poolRouted: Boolean(process.env.CODEX_POOL_AUTH_TOKEN || process.env.CODEX_OPENAI_BASE_URL), apiKeyPresent: Boolean(process.env.OPENAI_API_KEY) })}\n`,
+  );
 const responseLogPath = script?.responseLogPath ?? null;
 const modelListFailOnceMarkerPath = script?.modelListFailOnceMarkerPath ?? null;
 

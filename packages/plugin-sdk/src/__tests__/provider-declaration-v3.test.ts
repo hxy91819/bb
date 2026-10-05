@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { PluginProviderDeclaration } from "../backend-contract.js";
-import { validatePluginProviderDeclaration } from "../internal/host-policy.js";
+import {
+  validatePluginProviderDeclaration,
+  deriveValidatedHostOptions,
+} from "../internal/host-policy.js";
 
 function declaration(
   overrides: Partial<PluginProviderDeclaration> = {},
@@ -26,6 +29,30 @@ function declaration(
 }
 
 describe("provider declaration target-state fields", () => {
+  it("validates host-scoped options and rejects payloads exceeding the bridge limit", () => {
+    const normalized = validatePluginProviderDeclaration(
+      declaration({
+        experimental_deriveHostOptions: ({ hostId, settings }) => ({
+          hostId,
+          home: settings.home ?? "default",
+        }),
+      }),
+    );
+    expect(
+      deriveValidatedHostOptions({
+        declaration: normalized,
+        context: { hostId: "remote", settings: { home: "~/work" } },
+      }),
+    ).toEqual({ hostId: "remote", home: "~/work" });
+    expect(() =>
+      deriveValidatedHostOptions({
+        declaration: declaration({
+          experimental_deriveHostOptions: () => ({ data: "x".repeat(70_000) }),
+        }),
+        context: { hostId: "remote", settings: {} },
+      }),
+    ).toThrow();
+  });
   it("carries strings, option descriptors and extension kinds through validation", () => {
     const goalSchema = z.object({ objective: z.string() });
     const normalized = validatePluginProviderDeclaration(
@@ -303,6 +330,23 @@ describe("provider declaration target-state fields", () => {
     expect(validatePluginProviderDeclaration(declaration()).models.scope).toBe(
       "workspace",
     );
+  });
+
+  it("defaults catalog caching on and validates providers that opt out", () => {
+    expect(
+      validatePluginProviderDeclaration(declaration()).models
+        .experimental_cache,
+    ).toBe(true);
+    expect(
+      validatePluginProviderDeclaration(
+        declaration({ models: { experimental_cache: false } }),
+      ).models.experimental_cache,
+    ).toBe(false);
+    expect(() =>
+      validatePluginProviderDeclaration(
+        declaration({ models: { experimental_cache: "false" as never } }),
+      ),
+    ).toThrow("models.experimental_cache must be a boolean");
   });
 
   it("defaults the finished turn display to collapse and carries flat", () => {

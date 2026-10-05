@@ -51,7 +51,11 @@ describe("provider management", () => {
         expect(getDisabledProviderIds(harness.db)).toEqual(["acp-cursor"]);
         expect(await visibleProviderIds(harness)).not.toContain("acp-cursor");
         expect(() =>
-          requireBridgeLaunchForProviderId(harness.deps, "acp-cursor"),
+          requireBridgeLaunchForProviderId(
+            harness.deps,
+            "acp-cursor",
+            "disabled-host",
+          ),
         ).toThrow('Provider "acp-cursor" is disabled');
         expect(() =>
           resolveCreateThreadExecutionDefaults(harness.deps.providerRegistry, {
