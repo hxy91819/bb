@@ -5,6 +5,7 @@ import type {
 } from "@bb/server-contract";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { attemptDispatch } from "./dispatch-attempt.js";
+import { cancelEnvironmentSwitchContinuation } from "./environment-switch-continuation.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { sendThreadMessage } from "./thread-send.js";
 import { assertThreadHostAcceptsWork } from "./thread-host-admission.js";
@@ -19,6 +20,7 @@ export async function acceptThreadSendRequest(
   args: AcceptThreadSendRequestArgs,
 ): Promise<SendMessageResponse> {
   assertThreadHostAcceptsWork(deps.db, args.thread);
+  let response: SendMessageResponse;
   if (isStandaloneBuiltinClearCommand(args.payload.input)) {
     const environment = await requireThreadCommandEnvironment(deps, {
       thread: args.thread,
@@ -29,26 +31,28 @@ export async function acceptThreadSendRequest(
       thread: args.thread,
       trigger: "user",
     });
-    return { ok: true, delivery: "sent" };
+    response = { ok: true, delivery: "sent" };
+  } else {
+    const outcome = await attemptDispatch(deps, {
+      thread: args.thread,
+      payload: args.payload,
+      source: { kind: "inline" },
+      queuePayload: { kind: "inline" },
+      pluginSubmission: args.payload.pluginSubmission ?? null,
+      origin: null,
+      originPluginId: null,
+      startedOnBehalfOf: null,
+      trigger: "user",
+    });
+    response =
+      outcome.kind === "dispatched"
+        ? { ok: true, delivery: "sent" }
+        : {
+            ok: true,
+            delivery: "queued",
+            queuedMessage: outcome.entry,
+          };
   }
-
-  const outcome = await attemptDispatch(deps, {
-    thread: args.thread,
-    payload: args.payload,
-    source: { kind: "inline" },
-    queuePayload: { kind: "inline" },
-    pluginSubmission: args.payload.pluginSubmission ?? null,
-    origin: null,
-    originPluginId: null,
-    startedOnBehalfOf: null,
-    trigger: "user",
-  });
-  if (outcome.kind === "dispatched") {
-    return { ok: true, delivery: "sent" };
-  }
-  return {
-    ok: true,
-    delivery: "queued",
-    queuedMessage: outcome.entry,
-  };
+  cancelEnvironmentSwitchContinuation(deps, args.thread.id);
+  return response;
 }
