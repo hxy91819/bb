@@ -330,6 +330,12 @@ export interface ExperimentalSidebarNavigationIconProps {
 export interface ExperimentalSidebarNavigationProps {
   isCompactViewport: boolean;
   /**
+   * Host above the shared navigation and thread-list scroll area. Render the
+   * visible New thread item here to keep it reachable while other rows scroll.
+   * Null when the host is unavailable.
+   */
+  experimental_pinnedNavigationHost?: HTMLElement | null;
+  /**
    * Renders bb's bundled Navigation plugin, or nothing while it is disabled.
    * Kept for plugins written before `experimental_useSidebarNavigation`;
    * render items from that hook instead. Scheduled for removal.

@@ -2409,6 +2409,10 @@ items and host actions through `experimental_useSidebarNavigation()`. BB
 retains the drawer, thread list, footer, resize handle, and hidden-body
 shortcut policy. While a provider calls `openCustomize()`, the host renders
 its customize editor in the region and keeps the provider mounted but hidden.
+The optional `experimental_pinnedNavigationHost` is outside the shared
+navigation/thread-list scroll area. The bundled plugin renders the visible
+New thread row there; replacements may do the same without duplicating the
+row. Other navigation rows and the divider scroll with the thread list.
 
 Search activation opens the quick palette. The removed inline sidebar search
 field, query state, combobox, and result list do not form part of this API.
@@ -2437,6 +2441,9 @@ mounted.
 4. **Customize handoff.** Confirm providers accept the host editor replacing
    their region, and that focus returns to the control that opened it from a
    button, a dropdown item, and a context-menu item.
+5. **Pinned host.** Verify replacement plugins can keep New thread reachable
+   without duplicating the action or breaking reorder, visibility, and compact
+   customize behavior when the row moves outside the scroll area.
 
 ## `experimental_useSidebarNavigation`, `experimental_useSidebarNavigationSplit`, `experimental_SidebarNavigationIcon` (`@get-bb/plugin-sdk/app`)
 
