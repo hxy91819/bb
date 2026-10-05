@@ -184,6 +184,7 @@ describe("child outcome reconciliation", () => {
       const fixture = seedFamily(harness, "duplicate");
       for (let index = 0; index < 2; index += 1) {
         await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+          author: null,
           childThread: fixture.child,
           parentThreadId: fixture.parent.id,
           turnStatus: "failed",
