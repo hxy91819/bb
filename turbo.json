@@ -190,6 +190,14 @@
       ],
       "outputs": ["dist/**"]
     },
+    "bb-app#test": {
+      "dependsOn": ["//#ensure-native-modules", "topo"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/vitest*.ts",
+        "$TURBO_ROOT$/scripts/repair-npm-bundled-dependencies*.mjs"
+      ]
+    },
     "bb-app#build": {
       "dependsOn": [
         "@bb/app#build",
