@@ -65,7 +65,10 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
                 ? [event.data.item.text]
                 : [],
             );
-            expect(replies).toHaveLength(1);
+            expect(
+              replies,
+              JSON.stringify({ threadId, baseline, events }),
+            ).toHaveLength(1);
             await waitForThreadStatus(harness.api, threadId, "idle", 10_000);
             return replies[0]?.trim();
           }
