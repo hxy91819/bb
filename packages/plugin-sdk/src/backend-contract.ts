@@ -1352,6 +1352,11 @@ export interface PluginProviderExtensionKindDeclaration {
  * server builds one for every session and turn command it dispatches on a
  * thread of this provider.
  */
+export interface ExperimentalPluginProviderHostOptionsContext {
+  hostId: string;
+  settings: Readonly<Record<string, PluginSettingValue | undefined>>;
+}
+
 export interface PluginProviderOptionsContext {
   threadId: string;
   projectId: string;
@@ -1534,6 +1539,8 @@ export interface PluginProviderDeclaration {
    * be unique and exactly one entry must be the default.
    */
   models?: {
+    /** Set false to query the host on every catalog read, without serving cached identities. Defaults to true. */
+    experimental_cache?: boolean;
     /**
      * Optional: a provider that only declares a catalog `scope` needs no
      * fallback list, and an omitted list reads as no fallbacks at all.
@@ -1604,6 +1611,10 @@ export interface PluginProviderDeclaration {
    * a buggy hook cannot silently run a turn with default knobs. Must be fast:
    * it sits on the turn-submit path.
    */
+  /** Resolve non-secret base options for all operations on the selected host. */
+  experimental_deriveHostOptions?: (
+    context: ExperimentalPluginProviderHostOptionsContext,
+  ) => Readonly<Record<string, JsonValue>>;
   deriveProviderOptions?: (
     context: PluginProviderOptionsContext,
   ) => Readonly<Record<string, JsonValue>>;

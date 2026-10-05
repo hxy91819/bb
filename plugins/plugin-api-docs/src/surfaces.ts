@@ -559,6 +559,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Launch and stop the provider's CLI from that bridge with bb's portable launcher, which runs npm .cmd shims and ends the whole process tree on Windows",
           "Handle provider/installation/status with checkUpdates: false using local executable and version checks only, preserving operation-specific minimum versions; omitted or true keeps full install-source and update discovery for Settings",
           "Contribute validated environment variables to any provider for each session and turn",
+          "Resolve bounded non-secret base options per execution host through experimental_deriveHostOptions. Models, readiness, usage, installation and thread execution share those options; deriveProviderOptions adds thread-specific values. Native-root RPCs receive the same base options through experimental_providerOptions",
+          "Set models.experimental_cache to false when externally managed identity can change between requests; each catalog read awaits a coalesced host probe and cannot serve the previous identity after a failed probe",
         ],
         apiSymbols: [
           "contextSnapshotSchema",
@@ -566,6 +568,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "ContextCategory",
           "ContextEntry",
           "PluginProviderDeclaration",
+          "ExperimentalPluginProviderHostOptionsContext",
+          "ExperimentalNativeRootsResolveInput",
           "AvailableModel",
           "ModelServiceTier",
           "providerInstallationStatusParamsSchema",

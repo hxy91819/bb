@@ -12,6 +12,7 @@ import {
   resolveProviderNativeRootSet,
 } from "../../../src/services/providers/native-roots.js";
 import type { ProviderRegistration } from "../../../src/services/providers/provider-registry.js";
+import { resolveBridgeLaunchForProviderId } from "../../../src/services/system/provider-bridge-launch.js";
 import {
   registerHostRpcResponder,
   type HostRpcHandlerResult,
@@ -116,6 +117,62 @@ function registration(
 }
 
 describe("resolveProviderNativeRootSet", () => {
+  it("shares host options with bridge launch and invalidates roots when those options change", async () => {
+    let home = "/first";
+    await withTestHarness(
+      {
+        extraProviders: [
+          {
+            pluginId: PLUGIN_ID,
+            declaration: declaration("bound", {
+              experimental_resolvesNativeRoots: true,
+              experimental_deriveHostOptions: ({ hostId }) => ({
+                home: `${home}/${hostId}`,
+              }),
+            }),
+          },
+        ],
+      },
+      async (harness) => {
+        harness.deps.pluginHostArtifacts.set(
+          PLUGIN_ID,
+          stubHostArtifact(PLUGIN_ID),
+        );
+        const a = registerResolverHost(harness, "host-a");
+        const b = registerResolverHost(harness, "host-b");
+        const reg = registration(harness, "bound");
+        for (const hostId of ["host-a", "host-b"]) {
+          expect(
+            resolveBridgeLaunchForProviderId(harness.deps, "bound", hostId)
+              ?.providerOptions,
+          ).toEqual({ home: `/first/${hostId}` });
+          await resolveProviderNativeRootSet(harness.deps, {
+            registration: reg,
+            hostId,
+            cwd: "/work",
+            timeoutMs: 4_500,
+          });
+        }
+        expect(a.calls[0]?.command).toMatchObject({
+          input: { experimental_providerOptions: { home: "/first/host-a" } },
+        });
+        expect(b.calls[0]?.command).toMatchObject({
+          input: { experimental_providerOptions: { home: "/first/host-b" } },
+        });
+        home = "/second";
+        await resolveProviderNativeRootSet(harness.deps, {
+          registration: reg,
+          hostId: "host-a",
+          cwd: "/work",
+          timeoutMs: 4_500,
+        });
+        expect(a.calls).toHaveLength(2);
+        expect(a.calls[1]?.command).toMatchObject({
+          input: { experimental_providerOptions: { home: "/second/host-a" } },
+        });
+      },
+    );
+  });
   it("asks the plugin on the workspace host once per (host, cwd) within the TTL", async () => {
     let clock = 1_000;
     await withTestHarness(
