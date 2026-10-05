@@ -1629,6 +1629,7 @@ printf '%s\n' "$*" >>"${join(fixture.dataDir, "launchctl.log")}"
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     writeExecutable(
       join(fixture.binDir, "systemctl"),
       `#!/bin/sh
@@ -1680,6 +1681,7 @@ fi
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     const runtimeDir = join(fixture.homeDir, "runtime");
     mkdirSync(runtimeDir);
     writeExecutable(
@@ -1709,7 +1711,7 @@ fi
 
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(join(fixture.dataDir, "loginctl.log"), "utf8")).toBe(
-      `show-user ${process.getuid?.()} --property=RuntimePath --value\n`,
+      "show-user 1000 --property=RuntimePath --value\n",
     );
     expect(
       readFileSync(join(fixture.dataDir, "systemctl.log"), "utf8"),
@@ -1864,6 +1866,7 @@ fi
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     const serviceDir = join(fixture.homeDir, ".config/systemd/user");
     mkdirSync(serviceDir, { recursive: true });
     const legacyServiceFile = join(
