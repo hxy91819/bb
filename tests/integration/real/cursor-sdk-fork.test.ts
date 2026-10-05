@@ -109,6 +109,7 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
             },
           ],
         });
+        expect(await send(parent.id, "/mode ask")).toBe("Mode set to Ask");
         expect(
           await send(
             parent.id,
@@ -197,6 +198,7 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
               z.object({
                 type: z.string(),
                 modelId: z.string().optional(),
+                modeId: z.string().optional(),
                 sdkSessionId: z.string().optional(),
               }),
             )
@@ -212,6 +214,9 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
           expect(
             metadata.find((record) => record.modelId !== undefined)?.modelId,
           ).toBe("composer-2.5");
+          expect(
+            metadata.find((record) => record.modeId !== undefined)?.modeId,
+          ).toBe("ask");
           const sdkSessionId = metadata.find(
             (record) => record.sdkSessionId !== undefined,
           )?.sdkSessionId;
