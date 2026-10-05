@@ -40,7 +40,7 @@ import {
 import { resolveDeprecatedWorkspaceProvisionType } from "../environments/environment-response.js";
 
 const UPDATE_ENVIRONMENT_DIRECTORY_INSTRUCTIONS =
-  "If the user asks you to move this thread to another checkout, worktree, or directory, make sure the target directory exists, then call `update_environment_directory` with its absolute path. After it succeeds, stop work in the current turn; future turns will run in the updated environment.";
+  "If the user asks you to move this thread to another checkout, worktree, or directory, make sure the target directory exists, then call `update_environment_directory` with its absolute path. Set `continueCurrentTask` to true when unfinished work should resume automatically, or false when switching is the whole task. After it succeeds, stop work in the current turn because the running provider cwd cannot change; BB will resume unfinished work in the updated environment when requested.";
 
 const PLUGIN_INSTRUCTION_CONTRIBUTION_MAX_CHARS = 4096;
 
