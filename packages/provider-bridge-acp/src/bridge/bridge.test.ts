@@ -639,7 +639,7 @@ describe("acp bridge", () => {
     expect((await waitForResponse(initializeId)).result).toMatchObject({
       protocolVersion: PROVIDER_BRIDGE_PROTOCOL_VERSION,
       capabilities: {
-        fork: "tip",
+        fork: "checkpoint",
         approvalEnforcedBy: "runtime",
         threadGoalClear: true,
       },
@@ -3827,7 +3827,47 @@ describe("acp bridge", () => {
     expect(agentMessageTexts()).toContain("selected-model:fake/strong");
   });
 
-  it("rejects a checkpoint fork before session/fork", async () => {
+  it("forwards an advertised checkpoint and records the next completed turn checkpoint", async () => {
+    const forkLog = join(workspaceDir, "checkpoint-fork-accepted.json");
+    const threadId = "thread-checkpoint-accepted";
+    const id = sendRequest("thread/fork", {
+      threadId,
+      cwd: workspaceDir,
+      instructionMode: "append",
+      options: executionOptions({
+        model: "fake/strong",
+        providerOptions: {
+          acpLaunchSpec: acpLaunchSpec({
+            envVars: {
+              FAKE_ACP_FORK_SESSION: "1",
+              FAKE_ACP_CHECKPOINT_FORK: "1",
+              FAKE_ACP_FORK_LOG: forkLog,
+              FAKE_ACP_MODELS_FIELD: "1",
+            },
+          }),
+        },
+      }),
+      sourceProviderThreadId: "source-session",
+      sourceProviderCheckpointId: "old-checkpoint",
+    });
+    const providerThreadId = providerThreadIdOf(await waitForResponse(id));
+    startedProviderThreadIds.push(providerThreadId);
+    bbThreadIdByProviderThreadId.set(providerThreadId, threadId);
+    expect(JSON.parse(readFileSync(forkLog, "utf8"))).toMatchObject({
+      sessionId: "source-session",
+      _meta: { "cursor-acp/checkpoint": "old-checkpoint" },
+    });
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "echo-selected-model", mentions: [] }],
+    });
+    await waitForTurnCompleted();
+    expect(agentMessageTexts()).toContain("selected-model:fake/strong");
+    expect(threadEventsOfType("turn/completed").at(-1)).toMatchObject({
+      providerCheckpointId: "fake-checkpoint",
+    });
+  });
+
+  it("rejects an unadvertised checkpoint fork before session/fork", async () => {
     const forkLog = join(workspaceDir, "checkpoint-fork-params.json");
     const forkId = sendRequest("thread/fork", {
       threadId: "thread-checkpoint-fork",

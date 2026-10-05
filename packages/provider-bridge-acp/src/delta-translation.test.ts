@@ -72,11 +72,18 @@ function turnStartedEvent(): ProviderRuntimeEvent {
   };
 }
 
-function turnCompletedEvent(stopReason: string): ProviderRuntimeEvent {
+function turnCompletedEvent(
+  stopReason: string,
+  providerCheckpointId?: string,
+): ProviderRuntimeEvent {
   return {
     jsonrpc: "2.0",
     method: ACP_TURN_COMPLETED_METHOD,
-    params: { threadId: THREAD_ID, stopReason },
+    params: {
+      threadId: THREAD_ID,
+      stopReason,
+      ...(providerCheckpointId ? { providerCheckpointId } : {}),
+    },
   };
 }
 
@@ -1103,6 +1110,22 @@ describe("acp delta translation (moved from the legacy adapter suite)", () => {
       },
     ]);
   });
+
+  it.each(["end_turn", "cancelled", "refusal"])(
+    "persists a checkpoint only for a completed turn, not %s failures",
+    (stopReason) => {
+      const harness = startedHarness();
+      const completion = harness
+        .translate(turnCompletedEvent(stopReason, "saved-checkpoint"))
+        .find((event) => event.type === "turn/completed");
+      expect(completion).toBeDefined();
+      if (completion?.type !== "turn/completed")
+        throw new Error("Missing completion");
+      expect(completion.providerCheckpointId).toBe(
+        stopReason === "end_turn" ? "saved-checkpoint" : undefined,
+      );
+    },
+  );
 
   it("marks cancelled turns interrupted and refusals failed", () => {
     const harness = startedHarness();
