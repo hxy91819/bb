@@ -335,6 +335,8 @@ describe("plugin update service and routes", () => {
     repo = join(workDir, "repo");
     await mkdir(repo, { recursive: true });
     await git(repo, ["init", "-q", "-b", "main"]);
+    await git(repo, ["config", "commit.gpgsign", "false"]);
+    await git(repo, ["config", "tag.gpgsign", "false"]);
     await git(repo, ["config", "user.email", "test@example.com"]);
     await git(repo, ["config", "user.name", "Test"]);
     await commitPlugin(repo, "1.0.0");
@@ -1275,6 +1277,8 @@ describe("plugin update service and routes", () => {
     const tagged = join(workDir, "tagged");
     await mkdir(tagged, { recursive: true });
     await git(tagged, ["init", "-q", "-b", "main"]);
+    await git(tagged, ["config", "commit.gpgsign", "false"]);
+    await git(tagged, ["config", "tag.gpgsign", "false"]);
     await git(tagged, ["config", "user.email", "test@example.com"]);
     await git(tagged, ["config", "user.name", "Test"]);
     await writeFile(
