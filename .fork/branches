@@ -42,5 +42,7 @@ fix/acp-skills-prompt-paths            reported        https://github.com/get-bb
 feature/sidebar-date-groups            reported        https://github.com/get-bb/bb/issues/4809                   # Custom 模式 Threads 区按日期分组（Today/Yesterday/星期/Previous 30 days/月份），偏好 dateGrouping
 fix/dependency-security                 needs-feedback                                             # 稳定基线运行依赖和工具链漏洞修复，保留主版本
 feature/acp-custom-fork               needs-feedback                                             # ACP customAgents 默认自动发现 session/fork，现有配置无需填写 fork；保留显式 none/tip 覆盖
+feature/custom-acp-fork               needs-feedback                                             # 叠在 feature/acp-custom-fork 上；customAgents 可显式选择 tip fork
+feature/custom-acp-checkpoint-fork    needs-feedback                                             # 叠在 feature/custom-acp-fork 上；已完成回合 checkpoint 上独立 Fork，继承当时执行设置
 feature/codex-home-bindings            needs-feedback https://github.com/hxy91819/bb/issues/25     # 具名 CODEX_HOME 共享原生 Codex bridge，绕过 Pool，不复制或导入凭证；待上游反馈
 fix/git-fixture-isolation              needs-feedback                                             # Git 签名与 Linux user-unit fixture 不继承宿主配置和 root 身份
