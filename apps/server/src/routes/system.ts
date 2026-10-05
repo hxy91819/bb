@@ -307,6 +307,7 @@ export function registerSystemRoutes(
       ...settings,
       allowFastServiceTier:
         settings.allowFastServiceTier ?? current.allowFastServiceTier,
+      hiddenProviders: settings.hiddenProviders ?? current.hiddenProviders,
       telemetryEnabled: settings.telemetryEnabled ?? current.telemetryEnabled,
       confirmThreadArchive:
         settings.confirmThreadArchive ?? current.confirmThreadArchive,
