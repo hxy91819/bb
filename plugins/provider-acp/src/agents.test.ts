@@ -27,7 +27,6 @@ describe("parseCustomAcpAgents", () => {
         args: [],
         env: {},
         supportsManualCompaction: false,
-        fork: "none",
       },
     ]);
   });
@@ -365,7 +364,6 @@ describe("acpProviderDeclaration", () => {
         args: [],
         env: {},
         supportsManualCompaction: false,
-        fork: "none",
       }),
     );
 
