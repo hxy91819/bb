@@ -35,6 +35,12 @@ OpenCode ACP supports the core `bb thread compact` command; Cursor ACP does not
 expose compatible compaction. Check the actual agent's capabilities before
 attempting provider-specific recovery.
 
+For a custom ACP agent that implements `session/fork`, set `"fork": "tip"` in
+its `customAgents` entry using `bb plugin config provider-acp set customAgents`.
+The default is `"none"`; `"tip"` enables end-of-session forks only, and the
+bridge requires the agent to advertise fork support. Check that the adapter
+copies conversation state into an independent session, not just a new empty ID.
+
 OpenCode Go subscription usage is available in Provider usage when the selected
 machine has OpenCode installed and a Go subscription. Sign in to Go in OpenCode
 on that machine, then refresh its OpenCode tab. Verify with

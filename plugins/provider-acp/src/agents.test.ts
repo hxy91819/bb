@@ -27,6 +27,7 @@ describe("parseCustomAcpAgents", () => {
         args: [],
         env: {},
         supportsManualCompaction: false,
+        fork: "none",
       },
     ]);
   });
@@ -137,6 +138,39 @@ describe("parseCustomAcpAgents", () => {
 });
 
 describe("customAcpAgentDefinition", () => {
+  it("enables native tip forks only when the custom agent opts in", () => {
+    const parsed = parseCustomAcpAgents({
+      entries: [
+        {
+          id: "cursor-sdk",
+          displayName: "Cursor SDK",
+          command: "cursor-acp",
+          fork: "tip",
+        },
+      ],
+      reservedProviderIds: reserved,
+    });
+    expect(parsed.problems).toEqual([]);
+    const agent = parsed.agents[0];
+    if (!agent) throw new Error("expected the agent to parse");
+    expect(
+      acpProviderDeclaration(customAcpAgentDefinition(agent)).capabilities.fork,
+    ).toBe("tip");
+    expect(
+      parseCustomAcpAgents({
+        entries: [
+          {
+            id: "cursor-sdk",
+            displayName: "Cursor SDK",
+            command: "cursor-acp",
+            fork: "checkpoint",
+          },
+        ],
+        reservedProviderIds: reserved,
+      }).agents,
+    ).toEqual([]);
+  });
+
   it("carries the launch spec and drops a model CLI with nothing to list", () => {
     const [agent] = parseCustomAcpAgents({
       entries: [
@@ -191,7 +225,8 @@ describe("custom agents that report usage", () => {
 
     expect(customAcpAgentDefinition(agent).providerUsage).toBe(true);
     expect(
-      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance?.usage,
+      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance
+        ?.usage,
     ).toBe(true);
   });
 
@@ -205,7 +240,8 @@ describe("custom agents that report usage", () => {
 
     expect(customAcpAgentDefinition(agent).providerUsage).toBeUndefined();
     expect(
-      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance?.usage,
+      acpProviderDeclaration(customAcpAgentDefinition(agent)).maintenance
+        ?.usage,
     ).toBe(false);
   });
 });
@@ -329,6 +365,7 @@ describe("acpProviderDeclaration", () => {
         args: [],
         env: {},
         supportsManualCompaction: false,
+        fork: "none",
       }),
     );
 

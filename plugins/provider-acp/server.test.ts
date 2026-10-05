@@ -74,6 +74,23 @@ async function loadPlugin(options: {
 }
 
 describe("the ACP plugin's registrations", () => {
+  it("updates a custom provider's tip fork declaration when settings change", async () => {
+    const entry = {
+      id: "cursor-sdk",
+      displayName: "Cursor SDK",
+      command: "cursor-acp",
+    };
+    const host = await loadPlugin({ customAgents: customAgents(entry) });
+    expect(forkOf(host, "acp-cursor-sdk")).toBe("none");
+    await host.harness.setSettings({
+      customAgents: customAgents({ ...entry, fork: "tip" }),
+    });
+    await vi.waitFor(() => expect(forkOf(host, "acp-cursor-sdk")).toBe("tip"));
+    expect(forkOf(host, "acp-cursor")).toBe("none");
+    await host.harness.setSettings({ customAgents: customAgents(entry) });
+    await vi.waitFor(() => expect(forkOf(host, "acp-cursor-sdk")).toBe("none"));
+  });
+
   it("registers every shipped agent, and a configured one beside them", async () => {
     const host = await loadPlugin({
       customAgents: customAgents({

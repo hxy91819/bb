@@ -671,8 +671,13 @@ entry is a path or `{"path": ..., "recursive": true, "ancestors": true}` for
 an agent that nests skills or reads them from every ancestor directory),
 `permissionCli` (permission-mode launch flags), `supportsManualCompaction`
 (only if the agent accepts an explicit compaction request — bb hides
-`/compact` otherwise), and `dialect` (the vendor side channels bb reads for
+`/compact` otherwise), `fork` (`"none"` by default; set `"tip"` only when the
+agent implements ACP `session/fork` with independent inherited conversation
+state), and `dialect` (the vendor side channels bb reads for
 the agent: `cursor`, `opencode`, `omp`, or `grok`).
+
+Custom ACP forks support the end of the session only, not earlier checkpoints.
+The bridge also checks the agent's advertised fork capability before forking.
 
 The change applies immediately: the plugin re-registers its providers when the
 setting changes, with no restart and no `config refresh`.

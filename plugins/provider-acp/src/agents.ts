@@ -53,6 +53,7 @@ export const customAcpAgentSchema = z
     nativeSkillRoots: launchSpecFields.nativeSkillRoots,
     permissionCli: launchSpecFields.permissionCli,
     supportsManualCompaction: z.boolean().default(false),
+    fork: z.enum(["none", "tip"]).default("none"),
     providerUsage: z.boolean().optional(),
   })
   .strict();
@@ -94,7 +95,7 @@ export function customAcpAgentDefinition(
       ? {}
       : { nativeRootsResolver: shipped.nativeRootsResolver }),
     visibility: "always",
-    fork: "none",
+    fork: agent.fork,
     supportsManualCompaction: agent.supportsManualCompaction,
   };
 }
