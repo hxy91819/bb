@@ -1,6 +1,14 @@
 #!/usr/bin/env node
+import {
+  codexHomeLoginCommand,
+  codexExecutionEnv,
+  resolveCodexExecution,
+  type CodexExecutionContext,
+} from "../execution-context.js";
 
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
   isStandaloneBuiltinCompactCommand,
@@ -147,23 +155,33 @@ const codexBridgeCommandSchema = z.discriminatedUnion("method", [
   }),
   z.object({
     method: z.literal("thread/discard"),
-    params: threadDiscardParamsSchema,
+    params: threadDiscardParamsSchema.extend({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("thread/name/set"),
-    params: threadNameSetParamsSchema,
+    params: threadNameSetParamsSchema.extend({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("thread/archive"),
-    params: threadArchiveParamsSchema,
+    params: threadArchiveParamsSchema.extend({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("thread/unarchive"),
-    params: threadUnarchiveParamsSchema,
+    params: threadUnarchiveParamsSchema.extend({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("thread/goal/clear"),
-    params: threadGoalClearParamsSchema,
+    params: threadGoalClearParamsSchema.extend({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("skills/configure"),
@@ -388,10 +406,11 @@ export function resolveAppServerLaunch(env: NodeJS.ProcessEnv = process.env): {
 
 function appServerLaunchEnv(
   envVars: Readonly<Record<string, string>> | undefined,
+  execution: CodexExecutionContext = resolveCodexExecution({}),
 ): NodeJS.ProcessEnv {
   const poolBaseUrl = envVars?.[CODEX_POOL_BASE_URL_ENV];
   const poolAuthToken = envVars?.[CODEX_POOL_AUTH_TOKEN_ENV];
-  return {
+  return codexExecutionEnv(execution, {
     ...process.env,
     ...(poolBaseUrl === undefined
       ? {}
@@ -399,15 +418,16 @@ function appServerLaunchEnv(
     ...(poolAuthToken === undefined
       ? {}
       : { [CODEX_POOL_AUTH_TOKEN_ENV]: poolAuthToken }),
-  };
+  });
 }
 
 function buildAppServerEnv(
   envVars: Readonly<Record<string, string>> | undefined,
+  execution: CodexExecutionContext = resolveCodexExecution({}),
 ): NodeJS.ProcessEnv {
   return withoutBridgeRuntimeEnv(
     sanitizeInheritedChildProcessEnv({
-      env: appServerLaunchEnv(envVars),
+      env: appServerLaunchEnv(envVars, execution),
     }),
   );
 }
@@ -492,8 +512,14 @@ interface CodexBridgeSession {
 
 const sessionsByBbThreadId = new Map<string, CodexBridgeSession>();
 const maintenanceConnections = new Set<CodexAppServerConnection>();
-let modelListConnection: CodexAppServerConnection | null = null;
-let modelListConnectionPromise: Promise<CodexAppServerConnection> | null = null;
+const modelListConnections = new Map<
+  string,
+  {
+    connection: CodexAppServerConnection | null;
+    promise: Promise<CodexAppServerConnection> | null;
+    credentialFingerprint: string | null;
+  }
+>();
 let sessionSerialCounter = 0;
 let configuredSkillExtraRoots: string[] | null = null;
 
@@ -560,6 +586,7 @@ function decodeCodexOptions(
   return {
     sessionOptions: {
       ...options,
+      codexExecution: resolveCodexExecution(options.providerOptions),
       ...(decoded.memoryEnabled !== undefined
         ? { memoryEnabled: decoded.memoryEnabled }
         : {}),
@@ -584,6 +611,7 @@ function constructionSignature(
   const poolBaseUrl = sessionOptions.envVars?.[CODEX_POOL_BASE_URL_ENV];
   const poolToken = sessionOptions.envVars?.[CODEX_POOL_AUTH_TOKEN_ENV];
   return JSON.stringify({
+    codexExecution: sessionOptions.codexExecution,
     cwd,
     reasoningLevel: sessionOptions.reasoningLevel ?? null,
     memoryEnabled: sessionOptions.memoryEnabled ?? null,
@@ -977,6 +1005,7 @@ function handleChildExit(
 
 function spawnChildConnection(callbacks: {
   envVars?: Readonly<Record<string, string>>;
+  execution?: CodexExecutionContext;
   recordThreadId: string | null;
   onNotification: (method: string, params: unknown) => void;
   onRequest: (
@@ -986,9 +1015,15 @@ function spawnChildConnection(callbacks: {
   ) => void;
   onExit: (info: CodexAppServerExitInfo) => void;
 }): CodexAppServerConnection {
-  const env = buildAppServerEnv(callbacks.envVars);
-  const launch = resolveAppServerLaunch(appServerLaunchEnv(callbacks.envVars));
-  const { envVars: _envVars, ...connectionCallbacks } = callbacks;
+  const env = buildAppServerEnv(callbacks.envVars, callbacks.execution);
+  const launch = resolveAppServerLaunch(
+    appServerLaunchEnv(callbacks.envVars, callbacks.execution),
+  );
+  const {
+    envVars: _envVars,
+    execution: _execution,
+    ...connectionCallbacks
+  } = callbacks;
   return createCodexAppServerConnection({
     command: launch.command,
     args: launch.args,
@@ -1199,7 +1234,10 @@ async function constructThreadSession(
         : { presentation: tool.presentation }),
     })),
   );
-  const launchEnv = appServerLaunchEnv(decoded.sessionOptions.envVars);
+  const launchEnv = appServerLaunchEnv(
+    decoded.sessionOptions.envVars,
+    decoded.sessionOptions.codexExecution,
+  );
   const session: CodexBridgeSession = {
     bbThreadId: args.threadId,
     codexThreadId:
@@ -1265,6 +1303,7 @@ async function constructThreadSession(
   let notifications = Promise.resolve();
   const connection = spawnChildConnection({
     envVars: decoded.sessionOptions.envVars,
+    execution: decoded.sessionOptions.codexExecution,
     recordThreadId: args.threadId,
     onNotification: (method, params) => {
       notifications = notifications
@@ -1489,8 +1528,10 @@ async function rebuildThreadSession(
 
 async function withMaintenanceChild<T>(
   fn: (connection: CodexAppServerConnection) => Promise<T>,
+  execution: CodexExecutionContext,
 ): Promise<T> {
   const connection = spawnChildConnection({
+    execution,
     recordThreadId: null,
     onNotification: () => {},
     onRequest: (_method, _params, responder) => {
@@ -1511,16 +1552,48 @@ async function withMaintenanceChild<T>(
   }
 }
 
-async function getModelListConnection(): Promise<CodexAppServerConnection> {
-  if (modelListConnection !== null && !modelListConnection.exited) {
-    return modelListConnection;
+async function getModelListConnection(
+  execution: CodexExecutionContext,
+): Promise<CodexAppServerConnection> {
+  const key = JSON.stringify(execution);
+  let credentialFingerprint: string | null = null;
+  if (execution.codexHome !== null) {
+    try {
+      credentialFingerprint = createHash("sha256")
+        .update(await readFile(path.join(execution.codexHome, "auth.json")))
+        .digest("hex");
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      )
+        throw error;
+      credentialFingerprint = "missing";
+    }
   }
-  if (modelListConnectionPromise !== null) {
-    return modelListConnectionPromise;
+  let cached = modelListConnections.get(key);
+  if (
+    cached === undefined ||
+    cached.credentialFingerprint !== credentialFingerprint
+  ) {
+    if (cached?.connection) retireModelListConnection(cached.connection);
+    if (cached?.promise)
+      void cached.promise
+        .then((connection) => connection.kill())
+        .catch(() => undefined);
+    cached = { connection: null, promise: null, credentialFingerprint };
+    modelListConnections.set(key, cached);
+  }
+  const entry = cached;
+  if (entry.connection !== null && !entry.connection.exited) {
+    return entry.connection;
+  }
+  if (entry.promise !== null) {
+    return entry.promise;
   }
 
   const connectionPromise = (async () => {
     const connection = spawnChildConnection({
+      execution,
       recordThreadId: null,
       onNotification: () => {},
       onRequest: (_method, _params, responder) => {
@@ -1531,15 +1604,15 @@ async function getModelListConnection(): Promise<CodexAppServerConnection> {
       },
       onExit: () => {
         maintenanceConnections.delete(connection);
-        if (modelListConnection === connection) {
-          modelListConnection = null;
+        if (entry.connection === connection) {
+          entry.connection = null;
         }
       },
     });
     maintenanceConnections.add(connection);
     try {
       await initializeChild(connection);
-      modelListConnection = connection;
+      entry.connection = connection;
       return connection;
     } catch (error) {
       maintenanceConnections.delete(connection);
@@ -1547,20 +1620,20 @@ async function getModelListConnection(): Promise<CodexAppServerConnection> {
       throw error;
     }
   })();
-  modelListConnectionPromise = connectionPromise;
+  entry.promise = connectionPromise;
   try {
     return await connectionPromise;
   } finally {
-    if (modelListConnectionPromise === connectionPromise) {
-      modelListConnectionPromise = null;
+    if (entry.promise === connectionPromise) {
+      entry.promise = null;
     }
   }
 }
 
 function retireModelListConnection(connection: CodexAppServerConnection): void {
   maintenanceConnections.delete(connection);
-  if (modelListConnection === connection) {
-    modelListConnection = null;
+  for (const entry of modelListConnections.values()) {
+    if (entry.connection === connection) entry.connection = null;
   }
   connection.kill();
 }
@@ -1568,6 +1641,7 @@ function retireModelListConnection(connection: CodexAppServerConnection): void {
 async function withChildForThread<T>(
   bbThreadId: string,
   fn: (connection: CodexAppServerConnection) => Promise<T>,
+  execution: CodexExecutionContext,
 ): Promise<T> {
   const session = sessionsByBbThreadId.get(bbThreadId);
   if (
@@ -1578,7 +1652,7 @@ async function withChildForThread<T>(
   ) {
     return fn(session.connection);
   }
-  return withMaintenanceChild(fn);
+  return withMaintenanceChild(fn, execution);
 }
 
 type ThreadStartParamsShape = z.infer<typeof threadStartParamsSchema>;
@@ -1604,10 +1678,13 @@ function handleInitialize(id: string | number): void {
   sendResult(id, result);
 }
 
-async function handleModelList(id: string | number): Promise<void> {
+async function handleModelList(
+  id: string | number,
+  execution: CodexExecutionContext,
+): Promise<void> {
   let connection: CodexAppServerConnection | null = null;
   try {
-    connection = await getModelListConnection();
+    connection = await getModelListConnection(execution);
     const result = await connection.request({
       method: "model/list",
       params: {},
@@ -2303,6 +2380,7 @@ function waitForCodexTurnSettlement(
 interface ThreadRefParamsShape {
   threadId: string;
   providerThreadId: string;
+  providerOptions?: Record<string, unknown>;
 }
 
 async function handleThreadMaintenance(
@@ -2324,8 +2402,10 @@ async function handleThreadMaintenance(
     sendResult(id, { ok: true });
   };
   try {
-    await withChildForThread(params.threadId, (connection) =>
-      sendMaintenanceRequestWithRetries(connection, request),
+    await withChildForThread(
+      params.threadId,
+      (connection) => sendMaintenanceRequestWithRetries(connection, request),
+      resolveCodexExecution(params.providerOptions),
     );
     await settle();
   } catch (error) {
@@ -2424,13 +2504,34 @@ async function handleRequest(
       handleInitialize(request.id);
       break;
     case "model/list":
-      await handleModelList(request.id);
+      await handleModelList(
+        request.id,
+        resolveCodexExecution(request.params.providerOptions),
+      );
       break;
     case "provider/health":
-      sendResult(request.id, await getCodexProviderHealth());
+      {
+        const execution = resolveCodexExecution(request.params.providerOptions);
+        const result = await getCodexProviderHealth(
+          codexExecutionEnv(execution, process.env),
+        );
+        if (result.supported && execution.codexHome !== null)
+          result.health.loginCommand = codexHomeLoginCommand(
+            execution.codexHome,
+          );
+        sendResult(request.id, result);
+      }
       break;
     case "provider/usage":
-      sendResult(request.id, await getCodexProviderUsage());
+      sendResult(
+        request.id,
+        await getCodexProviderUsage(
+          codexExecutionEnv(
+            resolveCodexExecution(request.params.providerOptions),
+            process.env,
+          ),
+        ),
+      );
       break;
     case "provider/installation/status":
       sendResult(
@@ -2579,8 +2680,7 @@ function killAllChildren(): void {
     session.connection = null;
   }
   sessionsByBbThreadId.clear();
-  modelListConnection = null;
-  modelListConnectionPromise = null;
+  modelListConnections.clear();
   for (const connection of maintenanceConnections) {
     connection.kill();
   }

@@ -382,6 +382,7 @@ export function createBridgeProtocolAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
+              ...cwdAndStaticProviderOptions(undefined),
             },
           };
         case "thread/name/set":
@@ -391,6 +392,7 @@ export function createBridgeProtocolAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
+              ...cwdAndStaticProviderOptions(undefined),
               title: command.title,
             },
           });
@@ -401,6 +403,7 @@ export function createBridgeProtocolAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
+              ...cwdAndStaticProviderOptions(undefined),
             },
           });
         case "thread/unarchive":
@@ -410,6 +413,7 @@ export function createBridgeProtocolAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
+              ...cwdAndStaticProviderOptions(undefined),
             },
           });
         case "thread/goal/clear":
@@ -419,6 +423,7 @@ export function createBridgeProtocolAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
+              ...cwdAndStaticProviderOptions(undefined),
             },
           });
       }

@@ -2976,3 +2976,14 @@ directories, linked worktrees, and submodules. Core callers: the setup guide
 Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
+
+
+## Host-scoped provider options
+
+`PluginProviderDeclaration.models.experimental_cache` defaults to `true`. Setting it to `false` makes each server catalog read await a host probe, coalesces concurrent requests, and prevents serving a previous identity's catalog on failure. This is intended for externally managed credentials; bridge-local connections may still be reused while their credentials are unchanged. Stabilization requires API-level identity-change, concurrent-probe, failure and recovery coverage while default providers retain the existing cache behavior.
+
+`PluginProviderDeclaration.experimental_deriveHostOptions(context)` resolves a bounded plain JSON object synchronously from the target `hostId` and the plugin's current non-secret settings. It uses the same 64 KiB validation as bridge options. The server merges the result over static bridge options for model discovery, health, usage, installation, thread execution and native-root resolution; thread-specific `deriveProviderOptions` values override base values during execution. Failures identify the provider and do not fall back to default configuration. Core treats provider fields as opaque JSON.
+
+`ExperimentalPluginProviderHostOptionsContext` defines that input. `ExperimentalNativeRootsResolveInput.experimental_providerOptions` carries the same validated base options to host root resolvers; it is omitted for declarations without the new hook, preserving existing installed resolvers. Native-root cache keys include the options. Host daemon protocol 234 advertises the changed execution configuration semantics on the desktop-v0.46.0 baseline (protocol 233).
+
+Stabilization requires independent-host and independent-provider discovery, execution and cache-isolation proof; invalid and throwing hooks must fail rather than silently switch identity. Preserve compatibility with declarations and installed root resolvers that do not opt in, and audit payload limits and settings changes before removing the experimental names.
