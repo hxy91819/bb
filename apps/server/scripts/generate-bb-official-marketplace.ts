@@ -68,6 +68,10 @@ export interface PluginGitDates {
   updatedAt: string;
 }
 
+function normalizeGitCommitDate(date: string): string {
+  return date.endsWith("+00:00") ? `${date.slice(0, -6)}Z` : date;
+}
+
 export function parseBbOfficialCatalogFields(
   input: unknown,
   plugins: readonly BundledPluginIdentity[],
@@ -146,14 +150,15 @@ export async function readPluginGitDates(args: {
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
     if (date === undefined) continue;
+    const normalizedDate = normalizeGitCommitDate(date);
     for (const plugin of args.plugins) {
       if (!files.some((file) => file.startsWith(`plugins/${plugin.name}/`))) {
         continue;
       }
       const current = dates.get(plugin.name);
       dates.set(plugin.name, {
-        publishedAt: date,
-        updatedAt: current?.updatedAt ?? date,
+        publishedAt: normalizedDate,
+        updatedAt: current?.updatedAt ?? normalizedDate,
       });
     }
   }
