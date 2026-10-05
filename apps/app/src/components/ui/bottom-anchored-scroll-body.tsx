@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 import { useStore } from "jotai";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
-import { PAGE_SHELL_CONTENT_STYLE } from "./page-shell-content-style.js";
 import { supportsScrollAnchoring } from "@/lib/scroll-anchoring-support";
 import { PAGE_SCROLL_TO_TOP_EVENT } from "@/lib/page-scroll-to-top";
 import {
@@ -975,7 +974,6 @@ export function BottomAnchoredScrollBody({
                     supportsScrollAnchoring() &&
                     "scroll-bottom-anchor-content",
                 )}
-                style={PAGE_SHELL_CONTENT_STYLE}
               >
                 {children}
               </div>
