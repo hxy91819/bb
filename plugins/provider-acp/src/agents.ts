@@ -64,6 +64,7 @@ export const customAcpAgentSchema = z
     permissionCli: launchSpecFields.permissionCli,
     fork: z.enum(["none", "tip", "checkpoint"]).optional(),
     supportsManualCompaction: z.boolean().default(false),
+    fork: z.enum(["none", "tip"]).default("none"),
     providerUsage: z.boolean().optional(),
   })
   .strict();
