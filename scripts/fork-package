@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+用法：scripts/fork-package [--base <tag>] [--test-filter <turbo filter>]... [--verify-only] [--no-release] [--no-build]
+
+一条命令完成聚合打包：聚合 → 在 .worktrees/aggregate-deploy-<sha> 里安装、typecheck、测试 →
+提升 local/aggregate → 运行时构建与原生模块检查 → 打 fork-v* tag 并推送 → 清理被取代的候选 →
+打印 cutover 提示。全程串行，每一步都在单个 run-resource-isolated scope 里执行；任何一步失败就停在原地。
+聚合 SHA 由输入决定，分支没变时重跑会复用同一个 aggregate-deploy-<sha> 检出及其依赖。
+清理只删除干净、既不是本次结果、也不是服务运行目录或上一次 local/aggregate 的 aggregate-deploy-* 检出。
+
+--test-filter  传给 turbo run test 的 --filter，可重复；默认 "[<上一次 local/aggregate>]"，
+               即只测相对上次聚合有文件改动的包。
+--verify-only  测试通过后停止：不提升、不构建、不打 tag，保留 .worktrees/aggregate-deploy-<sha> 供检查。
+--no-release   不打发布 tag。
+--no-build     提升后停止，不做运行时构建。
+USAGE
+}
+
+base_override=""
+release=1
+build=1
+verify_only=0
+test_filters=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base) base_override="${2:?--base 需要 tag}"; shift 2 ;;
+    --test-filter) test_filters+=("${2:?--test-filter 需要值}"); shift 2 ;;
+    --verify-only) verify_only=1; shift ;;
+    --no-release) release=0; shift ;;
+    --no-build) build=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(git rev-parse --path-format=absolute --git-common-dir)"
+root="$(dirname "$root")"
+cd "$root"
+
+step() { printf '\n==> %s\n' "$*"; }
+config_value() { node -p "require('$config').service.$1"; }
+
+previous="$(git ls-remote fork refs/heads/local/aggregate | cut -f1)"
+[ -n "$previous" ] || { echo "fork 上没有 local/aggregate" >&2; exit 1; }
+
+aggregate_args=()
+[ -n "$base_override" ] && aggregate_args+=(--base "$base_override")
+
+step "聚合"
+"$here/fork-aggregate" "${aggregate_args[@]}"
+result="$(git rev-parse --verify refs/heads/aggregate/next)"
+short="$(git rev-parse --short "$result")"
+if [ -n "$base_override" ]; then
+  base="$base_override"
+else
+  list_ref=refs/heads/fork-tooling
+  git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/fork/fork-tooling
+  base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
+fi
+
+wt="$root/.worktrees/aggregate-deploy-$short"
+step "工作区 $wt"
+if [ -d "$wt" ]; then
+  [ "$(git -C "$wt" rev-parse HEAD)" = "$result" ] || { echo "$wt 已存在但不是 $result" >&2; exit 1; }
+  [ -z "$(git -C "$wt" status --porcelain --untracked-files=no)" ] || { echo "$wt 有未提交改动" >&2; exit 1; }
+  git worktree remove --force "$root/.worktrees/aggregate-next"
+else
+  git worktree move "$root/.worktrees/aggregate-next" "$wt"
+  git -C "$wt" checkout --quiet --detach "$result"
+fi
+iso="$wt/scripts/run-resource-isolated"
+
+step "安装依赖"
+"$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
+
+step "全仓 typecheck"
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
+
+step "测试"
+if [ "${#test_filters[@]}" -eq 0 ]; then
+  test_filters=("[$previous]")
+fi
+filter_args=()
+for f in "${test_filters[@]}"; do filter_args+=("--filter=$f"); done
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --continue --output-logs=errors-only "${filter_args[@]}"
+
+if [ "$verify_only" = 1 ]; then
+  step "仅验证，停止"
+  printf '聚合 SHA：%s\n部署检出：%s\n上次 local/aggregate：%s\n' "$result" "$wt" "$previous"
+  exit 0
+fi
+
+step "提升 local/aggregate"
+if [ "$result" = "$previous" ]; then
+  echo "fork/local/aggregate 已经是 $result"
+else
+  "$here/fork-aggregate" --promote-only
+fi
+[ "$(git ls-remote fork refs/heads/local/aggregate | cut -f1)" = "$result" ]
+
+if [ "$build" = 1 ]; then
+  config="$root/config/local-aggregate-web.json"
+  [ -f "$config" ] || { echo "缺少 $config，无法构建部署检出" >&2; exit 1; }
+  node_exe="$(config_value nodeExecutable)"
+  step "运行时构建（$node_exe）"
+  "$iso" --profile package -- "$node_exe" "$wt/.bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs" --repo "$wt"
+  "$node_exe" "$wt/scripts/ensure-native-modules.mjs" --check
+fi
+
+if [ "$release" = 1 ]; then
+  step "发布 tag"
+  version="${base#desktop-v}"
+  tag="$(git tag --points-at "$result" 'fork-v*' | head -1)"
+  if [ -z "$tag" ]; then
+    tag="$(git ls-remote fork 'refs/tags/fork-v*^{}' | awk -v sha="$result" '$1 == sha { sub(/\^\{\}$/, "", $2); sub(/^refs\/tags\//, "", $2); print $2 }' | head -1)"
+  fi
+  if [ -n "$tag" ]; then
+    echo "复用已有 tag $tag"
+  else
+    day="$(date -u +%Y%m%d)"
+    n=1
+    while git rev-parse --verify --quiet "refs/tags/fork-v$version-$day.$n" >/dev/null \
+      || [ -n "$(git ls-remote fork "refs/tags/fork-v$version-$day.$n")" ]; do
+      n=$((n + 1))
+    done
+    tag="fork-v$version-$day.$n"
+    git tag -a "$tag" "$result" -m "BB fork aggregate $(date -u +%Y-%m-%d)"
+    git push fork "refs/tags/$tag"
+  fi
+  remote_tag="$(git ls-remote fork "refs/tags/$tag^{}" | cut -f1)"
+  [ "$remote_tag" = "$result" ] || { echo "远端 tag $tag 指向 $remote_tag，不是 $result" >&2; exit 1; }
+  echo "tag $tag -> $result；流水线：https://github.com/hxy91819/bb/actions/workflows/fork-release.yml"
+fi
+
+step "清理被取代的候选"
+service_dir=""
+if [ -f "${config:-}" ]; then
+  service_dir="$(systemctl show "$(config_value systemdUnit)" -p WorkingDirectory --value 2>/dev/null || true)"
+fi
+for dir in "$root"/.worktrees/aggregate-deploy-*; do
+  [ -d "$dir" ] || continue
+  [ "$dir" = "$wt" ] && continue
+  [ "$dir" = "$service_dir" ] && continue
+  sha="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+  [ "$sha" = "$previous" ] && continue
+  if [ -n "$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    echo "保留 $dir：有未提交改动"
+    continue
+  fi
+  git worktree remove --force "$dir" && echo "已删除 $dir"
+done
+
+step "完成"
+cat <<EOF
+聚合 SHA：$result
+部署检出：$wt
+上次 local/aggregate：$previous
+EOF
+if [ "$build" = 1 ]; then
+  unit="$(config_value systemdUnit)"
+  dropin="$(config_value systemdDropInPath)"
+  server_port="$(config_value serverPort)"
+  daemon_port="$(config_value hostDaemonPort)"
+  old_dir="$(systemctl show "$unit" -p WorkingDirectory --value 2>/dev/null || true)"
+  cat <<EOF
+
+在 BB 外的终端执行 cutover（当前服务目录：${old_dir:-未知}）：
+  sudo sed -i 's#^WorkingDirectory=.*#WorkingDirectory=$wt#' $dropin
+  sudo systemctl daemon-reload && sudo systemctl restart $unit
+  curl -fsS http://127.0.0.1:$server_port/health && curl -fsS http://127.0.0.1:$daemon_port/health
+  systemctl show $unit -p ActiveState -p NRestarts -p WorkingDirectory
+回滚：把 WorkingDirectory 改回 ${old_dir:-旧检出}，daemon-reload 后 restart。
+EOF
+fi
