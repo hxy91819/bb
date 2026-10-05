@@ -53,7 +53,6 @@ export const customAcpAgentSchema = z
     nativeSkillRoots: launchSpecFields.nativeSkillRoots,
     permissionCli: launchSpecFields.permissionCli,
     supportsManualCompaction: z.boolean().default(false),
-    fork: z.enum(["none", "tip", "checkpoint"]).default("none"),
     providerUsage: z.boolean().optional(),
   })
   .strict();
