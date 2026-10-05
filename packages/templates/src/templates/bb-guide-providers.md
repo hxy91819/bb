@@ -223,8 +223,12 @@ config refresh is needed.
 
 Custom agents default to fork: "none". Set fork: "tip" only when the agent
 implements ACP session/fork with independent inherited conversation state.
-This enables end-of-session forks, not earlier checkpoints. The bridge also
-checks the agent's advertised fork capability.
+Set fork: "checkpoint" for adapters implementing the cursor-acp/checkpoint
+extension, such as the Cursor SDK adapter. This enables saved successful
+turn-boundary forks with bb thread fork <id> --source-seq-end <seq>;
+"tip" remains end-of-session only. The bridge checks the agent's advertised
+capability. Checkpoints preserve conversation state, not files, and only model
+turns completed with a checkpoint-aware adapter can be selected.
 
 Use top-level sharedSkillRoots for one provider-neutral skill collection. The
 user and project paths use the same relative-path rules. bb indexes these roots
