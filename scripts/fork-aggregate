@@ -50,9 +50,15 @@ else
 fi
 list="$(git show "$list_ref:.fork/branches" | sed -e 's/#.*//' -e '/^[[:space:]]*$/d')"
 
-base="${base_override:-$(awk '$1 == "base" { print $2 }' <<<"$list")}"
+base="${base_override:-$(printf '%s\n' "$list" | awk '$1 == "base" { print $2 }')}"
 git rev-parse --verify --quiet "refs/tags/$base" >/dev/null || { echo "找不到 tag $base" >&2; exit 1; }
-mapfile -t branches < <(awk '$1 != "base" { print $1 }' <<<"$list")
+# macOS 自带 Bash 3.2 没有 mapfile；发布 workflow 会在 darwin runner 上执行本脚本。
+branches=()
+while IFS= read -r branch; do
+  [ -n "$branch" ] && branches+=("$branch")
+done <<EOF
+$(printf '%s\n' "$list" | awk '$1 != "base" { print $1 }')
+EOF
 
 resolve_ref() {
   local branch="$1" local_sha remote_sha
