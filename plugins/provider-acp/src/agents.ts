@@ -26,7 +26,7 @@ export interface AcpAgentDefinition {
   installUrl?: string;
   iconTint?: { light: string; dark: string };
   supportsManualCompaction?: boolean;
-  fork?: "none" | "tip";
+  fork?: "none" | "tip" | "checkpoint";
   reasoningLevels?: readonly PluginProviderReasoningLevel[];
   providerUsage?: boolean;
   providerInstallation?: boolean;
@@ -53,7 +53,7 @@ export const customAcpAgentSchema = z
     nativeSkillRoots: launchSpecFields.nativeSkillRoots,
     permissionCli: launchSpecFields.permissionCli,
     supportsManualCompaction: z.boolean().default(false),
-    fork: z.enum(["none", "tip"]).default("none"),
+    fork: z.enum(["none", "tip", "checkpoint"]).default("none"),
     providerUsage: z.boolean().optional(),
   })
   .strict();

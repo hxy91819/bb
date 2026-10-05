@@ -76,6 +76,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
+const checkpointFork = process.env.FAKE_ACP_CHECKPOINT_FORK === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
 const usageOnLoad = process.env.FAKE_ACP_USAGE_ON_LOAD === "1";
 const usageSessionId = process.env.FAKE_ACP_USAGE_SESSION_ID;
@@ -595,6 +596,9 @@ async function handlePrompt(message) {
       id: message.id,
       result: {
         stopReason,
+        ...(checkpointFork
+          ? { _meta: { "cursor-acp/checkpoint": "fake-checkpoint" } }
+          : {}),
         ...(grokContext
           ? { _meta: { usage: { inputTokens: 17_504, totalTokens: 17_531 } } }
           : {}),
@@ -628,7 +632,15 @@ async function handleMessage(message) {
           agentCapabilities: {
             loadSession,
             promptCapabilities: { image: false },
-            ...(forkSession ? { sessionCapabilities: { fork: {} } } : {}),
+            ...(forkSession
+              ? {
+                  sessionCapabilities: {
+                    fork: checkpointFork
+                      ? { _meta: { "cursor-acp/checkpoint": true } }
+                      : {},
+                  },
+                }
+              : {}),
           },
           ...(authMethods.length > 0
             ? { authMethods: authMethods.map((id) => ({ id })) }

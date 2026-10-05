@@ -40,6 +40,11 @@ its `customAgents` entry using `bb plugin config provider-acp set customAgents`.
 The default is `"none"`; `"tip"` enables end-of-session forks only, and the
 bridge requires the agent to advertise fork support. Check that the adapter
 copies conversation state into an independent session, not just a new empty ID.
+Set `"fork": "checkpoint"` for the Cursor SDK adapter implementing the
+`cursor-acp/checkpoint` extension. Fork a saved successful turn boundary with
+`bb thread fork <id> --source-seq-end <seq>`. Earlier turns without a
+saved checkpoint cannot be reconstructed; checkpoints preserve conversation
+state rather than reverting files.
 
 OpenCode Go subscription usage is available in Provider usage when the selected
 machine has OpenCode installed and a Go subscription. Sign in to Go in OpenCode
