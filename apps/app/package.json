@@ -36,6 +36,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/inter": "^5.2.8",
     "@get-bb/plugin-sdk": "workspace:*",
+    "@mermaid-js/layout-elk": "^0.2.3",
     "@pierre/diffs": "^1.2.9",
     "@pierre/trees": "^1.0.0-beta.3",
     "@radix-ui/react-alert-dialog": "^1.1.19",
