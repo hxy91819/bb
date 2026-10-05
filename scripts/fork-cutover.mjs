@@ -15,19 +15,39 @@ export function replacementDropIn({ dropIn, oldDirectory, target, release }) {
       "Expected one ExecStart and the actual WorkingDirectory in the selected drop-in",
     );
   const command = starts[0];
-  const installed = command.startsWith(`ExecStart=${oldDirectory}/bin/bb-app `);
+  const installed =
+    command.split(" ")[0] === `ExecStart=${oldDirectory}/bin/bb-app`;
   if (installed !== release)
     throw new Error("Source and installed-release targets must not be mixed");
-  if (!command.includes(oldDirectory))
-    throw new Error(
-      "ExecStart does not identify the old source or package directory",
+  const sourceEntry = command
+    .split(" ")
+    .find((token) =>
+      [
+        "scripts/start-bb.mjs",
+        "scripts/start-bb-launcher.mjs",
+        "packages/bb-app/src/bin/bb-app.ts",
+        "packages/bb-app/dist/bb-app.js",
+      ].some(
+        (entry) => token === entry || token === `${oldDirectory}/${entry}`,
+      ),
     );
+  if (!release && !sourceEntry)
+    throw new Error("ExecStart does not identify a supported source launcher");
+  const replacement = release
+    ? command.replace(
+        `ExecStart=${oldDirectory}/bin/bb-app`,
+        `ExecStart=${target}/bin/bb-app`,
+      )
+    : command.replace(
+        ` ${sourceEntry}`,
+        ` ${sourceEntry.replace(`${oldDirectory}/`, `${target}/`)}`,
+      );
   return dropIn
     .replace(
       `WorkingDirectory=${oldDirectory}\n`,
       `WorkingDirectory=${target}\n`,
     )
-    .replace(command, command.replace(oldDirectory, target));
+    .replace(command, replacement);
 }
 
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
