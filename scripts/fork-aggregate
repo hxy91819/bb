@@ -32,6 +32,14 @@ root="$(git rev-parse --path-format=absolute --git-common-dir)"
 root="$(dirname "$root")"
 cd "$root"
 
+if [ "$promote" = 1 ] || [ "$promote_only" = 1 ]; then
+  [ -f "$root/.fork/branches" ] && grep -q '<!-- fork-maintenance:start -->' "$root/AGENTS.md" || {
+    echo "根目录仍使用旧维护模型；请在已迁移的独立 checkout 聚合，不提升或覆盖旧根目录" >&2
+    exit 1
+  }
+  [ -z "$(git status --porcelain)" ] || { echo "根目录有未提交或未跟踪改动，停止提升" >&2; exit 1; }
+fi
+
 git fetch --quiet origin "+refs/heads/main:refs/remotes/origin/main" "refs/tags/desktop-v*:refs/tags/desktop-v*"
 git fetch --quiet --prune fork
 
@@ -64,8 +72,8 @@ promote_result() {
     echo "根目录不在 local/aggregate，停止" >&2
     exit 1
   fi
-  if [ -n "$(git -C "$root" status --porcelain --untracked-files=no)" ]; then
-    echo "根目录有未提交的已跟踪改动，停止" >&2
+  if [ -n "$(git -C "$root" status --porcelain)" ]; then
+    echo "根目录有未提交或未跟踪改动，停止" >&2
     exit 1
   fi
   remote_before="$(git ls-remote fork refs/heads/local/aggregate | cut -f1)"
