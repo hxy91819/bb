@@ -58,6 +58,8 @@ jobs:
           '
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test fork maintenance
+        run: node --test scripts/fork-maintenance.test.mjs
       - name: Typecheck and test launcher
         run: pnpm exec turbo run typecheck test --filter=bb-app --concurrency=1 --output-logs=errors-only
       - name: Build and verify packed application

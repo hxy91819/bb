@@ -77,6 +77,11 @@ iso="$wt/scripts/run-resource-isolated"
 step "安装依赖"
 "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
 
+step "维护脚本与边界契约"
+"$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs"
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
+"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
+
 step "全仓 typecheck"
 "$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
 
@@ -162,17 +167,22 @@ cat <<EOF
 EOF
 if [ "$build" = 1 ]; then
   unit="$(config_value systemdUnit)"
-  dropin="$(config_value systemdDropInPath)"
-  server_port="$(config_value serverPort)"
-  daemon_port="$(config_value hostDaemonPort)"
   old_dir="$(systemctl show "$unit" -p WorkingDirectory --value 2>/dev/null || true)"
+  old_start="$(systemctl show "$unit" -p ExecStart --value 2>/dev/null || true)"
+  target="$wt"
+  if [[ "$old_start" == *"/bin/bb-app"* ]]; then
+    if [ "$release" != 1 ]; then
+      echo "当前服务使用安装包；本次未发布 Release，不生成源码切换命令。"
+      exit 0
+    fi
+    target="$(dirname "$old_dir")/bb-$tag-$(node -p 'process.platform + "-" + process.arch')"
+    echo "当前服务使用安装包：先下载、校验并解压 $tag 的平台包到 $target，再生成切换计划。"
+  fi
   cat <<EOF
 
-在 BB 外的终端执行 cutover（当前服务目录：${old_dir:-未知}）：
-  sudo sed -i 's#^WorkingDirectory=.*#WorkingDirectory=$wt#' $dropin
-  sudo systemctl daemon-reload && sudo systemctl restart $unit
-  curl -fsS http://127.0.0.1:$server_port/health && curl -fsS http://127.0.0.1:$daemon_port/health
-  systemctl show $unit -p ActiveState -p NRestarts -p WorkingDirectory
-回滚：把 WorkingDirectory 改回 ${old_dir:-旧检出}，daemon-reload 后 restart。
+生成只读 cutover/回退计划（当前服务目录：${old_dir:-未知}）：
+  node "$wt/scripts/fork-cutover.mjs" "$config" "$target" "$result"
+计划根据实际 unit 校验并同时更新 ExecStart 与 WorkingDirectory。生产执行仅限 BB 外的 Agent，
+先确认无 BB_* 上下文且不在 $unit 的 cgroup，再停服备份并应用计划；双端口健康之外还须核对实际版本。
 EOF
 fi

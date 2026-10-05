@@ -11,16 +11,20 @@
 
 ## 仓库角色
 
-| 引用 | 作用 |
-| --- | --- |
-| `origin` | 上游 get-bb/bb，只读 |
-| `fork` | 个人 fork hxy91819/bb，所有推送都去这里 |
-| `desktop-v*` tag | 上游稳定版，聚合和新分支的基线 |
-| `feature/*`、`fix/*` | 每个改动一个分支，基于基线 tag |
-| `fork-tooling` | 维护规则、`.fork/branches`、聚合脚本、部署 skill；和其他分支一样被 merge |
-| `local/aggregate` | 聚合产物，每次从 tag 重新生成并覆盖，根目录永远检出它 |
+| 引用                 | 作用                                                                     |
+| -------------------- | ------------------------------------------------------------------------ |
+| `origin`             | 上游 get-bb/bb，只读                                                     |
+| `fork`               | 个人 fork hxy91819/bb，所有推送都去这里                                  |
+| `desktop-v*` tag     | 上游稳定版，聚合和新分支的基线                                           |
+| `feature/*`、`fix/*` | 每个改动一个分支，基于基线 tag                                           |
+| `fork-tooling`       | 维护规则、`.fork/branches`、聚合脚本、部署 skill；和其他分支一样被 merge |
+| `local/aggregate`    | 聚合产物，每次从 tag 重新生成并覆盖，根目录永远检出它                    |
 
 当前基线是 `.fork/branches` 里 `base` 行的 tag。`origin/main` 上还没进 tag 的提交不追，除非用户明确要求。
+
+### 旧 checkout 的入口
+
+维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `local/aggregate` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
 
 ## 1. 开发新功能或修复
 
@@ -37,6 +41,15 @@ git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<
 - 完成后：相关测试通过 → 提交 → `git push fork <branch>` 并核对远端 SHA。
 - 在 `fork-tooling` 分支的 `.fork/branches` 加一行（分支、上游状态、说明），提交并推送 `fork-tooling`。
 
+修改 daemon wire 或 SDK 导出时，在功能分支提交/审查前运行已有契约测试，不等到聚合阶段才检查：
+
+```bash
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
+```
+
+旧基线没有 resource runner 时，使用已发布 fork 中的 runner 显式执行该 worktree 的命令。已有 fixture 设置自己的 Git 签名开关和模拟用户身份；不修改宿主全局 Git 配置或生产 systemd 来让测试通过。
+
 ## 2. 聚合打包
 
 ```bash
@@ -50,12 +63,12 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
 2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-3. `pnpm install --frozen-lockfile`、全仓 `typecheck --concurrency=1`、`test`，都带 `--continue`：一个包失败不会中断其余包，一次就能看到全部失败，修完再重跑一次，而不是每次只暴露一个。测试默认只跑 `--filter='[<上一次 local/aggregate>]'`，即相对上次聚合有文件改动的包；各分支自己的测试在分支上已经跑过。
+3. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 local/aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
 4. `scripts/fork-aggregate --promote-only`：把根目录 `local/aggregate` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
 5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
 7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `local/aggregate` 的那些。
-8. 打印聚合 SHA、部署检出路径和在 BB 外终端执行 cutover 的命令。
+8. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill，在 BB 外执行。
 
 修一次分支再重跑 `fork-package` 是常态：聚合 SHA 变了就换新检出，没变就复用旧检出和它的依赖。
 
@@ -81,10 +94,10 @@ scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升�
 
 脚本遇到冲突会停下，并判断是哪一类：
 
-| 类型 | 判断 | 处理 |
-| --- | --- | --- |
+| 类型           | 判断                          | 处理                                                                                                                                                            |
+| -------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 分支与上游冲突 | 该分支单独合入基线 tag 就冲突 | 在该分支 worktree 里 `git rebase --no-autostash <tag>`，修复、测试、`git push --force-with-lease fork <branch>`，重跑脚本。修好的分支同时也保持了对上游可合并。 |
-| 分支之间冲突 | 单独都能合入，一起才冲突 | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。 |
+| 分支之间冲突   | 单独都能合入，一起才冲突      | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。               |
 
 - 产品修复永远回到对应分支，不写在聚合的 merge 提交里。
 - 同一对分支反复出现非平凡冲突时，把后者 rebase 到前者上（叠放），更新清单顺序和说明。
