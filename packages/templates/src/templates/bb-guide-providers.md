@@ -221,6 +221,11 @@ bb hides the /compact command for agents that do not declare it. The plugin
 re-registers its providers as soon as the setting changes, so no restart or
 config refresh is needed.
 
+Custom agents default to fork: "none". Set fork: "tip" only when the agent
+implements ACP session/fork with independent inherited conversation state.
+This enables end-of-session forks, not earlier checkpoints. The bridge also
+checks the agent's advertised fork capability.
+
 Use top-level sharedSkillRoots for one provider-neutral skill collection. The
 user and project paths use the same relative-path rules. bb indexes these roots
 as read-only sources. It then injects the selected skills into all providers.
