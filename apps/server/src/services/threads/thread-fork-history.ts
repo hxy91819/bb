@@ -293,9 +293,9 @@ export function readForkExecutionOptions(
   deps: Pick<AppDeps, "db">,
   args: { historyEndSequence: number; sourceThreadId: string },
 ) {
-  const row = selectInheritedForkEventRows(deps, args).findLast(
-    (row) => row.type === "client/turn/requested",
-  );
+  const row = selectInheritedForkEventRows(deps, args)
+    .reverse()
+    .find((row) => row.type === "client/turn/requested");
   return row ? parseStoredTurnRequestEvent(row).execution : null;
 }
 
