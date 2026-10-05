@@ -1,11 +1,16 @@
-import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+import {
+  defineWorkspaceTestConfig,
+  sharedWorkerProjects,
+} from "../../vitest.shared.js";
 
-export default defineConfig({
-  resolve: { tsconfigPaths: true },
+export default defineWorkspaceTestConfig({
   test: {
     silent: "passed-only",
-    name: "bb-plugin-provider-codex",
-    include: ["src/**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**"],
+    projects: sharedWorkerProjects({
+      pkgDir: fileURLToPath(new URL(".", import.meta.url)),
+      name: "bb-plugin-provider-codex",
+      include: ["src/**/*.test.ts"],
+    }),
   },
 });

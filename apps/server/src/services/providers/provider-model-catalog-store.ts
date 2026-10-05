@@ -103,6 +103,7 @@ interface CatalogFailure {
 
 interface CatalogRefresh {
   fingerprint: string;
+  beforeView: string;
   sessionId: string | null;
   startedAt: number;
   markedStale: boolean;
@@ -430,7 +431,7 @@ export function createProviderModelCatalogStore(options: {
       return;
     }
     entry.refresh = null;
-    const before = pickerView(entry, refresh.fingerprint);
+    const before = refresh.beforeView;
     let level: "info" | "warn" | "error" = "info";
     let fields: Record<string, unknown>;
     if (settlement.ok) {
@@ -493,16 +494,23 @@ export function createProviderModelCatalogStore(options: {
   function startRefresh(
     deps: WorkSessionDeps,
     entry: CatalogEntry,
-    launch: CatalogLaunch,
+    fingerprint: string,
+    bridgeLaunch: HostDaemonBridgeLaunch,
+    discardCachedCatalog: boolean,
   ): Promise<void> {
     const { hostId, providerId, scopeKey } = entry.key;
     const refresh: CatalogRefresh = {
-      fingerprint: launch.fingerprint,
+      fingerprint,
+      beforeView: pickerView(entry, fingerprint),
       sessionId: deps.hub.getDaemonSessionIdForHost(hostId),
       startedAt: options.now(),
       markedStale: false,
       promise: Promise.resolve(),
     };
+    if (discardCachedCatalog) {
+      entry.good = null;
+      entry.failure = null;
+    }
     entry.refresh = refresh;
     refresh.promise = callHostOnlineRpc(deps, {
       hostId,
@@ -529,21 +537,34 @@ export function createProviderModelCatalogStore(options: {
   function joinOrStartRefresh(
     deps: WorkSessionDeps,
     entry: CatalogEntry,
-    launch: CatalogLaunch,
+    fingerprint: string,
+    bridgeLaunch: HostDaemonBridgeLaunch,
+    discardCachedCatalog = false,
   ): Promise<void> {
-    return entry.refresh?.fingerprint === launch.fingerprint
-      ? entry.refresh.promise
-      : startRefresh(deps, entry, launch);
+    if (entry.refresh?.fingerprint === fingerprint) {
+      if (discardCachedCatalog) {
+        entry.good = null;
+        entry.failure = null;
+      }
+      return entry.refresh.promise;
+    }
+    return startRefresh(
+      deps,
+      entry,
+      fingerprint,
+      bridgeLaunch,
+      discardCachedCatalog,
+    );
   }
 
   return {
     async read(deps, args) {
-      const launch = await resolveCatalogLaunch({
-        hostId: args.hostId,
-        providerId: args.provider.id,
-        bridgeLaunch: requireBridgeLaunchForProviderId(deps, args.provider.id),
-      });
-      const { fingerprint } = launch;
+      const bridgeLaunch = requireBridgeLaunchForProviderId(
+        deps,
+        args.provider.id,
+        args.hostId,
+      );
+      const fingerprint = catalogFingerprint(args.provider.id, bridgeLaunch);
       const entry = loadEntry(deps, {
         hostId: args.hostId,
         providerId: args.provider.id,
@@ -555,6 +576,17 @@ export function createProviderModelCatalogStore(options: {
             ? args.cwd
             : "",
       });
+      if (deps.providerRegistry.get(args.provider.id)?.cacheModels === false) {
+        await joinOrStartRefresh(deps, entry, fingerprint, bridgeLaunch, true);
+        const decision = evaluate(
+          entry,
+          fingerprint,
+          args.access,
+          options.now(),
+          true,
+        );
+        if (decision.kind === "serve") return decision.result;
+      }
       for (let refreshed = false; ; refreshed = true) {
         const decision = evaluate(
           entry,
@@ -577,6 +609,7 @@ export function createProviderModelCatalogStore(options: {
       const bridgeLaunch = resolveBridgeLaunchForProviderId(
         deps,
         args.provider.id,
+        args.hostId,
       );
       if (bridgeLaunch === null) {
         return;
@@ -603,7 +636,7 @@ export function createProviderModelCatalogStore(options: {
       if (options.now() - lastAttemptAt < PREWARM_MIN_AGE_MS) {
         return;
       }
-      await startRefresh(deps, entry, launch);
+      await startRefresh(deps, entry, fingerprint, bridgeLaunch, false);
     },
 
     clearFailure(hostId, providerId) {
