@@ -2126,14 +2126,15 @@ function runTurn(
       session.cancelRequested = false;
       try {
         session.promptRequestPending = true;
-        const promptResult = session.connection.request({
-          method: "session/prompt",
-          params: {
-            sessionId: session.providerThreadId,
-            prompt: buildPromptContentBlocks(session, pending.input),
-          },
-          resultSchema: acpPromptResultSchema,
-        });
+        const promptResult: Promise<z.infer<typeof acpPromptResultSchema>> =
+          session.connection.request({
+            method: "session/prompt",
+            params: {
+              sessionId: session.providerThreadId,
+              prompt: buildPromptContentBlocks(session, pending.input),
+            },
+            resultSchema: acpPromptResultSchema,
+          });
         acceptTurnInput(session, pending);
         if (session.queuedInputs.length > 0) {
           requestSteerCancel(session);
