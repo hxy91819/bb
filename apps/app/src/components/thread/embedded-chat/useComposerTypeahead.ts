@@ -3,9 +3,23 @@ import type { TypeaheadConfig } from "@/components/promptbox/PromptBoxInternal";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import type { PromptBoxAction } from "@/components/promptbox/PromptBoxActionsMenu";
 import type { ProviderComposerAction } from "@bb/domain";
-import { buildProviderPromptActionProps } from "@bb/client-core";
-import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
+import {
+  buildProviderPromptActionProps,
+  type ProviderCommandPanelAction,
+} from "@bb/client-core";
+import {
+  useCommandSuggestions,
+  type CommandSuggestionPanelCommand,
+} from "@/hooks/useCommandSuggestions";
 import { usePromptMentions } from "@/hooks/usePromptMentions";
+import { usePluginSlots } from "@/lib/plugin-slots";
+import { invokePluginThreadPanelAction } from "@/components/plugin/PluginPanelActions";
+import { usePluginThreadPanelOpenHandler } from "@/components/plugin/plugin-thread-panel-navigation";
+import {
+  SIDE_CHAT_COMMAND_NAME,
+  SIDE_CHAT_PLUGIN_ID,
+  SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
+} from "@/lib/side-chat-plugin";
 
 interface UseComposerTypeaheadArgs {
   projectId: string;
@@ -18,6 +32,7 @@ interface UseComposerTypeaheadArgs {
     | readonly ProviderComposerAction[]
     | undefined;
   resolveMentionLink: PromptMentionLinkResolver;
+  sideChatCommand?: { enabled: boolean };
 }
 
 interface UseComposerTypeaheadResult {
@@ -34,6 +49,7 @@ export function useComposerTypeahead({
   currentThreadId,
   selectedProviderComposerActions,
   resolveMentionLink,
+  sideChatCommand,
 }: UseComposerTypeaheadArgs): UseComposerTypeaheadResult {
   const promptMentions = usePromptMentions(mentionsProjectId ?? projectId, {
     currentThreadId,
@@ -53,6 +69,54 @@ export function useComposerTypeahead({
     [selectedProviderComposerActions],
   );
   const { promptActions } = providerPromptActions;
+  const openThreadPanel = usePluginThreadPanelOpenHandler();
+  const { threadPanelActions } = usePluginSlots();
+  const sideChatPanelCommand =
+    useMemo<CommandSuggestionPanelCommand | null>(() => {
+      if (sideChatCommand?.enabled !== true || openThreadPanel === null) {
+        return null;
+      }
+      const action = threadPanelActions.find(
+        (candidate) =>
+          candidate.pluginId === SIDE_CHAT_PLUGIN_ID &&
+          candidate.id === SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
+      );
+      if (action === undefined) return null;
+      return {
+        name: SIDE_CHAT_COMMAND_NAME,
+        pluginId: SIDE_CHAT_PLUGIN_ID,
+        actionId: SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
+        description: action.title,
+      };
+    }, [openThreadPanel, sideChatCommand?.enabled, threadPanelActions]);
+  const handlePanelAction = useCallback(
+    (target: ProviderCommandPanelAction): boolean => {
+      if (openThreadPanel === null) return false;
+      const action = threadPanelActions.find(
+        (candidate) =>
+          candidate.pluginId === target.pluginId &&
+          candidate.id === target.actionId,
+      );
+      if (action === undefined) return false;
+      invokePluginThreadPanelAction({
+        action,
+        openPanel: (options) =>
+          openThreadPanel({
+            pluginId: action.pluginId,
+            actionId: action.id,
+            title: options?.title,
+            params: options?.params,
+          }),
+        threadId: currentThreadId,
+      });
+      return true;
+    },
+    [currentThreadId, openThreadPanel, threadPanelActions],
+  );
+  const panelCommands = useMemo(
+    () => (sideChatPanelCommand === null ? undefined : [sideChatPanelCommand]),
+    [sideChatPanelCommand],
+  );
   const commandSuggestions = useCommandSuggestions({
     projectId,
     providerId,
@@ -60,6 +124,7 @@ export function useComposerTypeahead({
     skillsTriggers: providerPromptActions.skillsTriggers,
     activeTrigger: commandState.trigger,
     promptActions,
+    panelCommands,
     environmentId,
     query: commandState.query,
     composerFocused: hasComposerFocused,
@@ -85,6 +150,7 @@ export function useComposerTypeahead({
         loadMore: commandSuggestions.loadMore,
         onQueryChange: (query, trigger) => setCommandState({ query, trigger }),
         onEditorFocus: handleEditorFocus,
+        onPanelAction: handlePanelAction,
       },
     }),
     [
@@ -96,6 +162,7 @@ export function useComposerTypeahead({
       commandSuggestions.suggestions,
       commandSuggestions.triggers,
       handleEditorFocus,
+      handlePanelAction,
       promptMentions.isError,
       promptMentions.isLoading,
       promptMentions.setQuery,
