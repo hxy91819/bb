@@ -186,6 +186,16 @@ function SortableProviderRow({
   const isDefault =
     generalSettings.defaultProviderId === provider.id ||
     (generalSettings.defaultProviderId === null && index === 0);
+  const isHidden = generalSettings.hiddenProviders.includes(provider.id);
+  const toggleHidden = (): void => {
+    const hiddenProviders = isHidden
+      ? generalSettings.hiddenProviders.filter((id) => id !== provider.id)
+      : [...generalSettings.hiddenProviders, provider.id];
+    void onGeneralSettingsChange({
+      ...generalSettings,
+      hiddenProviders,
+    });
+  };
 
   return (
     <SettingsRow
@@ -223,6 +233,24 @@ function SortableProviderRow({
             : null
         }
       />
+      {isHidden ? <SettingsBadge>Hidden</SettingsBadge> : null}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 text-subtle-foreground"
+        aria-label={
+          isHidden
+            ? `Show ${provider.displayName}`
+            : `Hide ${provider.displayName}`
+        }
+        disabled={disabled}
+        onClick={toggleHidden}
+      >
+        <Icon
+          name={isHidden ? "Eye" : "EyeOff"}
+          className={COARSE_POINTER_ICON_SIZE_CLASS}
+        />
+      </Button>
     </SettingsRow>
   );
 }
@@ -308,7 +336,7 @@ export function ProvidersSettingsSection({
     <>
       <SettingsSection
         title="Providers"
-        description="Choose which agents you use in BB. Drag to reorder them in provider pickers."
+        description="Choose which agents you use in BB. Drag to reorder them in provider pickers. Hidden providers stay listed here so you can restore them."
       >
         {providersQuery.isPending ? (
           <p className="text-sm text-muted-foreground">Loading providers…</p>
