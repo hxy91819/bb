@@ -6,6 +6,7 @@ import {
 } from "@bb/db";
 import type { JsonValue, ProviderFork } from "@bb/domain";
 import type { HostDaemonOnlineRpcRequestMessage } from "@bb/host-daemon-contract";
+import { systemExecutionOptionsResponseSchema } from "@bb/server-contract";
 import { createDeferredPromise } from "@bb/test-helpers";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -133,6 +134,7 @@ function registerCatalogProbe(
   args: {
     bridgeOptions?: Readonly<Record<string, JsonValue>>;
     fork?: ProviderFork;
+    cacheModels?: boolean;
   },
 ) {
   const base = requireRegistration(harness, "claude-code");
@@ -140,6 +142,7 @@ function registerCatalogProbe(
     ...base,
     info: { ...base.info, id: "catalog-probe" },
     bridgeOptions: args.bridgeOptions ?? base.bridgeOptions,
+    cacheModels: args.cacheModels ?? base.cacheModels,
     serverCapabilities: {
       ...base.serverCapabilities,
       fork: args.fork ?? base.serverCapabilities.fork,
@@ -158,6 +161,93 @@ function seedEnvironmentPath(
 }
 
 describe("provider model catalog store", () => {
+  it("notifies only changed results when public API reads always probe the host", async () => {
+    await withTestHarness(async (harness) => {
+      const host = setupCatalogHost(harness, {
+        id: "host-external-catalog-push",
+      });
+      registerCatalogProbe(harness, { cacheModels: false });
+      const pushes = capturePushes(harness);
+      const read = async () => {
+        const response = await harness.app.request(
+          `/api/v1/system/execution-options?hostId=${host.hostId}&providerId=catalog-probe`,
+        );
+        expect(response.status).toBe(200);
+        const result = systemExecutionOptionsResponseSchema.parse(
+          await response.json(),
+        );
+        await settleTimers();
+        return result;
+      };
+      host.setAnswer(() => catalogAnswer(modelList("same-model")));
+      expect(modelIds(await read())).toEqual(["same-model"]);
+      expect(pushes).toHaveLength(1);
+      expect(modelIds(await read())).toEqual(["same-model"]);
+      expect(pushes).toHaveLength(1);
+      host.setAnswer(() => errorAnswer("auth_required"));
+      expect((await read()).models).toEqual([]);
+      expect(pushes).toHaveLength(2);
+      expect((await read()).models).toEqual([]);
+      expect(pushes).toHaveLength(2);
+      host.setAnswer(() => catalogAnswer(modelList("different-model")));
+      expect(modelIds(await read())).toEqual(["different-model"]);
+      expect(pushes).toHaveLength(3);
+      expect(modelIds(await read())).toEqual(["different-model"]);
+      expect(pushes).toHaveLength(3);
+    });
+  });
+
+  it("refreshes externally managed catalogs through the public API while preserving cached providers", async () => {
+    await withTestHarness(async (harness) => {
+      const host = setupCatalogHost(harness, { id: "host-external-catalog" });
+      registerCatalogProbe(harness, { cacheModels: false });
+      let identity = "first";
+      host.setAnswer((command) =>
+        catalogAnswer(modelList(`${command.providerId}-${identity}`)),
+      );
+      const read = async (providerId: string) => {
+        const response = await harness.app.request(
+          `/api/v1/system/execution-options?hostId=${host.hostId}&providerId=${providerId}`,
+        );
+        expect(response.status).toBe(200);
+        return systemExecutionOptionsResponseSchema.parse(
+          await response.json(),
+        );
+      };
+      expect(modelIds(await read("catalog-probe"))).toEqual([
+        "catalog-probe-first",
+      ]);
+      expect(modelIds(await read("codex"))).toEqual(["codex-first"]);
+      identity = "second";
+      expect(modelIds(await read("catalog-probe"))).toEqual([
+        "catalog-probe-second",
+      ]);
+      expect(modelIds(await read("codex"))).toEqual(["codex-first"]);
+      host.setAnswer(() => errorAnswer("auth_required"));
+      expect((await read("catalog-probe")).models).toEqual([]);
+      identity = "restored";
+      host.setAnswer((command) =>
+        catalogAnswer(modelList(`${command.providerId}-${identity}`)),
+      );
+      expect(modelIds(await read("catalog-probe"))).toEqual([
+        "catalog-probe-restored",
+      ]);
+      const before = host.listRequests("catalog-probe").length;
+      const pending = createDeferredPromise<HostRpcHandlerResult>();
+      host.setAnswer(() => pending.promise);
+      const concurrent = [read("catalog-probe"), read("catalog-probe")];
+      await vi.waitFor(() =>
+        expect(host.listRequests("catalog-probe")).toHaveLength(before + 1),
+      );
+      pending.resolve(catalogAnswer(modelList("catalog-probe-concurrent")));
+      expect((await Promise.all(concurrent)).map(modelIds)).toEqual([
+        ["catalog-probe-concurrent"],
+        ["catalog-probe-concurrent"],
+      ]);
+      expect(host.listRequests("catalog-probe")).toHaveLength(before + 1);
+    });
+  });
+
   it("keeps catalogs across a daemon reconnect, an unrelated registration and a capability-only re-registration", async () => {
     await withTestHarness(async (harness) => {
       const host = setupCatalogHost(harness, { id: "host-catalog-identity" });
@@ -165,6 +255,7 @@ describe("provider model catalog store", () => {
       const fork = resolveBridgeLaunchForProviderId(
         harness.deps,
         "catalog-probe",
+        host.hostId,
       )?.capabilities.fork;
       await host.read("codex");
       await host.read("catalog-probe");
@@ -182,8 +273,11 @@ describe("provider model catalog store", () => {
       probe.dispose();
       registerCatalogProbe(harness, { fork: fork === "none" ? "tip" : "none" });
       expect(
-        resolveBridgeLaunchForProviderId(harness.deps, "catalog-probe")
-          ?.capabilities.fork,
+        resolveBridgeLaunchForProviderId(
+          harness.deps,
+          "catalog-probe",
+          host.hostId,
+        )?.capabilities.fork,
       ).not.toBe(fork);
 
       expect(modelIds(await host.read("codex"))).toEqual(["codex-model"]);
