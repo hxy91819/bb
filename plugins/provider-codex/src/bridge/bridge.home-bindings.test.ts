@@ -133,7 +133,9 @@ it("starts and forks native sessions in the same home and uses it for maintenanc
     providerThreadId,
     providerOptions: providerOptions("a"),
   });
-  expect((await harness.waitForResponse(4)).error).toBeUndefined();
+  const cleared = await harness.waitForResponse(4);
+  expect(cleared.error).toBeUndefined();
+  expect(cleared.result).toEqual({ cleared: true });
   const records = await children();
   expect(records.length).toBeGreaterThanOrEqual(3);
   expect(

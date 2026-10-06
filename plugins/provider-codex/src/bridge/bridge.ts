@@ -2395,7 +2395,10 @@ async function handleThreadMaintenance(
         await releaseSession(session);
       }
     }
-    sendResult(id, { ok: true });
+    sendResult(
+      id,
+      request.method === "thread/goal/clear" ? { cleared: true } : { ok: true },
+    );
   };
   try {
     await withChildForThread(
