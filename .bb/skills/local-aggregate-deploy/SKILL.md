@@ -1,11 +1,11 @@
 ---
 name: local-aggregate-deploy
-description: Build the published BB local/aggregate and replace a configured local BB source service, with health checks and rollback. Use only for requested local service deployment or replacement validation; not for ordinary builds, development servers, or aggregation.
+description: Build the published BB local/aggregate and replace a configured local BB source service, with health checks and rollback. Use only for requested local service deployment or replacement validation; not for ordinary builds, development servers, aggregation, or provider/dispatch configuration.
 ---
 
 # Local aggregate deployment
 
-Aggregation itself belongs to [Fork 维护](../../../docs/fork-maintenance.md) (`scripts/fork-aggregate --promote`). This skill starts from a published `local/aggregate` and ends with a healthy service. Replacing the running service always needs the user's explicit authorization for this run.
+Aggregation itself belongs to [Fork 维护](../../../docs/fork-maintenance.md) (`scripts/fork-aggregate --promote`). This skill starts from a published `local/aggregate` and ends with a healthy service. Replacing the running service requires authorization for that target. Reuse authorization already granted in the session.
 
 ## 1. Select the target
 
@@ -31,6 +31,8 @@ After a successful build and native-module check, complete the default [tag rele
 If the new aggregate changes the database schema, back up `<dataDir>/bb.db*` before cutover. Migrations run automatically at service start; do not run ad-hoc SQL against the ledger.
 
 ## 3. Cutover from outside BB
+
+This boundary applies to commands that stop, restart or replace the BB service hosting the thread. Provider settings, named account bindings and dispatch aliases that take effect without a service restart can be configured and verified inside BB within the user's existing authorization. Use the provider's own skill and core CLI for those changes.
 
 Restarting the BB service kills any BB thread doing it. A BB thread may do steps 1–2, then stops and gives the user a prompt for an agent started outside BB (terminal). That agent first checks it has no `BB_*` environment and is not inside the service's cgroup, then:
 

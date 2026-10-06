@@ -35,15 +35,21 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 服务模型
 
-- systemd 服务从聚合 worktree 启动 `packages/bb-app/src/bin/bb-app.ts`，使用已经通过隔离构建的产物；启动前只检查原生模块。`scripts/start-bb.mjs` 会重新构建，不用于这个常驻服务入口。
+- 先检查实际 unit 的 ExecStart 和 WorkingDirectory，区分源码运行与 Release 包运行。源码服务从通过隔离构建的聚合 worktree 启动 `packages/bb-app/src/bin/bb-app.ts`；Release 服务使用校验和安装 smoke 通过的包内 `bin/bb-app`。切换计划必须同时核对两个指针，按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 生成。`scripts/start-bb.mjs` 会重新构建，不用于这个常驻服务入口。
 - 服务使用既有数据目录；升级代码不会迁移或复制该目录。
 - Tailscale Serve 仅反向代理 loopback 的网页端口。保持 Tailnet-only，绝不使用 Funnel。
 - `scripts/run-resource-isolated -- scripts/bb-dev-app current` 使用受限资源、隔离端口和隔离数据目录，只用于开发验证；不要把正式 Tailnet 网页入口指向它。
 - 同一数据目录在任意时刻只能由一个 bb 服务实例使用。
 
-实际服务名、路径、端口和 Tailnet 地址以所选本机配置为准。
+实际运行目标以 systemd unit 的 ExecStart、WorkingDirectory、环境和 drop-in 为准；本机 JSON 是部署输入，执行前与实际 unit 核对。Tailnet 地址以本机配置及实际 Tailscale 状态为准。
+
+## 配置与服务切换的边界
+
+不需要重启服务的 provider 设置、账号绑定和 dispatch alias 修改，在用户已授权范围内由 BB 线程直接完成并验证。会停止、重启或替换当前 BB 服务的命令，按部署技能交给 BB 外部 Agent 执行；已有部署授权继续有效，无需重复询问。
 
 ## 首次配置
+
+以下步骤用于首次建立源码服务。Release 包安装使用 [Fork 维护的安装流程](fork-maintenance.md#在其他机器安装)，服务替换仍按部署技能执行。
 
 1. 安装满足 `package.json` engines 的持久 Node 运行时，并把绝对二进制路径写进本机 JSON。systemd 不会加载交互 shell 的 `nvm`，因此不要让单元依赖 `nvm use` 或 `/tmp` 下的运行时。
 2. 在 Node 的 `bin` 目录为项目锁定的 pnpm 启用 Corepack：
@@ -66,10 +72,9 @@ git check-ignore -v config/local-aggregate-web.json
    没有明确服务部署授权时，首次配置也在本步骤后停止；以下 systemd 和
    Tailscale 步骤只在已有该授权时执行。
 
-4. 创建 systemd drop-in。将下列占位符替换为本机 JSON 的值。`repoPath` 是仓库根目录，
-   只用于首次配置；之后每次 cutover 都把 `WorkingDirectory` 改成 `fork-package`
-   生成的 `.worktrees/aggregate-deploy-<短 SHA>` 检出，实际运行目录以 `systemctl show
-   <unit> -p WorkingDirectory` 为准。
+4. 创建源码服务的 systemd drop-in。将下列占位符替换为经核对的本机 JSON 值。
+   `repoPath` 是已构建的干净检出。日后切换时使用部署技能生成与实际安装模型匹配的
+   ExecStart 和 WorkingDirectory；源码服务指向新的已构建检出，Release 服务指向新的已验证安装包。
 
    ```ini
    [Service]
