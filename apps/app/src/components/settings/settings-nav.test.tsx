@@ -82,6 +82,16 @@ describe("useSettingsNavState", () => {
     );
   });
 
+  it("shows Files even when local helper access is unavailable", () => {
+    const { result } = renderHook(() => useSettingsNavState(), {
+      wrapper: wrapperFor("/settings/files"),
+    });
+
+    expect(result.current.sections.map((section) => section.id)).toContain(
+      "files",
+    );
+  });
+
   it("resolves archived threads as a settings section", () => {
     const { result } = renderHook(() => useSettingsNavState(), {
       wrapper: wrapperFor("/settings/archived"),
