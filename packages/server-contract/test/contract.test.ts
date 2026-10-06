@@ -49,9 +49,18 @@ interface OptionalServerFieldGroup {
   reason: string;
 }
 
-const OPTIONAL_SERVER_FIELD_GROUP_LIMIT = 46;
+const OPTIONAL_SERVER_FIELD_GROUP_LIMIT = 47;
 
 const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
+  {
+    reason:
+      "Delivery is recorded only for ACP inputs steered, interrupted, or queued during an active turn; ordinary inputs and older events have no delivery classification.",
+    fields: [
+      "threadTimelineResponseSchema.delta.upsertRows.turnRequest.delivery",
+      "threadTimelineResponseSchema.rows.turnRequest.delivery",
+      "threadTimelineResponseSchema.timelinePage.olderRowUpdates.turnRequest.delivery",
+    ],
+  },
   {
     reason:
       "Older parent notices have no per-child outcomes. New notices omit interruption details for completed, failed, or unclassified turns; a recorded host-connection-loss cause is optional even when the interruption reason is known.",
