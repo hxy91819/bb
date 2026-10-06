@@ -2345,7 +2345,7 @@ describe("PromptBoxInternal size controls", () => {
     ["thread", "calc(50dvh - 3rem)"],
     ["root-compose", "calc(70dvh - 3rem)"],
   ] as const)(
-    "caps the %s editor at its intended viewport height",
+    "caps the %s editor at its viewport and compact-home heights",
     (layout, maxHeight) => {
       render(
         <PromptBoxInternal
@@ -2356,7 +2356,9 @@ describe("PromptBoxInternal size controls", () => {
       const editorScroll = document.querySelector<HTMLElement>(
         "[data-promptbox-editor-scroll]",
       );
-      expect(editorScroll?.style.maxHeight).toBe(maxHeight);
+      expect(editorScroll?.style.maxHeight).toBe(
+        `min(${maxHeight}, var(--bb-compact-home-editor-max-height, 9999px))`,
+      );
     },
   );
 
