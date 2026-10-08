@@ -95,7 +95,7 @@ export function ProviderIcon({
   return (
     <span
       className={cn(
-        "inline-flex size-6 min-h-max min-w-max shrink-0 items-center justify-center",
+        "inline-flex size-6 min-h-0 min-w-0 shrink-0 items-center justify-center",
         className,
       )}
       style={
