@@ -117,6 +117,7 @@ describe("creating a sidebar section", () => {
     expect(inspection.sidebarActionCalls).toContainEqual({
       method: "openNewThread",
       options: {
+        projectId: "proj_test",
         experimental_placement: { sectionId: "sec_a", pinned: false },
         focusPrompt: true,
       },
