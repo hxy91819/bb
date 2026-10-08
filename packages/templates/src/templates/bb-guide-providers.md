@@ -237,3 +237,15 @@ The bb user and project roots keep higher precedence than matching shared roots.
 
 OpenCode ACP declares support for the built-in /compact command. Cursor ACP does
 not expose compatible manual compaction through ACP.
+
+The Codex plugin supports named home bindings through `homeBindings`:
+
+  bb plugin config provider-codex set homeBindings '[{"id":"work","displayName":"Work","codexHome":"~/.codex-work"}]'
+  bb provider models codex-work
+  bb thread spawn --provider codex-work --prompt 'Inspect this repository'
+
+Each binding uses the local Codex CLI and its own home on the selected host.
+Absolute paths and `~/` expressions are accepted. File logins and auth symlinks
+are reused; fixed bindings bypass Account Pooler. Renaming a label is supported;
+changing a directory requires a new ID. Restore a removed binding with the same
+ID and home to continue its threads. See the Codex provider skill for preparation.

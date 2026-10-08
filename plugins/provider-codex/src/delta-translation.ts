@@ -65,6 +65,7 @@ interface CodexRetryErrorContext {
 }
 
 interface CodexEventTranslationState {
+  providerId: string;
   rateLimitsByLimitId: Map<string, CodexRateLimitSnapshot>;
   latestRateLimitId: string;
   injectedToolsByName: Map<string, CodexInjectedTool>;
@@ -73,6 +74,7 @@ interface CodexEventTranslationState {
 
 export function createCodexEventTranslationState(): CodexEventTranslationState {
   return {
+    providerId: "codex",
     rateLimitsByLimitId: new Map(),
     latestRateLimitId: "codex",
     injectedToolsByName: new Map(),
@@ -189,6 +191,7 @@ export function applyCodexRateLimitUpdate(
 
 function normalizeCodexRateLimitSnapshot(
   snapshot: CodexRateLimitSnapshot,
+  providerId: string,
 ): ProviderRateLimitState {
   const windows = [
     normalizeCodexRateLimitWindow("primary", snapshot.primary),
@@ -240,7 +243,7 @@ function normalizeCodexRateLimitSnapshot(
   const isSpendControlBlocked = snapshot.spendControlReached === true;
 
   return {
-    providerId: "codex",
+    providerId,
     status: isSpendControlBlocked ? "blocked" : status,
     kind: isSpendControlBlocked ? "spend-control" : kind,
     windows,
@@ -280,7 +283,10 @@ export function normalizeCodexRateLimits(
   for (const limitId of new Set(["codex", preferredLimitId])) {
     const snapshot = state.rateLimitsByLimitId.get(limitId);
     if (snapshot === undefined) continue;
-    const rateLimits = normalizeCodexRateLimitSnapshot(snapshot);
+    const rateLimits = normalizeCodexRateLimitSnapshot(
+      snapshot,
+      state.providerId,
+    );
     candidates.push({
       explicitlyBlocked:
         snapshot.rateLimitReachedType !== null ||

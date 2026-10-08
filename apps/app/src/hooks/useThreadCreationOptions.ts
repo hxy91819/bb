@@ -489,6 +489,7 @@ export function useThreadCreationOptions(
       visibleProviders.map((p) => ({
         value: p.id,
         label: p.displayName,
+        ...(p.pluginId === undefined ? {} : { pluginId: p.pluginId }),
         icon: getProviderIconInfo("agent", p.id, p)?.icon,
         ...(p.strings?.brandPrefix === undefined
           ? {}
