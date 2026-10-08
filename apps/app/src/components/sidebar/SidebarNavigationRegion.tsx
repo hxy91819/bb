@@ -168,6 +168,7 @@ export interface SidebarNavigationRegionProps {
   onCustomizingChange: (isCustomizing: boolean) => void;
   focusReturnTargetRef: { current: HTMLElement | null };
   onNavigate?: () => void;
+  pinnedNavigationHost?: HTMLElement | null;
 }
 
 export function SidebarNavigationRegion({
@@ -175,6 +176,7 @@ export function SidebarNavigationRegion({
   onCustomizingChange,
   focusReturnTargetRef,
   onNavigate,
+  pinnedNavigationHost,
 }: SidebarNavigationRegionProps) {
   const replacement = useSidebarNavigationReplacement();
   const preference = useAtomValue(sidebarNavigationProviderAtom);
@@ -245,7 +247,9 @@ export function SidebarNavigationRegion({
       aria-label="Sidebar navigation"
       data-testid="sidebar-navigation-region"
       className={cn(
-        isCustomizing && isCompactViewport && "flex min-h-0 flex-1 flex-col",
+        isCustomizing && isCompactViewport
+          ? "flex min-h-0 flex-1 flex-col"
+          : "shrink-0",
       )}
     >
       {isCustomizing && isEditorShown ? (
@@ -279,6 +283,7 @@ export function SidebarNavigationRegion({
             onReload={handleReload}
             props={{
               isCompactViewport,
+              experimental_pinnedNavigationHost: pinnedNavigationHost ?? null,
             }}
           />
         )}
