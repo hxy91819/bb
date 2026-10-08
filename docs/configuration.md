@@ -727,11 +727,16 @@ forks and `"tip"` declares tip support, still checked against the agent), `suppo
 (only if the agent accepts an explicit compaction request — bb hides
 `/compact` otherwise), `fork` (`"none"` by default; set `"tip"` only when the
 agent implements ACP `session/fork` with independent inherited conversation
-state), and `dialect` (the vendor side channels bb reads for
+state, or `"checkpoint"` when it implements saved turn-boundary forks), and `dialect` (the vendor side channels bb reads for
 the agent: `cursor`, `opencode`, `omp`, or `grok`).
 
-Custom ACP forks support the end of the session only, not earlier checkpoints.
-The bridge also checks the agent's advertised fork capability before forking.
+`"tip"` supports end-of-session forks. `"checkpoint"` also supports saved
+successful turn boundaries through the `cursor-acp/checkpoint` ACP extension;
+the bridge checks the agent's advertised capability before forking. Cursor SDK
+snapshots preserve conversation state, not files, and only new successful model
+turns gain checkpoints. Use `bb thread fork <id> --source-seq-end <seq>`
+or SDK `threads.fork({ sourceThreadId, sourceSeqEnd, ... })` to choose a saved
+completed turn. Omit `sourceSeqEnd` to fork at the tip.
 
 The change applies immediately: the plugin re-registers its providers when the
 setting changes, with no restart and no `config refresh`.

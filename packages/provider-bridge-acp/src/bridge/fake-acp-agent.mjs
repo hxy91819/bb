@@ -98,6 +98,7 @@ const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
 const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
 const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
+const checkpointFork = process.env.FAKE_ACP_CHECKPOINT_FORK === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
 const usageOnLoad = process.env.FAKE_ACP_USAGE_ON_LOAD === "1";
 const goalExtension = process.env.FAKE_ACP_GOAL_EXTENSION === "1";
@@ -380,7 +381,13 @@ function configOptions() {
 
 function sessionCapabilities() {
   const capabilities = {
-    ...(forkSession ? { fork: {} } : {}),
+    ...(forkSession
+      ? {
+          fork: checkpointFork
+            ? { _meta: { "cursor-acp/checkpoint": true } }
+            : {},
+        }
+      : {}),
     ...(resumeSession ? { resume: {} } : {}),
   };
   return Object.keys(capabilities).length > 0
@@ -728,6 +735,9 @@ async function handlePrompt(message) {
       id: message.id,
       result: {
         stopReason,
+        ...(checkpointFork
+          ? { _meta: { "cursor-acp/checkpoint": "fake-checkpoint" } }
+          : {}),
         ...(grokContext
           ? { _meta: { usage: { inputTokens: 17_504, totalTokens: 17_531 } } }
           : {}),
