@@ -211,9 +211,10 @@ Give it a user list and a project list. User roots resolve from the target host
 home directory. Project roots resolve from the selected workspace. Each root
 must use a relative path without dot segments. Custom agents automatically
 follow the ACP `session/fork` capability after background discovery on connected
-hosts; no fork setting is needed. `bb thread fork` and the UI support tip forks
-only. Optional fork: "none" disables them; fork: "tip" declares support that
-is still checked against the agent. Launch changes refresh discovery on the
+hosts; no fork setting is needed. The cursor-acp/checkpoint extension also
+enables saved turn-boundary forks. Optional fork: "none" disables forks;
+fork: "tip" limits them to the tip; fork: "checkpoint" declares historical
+support. The probe and bridge check the agent's capabilities. Launch changes refresh discovery on the
 next host poll; reload the ACP providers plugin after an unchanged CLI launch
 is upgraded. Set supportsManualCompaction to true only
 if the agent accepts an explicit compaction request; it defaults to false, and
@@ -221,14 +222,13 @@ bb hides the /compact command for agents that do not declare it. The plugin
 re-registers its providers as soon as the setting changes, so no restart or
 config refresh is needed.
 
-Custom agents default to fork: "none". Set fork: "tip" only when the agent
-implements ACP session/fork with independent inherited conversation state.
-Set fork: "checkpoint" for adapters implementing the cursor-acp/checkpoint
-extension, such as the Cursor SDK adapter. This enables saved successful
-turn-boundary forks with bb thread fork <id> --source-seq-end <seq>;
-"tip" remains end-of-session only. The bridge checks the agent's advertised
-capability. Checkpoints preserve conversation state, not files, and only model
-turns completed with a checkpoint-aware adapter can be selected.
+Select a saved successful turn boundary with
+bb thread fork <id> --source-seq-end <seq>, or SDK
+threads.fork({ sourceThreadId, sourceSeqEnd, ... }). Older host probes report only
+tip support; an explicit fork: "checkpoint" declaration is preserved until the
+bridge verifies the agent at execution. Checkpoints preserve conversation state,
+not files, and only model turns completed with a checkpoint-aware adapter can
+be selected.
 
 Use top-level sharedSkillRoots for one provider-neutral skill collection. The
 user and project paths use the same relative-path rules. bb indexes these roots

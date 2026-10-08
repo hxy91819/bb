@@ -904,7 +904,12 @@ bridge options (`acpDialect`). `experimental_probeAcpAgent` asks one
 installed agent what it supports (`initialize` → `agentCapabilities`) so a
 plugin can replace a declared guess with the agent's own answer, and
 `experimental_acpAgentProbeSchema` validates that answer across a host RPC
-boundary. `experimental_acpLaunchSpecSchema` (and its `AcpLaunchSpec` type)
+boundary. Successful replies include optional `checkpointFork`, indicating the
+`cursor-acp/checkpoint` extension. It is optional for compatibility with older
+host artifacts: automatic discovery treats an absent field as tip-only, while
+explicit checkpoint declarations are verified by the bridge at execution.
+Older servers ignore the extra field and retain their existing tip behavior.
+`experimental_acpLaunchSpecSchema` (and its `AcpLaunchSpec` type)
 is the launch spec the bridge parses, published so a plugin validates what
 it declares against exactly what the bridge will accept; the ACP package
 owns the definition (it is no longer a host-daemon-contract shape).

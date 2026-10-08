@@ -35,17 +35,6 @@ OpenCode ACP supports the core `bb thread compact` command; Cursor ACP does not
 expose compatible compaction. Check the actual agent's capabilities before
 attempting provider-specific recovery.
 
-For a custom ACP agent that implements `session/fork`, set `"fork": "tip"` in
-its `customAgents` entry using `bb plugin config provider-acp set customAgents`.
-The default is `"none"`; `"tip"` enables end-of-session forks only, and the
-bridge requires the agent to advertise fork support. Check that the adapter
-copies conversation state into an independent session, not just a new empty ID.
-Set `"fork": "checkpoint"` for the Cursor SDK adapter implementing the
-`cursor-acp/checkpoint` extension. Fork a saved successful turn boundary with
-`bb thread fork <id> --source-seq-end <seq>`. Earlier turns without a
-saved checkpoint cannot be reconstructed; checkpoints preserve conversation
-state rather than reverting files.
-
 OpenCode Go subscription usage is available in Provider usage when the selected
 machine has OpenCode installed and a Go subscription. Sign in to Go in OpenCode
 on that machine, then refresh its OpenCode tab. Verify with
@@ -71,12 +60,23 @@ Missing credentials, rejected keys, and collection errors remain unavailable
 states rather than zero usage. Never print API keys when diagnosing setup.
 
 Custom ACP agents are configured with `bb plugin config provider-acp set
-customAgents '[...]'`. Forks follow the agent's ACP `session/fork` capability
-automatically after background discovery on connected hosts; omit `fork`.
-Use `bb thread fork <thread-id>` or the UI fork action. Optional `"fork": "none"`
-disables forks; `"fork": "tip"` declares support, still checked against the
-agent. Preserve other entries when updating the list. Launch changes are
-re-probed on the next host poll; reload the ACP providers plugin after upgrading
-an agent without changing its launch. A supported host enables automatic forks
-in the global provider catalog; the bridge verifies the chosen host at execution.
-ACP supports tip forks only; `--source-seq-end` checkpoint forks are rejected.
+customAgents '[...]'`. Preserve other entries when updating the list. Omit
+`fork` to discover the agent's capabilities on connected hosts: `session/fork`
+enables tip forks, and its `cursor-acp/checkpoint` metadata enables historical
+forks. Optional `"fork": "none"` disables forks; `"fork": "tip"` limits them
+to the conversation tip; `"fork": "checkpoint"` declares historical support.
+The probe and bridge check the agent's capabilities. Older host probes report
+only tip support; an explicit checkpoint declaration is preserved until the
+bridge verifies the agent at execution.
+
+Use `bb thread fork <thread-id>` or the UI fork action. Select a saved successful
+turn boundary with `bb thread fork <id> --source-seq-end <seq>` or SDK
+`threads.fork({ sourceThreadId, sourceSeqEnd, ... })`. Earlier turns without a
+saved checkpoint cannot be reconstructed; checkpoints preserve conversation
+state rather than reverting files. The adapter must copy independent session
+state, not just return a new empty ID.
+
+Launch changes are re-probed on the next host poll; reload the ACP providers
+plugin after upgrading an agent without changing its launch. Any supporting
+connected host enables automatic forks in the global provider catalog; the
+bridge verifies the chosen host at execution.

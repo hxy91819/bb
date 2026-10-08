@@ -42,7 +42,6 @@ describe("parseCustomAcpAgents", () => {
         args: [],
         env: {},
         supportsManualCompaction: false,
-        fork: "none",
       },
     ]);
   });
