@@ -11,6 +11,15 @@ The same data is available through `bb settings usage --machine <id> --json`
 and `bb.sdk.system.usageLimits({ hostId, providerId: "acp-opencode" })`.
 Other OpenCode providers and pay-as-you-go spending are not included.
 
+Custom agents automatically expose tip forks when their ACP initialization
+response advertises `session/fork`; no extra fork setting is needed. Background
+discovery runs on connected hosts, caches answers per launch configuration, and
+refreshes changed launches. `bb thread fork` and the UI fork action become
+available after successful discovery. Optional `"fork": "none"` disables forks;
+`"fork": "tip"` declares support, still checked by the probe and bridge.
+Checkpoint forks are unsupported. See the Custom ACP Agents chapter in
+`docs/configuration.md` for configuration and refresh behavior.
+
 The plugin has no bridge of its own. Every agent it registers runs on the
 published ACP kit, `@get-bb/plugin-sdk/provider-bridge/acp`, which its
 `bb.host` entry re-exports (`src/host.ts`). That is the whole
