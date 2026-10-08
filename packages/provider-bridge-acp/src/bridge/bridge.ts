@@ -959,7 +959,7 @@ async function loadSessionDiscoveredModels(
         error instanceof Error ? error.message : String(error)
       }\n`,
     );
-    return null;
+    throw error;
   } finally {
     if (timeout !== undefined) {
       clearTimeout(timeout);
