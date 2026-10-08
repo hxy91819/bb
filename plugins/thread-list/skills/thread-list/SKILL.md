@@ -7,7 +7,7 @@ description: "Inspect or change the sidebar thread list's layout preferences: or
 
 The Thread list plugin owns the sidebar's layout state. Read it with
 `bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`, `organizationMode`,
-`environmentGrouping`, `chronologicalSort`, `sortDirection`, `sectionOrder`,
+`environmentGrouping`, `chronologicalSort`, `dateGrouping`, `sortDirection`, `sectionOrder`,
 `manualSectionOrder`, `machineSectionOrder`, `hiddenGroups` (including the
 built-in `threads` group), `rowActions`,
 `collapsedSections`, `collapsedProjects`, `collapsedThreads`,
@@ -56,3 +56,23 @@ and general thread groups start unsectioned and unpinned. Environment rows
 reuse their environment and the containing group's placement. In Pinned,
 they retain the group's common underlying section for unpinning; mixed-section
 groups use no underlying section.
+
+## Date groups
+
+`dateGrouping` defaults to `true`. Organize → Rows → Date groups toggles it;
+`bb thread-list prefs set dateGrouping false` or `setPreference` RPC does the same.
+It only groups root entries in Custom's built-in Threads section. Pinned,
+custom sections, By project, and By machine are unchanged. Alphabetical sorting
+disables the toggle and hides date groups without changing the saved preference.
+
+Updated sorting groups by the same key it sorts by: a thread's latest activity
+(`latestAttentionAt`), with running threads counted as today; metadata edits such
+as pinning do not move a thread. Created sorting uses `createdAt`. Buckets use
+local calendar days: Today, Yesterday, English weekday names for 2–6 days ago,
+Previous 30 days for 7–29 days ago, then English month and numeric year (for
+example, September 2026). Headings are always English, matching the rest of the
+sidebar, regardless of the browser locale. Nested children and worktree siblings
+stay with their root thread or environment representative's date. Archived threads
+share the same buckets when included by Filter. Headings are display-only, not
+collapsible, draggable, or keyboard jump targets; there are no priority or
+needs-input buckets. Dates refresh at local midnight and on window focus.
