@@ -1272,21 +1272,62 @@ describe("ThreadRow", () => {
         titleContainer?.classList.contains(
           "pr-(--bb-sidebar-hover-actions-inset)",
         ),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         titleContainer?.style.getPropertyValue(
           "--bb-sidebar-hover-actions-inset",
         ),
-      ).toBe("calc(var(--spacing) * 7.5)");
+      ).toBe("calc(var(--spacing) * 0)");
       expect(
         titleContainer?.classList.contains("max-md:pointer-coarse:pr-0"),
-      ).toBe(true);
+      ).toBe(false);
       expect(navigationTarget?.classList.contains("flex-1")).toBe(true);
       expect(titleWrapper?.classList.contains("flex-1")).toBe(false);
+      expect(
+        screen.queryByRole("button", { name: "Archive thread" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Thread actions" }),
+      ).not.toBeNull();
       fireEvent.click(toggle);
       expect(onToggleCollapsed).toHaveBeenCalledWith("thr_test");
     },
   );
+
+  it("keeps custom quick actions on parent rows while hiding archive", () => {
+    getDefaultStore().set(preferenceValueAtom("rowActions"), [
+      "pin",
+      "copyLink",
+      "archive",
+    ]);
+    const slot = renderThreadRow({
+      options: {
+        kind: "parent",
+        depth: 1,
+        isCompact: false,
+        isCollapsed: true,
+        childCount: 1,
+        childActivity: NO_COLLAPSED_CHILD_ACTIVITY,
+        onToggleCollapsed: vi.fn(),
+      },
+    });
+    expect(screen.queryByRole("button", { name: "Archive thread" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Copy thread link" }),
+    ).toBeTruthy();
+    const titleContainer = screen.getByRole("button", {
+      name: /Expand Thread/,
+    }).parentElement;
+    expect(
+      titleContainer?.style.getPropertyValue(
+        "--bb-sidebar-hover-actions-inset",
+      ),
+    ).toBe("calc(var(--spacing) * 15)");
+    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
+    expect(slot.inspection.sidebarActionCalls).toEqual([
+      { method: "setPinned", threadId: "thr_test", pinned: true },
+    ]);
+  });
 
   it("routes a tap on the bare row through its navigation link", () => {
     renderThreadRow();
