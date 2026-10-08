@@ -157,6 +157,8 @@ async function git(cwd: string, args: string[]): Promise<string> {
 
 async function initGitRepo(repoDir: string): Promise<void> {
   await git(repoDir, ["init", "-q", "-b", "main"]);
+  await git(repoDir, ["config", "commit.gpgsign", "false"]);
+  await git(repoDir, ["config", "tag.gpgsign", "false"]);
   await git(repoDir, ["config", "user.email", "test@example.com"]);
   await git(repoDir, ["config", "user.name", "Test"]);
 }
