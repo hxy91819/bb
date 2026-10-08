@@ -366,7 +366,19 @@ function RootComposeFilePreviewTabContent({
   const openContext =
     tab.kind === "workspace-file-preview" && tab.environmentId === null
       ? projectOpenContext
-      : environmentOpenContext;
+      : tab.kind === "host-file-preview" && tab.hostId
+        ? resolveHostOpenContext({
+            hostId: tab.hostId,
+            isLocal: isLocalDaemonHost(tab.hostId),
+            serverOrigin,
+          })
+        : tab.kind === "thread-storage-file-preview"
+          ? resolveHostOpenContext({
+              hostId: threadStorageLocationQuery.data?.hostId ?? null,
+              isLocal: isLocalDaemonHost(threadStorageLocationQuery.data?.hostId),
+              serverOrigin,
+            })
+          : environmentOpenContext;
   const { canOpenPreferredFileTarget, openPathInPreferredFileTarget } =
     useLocalOpenTargets({
       enabled: openContext !== null,
