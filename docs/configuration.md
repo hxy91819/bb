@@ -669,7 +669,9 @@ selection), `reasoningCli` (launch-time reasoning flags), `nativeReasoning`
 in the composer, as `{"user": [...], "project": [...]}` relative paths; an
 entry is a path or `{"path": ..., "recursive": true, "ancestors": true}` for
 an agent that nests skills or reads them from every ancestor directory),
-`permissionCli` (permission-mode launch flags), `supportsManualCompaction`
+`permissionCli` (permission-mode launch flags), `fork` (omitted by default to
+follow the agent's ACP `session/fork` capability; `"none"` explicitly disables
+forks and `"tip"` declares tip support, still checked against the agent), `supportsManualCompaction`
 (only if the agent accepts an explicit compaction request — bb hides
 `/compact` otherwise), `fork` (`"none"` by default; set `"tip"` only when the
 agent implements ACP `session/fork` with independent inherited conversation
@@ -686,6 +688,18 @@ completed turn. Omit `sourceSeqEnd` to fork at the tip.
 
 The change applies immediately: the plugin re-registers its providers when the
 setting changes, with no restart and no `config refresh`.
+
+No extra fork configuration is needed: the background capability probe runs on
+connected hosts and enables `bb thread fork` and the UI fork action when a
+custom agent advertises `session/fork`. Until a successful probe, automatic
+forks remain unavailable. The probe is cached per host and launch configuration;
+changing command, args, env, cwd, or the fork override triggers a fresh probe
+within the next host poll (normally five seconds). Disconnected hosts lose their
+cached answers. Reloading the ACP providers plugin refreshes unchanged launches
+after an agent upgrade. When any connected host supports an automatic fork, the
+provider exposes it globally; execution still checks the selected host's agent.
+ACP forks support the conversation tip only, not `--source-seq-end` checkpoints.
+
 
 A configured agent's command is local code execution and only works with a
 co-located daemon.

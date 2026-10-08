@@ -1,6 +1,6 @@
 ---
 name: acp-provider
-description: "Configure or troubleshoot ACP agent discovery, custom models, skills, and compaction in BB."
+description: "Configure or troubleshoot ACP agent discovery, custom models, skills, forks, and compaction in BB."
 ---
 
 # ACP providers
@@ -69,3 +69,14 @@ environment. A custom OpenCode wrapper must declare
 `dialect: "opencode"` and `providerUsage: true` to expose its usage.
 Missing credentials, rejected keys, and collection errors remain unavailable
 states rather than zero usage. Never print API keys when diagnosing setup.
+
+Custom ACP agents are configured with `bb plugin config provider-acp set
+customAgents '[...]'`. Forks follow the agent's ACP `session/fork` capability
+automatically after background discovery on connected hosts; omit `fork`.
+Use `bb thread fork <thread-id>` or the UI fork action. Optional `"fork": "none"`
+disables forks; `"fork": "tip"` declares support, still checked against the
+agent. Preserve other entries when updating the list. Launch changes are
+re-probed on the next host poll; reload the ACP providers plugin after upgrading
+an agent without changing its launch. A supported host enables automatic forks
+in the global provider catalog; the bridge verifies the chosen host at execution.
+ACP supports tip forks only; `--source-seq-end` checkpoint forks are rejected.
