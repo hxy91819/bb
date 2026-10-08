@@ -722,13 +722,11 @@ in the composer, as `{"user": [...], "project": [...]}` relative paths; an
 entry is a path or `{"path": ..., "recursive": true, "ancestors": true}` for
 an agent that nests skills or reads them from every ancestor directory),
 `permissionCli` (permission-mode launch flags), `fork` (omitted by default to
-follow the agent's ACP `session/fork` capability; `"none"` explicitly disables
-forks and `"tip"` declares tip support, still checked against the agent), `supportsManualCompaction`
-(only if the agent accepts an explicit compaction request — bb hides
-`/compact` otherwise), `fork` (`"none"` by default; set `"tip"` only when the
-agent implements ACP `session/fork` with independent inherited conversation
-state, or `"checkpoint"` when it implements saved turn-boundary forks), and `dialect` (the vendor side channels bb reads for
-the agent: `cursor`, `opencode`, `omp`, or `grok`).
+follow the agent's advertised fork boundaries; `"none"` disables forks, `"tip"`
+limits them to the tip, and `"checkpoint"` declares saved turn-boundary support),
+`supportsManualCompaction` (only if the agent accepts an explicit compaction
+request — bb hides `/compact` otherwise), and `dialect` (the vendor side
+channels bb reads for the agent: `cursor`, `opencode`, `omp`, or `grok`).
 
 `"tip"` supports end-of-session forks. `"checkpoint"` also supports saved
 successful turn boundaries through the `cursor-acp/checkpoint` ACP extension;
@@ -743,15 +741,18 @@ setting changes, with no restart and no `config refresh`.
 
 No extra fork configuration is needed: the background capability probe runs on
 connected hosts and enables `bb thread fork` and the UI fork action when a
-custom agent advertises `session/fork`. Until a successful probe, automatic
+custom agent advertises `session/fork`. The `cursor-acp/checkpoint` extension
+also enables saved turn-boundary forks. Until a successful probe, automatic
 forks remain unavailable. The probe is cached per host and launch configuration;
 changing command, args, env, cwd, or the fork override triggers a fresh probe
 within the next host poll (normally five seconds). Disconnected hosts lose their
 cached answers. Reloading the ACP providers plugin refreshes unchanged launches
 after an agent upgrade. When any connected host supports an automatic fork, the
 provider exposes it globally; execution still checks the selected host's agent.
-ACP forks support the conversation tip only, not `--source-seq-end` checkpoints.
-
+Older host probes report only tip support. An explicit `"checkpoint"`
+declaration remains available with these replies and is verified by the bridge
+at execution. A current probe narrows it to tip when the agent lacks the
+checkpoint extension.
 
 A configured agent's command is local code execution and only works with a
 co-located daemon.

@@ -12,12 +12,15 @@ and `bb.sdk.system.usageLimits({ hostId, providerId: "acp-opencode" })`.
 Other OpenCode providers and pay-as-you-go spending are not included.
 
 Custom agents automatically expose tip forks when their ACP initialization
-response advertises `session/fork`; no extra fork setting is needed. Background
+response advertises `session/fork`, and historical forks when it also advertises
+`cursor-acp/checkpoint`; no extra fork setting is needed. Background
 discovery runs on connected hosts, caches answers per launch configuration, and
 refreshes changed launches. `bb thread fork` and the UI fork action become
 available after successful discovery. Optional `"fork": "none"` disables forks;
-`"fork": "tip"` declares support, still checked by the probe and bridge.
-Checkpoint forks are unsupported. See the Custom ACP Agents chapter in
+`"fork": "tip"` limits forks to the conversation tip; `"fork": "checkpoint"`
+declares historical support, checked by the probe and bridge. Select a saved
+successful turn with `bb thread fork <id> --source-seq-end <seq>`. Checkpoints
+preserve conversation state rather than files. See the Custom ACP Agents chapter in
 `docs/configuration.md` for configuration and refresh behavior.
 
 The plugin has no bridge of its own. Every agent it registers runs on the

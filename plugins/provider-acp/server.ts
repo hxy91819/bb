@@ -106,9 +106,16 @@ export default async function acpProvidersPlugin(
           ? [record.probe]
           : [];
       });
-      const preferredFork = agent.fork === undefined;
       const probe =
-        probes.find((probe) => probe.fork === preferredFork) ?? probes[0];
+        (agent.fork === undefined
+          ? (probes.find(
+              (probe) => probe.fork && probe.checkpointFork === true,
+            ) ?? probes.find((probe) => probe.fork))
+          : probes.find(
+              (probe) =>
+                !probe.fork ||
+                (agent.fork === "checkpoint" && probe.checkpointFork === false),
+            )) ?? probes[0];
       return probe ? (applyAcpAgentProbe(agent, probe)?.agent ?? agent) : agent;
     });
   }

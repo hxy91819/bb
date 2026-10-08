@@ -6,9 +6,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { listEvents } from "@bb/db";
 import { threadResponseSchema } from "@bb/server-contract";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { registerConfiguredAcpProvider } from "../../../apps/server/test/helpers/provider-registry.js";
 import { getThreadEvents, sendTextMessage } from "../helpers/api.js";
 import { waitForThreadStatus } from "../helpers/assertions.js";
 import {
@@ -32,7 +31,9 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
       const directory = await mkdtemp(path.join(tmpdir(), "bb-cursor-fork-"));
       const childCwd = path.join(directory, "child");
       await mkdir(childCwd);
-      const harness = await createIntegrationHarness();
+      const harness = await createIntegrationHarness({
+        builtinPlugins: ["provider-acp"],
+      });
       const inheritedToken = randomBytes(12).toString("hex");
       const laterToken = randomBytes(12).toString("hex");
       const parentToken = randomBytes(12).toString("hex");
@@ -84,14 +85,36 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
         );
       };
       try {
-        await registerConfiguredAcpProvider(harness.server.providerRegistry, {
+        const entry = {
           id: "cursor-sdk-fork-test",
           displayName: "Cursor SDK Fork Test",
           command: process.execPath,
           args: [path.resolve(adapterEntry)],
           env: { CURSOR_ACP_CONFIG_DIR: path.join(directory, "acp-config") },
-          fork,
-        });
+        };
+        const settingsResponse = await fetch(
+          `${harness.serverUrl}/api/v1/plugins/provider-acp/settings`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              values: { customAgents: JSON.stringify([entry]) },
+            }),
+          },
+        );
+        expect(
+          settingsResponse.status,
+          await settingsResponse.clone().text(),
+        ).toBe(200);
+        await vi.waitFor(
+          () => {
+            expect(
+              harness.server.providerRegistry.get("acp-cursor-sdk-fork-test")
+                ?.serverCapabilities.fork,
+            ).toBe("checkpoint");
+          },
+          { timeout: 90_000 },
+        );
         const project = await createProjectFixture(harness, {
           name: "Cursor Fork Isolation",
         });

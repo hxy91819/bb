@@ -13,14 +13,23 @@ export function applyAcpAgentProbe(
   if (!probe.reachable) {
     return null;
   }
-  const fork = probe.fork ? "tip" : "none";
+  const fork = !probe.fork
+    ? "none"
+    : agent.fork !== "tip" &&
+        (probe.checkpointFork === true ||
+          (probe.checkpointFork === undefined && agent.fork === "checkpoint"))
+      ? "checkpoint"
+      : "tip";
   if (agent.fork === "none" || agent.fork === fork) {
     return null;
   }
   return {
     agent: { ...agent, fork },
-    reason: probe.fork
-      ? "the agent advertises session/fork"
-      : "the agent does not advertise session/fork",
+    reason:
+      fork === "checkpoint"
+        ? "the agent supports checkpoint forks"
+        : probe.fork
+          ? "the agent advertises session/fork"
+          : "the agent does not advertise session/fork",
   };
 }

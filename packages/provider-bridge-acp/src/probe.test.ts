@@ -1,7 +1,47 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { acpAgentProbeSchema, probeAcpAgent } from "./probe.js";
 
 describe("probeAcpAgent", () => {
+  it("accepts older host replies and remains readable by older servers", () => {
+    expect(acpAgentProbeSchema.parse({ reachable: true, fork: true })).toEqual({
+      reachable: true,
+      fork: true,
+    });
+    const oldSchema = z.object({
+      reachable: z.literal(true),
+      fork: z.boolean(),
+    });
+    expect(
+      oldSchema.parse({ reachable: true, fork: true, checkpointFork: true }),
+    ).toEqual({
+      reachable: true,
+      fork: true,
+    });
+  });
+
+  it("retains the Cursor checkpoint extension through the host RPC schema", async () => {
+    const probe = await probeAcpAgent({
+      command: process.execPath,
+      args: [
+        "-e",
+        `process.stdin.on("data", () => {
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1,
+          result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: {
+            fork: { _meta: { "cursor-acp/checkpoint": true } }
+          } } }
+        }) + "\\n");
+      });`,
+      ],
+      cwd: process.cwd(),
+    });
+    expect(acpAgentProbeSchema.parse(probe)).toEqual({
+      reachable: true,
+      fork: true,
+      checkpointFork: true,
+    });
+  });
+
   it("reports a missing agent instead of throwing", async () => {
     const probe = await probeAcpAgent({
       command: "bb-acp-agent-that-does-not-exist",
@@ -57,7 +97,11 @@ describe("probeAcpAgent", () => {
         timeoutMs: 10_000,
       });
 
-      expect(probe).toEqual({ reachable: true, fork: true });
+      expect(probe).toEqual({
+        reachable: true,
+        fork: true,
+        checkpointFork: false,
+      });
     } finally {
       if (previous === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
       else process.env.ELECTRON_RUN_AS_NODE = previous;
@@ -89,6 +133,10 @@ describe("probeAcpAgent", () => {
       timeoutMs: 10_000,
     });
 
-    expect(probe).toEqual({ reachable: true, fork: true });
+    expect(probe).toEqual({
+      reachable: true,
+      fork: true,
+      checkpointFork: false,
+    });
   });
 });
