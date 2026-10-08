@@ -5,7 +5,6 @@ import type {
   ReasoningLevel,
   ServiceTier,
 } from "@bb/domain";
-import path from "node:path";
 
 import {
   ACP_DEFAULT_MODEL_ID,
@@ -103,21 +102,23 @@ function buildAcpSkillsInstructions(
   }
 
   const skillLines = skillRoots.flatMap((skillRoot) => {
-    return skillRoot.skills.map((skill) => {
-      const skillFilePath = path.join(
-        skillRoot.skillDirectoryRootPath,
-        skill.name,
-        "SKILL.md",
-      );
-      return `- ${skill.name}: ${sanitizeAcpSkillDescription(skill.description)} (SKILL.md: ${skillFilePath})`;
-    });
+    if (skillRoot.skills.length === 0) {
+      return [];
+    }
+    return [
+      `Skills root: ${skillRoot.skillDirectoryRootPath}`,
+      ...skillRoot.skills.map(
+        (skill) =>
+          `- ${skill.name}: ${sanitizeAcpSkillDescription(skill.description)}`,
+      ),
+    ];
   });
   if (skillLines.length === 0) {
     return undefined;
   }
 
   return [
-    "bb skills are reusable instruction folders. When the current task matches a listed skill description, read that skill's SKILL.md at the absolute path before proceeding; you may read supporting files in the same skill directory that SKILL.md references. If a listed path does not exist, the list is stale and should be ignored.",
+    "bb skills are reusable instruction folders. When the current task matches a listed skill description, read that skill's SKILL.md before proceeding: it lives at <skills root>/<skill name>/SKILL.md under the root declared for its group. You may read supporting files in the same skill directory that SKILL.md references. If a path does not exist, the list is stale and should be ignored.",
     "",
     "Available bb skills:",
     ...skillLines,
