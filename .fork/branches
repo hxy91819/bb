@@ -47,3 +47,4 @@ feature/custom-acp-checkpoint-fork    needs-feedback                            
 fix/acp-checkpoint-probe              needs-feedback                                             # 叠在 feature/custom-acp-checkpoint-fork 上并合入 feature/acp-custom-fork；自动识别历史 Fork 能力，保留显式限制及旧探测兼容
 feature/codex-home-bindings            needs-feedback https://github.com/hxy91819/bb/issues/25     # 具名 CODEX_HOME 共享原生 Codex bridge，绕过 Pool，不复制或导入凭证；待上游反馈
 fix/git-fixture-isolation              needs-feedback                                             # Git 签名与 Linux user-unit fixture 不继承宿主配置和 root 身份
+feature/child-report-delivery          needs-feedback                                                             # 子线程汇报投递设计文档（docs/child-report-delivery-design.md），尚无实现
