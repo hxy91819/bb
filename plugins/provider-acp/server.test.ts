@@ -288,9 +288,56 @@ describe("the ACP plugin's registration bookkeeping", () => {
 });
 
 describe("the ACP plugin's capability probe", () => {
-  it.each([false, true])(
-    "discovers custom forks through a real ACP initialize response without a fork setting (custom cwd=%s)",
-    async (customCwd) => {
+  it.each([
+    { configured: undefined, checkpointFork: true, expected: "checkpoint" },
+    { configured: "checkpoint", checkpointFork: true, expected: "checkpoint" },
+    { configured: "tip", checkpointFork: true, expected: "tip" },
+    { configured: "none", checkpointFork: true, expected: "none" },
+    { configured: "checkpoint", checkpointFork: false, expected: "tip" },
+    {
+      configured: "checkpoint",
+      checkpointFork: undefined,
+      expected: "checkpoint",
+    },
+    { configured: undefined, checkpointFork: undefined, expected: "tip" },
+  ])(
+    "registers the supported fork boundary for %j",
+    async ({ configured, checkpointFork, expected }) => {
+      const host = await loadPlugin({
+        customAgents: customAgents({
+          id: "cursor-sdk",
+          displayName: "Cursor SDK",
+          command: "cursor-acp",
+          ...(configured === undefined ? {} : { fork: configured }),
+        }),
+        hosts: [{ id: "host_1", status: "connected" }],
+        probe: () => ({
+          reachable: true,
+          fork: true,
+          ...(checkpointFork === undefined ? {} : { checkpointFork }),
+        }),
+      });
+      vi.useFakeTimers();
+      const run = host.harness.runService("acp-capability-probe");
+      try {
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(forkOf(host, "acp-cursor-sdk")).toBe(expected);
+      } finally {
+        run.controller.abort();
+        await run.done;
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each([
+    { customCwd: false, checkpoint: false },
+    { customCwd: true, checkpoint: false },
+    { customCwd: false, checkpoint: true },
+    { customCwd: true, checkpoint: true },
+  ])(
+    "discovers custom fork boundaries through a real ACP initialize response (%j)",
+    async ({ customCwd, checkpoint }) => {
       const fixtureDir = await mkdtemp(path.join(tmpdir(), "bb-auto-fork-"));
       const cwd = customCwd ? path.join(fixtureDir, "agent") : fixtureDir;
       await mkdir(cwd, { recursive: true });
@@ -313,7 +360,7 @@ describe("the ACP plugin's capability probe", () => {
             process.stdout.write(JSON.stringify({
               jsonrpc: "2.0", id: request.id,
               result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities:
-                require("node:fs").existsSync("fork-marker") ? { fork: {} } : {} } },
+                require("node:fs").existsSync("fork-marker") ? { fork: ${JSON.stringify(checkpoint ? { _meta: { "cursor-acp/checkpoint": true } } : {})} } : {} } },
             }) + "\\n");
           }
         }
@@ -338,7 +385,10 @@ describe("the ACP plugin's capability probe", () => {
       const run = host.harness.runService("acp-capability-probe");
       try {
         await vi.waitFor(
-          () => expect(forkOf(host, "acp-fixture")).toBe("tip"),
+          () =>
+            expect(forkOf(host, "acp-fixture")).toBe(
+              checkpoint ? "checkpoint" : "tip",
+            ),
           {
             timeout: 5_000,
           },
@@ -577,9 +627,14 @@ describe("the ACP plugin's capability probe", () => {
     }
   });
 
-  it.each([false, true])(
-    "keeps custom forks available when any connected host supports them (supporting host first=%s)",
-    async (supportFirst) => {
+  it.each([
+    { supportFirst: false, checkpoint: false },
+    { supportFirst: true, checkpoint: false },
+    { supportFirst: false, checkpoint: true },
+    { supportFirst: true, checkpoint: true },
+  ])(
+    "keeps the strongest automatic fork capability across connected hosts (%j)",
+    async ({ supportFirst, checkpoint }) => {
       const hosts = [
         { id: "host_support", status: "connected" },
         { id: "host_unsupported", status: "connected" },
@@ -594,7 +649,8 @@ describe("the ACP plugin's capability probe", () => {
         hosts,
         probe: (_command, hostId) => ({
           reachable: true,
-          fork: hostId === "host_support",
+          fork: checkpoint || hostId === "host_support",
+          checkpointFork: checkpoint && hostId === "host_support",
         }),
       });
       vi.useFakeTimers();
@@ -608,13 +664,13 @@ describe("the ACP plugin's capability probe", () => {
             ),
           ).toHaveLength(2),
         );
-        expect(forkOf(host, "acp-amp")).toBe("tip");
+        expect(forkOf(host, "acp-amp")).toBe(checkpoint ? "checkpoint" : "tip");
         for (const available of hosts) {
           if (available.id === "host_support")
             available.status = "disconnected";
         }
         await vi.advanceTimersByTimeAsync(5_000);
-        expect(forkOf(host, "acp-amp")).toBe("none");
+        expect(forkOf(host, "acp-amp")).toBe(checkpoint ? "tip" : "none");
       } finally {
         run.controller.abort();
         await run.done;
