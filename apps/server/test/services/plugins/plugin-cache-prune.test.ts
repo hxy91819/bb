@@ -389,6 +389,8 @@ describe("git plugin cache lifecycle", () => {
     repo = join(workDir, "repo");
     await mkdir(repo, { recursive: true });
     await git(["init", "-q", "-b", "main"]);
+    await git(["config", "commit.gpgsign", "false"]);
+    await git(["config", "tag.gpgsign", "false"]);
     await git(["config", "user.email", "test@example.com"]);
     await git(["config", "user.name", "Test"]);
     await commitPlugin("1.0.0");
