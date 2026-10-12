@@ -61,7 +61,6 @@ import {
 import { cn } from "@bb/shared-ui/lib/utils";
 import { SecondaryPanelSelectionActions } from "./SecondaryPanelSelectionActions.js";
 import {
-  FILE_PREVIEW_WRAPPER_STYLE,
   FilePreviewHeaderFrame,
   FilePreviewPath,
 } from "./FilePreviewChrome.js";
