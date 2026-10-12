@@ -52,6 +52,7 @@ import {
   resetPluginSlotStoreForTest,
   setPluginSlotRegistrations,
 } from "@/lib/plugin-slots";
+import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation";
 import type { ChildThreadPendingAttention } from "@/hooks/queries/child-thread-pending-interactions";
 import {
   ThreadDetailPromptArea,
@@ -576,16 +577,21 @@ vi.mock("@/hooks/useCommandSuggestions", () => ({
   useCommandSuggestions: ({
     providerId,
     commandScope,
+    panelCommands,
   }: {
     providerId: string;
     commandScope: string;
+    panelCommands?: readonly { name: string }[];
   }) => ({
     hasMore: false,
     isError: false,
     isLoading: false,
     isLoadingMore: false,
     loadMore: vi.fn(),
-    suggestions: [{ name: `${providerId}:${commandScope}` }],
+    suggestions: [
+      { name: `${providerId}:${commandScope}` },
+      ...(panelCommands ?? []).map((command) => ({ name: command.name })),
+    ],
     triggers: [],
   }),
 }));
@@ -837,6 +843,7 @@ interface RenderPromptAreaOptions {
   activePromptMode?: ThreadTimelineActivePromptMode | null;
   activeWorkflows?: TimelineWorkflowWorkRow[];
   goal?: ThreadTimelineGoal | null;
+  isForkAvailable?: boolean;
   modelFallback?: ThreadTimelineModelFallback | null;
   pendingInteractions?: readonly PendingInteraction[];
   childPendingInteractions?: readonly ChildThreadPendingAttention[];
@@ -854,6 +861,7 @@ function buildPromptAreaElement({
   activePromptMode = null,
   activeWorkflows = [],
   goal = null,
+  isForkAvailable = false,
   modelFallback = null,
   pendingInteractions = [],
   childPendingInteractions = [],
@@ -880,6 +888,7 @@ function buildPromptAreaElement({
         goal={goal}
         modelFallback={modelFallback}
         isEnvironmentActionPending={false}
+        isForkAvailable={isForkAvailable}
         onChangedFileClick={vi.fn()}
         parentThreadSection={null}
         pendingInteractions={pendingInteractions}
@@ -979,6 +988,61 @@ describe("environment follow-up summary", () => {
 
     expect(screen.queryByTestId("thread-environment-summary")).toBeNull();
   });
+});
+
+describe("side-chat composer command", () => {
+  it("offers the side-chat panel command in the main composer when the thread is forkable", () => {
+    setPluginSlotRegistrations(
+      "side-chat",
+      makePluginRegistrationSet({
+        threadPanelActions: [
+          {
+            id: "side-chat",
+            title: "Start side chat",
+            component: () => null,
+            run: vi.fn(),
+          },
+        ],
+      }),
+    );
+    render(
+      <PluginThreadPanelNavigationProvider openThreadPanel={vi.fn(() => true)}>
+        {buildPromptAreaElement({ isForkAvailable: true })}
+      </PluginThreadPanelNavigationProvider>,
+    );
+
+    expect(
+      screen
+        .getByTestId("command-suggestions")
+        .textContent?.split(",") ?? [],
+    ).toContain("side");
+  });
+
+  it("omits the side-chat panel command when the thread is not forkable", () => {
+    setPluginSlotRegistrations(
+      "side-chat",
+      makePluginRegistrationSet({
+        threadPanelActions: [
+          {
+            id: "side-chat",
+            title: "Start side chat",
+            component: () => null,
+            run: vi.fn(),
+          },
+        ],
+      }),
+    );
+    render(
+      <PluginThreadPanelNavigationProvider openThreadPanel={vi.fn(() => true)}>
+        {buildPromptAreaElement()}
+      </PluginThreadPanelNavigationProvider>,
+    );
+
+    expect(
+      screen.getByTestId("command-suggestions").textContent,
+    ).not.toContain("side");
+  });
+
 });
 
 describe("ThreadDetailPromptArea", () => {
