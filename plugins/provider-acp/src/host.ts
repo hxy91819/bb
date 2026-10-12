@@ -14,7 +14,7 @@ export default experimental_defineHostEntry({
         command: input.command,
         args: input.args,
         env: input.env,
-        cwd: context.experimental_paths.tempDir,
+        cwd: input.cwd ?? context.experimental_paths.tempDir,
       }),
     resolveNativeRoots: (input) =>
       resolveAcpNativeRoots({

@@ -10,6 +10,7 @@ export const acpHostContract = defineRpcContract({
         command: z.string().min(1),
         args: z.array(z.string()),
         env: z.record(z.string(), z.string()),
+        cwd: z.string().min(1).optional(),
       })
       .strict(),
     output: experimental_acpAgentProbeSchema,
