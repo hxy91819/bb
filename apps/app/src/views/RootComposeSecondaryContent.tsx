@@ -126,10 +126,7 @@ export function RootComposeSecondaryContent({
         </div>
       ) : null}
       {isCompactHomeLayout ? (
-        <div
-          className="@container/page flex min-h-0 flex-1 flex-col"
-          style={PAGE_SHELL_CONTENT_STYLE}
-        >
+        <div className="@container/page flex min-h-0 flex-1 flex-col">
           <RootComposeCompactHome composer={children}>
             {compactScrollContent}
             <PluginHomepageSections />
