@@ -1,7 +1,8 @@
 import { atom, type SetStateAction, type WritableAtom } from "jotai";
-import type {
-  PreferenceKey,
-  PreferenceValue,
+import {
+  conflictingGroupingPreference,
+  type PreferenceKey,
+  type PreferenceValue,
 } from "../../shared/preferences.js";
 import {
   preferenceValueAtom,
@@ -23,6 +24,14 @@ export function createSyncedPreferenceAtom<Key extends PreferenceKey>(
       const valueAtom = preferenceValueAtom(key);
       const previous = get(valueAtom);
       const next = typeof update === "function" ? update(previous) : update;
+      const conflictingKey = conflictingGroupingPreference(key);
+      if (next === true && conflictingKey !== null) {
+        const conflictingAtom = preferenceValueAtom(conflictingKey);
+        if (get(conflictingAtom)) {
+          set(conflictingAtom, false);
+          schedulePreferenceWrite(conflictingKey, false);
+        }
+      }
       if (Object.is(next, previous)) return;
       set(valueAtom, next);
       schedulePreferenceWrite(key, next);
