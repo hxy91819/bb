@@ -157,6 +157,7 @@ import {
   promptCommandResourceFromSuggestion,
   promptEditorClipboardTextFromSlice,
   promptEditorContentFromValue,
+  promptEditorCopiedSlice,
   promptEditorInlineContentFromValue,
   promptEditorValueFromDoc,
   promptEditorValueFromSlice,
@@ -633,7 +634,6 @@ interface PromptBoxInternalProps {
   blurOnPointerSubmit?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  allowSoftKeyboardAutoFocus?: boolean;
   textEffects?: readonly ComposerTextEffectSource[];
   onComposerLayoutChange?: (layout: ComposerView["layout"]) => void;
   header?: ReactNode;
@@ -1276,7 +1276,6 @@ export function PromptBoxInternal({
   blurOnPointerSubmit = false,
   placeholder = "Ask anything. @ to mention files, folders, or sections",
   autoFocus = true,
-  allowSoftKeyboardAutoFocus = false,
   textEffects,
   onComposerLayoutChange,
   header,
@@ -1381,8 +1380,6 @@ export function PromptBoxInternal({
   const isPointerCoarse = usePointerCoarse();
   const isIPadOSWebKitDevice = useMemo(isIPadOSWebKit, []);
   const editorEnterKeyHint = isPointerCoarse ? "enter" : "send";
-  const shouldAvoidSoftKeyboardAutofocus =
-    isPointerCoarse && !allowSoftKeyboardAutoFocus;
   const formRef = useRef<HTMLFormElement>(null);
   const typeaheadMenuRef = useRef<HTMLDivElement>(null);
   const reportQueuedEditorTypeaheadLayout = useContext(
@@ -2055,6 +2052,8 @@ export function PromptBoxInternal({
           ...(id ? { id } : {}),
           role: "textbox",
         },
+        transformCopied: (slice, view) =>
+          promptEditorCopiedSlice(slice, view.state.selection),
         clipboardTextSerializer: (slice, view) =>
           promptEditorClipboardTextFromSlice(slice, view.state.schema),
         handleDOMEvents: {
@@ -2428,7 +2427,7 @@ export function PromptBoxInternal({
       }
       return;
     }
-    if (shouldAvoidSoftKeyboardAutofocus) return;
+    if (isPointerCoarse) return;
 
     const focusEditor = () => {
       if (editor.isDestroyed) return;
@@ -2450,7 +2449,7 @@ export function PromptBoxInternal({
     editor,
     focusScopeKey,
     scheduleRevealEditorSelection,
-    shouldAvoidSoftKeyboardAutofocus,
+    isPointerCoarse,
   ]);
 
   useEffect(() => {
