@@ -606,12 +606,16 @@ function selectClientRequestContextRows(
   const clientRequestIds = collectSteerClientRequestIdsNeedingContext(
     args.rows,
   );
-  if (clientRequestIds.length === 0) {
+  const deliveryClientRequestIds = args.rows.flatMap((row) => {
+    const id = tryReadSteerClientTurnRequestedRequestId(row);
+    return id === null ? [] : [id];
+  });
+  if (clientRequestIds.length === 0 && deliveryClientRequestIds.length === 0) {
     return { acceptedRows: [], deliveryRows: [], rejectedRows: [] };
   }
   const afterSequence = minSequenceOfClientRequests(
     args.rows,
-    new Set(clientRequestIds),
+    new Set([...clientRequestIds, ...deliveryClientRequestIds]),
   );
   return {
     acceptedRows: listStoredTurnInputAcceptedRowsByClientRequestIds(db, {
@@ -621,7 +625,7 @@ function selectClientRequestContextRows(
     }),
     deliveryRows: listStoredTurnInputDeliveryRowsByClientRequestIds(db, {
       afterSequence,
-      clientRequestIds,
+      clientRequestIds: deliveryClientRequestIds,
       threadId: args.threadId,
     }),
     rejectedRows: listStoredTurnRejectedRowsByClientRequestIds(db, {
@@ -1705,6 +1709,9 @@ function buildThreadConversationRows(
     });
     const acceptedClientRequestContext: AcceptedClientRequestContext = {
       acceptedClientRequestEvents: clientRequestContextRows.acceptedRows.map(
+        (row) => toThreadEventWithMeta(row),
+      ),
+      deliveryClientRequestEvents: clientRequestContextRows.deliveryRows.map(
         (row) => toThreadEventWithMeta(row),
       ),
       rejectedClientRequestEvents: clientRequestContextRows.rejectedRows.map(

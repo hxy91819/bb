@@ -2595,7 +2595,8 @@ function runTurn(
           emitGrokContextWindow(session, grokUsage.used);
         }
       } catch (error) {
-        session.restartAfterCancelError = session.cancelRequested || ctx.everCancelled;
+        session.restartAfterCancelError =
+          session.cancelRequested || ctx.everCancelled;
         ctx.failedMessage ??=
           error instanceof Error ? error.message : String(error);
         requestSteerCancel(session, ctx);
@@ -2690,7 +2691,10 @@ function reconcileExecutionSettings(
     session.connection.exited ||
     session.restartAfterCancelError ||
     launchArgsChanged ||
-    !isDeepStrictEqual(construction.envVars ?? {}, session.construction.envVars ?? {});
+    !isDeepStrictEqual(
+      construction.envVars ?? {},
+      session.construction.envVars ?? {},
+    );
   cancelPendingPermissions(session);
   session.policy = {
     permissionMode: construction.permissionMode,
@@ -3113,8 +3117,7 @@ function decodeDialectId(
 function decodeSteeringMode(
   providerOptions: Record<string, unknown> | undefined,
 ): AcpSteeringMode | undefined {
-  return acpProviderOptionsSchema.parse(providerOptions ?? {})
-    .acpSteeringMode;
+  return acpProviderOptionsSchema.parse(providerOptions ?? {}).acpSteeringMode;
 }
 
 function maintenanceTarget(

@@ -788,7 +788,6 @@ describe("acp bridge", () => {
     });
   });
 
-
   it("keeps probing reasoning for later models after one model's probe fails", async () => {
     const modelListId = sendModelList({
       envVars: {
@@ -1435,7 +1434,11 @@ describe("acp bridge", () => {
 
   it("applies a queued steer's changed ACP-native model before its prompt", async () => {
     const launch: AgentLaunchArgs = {
-      envVars: { FAKE_ACP_MODEL_CONFIG: "1" },
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+        FAKE_ACP_MID_TURN_STEERING: "1",
+        FAKE_ACP_CONCURRENT_PROMPTS: "1",
+      },
     };
     const { providerThreadId } = await startThread({
       ...launch,
@@ -1459,6 +1462,9 @@ describe("acp bridge", () => {
 
     expect(agentMessageTexts()).toContain("selected-model:fake/strong");
     expect(notifications("session/replaced")).toHaveLength(0);
+    expect(turnInputDeliveries(CLIENT_REQUEST_ID)).toMatchObject([
+      { delivery: "interrupted" },
+    ]);
   });
 
   it("restores the requested ACP-native model after the agent switches itself", async () => {
@@ -2801,7 +2807,12 @@ describe("acp bridge", () => {
   it("preserves stacked steers across permission CLI rebuilds", async () => {
     const promptLog = join(workspaceDir, "permission-prompts.jsonl");
     const { providerThreadId } = await startThread({
-      envVars: { FAKE_ACP_LOAD_SESSION: "1", FAKE_ACP_PROMPT_LOG: promptLog },
+      envVars: {
+        FAKE_ACP_LOAD_SESSION: "1",
+        FAKE_ACP_PROMPT_LOG: promptLog,
+        FAKE_ACP_MID_TURN_STEERING: "1",
+        FAKE_ACP_CONCURRENT_PROMPTS: "1",
+      },
       permissionCli: {
         full: ["--full"],
         workspaceWrite: ["--workspace"],
@@ -2845,6 +2856,11 @@ describe("acp bridge", () => {
         (event) => event.clientRequestId,
       ),
     ).toEqual([CLIENT_REQUEST_ID, "creq_abcdefghjm", "creq_abcdefghjn"]);
+    for (const requestId of ["creq_abcdefghjm", "creq_abcdefghjn"]) {
+      expect(turnInputDeliveries(requestId)).toMatchObject([
+        { delivery: "interrupted" },
+      ]);
+    }
   });
 
   it("reports a permission-changing steer whose replacement fails to start", async () => {
@@ -3299,9 +3315,7 @@ describe("acp bridge", () => {
         "slow primary",
         secondSteerText,
       ]);
-      expect(agentMessageTexts().join("")).toContain(
-        `echo:${secondSteerText}`,
-      );
+      expect(agentMessageTexts().join("")).toContain(`echo:${secondSteerText}`);
       expect(threadEventsOfType("provider/warning").at(-1)).toMatchObject({
         summary:
           "ACP agent rejected an earlier steer after accepting a later one. The earlier input was not replayed, and native steering is disabled for this connection.",
@@ -3613,6 +3627,7 @@ describe("acp bridge", () => {
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
       input: [{ type: "text", text: "request-permission", mentions: [] }],
+      options: executionOptions({ permissionMode: "accept-edits" }),
     });
     await waitForResponse(turnId);
     const forwarded = await waitFor(
@@ -3629,6 +3644,7 @@ describe("acp bridge", () => {
       expectedTurnId: "turn-1",
       input: [{ type: "text", text: "steered", mentions: [] }],
       clientRequestId: "creq_sterperm22",
+      options: executionOptions({ permissionMode: "accept-edits" }),
     });
     await waitForResponse(steerId);
     await waitFor(
