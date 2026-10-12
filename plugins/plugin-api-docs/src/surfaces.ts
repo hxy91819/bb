@@ -673,8 +673,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Bring any CLI agent into bb, with its own models and icon",
           "Run every thread started with it through a bridge the plugin ships",
           "Report context usage, service tiers, and install status",
-          "Resolve non-secret host options through experimental_deriveHostOptions for discovery, execution, and native roots",
-          "Set models.experimental_cache to false to refresh externally managed identities without serving stale catalogs",
+          "Resolve host-specific options and refresh model catalogs when external identities change",
         ],
         apiSymbols: [
           "contextSnapshotSchema",
