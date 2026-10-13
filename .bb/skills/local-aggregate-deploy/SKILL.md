@@ -1,11 +1,11 @@
 ---
 name: local-aggregate-deploy
-description: Build the published BB local/aggregate and replace a configured local BB source service, with health checks and rollback. Use only for requested local service deployment or replacement validation; not for ordinary builds, development servers, aggregation, or provider/dispatch configuration.
+description: Build the published BB main and replace a configured local BB source service, with health checks and rollback. Use only for requested local service deployment or replacement validation; not for ordinary builds, development servers, aggregation, or provider/dispatch configuration.
 ---
 
 # Local aggregate deployment
 
-Aggregation itself belongs to [Fork 维护](../../../docs/fork-maintenance.md) (`scripts/fork-aggregate --promote`). This skill starts from a published `local/aggregate` and ends with a healthy service. Replacing the running service requires authorization for that target. Reuse authorization already granted in the session.
+Aggregation itself belongs to [Fork 维护](../../../docs/fork-maintenance.md) (`scripts/fork-aggregate --promote`). This skill starts from a published `main` and ends with a healthy service. Replacing the running service requires authorization for that target. Reuse authorization already granted in the session.
 
 ## 1. Select the target
 
@@ -15,7 +15,7 @@ Compare the selected config with the actual system unit's ExecStart, WorkingDire
 
 ## 2. Build (old service keeps running)
 
-`scripts/fork-package` normally leaves a built checkout at `.worktrees/aggregate-deploy-<short sha>` whose HEAD equals `fork/local/aggregate`; reuse it and skip to the cutover prompt it printed. Otherwise build from a clean checkout at that commit: `git worktree add --detach .worktrees/aggregate-deploy-<short sha> fork/local/aggregate`. Record the old running SHA and the new SHA for rollback.
+`scripts/fork-package` normally leaves a built checkout at `.worktrees/aggregate-deploy-<short sha>` whose HEAD equals `fork/main`; reuse it and skip to the cutover prompt it printed. Otherwise build from a clean checkout at that commit: `git worktree add --detach .worktrees/aggregate-deploy-<short sha> fork/main`. Record the old running SHA and the new SHA for rollback.
 
 ```bash
 scripts/run-resource-isolated --profile package -- <nodeExecutable> <node-bin>/pnpm install --frozen-lockfile
@@ -24,7 +24,7 @@ scripts/run-resource-isolated --profile package -- \
 <nodeExecutable> scripts/ensure-native-modules.mjs --check
 ```
 
-`build-runtime.mjs` refuses a dirty tree or a HEAD different from `fork/local/aggregate`, then builds only the SDK, app, server, host daemon, and bundled plugins with one Turbo task at a time. If the build is OOM-killed, leave the service running and retry after reducing competing load; never kill unrelated user processes. Before the first cutover on a machine, install `assets/oom-policy-continue.conf` as a drop-in for the unit and run `node .bb/skills/local-aggregate-deploy/scripts/test-resource-isolation.mjs`.
+`build-runtime.mjs` refuses a dirty tree or a HEAD different from `fork/main`, then builds only the SDK, app, server, host daemon, and bundled plugins with one Turbo task at a time. If the build is OOM-killed, leave the service running and retry after reducing competing load; never kill unrelated user processes. Before the first cutover on a machine, install `assets/oom-policy-continue.conf` as a drop-in for the unit and run `node .bb/skills/local-aggregate-deploy/scripts/test-resource-isolation.mjs`.
 
 After a successful build and native-module check, complete the default [tag release steps](../../../docs/fork-maintenance.md#3-发布预编译聚合包) for the recorded new SHA and include the Release link in the handoff. Those steps define authorization, reuse of an existing release, and failure handling; service replacement still requires the authorization above.
 

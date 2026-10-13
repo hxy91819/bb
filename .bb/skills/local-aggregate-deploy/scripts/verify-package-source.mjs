@@ -24,11 +24,11 @@ export function verifyPackageSource({ repoPath }) {
     "ls-remote",
     "--exit-code",
     "fork",
-    "refs/heads/local/aggregate",
+    "refs/heads/main",
   ).split("\t")[0];
   if (sourceCommit !== publishedAggregate) {
     throw new Error(
-      `published aggregate mismatch: HEAD=${sourceCommit} fork/local/aggregate=${publishedAggregate}`,
+      `published aggregate mismatch: HEAD=${sourceCommit} fork/main=${publishedAggregate}`,
     );
   }
   return { sourceCommit };

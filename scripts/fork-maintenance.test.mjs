@@ -103,7 +103,7 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
       };
       const git = (...args) =>
         execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
-      git("init", "-q", "-b", "local/aggregate");
+      git("init", "-q", "-b", "main");
       git("config", "user.name", "Test");
       git("config", "user.email", "test@example.com");
       mkdirSync(join(root, ".fork"));
@@ -151,7 +151,7 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
   });
 }
 
-test("a clean migrated root promotes the verified SHA to a local fork", () => {
+test("a clean main root promotes the verified SHA to fork/main", () => {
   const root = mkdtempSync(join(tmpdir(), "bb-promote-clean-"));
   try {
     const env = {
@@ -161,7 +161,7 @@ test("a clean migrated root promotes the verified SHA to a local fork", () => {
     };
     const git = (...args) =>
       execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
-    git("init", "-q", "-b", "local/aggregate");
+    git("init", "-q", "-b", "main");
     git("config", "user.name", "Test");
     git("config", "user.email", "test@example.com");
     mkdirSync(join(root, ".fork"));
@@ -170,10 +170,11 @@ test("a clean migrated root promotes the verified SHA to a local fork", () => {
     git("add", ".");
     git("commit", "-qm", "base");
     git("tag", "desktop-v1.0.0");
-    git("branch", "main");
     git("branch", "fork-tooling");
+    git("branch", "local/aggregate");
+    const previous = git("rev-parse", "HEAD");
     const remote = join(root, ".git", "remote.git");
-    git("init", "--bare", "-q", remote);
+    git("init", "--bare", "-q", "-b", "main", remote);
     git("remote", "add", "origin", remote);
     git("remote", "add", "fork", remote);
     git(
@@ -181,8 +182,8 @@ test("a clean migrated root promotes the verified SHA to a local fork", () => {
       "-q",
       "fork",
       "main",
-      "local/aggregate",
       "fork-tooling",
+      "local/aggregate",
       "refs/tags/desktop-v1.0.0",
     );
     const next = git(
@@ -200,11 +201,20 @@ test("a clean migrated root promotes the verified SHA to a local fork", () => {
       { cwd: root, env, encoding: "utf8" },
     );
     assert.equal(result.status, 0, result.stderr);
+    assert.equal(git("branch", "--show-current"), "main");
     assert.equal(git("rev-parse", "HEAD"), next);
     assert.equal(
-      git("ls-remote", "fork", "refs/heads/local/aggregate").split("\t")[0],
+      git("ls-remote", "fork", "refs/heads/main").split("\t")[0],
       next,
     );
+    assert.equal(
+      git("ls-remote", "fork", "refs/heads/local/aggregate").split("\t")[0],
+      previous,
+    );
+    const clone = join(root, ".git", "clone");
+    git("clone", "-q", remote, clone);
+    assert.equal(git("-C", clone, "branch", "--show-current"), "main");
+    assert.equal(git("-C", clone, "rev-parse", "HEAD"), next);
     assert.equal(git("status", "--porcelain"), "");
   } finally {
     rmSync(root, { recursive: true, force: true });

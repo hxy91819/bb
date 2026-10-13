@@ -18,14 +18,14 @@ function withRepository(run) {
   const forkPath = mkdtempSync(join(tmpdir(), "bb-package-fork-"));
   try {
     git(forkPath, "init", "-q", "--bare");
-    git(repoPath, "init", "-q", "-b", "local/aggregate");
+    git(repoPath, "init", "-q", "-b", "main");
     git(repoPath, "config", "user.email", "test@example.com");
     git(repoPath, "config", "user.name", "Test");
     writeFileSync(join(repoPath, "source.txt"), "first\n");
     git(repoPath, "add", "source.txt");
     git(repoPath, "commit", "-q", "-m", "aggregate");
     git(repoPath, "remote", "add", "fork", forkPath);
-    git(repoPath, "push", "-q", "fork", "HEAD:refs/heads/local/aggregate");
+    git(repoPath, "push", "-q", "fork", "HEAD:refs/heads/main");
     run(repoPath);
   } finally {
     rmSync(repoPath, { recursive: true, force: true });
@@ -51,7 +51,10 @@ test("rejects an aggregate that has not been pushed to the fork", () => {
   withRepository((repoPath) => {
     writeFileSync(join(repoPath, "source.txt"), "second\n");
     git(repoPath, "commit", "-q", "-am", "unpublished aggregate");
-    assert.throws(() => verifyPackageSource({ repoPath }), /published aggregate mismatch/u);
+    assert.throws(
+      () => verifyPackageSource({ repoPath }),
+      /published aggregate mismatch/u,
+    );
   });
 });
 
@@ -64,7 +67,10 @@ test("rejects tracked changes", () => {
 
 test("rejects untracked files that could enter the package", () => {
   withRepository((repoPath) => {
-    writeFileSync(join(repoPath, "untracked.ts"), "export const changed = true;\n");
+    writeFileSync(
+      join(repoPath, "untracked.ts"),
+      "export const changed = true;\n",
+    );
     assert.throws(() => verifyPackageSource({ repoPath }), /not clean/u);
   });
 });

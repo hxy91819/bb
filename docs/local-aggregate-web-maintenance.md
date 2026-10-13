@@ -1,16 +1,16 @@
 # 本机聚合网页服务维护
 
-本说明适用于把 `local/aggregate` 作为本机 Tailnet 网页服务运行的场景。
+本说明适用于把 `main` 作为本机 Tailnet 网页服务运行的场景。
 它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
 
 ## 文件与保密边界
 
-| 文件 | Git 状态 | 用途 |
-| --- | --- | --- |
-| `docs/local-aggregate-web-maintenance.md` | 提交 | 通用维护步骤与安全边界 |
-| `config/local-aggregate-web.example.json` | 提交 | 脱敏的配置结构示例 |
-| `config/local-aggregate-web.json` | 忽略 | 默认目标的本机路径、内部 Tailnet 地址和端口 |
-| `config/local-aggregate-web.<target>.json` | 忽略 | 指定目标的同一配置结构 |
+| 文件                                       | Git 状态 | 用途                                        |
+| ------------------------------------------ | -------- | ------------------------------------------- |
+| `docs/local-aggregate-web-maintenance.md`  | 提交     | 通用维护步骤与安全边界                      |
+| `config/local-aggregate-web.example.json`  | 提交     | 脱敏的配置结构示例                          |
+| `config/local-aggregate-web.json`          | 忽略     | 默认目标的本机路径、内部 Tailnet 地址和端口 |
+| `config/local-aggregate-web.<target>.json` | 忽略     | 指定目标的同一配置结构                      |
 
 在新机器上复制模板：
 
@@ -58,7 +58,7 @@ git check-ignore -v config/local-aggregate-web.json
    <node-bin-directory>/corepack enable --install-directory <node-bin-directory>
    ```
 
-3. 在要部署的 `local/aggregate` 检出（干净的 worktree）里安装依赖并执行运行时预构建：
+3. 在要部署的 `main` 检出（干净的 worktree）里安装依赖并执行运行时预构建：
 
    ```bash
    scripts/run-resource-isolated --profile package -- <node-bin-directory>/pnpm install --frozen-lockfile
@@ -106,8 +106,8 @@ git check-ignore -v config/local-aggregate-web.json
 聚合按 [Fork 维护](fork-maintenance.md) 用 `scripts/fork-aggregate --promote` 生成并推送；
 构建与服务替换以 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 为唯一入口。
 
-- 本机：在根目录 `local/aggregate`（与 `fork/local/aggregate` 同一 commit、工作区干净）上构建。
-- 另一台机器：`git fetch fork`，在现有工作区之外用 `git worktree add --detach <path> fork/local/aggregate` 建干净 worktree，记下该 SHA，在里面安装依赖和构建。
+- 本机：在根目录 `main`（与 `fork/main` 同一 commit、工作区干净）上构建。
+- 另一台机器：`git fetch fork`，在现有工作区之外用 `git worktree add --detach <path> fork/main` 建干净 worktree，记下该 SHA，在里面安装依赖和构建。
 - 没有明确服务部署授权时，到构建和原生 ABI 检查完成为止，不修改 systemd、Tailscale 或本机目标配置。
 - 切换后，在浏览器强制刷新一次以加载新的前端 bundle，并打开一个既有会话确认数据可见。
 
@@ -124,11 +124,15 @@ git check-ignore -v config/local-aggregate-web.json
   "command": "node",
   "args": ["/data/code/cursor-acp/dist/index.js"],
   "icon": "provider-acp/cursor",
-  "iconTint": {"light": "#111827", "dark": "#F5F5F5"},
+  "iconTint": { "light": "#111827", "dark": "#F5F5F5" },
   "steeringMode": "auto",
   "nativeSkillRoots": {
-    "user": [".agents/skills", ".agents/skills/.system", ".cursor/skills-cursor"],
-    "project": [{"path": ".agents/skills", "ancestors": true}]
+    "user": [
+      ".agents/skills",
+      ".agents/skills/.system",
+      ".cursor/skills-cursor"
+    ],
+    "project": [{ "path": ".agents/skills", "ancestors": true }]
   }
 }
 ```

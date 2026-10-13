@@ -18,13 +18,15 @@
 | `desktop-v*` tag     | 上游稳定版，聚合和新分支的基线                                           |
 | `feature/*`、`fix/*` | 每个改动一个分支，基于基线 tag                                           |
 | `fork-tooling`       | 维护规则、`.fork/branches`、聚合脚本、部署 skill；和其他分支一样被 merge |
-| `local/aggregate`    | 聚合产物，每次从 tag 重新生成并覆盖，根目录永远检出它                    |
+| `main`               | 个人 fork 默认分支，保存最新聚合产物，根目录永远检出它                   |
 
 当前基线是 `.fork/branches` 里 `base` 行的 tag。`origin/main` 上还没进 tag 的提交不追，除非用户明确要求。
 
+个人 fork 的 `main` 是最新聚合入口，`origin/main` 是上游开发主干，两者用途不同。GitHub 默认分支设为 `main`，访客打开仓库或普通 clone 即可拿到最新聚合代码。聚合仍基于稳定 tag，因此 GitHub 与上游主干比较时可能显示落后；是否纳入新代码以基线 tag 和分支清单为准。
+
 ### 旧 checkout 的入口
 
-维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `local/aggregate` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
+维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `main` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
 
 ## 1. 开发新功能或修复
 
@@ -35,7 +37,7 @@ base=$(git show fork-tooling:.fork/branches | awk '$1=="base"{print $2}')
 git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<name>
 ```
 
-- 不要从 `local/aggregate` 拉分支，否则分支会带上全部聚合内容，无法单独提给上游。
+- 不要从 `main` 拉分支，否则分支会带上全部聚合内容，无法单独提给上游。
 - 只有真正依赖另一个 fork 分支时，才从那个分支拉出（叠放），并在清单说明里写"叠在 X 上"。
 - 修改已有功能：直接在它的分支上继续提交。分支落后于基线也没关系，merge 会处理；只有冲突时才 rebase。
 - 完成后：相关测试通过 → 提交 → `git push fork <branch>` 并核对远端 SHA。
@@ -63,11 +65,11 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
 2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-3. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 local/aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
-4. `scripts/fork-aggregate --promote-only`：把根目录 `local/aggregate` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
+3. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 main>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
+4. `scripts/fork-aggregate --promote-only`：把根目录 `main` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
 5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
-7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `local/aggregate` 的那些。
+7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `main` 的那些。
 8. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill，在 BB 外执行。
 
 修一次分支再重跑 `fork-package` 是常态：聚合 SHA 变了就换新检出，没变就复用旧检出和它的依赖。
@@ -118,7 +120,7 @@ scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升�
 
 用户要求聚合打包或为聚合版构建部署包时，发布是打包任务的默认收尾，已经授权，无需再次确认。用户明确要求仅验证、不发布时跳过；构建或必要验证失败时先修复，不给失败结果打发布 tag。
 
-1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `local/aggregate` 被其他任务移动，也使用这个已验证的 SHA。
+1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `main` 被其他任务移动，也使用这个已验证的 SHA。
 2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
 3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
 4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开且四个平台的包和校验文件齐全。
