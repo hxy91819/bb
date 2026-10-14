@@ -87,6 +87,27 @@ describe("the ACP plugin's registrations", () => {
     expect(registeredIds(host)).toContain("acp-amp");
   });
 
+  it("registers a custom agent with a declared plugin icon and tint", async () => {
+    const host = await loadPlugin({
+      customAgents: customAgents({
+        id: "cursor-sdk",
+        displayName: "Cursor (SDK)",
+        command: "node",
+        icon: "provider-acp/cursor",
+        iconTint: { light: "#111827", dark: "#F5F5F5" },
+      }),
+    });
+
+    const declaration = host.harness.registrations.providerRegistrations.find(
+      (provider) => provider.id === "acp-cursor-sdk",
+    );
+    expect(declaration?.icon).toBe("provider-acp/cursor");
+    expect(declaration?.strings?.iconTint).toEqual({
+      light: "#111827",
+      dark: "#F5F5F5",
+    });
+  });
+
   it("removes a configured agent the setting no longer lists", async () => {
     const host = await loadPlugin({
       customAgents: customAgents({
