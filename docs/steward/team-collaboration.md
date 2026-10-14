@@ -13,7 +13,8 @@
 
 - [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
 - [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 通过 17 项检查，20 个普通头像与 Admin 已完成；插件等待含列表 v2 和 overlay 修复的同 SHA 候选接入与联合验收。
-- [ ] 用匹配的新 BB/SDK 完成联合验收与更新 Release。← 候选受安装测试借用真实 user bus 阻塞，thr_rw8nn3x7aw 隔离修复后由 thr_kmvugsk2ci 重聚合；旧资产保留，生产服务不改。
+- [ ] 重新聚合并交付同 SHA 的 BB/SDK 候选包。← 安装测试 fixture 隔离已修复，53 项及相关 182 项检查通过；thr_kmvugsk2ci 接续完整流水线与冷消费。
+- [ ] 用匹配的新 BB/SDK 完成联合验收与更新 Release。← 候选交付后接入插件，验收新版 UI、旧数据升级与活动查询，再更新两仓库 Release；旧资产保留，生产服务不改。
 
 ## 关键决策
 
