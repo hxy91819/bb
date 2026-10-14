@@ -1659,7 +1659,18 @@ export function NewThreadComposer({
       setAttachmentError(null);
       let clearedSubmittedDraft = false;
       try {
-        const prepared = withThreadCreationContext(request);
+        let prepared: NewThreadComposerSubmission;
+        try {
+          prepared = withThreadCreationContext(request);
+        } catch (error) {
+          setAttachmentError(
+            getMutationErrorMessage({
+              error,
+              fallbackMessage: "Thread creation context preparation failed",
+            }),
+          );
+          throw error;
+        }
         clearedSubmittedDraft =
           promptDraft.clearIfCurrentMatches(submittedDraft);
         await onSubmit(prepared);
