@@ -53,6 +53,7 @@ describe("general settings", () => {
           allowFastServiceTier: false,
           steerActiveThreadOnEnter: true,
           providerOrder: ["pi", "codex"],
+          hiddenProviders: ["acp-cursor"],
           defaultProviderId: "pi",
         }),
       });
@@ -70,6 +71,7 @@ describe("general settings", () => {
         allowFastServiceTier: false,
         steerActiveThreadOnEnter: true,
         providerOrder: ["pi", "codex"],
+        hiddenProviders: ["acp-cursor"],
         defaultProviderId: "pi",
         showUnhandledProviderEvents: false,
       });
@@ -79,6 +81,7 @@ describe("general settings", () => {
         allowFastServiceTier: false,
         steerActiveThreadOnEnter: true,
         providerOrder: ["pi", "codex"],
+        hiddenProviders: ["acp-cursor"],
         defaultProviderId: "pi",
       });
 
@@ -93,8 +96,45 @@ describe("general settings", () => {
         allowFastServiceTier: false,
         steerActiveThreadOnEnter: true,
         providerOrder: ["pi", "codex"],
+        hiddenProviders: ["acp-cursor"],
         defaultProviderId: "pi",
       });
+    });
+  });
+
+  it("keeps stored hidden providers when an update omits them", async () => {
+    await withTestHarness(async (harness) => {
+      const put = await harness.app.request("/api/v1/settings/general", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...defaultAppSettings,
+          hiddenProviders: ["acp-cursor"],
+        }),
+      });
+      expect(put.status).toBe(200);
+
+      const { hiddenProviders, ...withoutHidden } = defaultAppSettings;
+      const legacyPut = await harness.app.request("/api/v1/settings/general", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(withoutHidden),
+      });
+      expect(legacyPut.status).toBe(200);
+      expect(getAppSettings(harness.db).hiddenProviders).toEqual([
+        "acp-cursor",
+      ]);
+
+      const cleared = await harness.app.request("/api/v1/settings/general", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...defaultAppSettings,
+          hiddenProviders: [],
+        }),
+      });
+      expect(cleared.status).toBe(200);
+      expect(getAppSettings(harness.db).hiddenProviders).toEqual([]);
     });
   });
 
