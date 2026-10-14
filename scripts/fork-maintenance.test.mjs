@@ -224,8 +224,13 @@ test("a clean main root promotes the verified SHA to fork/main", () => {
 test("SDK source identity rejects wrong SHA, tag and dirty input while allowing ignored build outputs", async () => {
   const { checkSource } = await import("./fork-release/sdk-artifact.mjs");
   const root = mkdtempSync(join(tmpdir(), "bb-sdk-source-"));
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
   const git = (...args) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
   try {
     git("init", "-q");
     git("config", "user.name", "Test");
