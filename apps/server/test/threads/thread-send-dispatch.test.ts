@@ -1,5 +1,6 @@
 import {
   archiveThread,
+  createQueuedThreadMessage,
   getAppSettings,
   updateHost,
   getQueuedThreadMessage,
@@ -24,6 +25,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TelemetryService } from "../../src/services/system/telemetry.js";
 import * as queuedDispatch from "../../src/services/threads/queued-message-dispatch.js";
 import * as threadEvents from "../../src/services/threads/thread-events.js";
+import * as threadCommands from "../../src/services/threads/thread-commands.js";
 import { runQueuedMessageDispatch } from "../../src/services/threads/queued-message-dispatch.js";
 import {
   createAutomaticQueuedMessageGroupEligibility,
@@ -69,7 +71,7 @@ interface SeedIdleThreadFixtureArgs {
 }
 
 interface SeedProviderThreadFixtureArgs extends SeedIdleThreadFixtureArgs {
-  status?: "active" | "idle" | "starting";
+  status?: Thread["status"];
   serviceTier?: ServiceTier;
 }
 
@@ -935,7 +937,7 @@ describe("startup queue waits", () => {
       const parked = listQueuedThreadMessages(harness.db, thread.id)[0]!;
       expect(JSON.parse(parked.content)).toEqual(input);
       expect(JSON.parse(parked.waitingOn!)).toEqual({
-        kind: "turn-starting",
+        kind: "thread-busy",
       });
       expect(JSON.parse(parked.systemNotice!)).toEqual({
         kind: "child-completed",
@@ -966,6 +968,33 @@ describe("startup queue waits", () => {
       });
       expect(response.status).toBe(200);
 
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toHaveLength(0);
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toHaveLength(1);
+
+      const completed = await harness.app.request("/internal/session/events", {
+        method: "POST",
+        headers: internalAuthHeaders(harness),
+        body: JSON.stringify({
+          sessionId,
+          eventGroups: groupHostDaemonEvents([
+            {
+              threadId: thread.id,
+              event: {
+                type: "turn/completed",
+                threadId: thread.id,
+                providerThreadId: "provider-send-dispatch-62",
+                scope: turnScope("turn-system-notice-ready"),
+                status: "completed",
+              },
+            },
+          ]),
+        }),
+      });
+      expect(completed.status).toBe(200);
+
       await vi.waitFor(() => {
         expect(
           listQueuedThreadCommands(harness, "turn.submit", thread.id),
@@ -977,35 +1006,281 @@ describe("startup queue waits", () => {
         expect.objectContaining({
           input,
           target: {
-            mode: "auto",
-            expectedTurnId: "turn-system-notice-ready",
+            mode: "start",
           },
         }),
       ]);
       expect(listQueuedThreadMessages(harness.db, thread.id)).toEqual([]);
+      expect(
+        listEvents(harness.db, { threadId: thread.id })
+          .filter((event) => event.type === "client/turn/requested")
+          .map((event) => JSON.parse(event.data))
+          .find(
+            (event) =>
+              event.initiator === "system" &&
+              event.systemMessageKind === "child-completed",
+          ),
+      ).toMatchObject({
+        initiator: "system",
+        systemMessageKind: "child-completed",
+        systemMessageSubject: {
+          kind: "thread",
+          threadId: "child-1",
+          threadName: "Child",
+        },
+        target: { kind: "new-turn" },
+      });
+    });
+  });
 
-      vi.spyOn(threadEvents, "getActiveTurnId").mockReturnValueOnce(null);
+  it("joins an active turn for a detached tool result", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedProviderThreadFixture({
+        harness,
+        status: "active",
+        value: 621,
+      });
+      seedTurnStarted(harness.deps, {
+        environmentId: environment.id,
+        providerThreadId: "provider-send-dispatch-621",
+        threadId: thread.id,
+        turnId: "turn-tool-result",
+      });
+
       await expect(
         queueParentSystemMessage(harness.deps, {
+          input: textInput("tool result"),
+          parentThreadId: thread.id,
+          systemMessageKind: "tool-result-delivered",
+          systemMessageSubject: null,
+        }),
+      ).resolves.toBe(true);
+
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toEqual([]);
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toMatchObject([
+        {
+          target: {
+            mode: "auto",
+            expectedTurnId: "turn-tool-result",
+          },
+        },
+      ]);
+    });
+  });
+
+  it("starts an error parent notice immediately", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedProviderThreadFixture({
+        harness,
+        status: "error",
+        value: 622,
+      });
+
+      await expect(
+        queueParentSystemMessage(harness.deps, {
+          input: textInput("child finished after error"),
+          parentThreadId: thread.id,
+          systemMessageKind: "child-completed",
+          systemMessageSubject: null,
+        }),
+      ).resolves.toBe(true);
+
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toEqual([]);
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toMatchObject([{ target: { mode: "start" } }]);
+    });
+  });
+
+  it.each(["active", "starting"] as const)(
+    "recovers a queued parent notice after the %s parent fails without sending ordinary messages",
+    async (status) => {
+      await withTestHarness(async (harness) => {
+        const { thread } = seedProviderThreadFixture({
+          harness,
+          status,
+          value: status === "active" ? 627 : 628,
+        });
+        const ordinary = seedQueuedMessage(harness.deps, {
+          threadId: thread.id,
+          content: textInput("ordinary queued message"),
+          waitingOn: { kind: "thread-busy" },
+        });
+        const input = textInput("child finished before parent failed");
+        await queueParentSystemMessage(harness.deps, {
           input,
           parentThreadId: thread.id,
           systemMessageKind: "child-completed",
-          systemMessageSubject: {
-            kind: "thread",
-            threadId: "child-2",
-            threadName: "Other child",
+          systemMessageSubject: null,
+        });
+        expect(listQueuedThreadMessages(harness.db, thread.id)).toHaveLength(2);
+        expect(
+          listQueuedThreadCommands(harness, "turn.submit", thread.id),
+        ).toHaveLength(0);
+
+        applyLoggedThreadLifecycleEvent(harness.deps, {
+          event: { type: "run.failed" },
+          threadId: thread.id,
+        });
+        expect(getThread(harness.db, thread.id)?.status).toBe("error");
+        await runQueuedMessageDispatch(harness.deps, {
+          kind: "idle-recovery",
+          now: Date.now(),
+        });
+
+        expect(
+          listQueuedThreadCommands(harness, "turn.submit", thread.id),
+        ).toMatchObject([{ input, target: { mode: "start" } }]);
+        expect(
+          listQueuedThreadMessages(harness.db, thread.id).map((row) => row.id),
+        ).toEqual([ordinary.id]);
+      });
+    },
+  );
+
+  it.each([
+    ["starting", "run.started", "run.succeeded"],
+    ["stopping", "stop.settled", null],
+  ] as const)(
+    "queues a notice while the parent is %s and starts it after becoming idle",
+    async (status, activate, settle) => {
+      await withTestHarness(async (harness) => {
+        const { thread } = seedProviderThreadFixture({
+          harness,
+          status,
+          value: status === "starting" ? 623 : 624,
+        });
+
+        await expect(
+          queueParentSystemMessage(harness.deps, {
+            input: textInput(`child finished while ${status}`),
+            parentThreadId: thread.id,
+            systemMessageKind: "child-completed",
+            systemMessageSubject: null,
+          }),
+        ).resolves.toBe(true);
+
+        expect(listQueuedThreadMessages(harness.db, thread.id)).toMatchObject([
+          {
+            waitingOn: JSON.stringify({ kind: "thread-busy" }),
           },
-        }),
-      ).resolves.toBe(true);
-      expect(listQueuedThreadMessages(harness.db, thread.id)).toHaveLength(0);
+        ]);
+        expect(
+          listQueuedThreadCommands(harness, "turn.submit", thread.id),
+        ).toHaveLength(0);
+
+        applyLoggedThreadLifecycleEvent(harness.deps, {
+          event: { type: activate },
+          threadId: thread.id,
+        });
+        if (settle !== null) {
+          applyLoggedThreadLifecycleEvent(harness.deps, {
+            event: { type: settle },
+            threadId: thread.id,
+          });
+        }
+        await runQueuedMessageDispatch(harness.deps, {
+          kind: "thread-ready",
+          threadId: thread.id,
+        });
+
+        expect(listQueuedThreadMessages(harness.db, thread.id)).toEqual([]);
+        expect(
+          listQueuedThreadCommands(harness, "turn.submit", thread.id),
+        ).toMatchObject([{ target: { mode: "start" } }]);
+      });
+    },
+  );
+
+  it("rewrites a host-offline notice to thread-busy when reconnect finds an active parent", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedProviderThreadFixture({
+        harness,
+        status: "active",
+        value: 625,
+      });
+      const queued = createQueuedThreadMessage(harness.db, harness.hub, {
+        threadId: thread.id,
+        content: textInput("child finished while parent host was offline"),
+        senderThreadId: null,
+        origin: null,
+        originPluginId: null,
+        requestedBy: null,
+        model: "gpt-5",
+        reasoningLevel: "medium",
+        permissionMode: "full",
+        serviceTier: "default",
+        waitingOn: { kind: "host-offline", hostName: "Test Host" },
+        sendAt: null,
+        payload: { kind: "inline" },
+        systemNotice: { kind: "child-completed", subject: null },
+      });
+
+      await runQueuedMessageDispatch(harness.deps, {
+        kind: "host-connected",
+        hostId: environment.hostId,
+      });
+
+      expect(getQueuedThreadMessage(harness.db, queued.id)).toMatchObject({
+        claimedAt: null,
+        waitingOn: JSON.stringify({ kind: "thread-busy" }),
+      });
       expect(
         listQueuedThreadCommands(harness, "turn.submit", thread.id),
-      ).toHaveLength(2);
-      expect(
-        listQueuedThreadCommands(harness, "turn.submit", thread.id)[1],
-      ).toMatchObject({
-        target: { mode: "auto", expectedTurnId: "turn-system-notice-ready" },
+      ).toHaveLength(0);
+
+      applyLoggedThreadLifecycleEvent(harness.deps, {
+        event: { type: "run.succeeded" },
+        threadId: thread.id,
       });
+      await runQueuedMessageDispatch(harness.deps, {
+        kind: "thread-ready",
+        threadId: thread.id,
+      });
+
+      expect(getQueuedThreadMessage(harness.db, queued.id)).toBeNull();
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toMatchObject([{ target: { mode: "start" } }]);
+    });
+  });
+
+  it("queues a notice when the parent becomes active during preparation", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedProviderThreadFixture({
+        harness,
+        value: 626,
+      });
+      const buildExecutionOptions = threadCommands.buildExecutionOptions;
+      vi.spyOn(threadCommands, "buildExecutionOptions").mockImplementationOnce(
+        async (...args) => {
+          applyLoggedThreadLifecycleEvent(harness.deps, {
+            event: { type: "run.started" },
+            threadId: thread.id,
+          });
+          return buildExecutionOptions(...args);
+        },
+      );
+
+      await expect(
+        queueParentSystemMessage(harness.deps, {
+          input: textInput("child finished during parent startup"),
+          parentThreadId: thread.id,
+          systemMessageKind: "child-completed",
+          systemMessageSubject: null,
+        }),
+      ).resolves.toBe(true);
+
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toMatchObject([
+        {
+          waitingOn: JSON.stringify({ kind: "thread-busy" }),
+        },
+      ]);
+      expect(
+        listQueuedThreadCommands(harness, "turn.submit", thread.id),
+      ).toHaveLength(0);
     });
   });
 

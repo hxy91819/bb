@@ -77,6 +77,7 @@ import { deliverParentSystemMessage } from "./parent-system-messages.js";
 import {
   createQueuedMessageAutoSendPausedError,
   createQueuedMessageClaimLostError,
+  recordQueuedMessageWait,
   QUEUED_MESSAGE_AUTO_SEND_PAUSED_CODE,
   QUEUED_MESSAGE_CLAIM_LOST_CODE,
   settleQueueRowDispatched,
@@ -149,6 +150,11 @@ export function createAutomaticQueuedMessageGroupEligibility(
         case "time":
           return member.sendAt !== null && member.sendAt <= args.now;
         case "thread-busy":
+          return (
+            args.thread.status === "idle" ||
+            args.thread.status === "pending" ||
+            (args.thread.status === "error" && member.systemNotice !== null)
+          );
         case "stopping":
           return (
             args.thread.status === "idle" || args.thread.status === "pending"
@@ -644,13 +650,38 @@ async function sendClaimedSystemNotice(
     JSON.parse(lead.systemNotice),
   );
   const queuedMessage = toThreadQueuedMessage(lead);
-  const delivered = await deliverParentSystemMessage(deps, {
+  const outcome = await deliverParentSystemMessage(deps, {
     input: queuedMessage.content,
     parentThread: args.thread,
     systemMessageKind: notice.kind,
     systemMessageSubject: notice.subject,
   });
-  if (!delivered) {
+  if (outcome === "busy") {
+    recordQueuedMessageWait(deps, {
+      thread: args.thread,
+      message: {
+        input: queuedMessage.content,
+        execution: {
+          model: queuedMessage.model,
+          reasoningLevel: queuedMessage.reasoningLevel,
+          permissionMode: queuedMessage.permissionMode,
+          serviceTier: queuedMessage.serviceTier,
+          source: "client/turn/requested",
+        },
+        senderThreadId: null,
+        origin: null,
+        originPluginId: null,
+        requestedBy: null,
+        payload: { kind: "inline" },
+        systemNotice: notice,
+      },
+      waitingOn: { kind: "thread-busy" },
+      sendAt: null,
+      claimed: args.queuedMessages,
+    });
+    return queuedMessage;
+  }
+  if (outcome === "gone") {
     // The thread changed under the drain. Leave the row claimed-and-released
     // by the caller's error path rather than consuming a notice nobody got.
     throw createQueuedMessageClaimLostError();

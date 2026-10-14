@@ -964,7 +964,17 @@ export function listIdleThreadsWithQueuedMessages(
     .leftJoin(environments, eq(environments.id, threads.environmentId))
     .where(
       and(
-        inArray(threads.status, ["idle", "pending"]),
+        or(
+          inArray(threads.status, ["idle", "pending"]),
+          and(
+            eq(threads.status, "error"),
+            isNotNull(queuedThreadMessages.systemNotice),
+            eq(
+              sql<string>`json_extract(${queuedThreadMessages.waitingOn}, '$.kind')`,
+              "thread-busy",
+            ),
+          ),
+        ),
         isNull(threads.archivedAt),
         isNull(threads.deletedAt),
         or(
