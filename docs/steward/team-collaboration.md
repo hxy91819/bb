@@ -7,11 +7,11 @@
 - [x] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表；[收敛设计已交付](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，独立架构审查完成。
 - [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已提交、审查和推送。
 - [x] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [bb-team 完整实现 cd395a06](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已提交、审查和公开 push；身份、归属、成员分组与按需活动查询均已验收。
-- [x] 在独立测试实例完成两仓库的联合行为验收与独立审查。← 同 SHA 候选与正式 BB/SDK 的原生归属、分组、活动查询、Guide、Chromium/WebKit 紧凑视口、生产冷安装、完整归档与公开 Git tag 安装均通过；审查发现已闭合，生产服务未改动。确定性协议 fixture 不代表付费 AI 效果；既有队列失败和开发依赖告警保留在验证记录中。
+- [x] 在独立测试实例完成联合验收与独立审查。← 同 SHA 候选及正式 BB/SDK 的归属、分组、活动、Guide、Chromium/WebKit、冷安装与公开包安装通过；审查闭合，生产未动。协议 fixture 不代表付费 AI 效果；既有队列失败和开发告警保留。
 - [x] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件。← [fork-v0.46.0-20261014.1 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.1)，source 为 e7c2ef8409；四平台运行时、通用 SDK 和发布 CI 全通过，十一件正式资产及来源校验通过。
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
-- [ ] 按用户反馈改进身份入口、默认管理员、列表展示并扩充头像。← 插件 UI 与默认管理员由 thr_pbj6j2khqk 实现；二十个普通头像加固定 Admin 已完成本地资产提交 31358dc，待整体 push；通用列表 SDK 由 thr_zcee9kvvy6 接续。
+- [ ] 按用户反馈改进身份入口、默认管理员、列表展示并扩充头像。← 身份与固定 Admin 已本地提交并通过 17 项检查；第二窗口与升级后入口缺失由 thr_9w3up3ngdi 定位；20 个普通头像与 Admin 已完成，列表 SDK 由 thr_zcee9kvvy6 接续。
 - [ ] 用匹配的新 BB/SDK 完成独立实例验收与审查，公开更新插件和必要的 BB Release。← 已发布 v0.1.0 与 fork-v0.46.0-20261014.1 保留，不覆盖旧资产或操作生产服务。
 
 ## 关键决策
@@ -23,9 +23,9 @@
 - 2026-10-14 用户要求通过 improve-codebase-architecture 独立审查，并授权管家自行依据专业判断取舍结果。原因：核实扩展点与维护成本。影响：有证据的必要调整和范围内改进直接推进，无需逐项确认；其余作为后续候选。
 - 2026-10-14 管家采纳独立审查的四项必要调整，先实施共同创建链；要求查询采用有界事实分页而非完整结果快照，列表沿现有 useData/纯投影模式，身份持久默认加窗口覆盖，时区自动检测并作为普通设置可改。原因：避免公共契约与首次使用过重。影响：设计修订及后续实现，不增加管理员权限。
 - 2026-10-14 管家采用 BB 子线程顺序推进设计、实现与验收；本工作簿留在 fork-tooling，通用扩展从 .fork/branches 的稳定 tag 开发。原因：跨会话接续并保持可向上游提交的独立改动。影响：派发和 Git 交付。
-- 2026-10-14 同目录唯一 writer，接续前停止旧线程并清队列；重型验证与 live 全生命周期共用锁。用户 manager 被 OOM 终止后，临时用相同预算的系统级 scope 调用既有 runner，不恢复全局 manager；状态与清理查实际系统 scope。原因：保持验收隔离并避免影响生产。影响：SDK、插件及后续打包；中断/refusal/OOM 仍为失败。
+- 2026-10-14 同目录仅一个 writer；接续先停旧线程并清队列，重型验证与 live 全程持共享锁。user manager 被 OOM 终止后，临时以同预算系统 scope 调用既有 runner，按实际 scope 清理，不恢复全局 manager；中断/refusal/OOM 仍记失败。原因：隔离验收并保护生产。影响：SDK、插件和打包。
 - 2026-10-14 用户追加 BB 聚合包与插件包的 Release 交付，并要求当前环境由管家推动验收、启动独立测试实例，不使用主 BB 验收。原因：便于在其他环境测试且隔离现有服务。影响：联合验收、两仓库打包发布与安装说明；此授权不包含替换主 BB 服务。
-- 2026-10-14 管家采纳同一聚合 SHA 构建的完整 SDK tarball 作为 BB Release 通用资产，候选验收先使用该产物；联合验收后发布 BB，再由插件固定正式资产 URL 与 lockfile integrity 并公开交付。原因：新增接口尚未发布到上游 npm，同版本号不能证明具备 fork 能力。影响：发布 workflow、开发与 CI 可复现性、插件兼容说明；不发布上游 npm 包。
+- 2026-10-14 同一聚合 SHA 的完整 SDK tarball 作为 BB Release 通用资产；候选联合验收后先发布 BB，再固定插件正式 URL/integrity。原因：新增接口未进上游 npm，同版本号不能证明能力。影响：CI、兼容说明和可复现交付；不发布上游 npm 包。
 
 - 2026-10-14 用户追加未选身份自动提示、明确“选择”操作和主页身份入口；人员分组只显示项目，其他模式仅在行首显示人员头像，姓名用于提示和可访问文本。原因：降低入口深度与列表噪声。影响：插件 UI 和最小通用列表 SDK 扩展；采用二十个普通可选头像与独立管理员头像。
 
