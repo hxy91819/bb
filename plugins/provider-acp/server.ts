@@ -18,11 +18,17 @@ import {
 const CUSTOM_AGENTS_SETTING_DESCRIPTION =
   "A JSON array of ACP agents to add. Each entry needs id, displayName and command; see the guide for the optional fields.";
 
-const PROBEABLE_ACP_AGENTS = KNOWN_ACP_AGENTS.filter(
-  (agent) => (agent.fork ?? "none") !== "none",
-);
-
 const HOST_POLL_INTERVAL_MS = 5_000;
+
+function probeKey(agent: AcpAgentDefinition): string {
+  return JSON.stringify({
+    command: agent.launch.command,
+    args: agent.launch.args,
+    env: agent.launch.env,
+    cwd: agent.launch.cwd,
+    fork: agent.fork,
+  });
+}
 
 async function sleepUntilAbort(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) {
@@ -76,17 +82,35 @@ export default async function acpProvidersPlugin(
 
   const registered = new Map<string, { key: string; dispose(): void }>();
 
-  const narrowed = new Map<string, AcpAgentDefinition>();
+  const probesByHost = new Map<
+    string,
+    Map<string, { key: string; probe: AcpAgentProbe }>
+  >();
   let configuredAgents: readonly AcpAgentDefinition[] = [];
+  let configurationRevision = 0;
 
-  function desiredAgents(): AcpAgentDefinition[] {
+  function declaredAgents(): AcpAgentDefinition[] {
     const configuredIds = new Set(configuredAgents.map((agent) => agent.id));
     return [
-      ...KNOWN_ACP_AGENTS.filter((agent) => !configuredIds.has(agent.id)).map(
-        (agent) => narrowed.get(agent.id) ?? agent,
-      ),
+      ...KNOWN_ACP_AGENTS.filter((agent) => !configuredIds.has(agent.id)),
       ...configuredAgents,
     ];
+  }
+
+  function desiredAgents(): AcpAgentDefinition[] {
+    return declaredAgents().map((agent) => {
+      const key = probeKey(agent);
+      const probes = [...probesByHost.values()].flatMap((byAgent) => {
+        const record = byAgent.get(agent.id);
+        return record?.key === key && record.probe.reachable
+          ? [record.probe]
+          : [];
+      });
+      const preferredFork = agent.fork === undefined;
+      const probe =
+        probes.find((probe) => probe.fork === preferredFork) ?? probes[0];
+      return probe ? (applyAcpAgentProbe(agent, probe)?.agent ?? agent) : agent;
+    });
   }
 
   function register(declaration: PluginProviderDeclaration): void {
@@ -132,7 +156,18 @@ export default async function acpProvidersPlugin(
     for (const warning of resolved.warnings) {
       bb.log.warn(warning);
     }
+    if (JSON.stringify(configuredAgents) !== JSON.stringify(resolved.agents)) {
+      configurationRevision += 1;
+    }
     configuredAgents = resolved.agents;
+    const keys = new Map(
+      declaredAgents().map((agent) => [agent.id, probeKey(agent)]),
+    );
+    for (const byAgent of probesByHost.values()) {
+      for (const [id, record] of byAgent) {
+        if (keys.get(id) !== record.key) byAgent.delete(id);
+      }
+    }
     reconcile(desiredAgents());
     if (resolved.agents.length > 0) {
       bb.log.info(
@@ -153,18 +188,22 @@ export default async function acpProvidersPlugin(
     hostId: string,
     signal: AbortSignal,
   ): Promise<void> {
+    const revision = configurationRevision;
+    const agents = declaredAgents();
     const disabledIds = new Set(
       (await bb.sdk.providers.catalog())
         .filter((provider) => !provider.enabled)
         .map((provider) => provider.id),
     );
-    const configuredIds = new Set(configuredAgents.map((agent) => agent.id));
-    for (const shipped of PROBEABLE_ACP_AGENTS) {
-      if (signal.aborted) return;
-      if (configuredIds.has(shipped.id) || disabledIds.has(shipped.id))
-        continue;
-      const agent = narrowed.get(shipped.id) ?? shipped;
-      if ((agent.fork ?? "none") === "none") continue;
+    const byAgent =
+      probesByHost.get(hostId) ??
+      new Map<string, { key: string; probe: AcpAgentProbe }>();
+    probesByHost.set(hostId, byAgent);
+    for (const agent of agents) {
+      if (signal.aborted || revision !== configurationRevision) return;
+      if (agent.fork === "none" || disabledIds.has(agent.id)) continue;
+      const key = probeKey(agent);
+      if (byAgent.get(agent.id)?.key === key) continue;
       let probe: AcpAgentProbe;
       try {
         probe = await host.call(
@@ -173,6 +212,9 @@ export default async function acpProvidersPlugin(
             command: agent.launch.command,
             args: agent.launch.args,
             env: agent.launch.env,
+            ...(agent.launch.cwd === undefined
+              ? {}
+              : { cwd: agent.launch.cwd }),
           },
           { hostId, signal },
         );
@@ -180,16 +222,16 @@ export default async function acpProvidersPlugin(
         bb.log.debug(
           `Could not probe ${agent.id} on host ${hostId}: ${String(error)}`,
         );
-        continue;
+        probe = { reachable: false, reason: String(error) };
       }
+      if (signal.aborted || revision !== configurationRevision) return;
+      byAgent.set(agent.id, { key, probe });
       const applied = applyAcpAgentProbe(agent, probe);
-      if (applied === null) {
-        continue;
+      if (applied !== null) {
+        bb.log.info(
+          `${agent.id} on host ${hostId}: ${applied.reason}; re-registering.`,
+        );
       }
-      bb.log.info(
-        `${agent.id} on host ${hostId}: ${applied.reason}; re-registering.`,
-      );
-      narrowed.set(agent.id, applied.agent);
       reconcile(desiredAgents());
     }
   }
@@ -210,7 +252,6 @@ export default async function acpProvidersPlugin(
 
   bb.background.service("acp-capability-probe", {
     async start(signal: AbortSignal): Promise<void> {
-      const probed = new Set<string>();
       while (!signal.aborted) {
         const hosts = await bb.sdk.hosts.list();
         const connected = new Set(
@@ -218,12 +259,16 @@ export default async function acpProvidersPlugin(
             .filter((available) => available.status === "connected")
             .map((available) => available.id),
         );
-        for (const hostId of [...probed]) {
-          if (!connected.has(hostId)) probed.delete(hostId);
+        let removed = false;
+        for (const hostId of probesByHost.keys()) {
+          if (!connected.has(hostId)) {
+            probesByHost.delete(hostId);
+            removed = true;
+          }
         }
+        if (removed) reconcile(desiredAgents());
         for (const hostId of connected) {
-          if (signal.aborted || probed.has(hostId)) continue;
-          probed.add(hostId);
+          if (signal.aborted) break;
           await probeAgents(hostId, signal);
         }
         if (signal.aborted) break;
