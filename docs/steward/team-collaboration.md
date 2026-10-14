@@ -8,8 +8,8 @@
 - [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已提交、审查和推送。
 - [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [成员与六头像基础已公开](https://github.com/hxy91819/bb-team/commit/ec21d4a7e7c425002a1e6cb740cd49e9c30abfc4)；完整实现与候选验收已保存本地提交 a67d1e5，待正式 SDK 供应固定后公开 push（thr_pbj6j2khqk）。
 - [x] 在独立测试实例完成两仓库的候选联合行为验收与独立审查。← [聚合候选 e7c2ef8409](https://github.com/hxy91819/bb/commit/e7c2ef8409d575c463cba97f366a936e724bfd98)及同 SHA BB/SDK 包已验证；团队插件原生归属、分组、活动查询、Guide 与 Chromium/WebKit 紧凑视口旅程、生产冷安装均通过；审查发现已闭合，生产服务未改动。
-- [ ] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件，交付其他环境的安装方式。← 联合验收完成，已进入固定 e7c2ef8409 的正式发布（thr_kmvugsk2ci）；不重新聚合工作簿改动。
-- [ ] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，再发布 bb-team 插件 GitHub Release，交付其他环境的安装方式。
+- [ ] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件，交付其他环境的安装方式。← 固定 e7c2ef8409 的正式 tag `fork-v0.46.0-20261014.1` 已推送，[四平台与 SDK 发布 CI](https://github.com/hxy91819/bb/actions/runs/38549829312)运行中（thr_kmvugsk2ci）。
+- [ ] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，再发布 bb-team 插件 GitHub Release，交付其他环境的安装方式。 ← 并行准备发行归档和安装说明，资产公开后执行正式供应验证（thr_pbj6j2khqk）。
 
 ## 关键决策
 
