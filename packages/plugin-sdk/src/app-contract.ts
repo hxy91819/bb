@@ -1617,6 +1617,8 @@ export type experimental_ThreadListGroupProjection =
 export interface experimental_ThreadListItemInput<Data> {
   thread: PluginSidebarThread;
   data: Data;
+  /** Effective canonical pluginId/registrationId; built-in or fallback lists use null. */
+  groupingKey: string | null;
 }
 
 /** Sorted, deduplicated IDs merged across visible consumers in this app window. */
@@ -1641,10 +1643,12 @@ export interface experimental_ThreadListGroupingRegistration<Data = undefined> {
   ): experimental_ThreadListGroupProjection;
 }
 
-/** One bounded, noninteractive addition beside a row's title. */
+/** One bounded, noninteractive addition before or after a row's title. */
 export interface experimental_ThreadRowDecoration {
-  /** 1–80 Unicode characters. */
-  text: string;
+  /** 1–80 Unicode characters when present; omission requires a visible avatar. */
+  text?: string | null;
+  /** Defaults to trailing. Leading appears before the provider icon and title. */
+  placement?: "leading" | "trailing";
   /** 1–160 Unicode characters, independent of the visible abbreviation. */
   accessibleLabel: string;
   avatar?: experimental_ThreadListAvatar | null;
@@ -1687,9 +1691,17 @@ export interface experimental_ThreadListContributions {
     | null;
 }
 
+/** Custom list consumers supply their actual effective mode, never the saved selection. */
+export interface experimental_ThreadRowDecorationOptions {
+  groupingKey: string | null;
+}
+
 export interface experimental_ThreadRowDecorationEntry {
   key: string;
-  decoration: experimental_ThreadRowDecoration;
+  decoration: experimental_ThreadRowDecoration & {
+    text: string | null;
+    placement: "leading" | "trailing";
+  };
 }
 
 /**
@@ -2570,6 +2582,12 @@ export interface ExperimentalAppIcons {
 }
 
 export interface PluginAppBuilder {
+  /**
+   * Version 2 guarantees avatar-only decorations, leading/trailing placement and
+   * effective per-list groupingKey. Missing or 1 means the old text-only contract.
+   * Check >= 2 during setup; SDK package versions do not identify host support.
+   */
+  readonly experimental_threadListContributionVersion: 2;
   experimental_icons: ExperimentalAppIcons;
   commands: PluginAppCommands;
   slots: PluginAppSlots;
@@ -3828,6 +3846,7 @@ export interface PluginSdkApp {
   /** Consume only for realized, visible rows; multiple consumers deduplicate IDs. */
   experimental_useThreadRowDecorations(
     thread: PluginSidebarThread,
+    options?: experimental_ThreadRowDecorationOptions,
   ): readonly experimental_ThreadRowDecorationEntry[];
   /**
    * bb's thread menu behind a trigger (see

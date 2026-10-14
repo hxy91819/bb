@@ -589,6 +589,7 @@ export function collectPluginAppRegistrations(
   }
 
   definition.setup({
+    experimental_threadListContributionVersion: 2,
     commands: { register: registerCommand },
     slots: {
       homepageSection(registration) {
