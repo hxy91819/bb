@@ -388,11 +388,13 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      'pluginMetadata is accepted only when origin is "plugin"; plugin submission data is present only for experimental composer submissions and queued payloads that preserve them.',
+      'pluginMetadata is accepted only when origin is "plugin"; plugin submission data is present only for experimental composer submissions and queued payloads that preserve them; creation context omitted by callers without a client snapshot, server preparation still runs independently of origin.',
     fields: [
+      "createThreadRequestSchema.experimental_pluginContext",
       "createThreadRequestSchema.pluginMetadata",
-      "forkThreadRequestSchema.pluginMetadata",
       "createThreadRequestSchema.pluginSubmission",
+      "forkThreadRequestSchema.experimental_pluginContext",
+      "forkThreadRequestSchema.pluginMetadata",
       "sendMessageRequestSchema.pluginSubmission",
     ],
   },
