@@ -78,8 +78,40 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  sdk:
+    if: github.repository == 'hxy91819/bb'
+    name: Universal Plugin SDK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Package and cold-install SDK
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node scripts/fork-release/package-sdk.mjs . release "$RELEASE_TAG" "$GITHUB_SHA"
+          node scripts/fork-release/smoke-sdk.mjs release "$RELEASE_TAG" "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sdk-universal
+          path: release/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
-    needs: runtime
+    needs: [runtime, sdk]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -92,6 +124,10 @@ jobs:
         with:
           pattern: runtime-*
           merge-multiple: true
+          path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: sdk-universal
           path: release
       - name: Publish GitHub release
         env:

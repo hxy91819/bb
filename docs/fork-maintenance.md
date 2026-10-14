@@ -141,7 +141,7 @@ git ls-remote fork 'refs/tags/fork-v0.44.0-20261001.1^{}'
 
 workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
 
-在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。只有全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
+在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有四个平台与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
 
 | 包名后缀              | 目标机器                                              |
 | --------------------- | ----------------------------------------------------- |
@@ -153,6 +153,41 @@ workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点�
 这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
 
 流程仅使用 GitHub 自带的 `GITHUB_TOKEN`，发布 job 获得 `contents: write`；无需 npm token、Apple 签名证书或上游的 Blacksmith runner。Fork 的 Actions 需已启用。
+
+### 独立插件开发使用 SDK
+
+SDK 是通用 npm tarball，不是第五种平台服务包。每次新 Release 额外包含：
+
+- `bb-plugin-sdk-<fork-tag>.tgz`：完整的 `@get-bb/plugin-sdk`，保留源码中的包名与版本。
+- 同名 `.tgz.sha256`：`sha256sum --check` 可读的校验文件。
+- `bb-plugin-sdk-<fork-tag>.json`：`tag`、40 位聚合 `source` SHA、原 `package` / `version`、`filename`、`sha256`。记录不含构建路径。
+
+不需要 npm token，也不向上游 `@get-bb` 发布包。同一个 SDK 版本号不表示 stock npm 包包含 fork API；插件应固定 Release 资产 URL，并提交 lockfile 中的 integrity。示例（将 tag 与 SHA 换成实际已验收的 Release）：
+
+```bash
+tag=fork-v0.46.0-20261014.1
+source_sha='替换为该Release的40位聚合SHA'
+stem="bb-plugin-sdk-${tag}"
+url="https://github.com/hxy91819/bb/releases/download/${tag}"
+curl -fLO "${url}/${stem}.tgz"
+curl -fLO "${url}/${stem}.tgz.sha256"
+curl -fLO "${url}/${stem}.json"
+sha256sum --check "${stem}.tgz.sha256"
+node /path/to/bb/scripts/fork-release/verify-sdk.mjs . "$tag" "$source_sha" /path/to/matching-bb-checkout
+npm install --save-exact "@get-bb/plugin-sdk@${url}/${stem}.tgz"
+git add package.json package-lock.json
+```
+
+`verify-sdk.mjs` 交叉核对来源记录、SHA、tag、实际 tgz 内的包名/版本以及匹配 BB checkout 的 SDK manifest；来源 SHA 还应与已解析的 Release tag commit 和平台包 `release.json` 的 `source` 一致。来源 JSON 与 checksum 用于一致性验证，信任根是固定的仓库和不可变 Release 资产，不是单独下载的 JSON。macOS 可用 `shasum -a 256 --check`。
+
+构建循环中，先在已固定且干净的聚合候选上安装 frozen 依赖，再用同一脚本产出候选 SDK；输出目录必须在源码树外（或已被忽略），正常 gitignored 生成文件不算脏源码。无需先打 tag：若同名 tag 已存在，脚本要求它指向同一 SHA。
+
+```bash
+node /path/to/fork-tooling/scripts/fork-release/package-sdk.mjs /path/to/clean-candidate /tmp/sdk-candidate "$tag" "$source_sha"
+node /path/to/fork-tooling/scripts/fork-release/smoke-sdk.mjs /tmp/sdk-candidate "$tag" "$source_sha" /path/to/clean-candidate
+```
+
+本机安装、构建和冷消费检查应放在既有资源隔离流程内串行执行。正式 Release 从同一聚合 SHA 使用相同脚本构建；候选包的字节 hash 不必与正式构建相同，正式 URL/integrity 以正式资产为准。插件 owner 联合验收后固定该 URL 和 lockfile；兼容声明写明实际验收的 BB fork tag 与聚合 SHA，不能仅写 SDK 原版本。BB 发布不依赖尚未发布的插件。
 
 ### 在其他机器安装
 
@@ -177,7 +212,7 @@ macOS 对应换成 `darwin-x64` 或 `darwin-arm64`，校验命令用 `shasum -a 
 
 构建或验证失败时修复所属分支，重新聚合后使用新 tag 发布。纯网络或 runner 故障可在 Actions 重跑原 tag。
 
-上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和资产清单，不覆盖已发布包。需要修订已发布版本时使用新 tag。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
+上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和完整资产清单（四个平台的八件资产与 SDK 的三件资产），不覆盖已发布包。需要修订已发布版本时使用新 tag。新 workflow 缺 SDK 资产会失败，不降级；历史已公开且不含 SDK 的 Release 不回填、不修改，仍使用其原 workflow。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
 
 ## 4. 向上游反馈
 

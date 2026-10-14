@@ -4,6 +4,7 @@ set -euo pipefail
 : "${GH_REPO:?}" "${RELEASE_TAG:?}" "${GITHUB_SHA:?}"
 remote_source="$(git ls-remote "https://github.com/${GH_REPO}.git" "refs/tags/${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}^{}" | awk '/\^\{\}$/ { peeled=$1; next } { target=$1 } END { print peeled ? peeled : target }')"
 test "$remote_source" = "$GITHUB_SHA"
+node scripts/fork-release/verify-sdk.mjs release "$RELEASE_TAG" "$GITHUB_SHA"
 cd release
 
 assets=()
@@ -12,13 +13,22 @@ for platform in linux darwin; do
     archive="bb-${RELEASE_TAG}-${platform}-${arch}.tar.gz"
     test -s "$archive"
     test -s "$archive.sha256"
-    sha256sum --check "$archive.sha256"
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum --check "$archive.sha256"
+    else
+      shasum -a 256 --check "$archive.sha256"
+    fi
     assets+=("$archive" "$archive.sha256")
   done
 done
 
+sdk="bb-plugin-sdk-${RELEASE_TAG}"
+assets+=("$sdk.tgz" "$sdk.tgz.sha256" "$sdk.json")
+
 cat > release-notes.md <<EOF
 Prebuilt BB fork aggregate from commit ${GITHUB_SHA}.
+
+The universal Plugin SDK npm tarball and provenance JSON come from the same commit. They are for plugin development; SDK package names and versions retain their upstream values.
 
 Download the archive matching your OS and CPU. Verify its accompanying SHA-256 checksum, extract it, then run bin/bb-app or bin/bb --help inside the extracted directory.
 
