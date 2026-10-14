@@ -43,3 +43,4 @@ feature/plugin-thread-context                   needs-feedback                  
 feature/plugin-thread-list-contributions        needs-feedback                                             # 通用可选成员等分组与行装饰贡献，复用原生thread-list树/偏好/交互。
 feature/thread-activity-query                  needs-feedback                                             # 通用有界线程活动事实查询，SQL namespace/metadata/date过滤与SDK/CLI分页
 fix/queue-child-parent-notices         needs-feedback                                             # 父会话忙碌时将子会话系统通知排队，空闲后以新回合投递
+fix/plugin-overlay-recovery                    needs-feedback                                             # 插件内容脚本隔离期间放行 React root 挂载，避免全局 overlay 节点被拒
