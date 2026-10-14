@@ -12,9 +12,9 @@
 
 - [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
 - [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像。← 本地 checkpoint 24f43b27；正式 .2 的双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合；发布仍待宿主头像修复。
-- [ ] 聚合头像宽度修复并交付匹配的 BB/SDK 候选。← thr_jeu8fv6gj7 执行完整流水线与冷消费；[正式 .2](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.2)保留，新候选完成布局回归后再发行。
+- [x] 聚合头像宽度修复并交付匹配的 BB/SDK 候选。← 同 SHA 331774968c 已完成完整流水线、102 包类型检查、改动包测试、冷 SDK 与独立 runtime 检查；父核对资产 hash/source，插件已获匹配包。
 - [x] 修复通用行首头像宽度。← [布局修复已 push](https://github.com/hxy91819/bb/commit/b63855626b1c958bbe873494526f54a7a7465f61)：240/320px 侧栏、长标题/项目/child/pinned/多贡献者下保持完整 16px，行为检查与独立审查通过。
-- [ ] 完成新版插件验收与 v0.2.0 Release。← 宿主头像修复后核对匹配供应，完成必要布局回归、冷安装、CI、完整归档及公开回读；既有绿色验收保留，旧资产不覆盖。
+- [ ] 完成新版插件验收与 v0.2.0 Release。← thr_pbj6j2khqk 使用候选 331774968c 复验实际头像与移动、安装边界；通过后发布该 SHA 的 BB，再固定插件正式供应、冷安装、CI、归档及公开回读；旧资产不覆盖。
 
 ## 关键决策
 
