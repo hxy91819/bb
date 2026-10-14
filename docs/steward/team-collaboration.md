@@ -5,8 +5,7 @@
 ## 路线
 
 - [x] 完成[设计与审查](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，在稳定基线实现 BB 通用扩展、SDK、CLI 与 Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已审查和推送。
-- [x] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [bb-team 完整实现 cd395a06](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已提交、审查和公开 push；身份、归属、成员分组与按需活动查询均已验收。
-- [x] 在独立测试实例完成联合验收与独立审查。← 同 SHA 候选及正式 BB/SDK 的归属、分组、活动、Guide、Chromium/WebKit、冷安装与公开包安装通过；审查闭合，生产未动。协议 fixture 不代表付费 AI 效果；既有队列失败和开发告警保留。
+- [x] 在独立仓库实现团队插件、头像和安装文档，并完成同 SHA 两仓库联合验收及审查；[v0.1 源码](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已公开。身份、归属、分组、按需活动、升级与 Chromium/WebKit 通过；协议 fixture 不代表付费 AI 效果，既有基线失败与开发告警保留。
 - [x] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件。← [fork-v0.46.0-20261014.1 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.1)，source 为 e7c2ef8409；四平台运行时、通用 SDK 和发布 CI 全通过，十一件正式资产及来源校验通过。
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
@@ -14,7 +13,8 @@
 - [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像。← 本地 checkpoint 24f43b27；正式 .2 的双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合；发布待匹配包联合验收。
 - [x] 重聚合完整布局修复并交付匹配 BB/SDK。← 新候选 9ddb184943 包含头像和项目标签预算修复，完整流水线、102 包类型检查、改动包测试、冷 SDK 与独立 runtime 通过；父核对 hash/source 与合并审查。
 - [x] 闭合头像与整行宽度预算的源码修复。← [头像修复](https://github.com/hxy91819/bb/commit/b63855626b1c958bbe873494526f54a7a7465f61)与[项目标签预算](https://github.com/hxy91819/bb/commit/6beb3eb7e042f5746daae4bc70a563f3d5a06f82)分别保留独立分支；实际组合 192 行观测无溢出，头像 16px、标题至少 22px，117 项测试及审查通过。
-- [ ] 完成新版插件验收与 v0.2.0 Release。← thr_pbj6j2khqk 对候选 9ddb184943 完成实际团队必要布局回归后，发行该 SHA 的 BB/SDK；再固定插件正式供应、冷安装、CI、归档与公开回读，既有绿色与旧资产保留。
+- [x] 完成新候选实际团队必要回归。← 9ddb184943 的 18 行头像均 16px、原时间分组溢出转绿，Chromium/WebKit 移动入口、Search、touch、冷窗口和生产安装构建通过，增量审查闭合。
+- [ ] 发布匹配 BB/SDK 与插件 v0.2.0。← thr_jeu8fv6gj7 发布确切已验收 SHA 9ddb184943；正式供应到位后固定插件依赖，完成归档安装、CI 与公开回读；不重新聚合改变发行 SHA，不操作生产服务。
 
 ## 关键决策
 
