@@ -41,3 +41,4 @@ fix/git-fixture-isolation              needs-feedback                           
 feature/child-report-delivery          needs-feedback                                                             # 子线程汇报投递设计文档（docs/child-report-delivery-design.md），尚无实现
 feature/plugin-thread-context                   needs-feedback                                             # 通用提交上下文快照与多namespace插件metadata原子创建，SDK/CLI/Guide共用。
 feature/plugin-thread-list-contributions        needs-feedback                                             # 通用可选成员等分组与行装饰贡献，复用原生thread-list树/偏好/交互。
+feature/thread-activity-query                  needs-feedback                                             # 通用有界线程活动事实查询，SQL namespace/metadata/date过滤与SDK/CLI分页
