@@ -3,6 +3,11 @@ import {
   updateUiPreferenceRoute,
   resetUiPreferenceRoute,
 } from "./client-route-descriptors.js";
+export {
+  experimentalThreadActivityRequestSchema,
+  type ExperimentalThreadActivityInput,
+  type ExperimentalThreadActivityResponse,
+} from "./api/thread-activity.js";
 import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
@@ -1361,6 +1366,16 @@ export const publicApiRoutes = {
         threadListQuerySchema,
       ),
       response: jsonResponse<ThreadListResponse>(),
+    }),
+    experimental_activity: defineRoute({
+      path: "/threads/experimental-activity",
+      method: "post",
+      request: jsonRequest<
+        EmptyInput,
+        ExperimentalThreadActivityInput,
+        typeof experimentalThreadActivityRequestSchema
+      >(experimentalThreadActivityRequestSchema),
+      response: jsonResponse<ExperimentalThreadActivityResponse>(),
     }),
     /**
      * Grouped `SELECT count(*)` over threads. Exists because a plugin gate

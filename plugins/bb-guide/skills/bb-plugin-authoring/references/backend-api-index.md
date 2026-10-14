@@ -35,6 +35,10 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalThreadTabActionContext`
 - `ExperimentalAppPanel`
 - `ExperimentalAppPanelSurface`
+- `ExperimentalActivityEvidence`
+- `ExperimentalThreadActivityArgs`
+- `ExperimentalThreadActivityResult`
+- `ExperimentalPluginThreadActivityArgs`
 - `ExperimentalDesktopBrowserAcquireInput`
 - `ExperimentalDesktopBrowserCreateInput`
 - `ExperimentalDesktopBrowserLease`
@@ -492,3 +496,6 @@ Read the installed declarations for exact current signatures.
 
 The keyed method and row types are inferred from the `contract` option.
 Read-state and error behavior is documented in [Frontend hooks and UI](frontend-hooks-and-ui.md).
+
+Activity API reference: the Plugin Guide's Thread plugin metadata card describes
+`PluginBbSdk.threads.experimental_activity`.

@@ -2,6 +2,8 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createProjectSource,
+  insertThreadPluginMetadata,
+  events,
   ensurePersonalProject,
   getEnvironment,
   getThread,
@@ -22,6 +24,7 @@ import {
 } from "@bb/domain";
 import {
   threadResponseSchema,
+  experimentalThreadActivityResponseSchema,
   threadTimelineResponseSchema,
 } from "@bb/server-contract";
 import { eq } from "drizzle-orm";
@@ -29,7 +32,10 @@ import { createDeferredPromise } from "@bb/test-helpers";
 import { describe, expect, it, vi } from "vitest";
 import { storeAttachment } from "../../src/services/projects/attachments.js";
 import * as placement from "../../src/services/threads/thread-environment-placement.js";
-import { appendClientTurnEventInTransaction } from "../../src/services/threads/thread-events.js";
+import {
+  appendThreadEventInTransaction,
+  appendClientTurnEventInTransaction,
+} from "../../src/services/threads/thread-events.js";
 import { sendQueuedMessage } from "../../src/services/threads/queued-messages.js";
 import { sendThreadMessage } from "../../src/services/threads/thread-send.js";
 import {
@@ -1306,6 +1312,165 @@ async function waitForForkStart(harness: TestAppHarness, forkId: string) {
 }
 
 describe("fork branch point and inherited history", () => {
+  it("reports only local evidence after real empty-fork startup, including multilevel forks and deleted sources", async () => {
+    await withTestHarness(async (harness) => {
+      const { sourceThread } = seedConversationForkSource(harness, {
+        runningThirdTurn: false,
+      });
+      harness.db
+        .update(events)
+        .set({ createdAt: Date.now() - 1000 })
+        .where(eq(events.threadId, sourceThread.id))
+        .run();
+      async function activity(threadId: string) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        const response = await harness.app.request(
+          "/api/v1/threads/experimental-activity",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: "details",
+              threadId,
+              metadata: { pluginId: "team", key: "memberId", equals: "b" },
+              from: Date.now() - 86400000,
+              to: Date.now() + 1000,
+            }),
+          },
+        );
+        expect(response.status).toBe(200);
+        return experimentalThreadActivityResponseSchema.parse(
+          await readJson(response),
+        );
+      }
+      async function makeFork(sourceId: string, providerId: string) {
+        const response = await postFork(harness, { sourceThreadId: sourceId });
+        expect(response.status).toBe(201);
+        const fork = threadResponseSchema.parse(await readJson(response));
+        insertThreadPluginMetadata(harness.db, {
+          threadId: fork.id,
+          pluginId: "team",
+          metadata: { memberId: "b" },
+        });
+        const queued = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "thread.start" && command.threadId === fork.id,
+        );
+        if (queued.command.type !== "thread.start") throw new Error();
+        expect(queued.command.input).toEqual([]);
+        const before = await activity(fork.id);
+        expect(before.items).toEqual([]);
+        expect(before.coverage.incomplete).toBe(true);
+        const copied = listEvents(harness.db, { threadId: fork.id }).filter(
+          (e) => e.type === "item/completed",
+        );
+        expect(copied.length).toBeGreaterThan(0);
+        await reportQueuedCommandSuccess(harness, queued, {
+          providerThreadId: providerId,
+        });
+        const identity = listEvents(harness.db, { threadId: fork.id }).find(
+          (e) => e.type === "thread/identity",
+        );
+        expect(identity?.sequence).toBeGreaterThan(
+          Math.max(...copied.map((e) => e.sequence)),
+        );
+        return fork;
+      }
+      function localTurn(threadId: string, providerId: string, text: string) {
+        harness.db.transaction((tx) => {
+          appendThreadEventInTransaction(tx, {
+            threadId,
+            providerThreadId: providerId,
+            type: "turn/started",
+            scope: turnScope("local-turn"),
+            data: { providerThreadId: providerId },
+          });
+          appendThreadEventInTransaction(tx, {
+            threadId,
+            providerThreadId: providerId,
+            type: "item/completed",
+            scope: turnScope("local-turn"),
+            data: {
+              providerThreadId: providerId,
+              item: { type: "agentMessage", id: "local", text },
+            },
+          });
+          appendThreadEventInTransaction(tx, {
+            threadId,
+            providerThreadId: providerId,
+            type: "turn/completed",
+            scope: turnScope("local-turn"),
+            data: { providerThreadId: providerId, status: "completed" },
+          });
+        });
+      }
+      const fork = await makeFork(sourceThread.id, "provider-local-1");
+      localTurn(fork.id, "provider-local-1", "first local statement");
+      const first = await activity(fork.id);
+      expect(first.items.map((e) => ("excerpt" in e ? e.excerpt : ""))).toEqual(
+        ["first local statement", "Turn completed"],
+      );
+      const nested = await makeFork(fork.id, "provider-local-2");
+      localTurn(nested.id, "provider-local-2", "second local statement");
+      harness.db
+        .update(threads)
+        .set({ deletedAt: Date.now() })
+        .where(eq(threads.id, sourceThread.id))
+        .run();
+      harness.db
+        .update(threads)
+        .set({ deletedAt: Date.now() })
+        .where(eq(threads.id, fork.id))
+        .run();
+      harness.db.delete(threads).where(eq(threads.id, sourceThread.id)).run();
+      harness.db.delete(threads).where(eq(threads.id, fork.id)).run();
+      const second = await activity(nested.id);
+      expect(
+        second.items.map((e) => ("excerpt" in e ? e.excerpt : "")),
+      ).toEqual(["second local statement", "Turn completed"]);
+      expect(second.coverage.incomplete).toBe(false);
+      const retained = listEvents(harness.db, { threadId: nested.id });
+      const prefixEvent = retained.find((e) => e.type === "item/completed");
+      if (!prefixEvent) throw new Error();
+      harness.db.delete(events).where(eq(events.id, prefixEvent.id)).run();
+      const gap = await activity(nested.id);
+      expect(gap.items.map((e) => ("excerpt" in e ? e.excerpt : ""))).toEqual([
+        "second local statement",
+        "Turn completed",
+      ]);
+      expect(gap.coverage.incomplete).toBe(true);
+      expect(gap.coverage.forkBoundaryGaps.samples[0]?.reason).toBe(
+        "prefix-sequence-gap",
+      );
+      const firstIdentity = retained.find((e) => e.type === "thread/identity");
+      if (!firstIdentity) throw new Error();
+      harness.db.transaction((tx) =>
+        appendThreadEventInTransaction(tx, {
+          threadId: nested.id,
+          providerThreadId: "provider-local-2",
+          type: "thread/identity",
+          scope: threadScope(),
+          data: { providerThreadId: "provider-local-2" },
+        }),
+      );
+      localTurn(nested.id, "provider-local-2", "after later identity");
+      harness.db.delete(events).where(eq(events.id, firstIdentity.id)).run();
+      const laterBoundary = await activity(nested.id);
+      expect(
+        laterBoundary.items.map((e) => ("excerpt" in e ? e.excerpt : "")),
+      ).toEqual(["after later identity", "Turn completed"]);
+      expect(laterBoundary.coverage.incomplete).toBe(true);
+      expect(laterBoundary.coverage.forkBoundaryGaps.uncertainPrefixCount).toBe(
+        1,
+      );
+      harness.db.delete(events).where(eq(events.threadId, nested.id)).run();
+      const missing = await activity(nested.id);
+      expect(missing.items).toEqual([]);
+      expect(missing.coverage.incomplete).toBe(true);
+    });
+  });
+
   function referenceAttachmentInHistory(
     harness: TestAppHarness,
     threadId: string,
