@@ -363,6 +363,15 @@ function wrapSdkForPlugin(
     },
     threads: {
       ...sdk.threads,
+      experimental_activity(args) {
+        return sdk.threads.experimental_activity({
+          ...args,
+          metadata: {
+            ...args.metadata,
+            pluginId: args.metadata.pluginId ?? pluginId,
+          },
+        });
+      },
       async getPluginMetadata(
         args: Omit<ThreadPluginMetadataArgs, "pluginId"> & {
           pluginId?: string;

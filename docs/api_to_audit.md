@@ -3563,3 +3563,16 @@ Stabilize after exercising producer cancellation, reload, reconnect and byte lim
 - **Core callers:** `ThreadPromptContextBanner` (`apps/app/src/components/promptbox/banner/ThreadPromptContextBanner.tsx`) registers the parent thread (summary and details, including read-only history) and changed files (summary, merge-base action, details) through `definePluginApp` and the same collector, and renders them with plugin registrations through `useThreadContextSegments` and `ThreadContextSegmentMount` (`apps/app/src/components/plugin/PluginThreadContextSegments.tsx`). Core segments read pane-local data from a React context and render without a plugin crash boundary, as core Info rows do. The GitHub PR Status plugin registers the pull request segment in its own group `2_pullRequest`, between core's two and its Mark ready and merge actions. Active child threads are a separate core row above the context row (`ThreadChildThreadsBanner`), not a segment. Contract tests: `ThreadPromptContextBanner.segments.test.tsx`.
 - **Known coupling:** `environment` folds in the "Show Git changes and Commit button" setting so the pull request segment hides with core's changed files, as before; that setting should become the git plugin's own when changed files move out of core.
 - **Stabilization:** audit per-component mounts and crash recovery across reloads and plugin disable, `segments` stability while visibility settles, focus handoff between a plugin's summary and details, independent panes, and compact widths with several plugin segments. Then rename project-wide and remove this entry.
+
+## Thread activity evidence
+
+`PluginBbSdk.threads.experimental_activity`, `ExperimentalPluginThreadActivityArgs`,
+`ExperimentalThreadActivityArgs`, `ExperimentalThreadActivityResult` and
+`ExperimentalActivityEvidence` expose bounded retained event facts through the
+public `POST /threads/experimental-activity` route. Core `bb thread
+experimental-activity` and the SDK use this same route and query service; the plugin
+binding only supplies its default metadata namespace. Stabilization requires
+scalar/type and public access filtering, binary/sequence keyset continuation,
+wire budgets, real fork startup boundary tests, retained/live coverage, and
+independent consumers exercising per-item cursors. The Plugin Guide's thread
+plugin metadata card owns the API reference. No daemon protocol change.

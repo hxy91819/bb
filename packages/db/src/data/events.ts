@@ -1,3 +1,4 @@
+import { eventSequenceRange } from "./activity-evidence.js";
 import { markThreadPruningWork } from "./thread-pruning-work.js";
 import { isBeforeLatestThreadEvent } from "./event-pruning-guards.js";
 import { acquireProjectAttachmentOwnership } from "./project-attachments.js";
@@ -1464,13 +1465,7 @@ export function listStoredEventRows(
       )
       .where(
         and(
-          eq(events.threadId, args.threadId),
-          args.afterSequence === undefined
-            ? undefined
-            : gt(events.sequence, args.afterSequence),
-          args.beforeSequence === undefined
-            ? undefined
-            : lt(events.sequence, args.beforeSequence),
+          eventSequenceRange(args),
           pageTypes === undefined
             ? undefined
             : inArray(events.type, [...pageTypes]),
