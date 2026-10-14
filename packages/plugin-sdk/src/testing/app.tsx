@@ -16,6 +16,11 @@ import {
 } from "react";
 import { act, render, type RenderResult } from "@testing-library/react";
 import {
+  ThreadListContributionProvider,
+  useThreadListContributions,
+  useThreadRowDecorations,
+} from "../internal/thread-contribution-runtime.js";
+import {
   type BbContext,
   type BbNavigate,
   type BranchesState,
@@ -71,6 +76,8 @@ import {
   type PluginThreadHeaderActionRegistration,
   type PluginThreadActionEntry,
   type PluginThreadActionRegistration,
+  type experimental_ThreadListGroupingRegistration,
+  type experimental_ThreadRowDecorationRegistration,
   type PluginThreadActionRegistrationInfo,
   type PluginThreadActionsContextMenuProps,
   type PluginThreadActionsMenuProps,
@@ -1171,7 +1178,9 @@ function TestDiff({
   );
 }
 
-type TestClipboard = (content: ExperimentalClipboardContent) => Promise<boolean>;
+type TestClipboard = (
+  content: ExperimentalClipboardContent,
+) => Promise<boolean>;
 
 let activeClipboard: TestClipboard | null = null;
 
@@ -1375,6 +1384,8 @@ const testPluginSdkApp = {
     return useSlotEnv("experimental_useThreadActionRegistrations")
       .threadActionRegistrations;
   },
+  experimental_useThreadListContributions: useThreadListContributions,
+  experimental_useThreadRowDecorations: useThreadRowDecorations,
   experimental_ThreadActionsMenu: TestThreadActionsMenu,
   experimental_ThreadActionsContextMenu: TestThreadActionsContextMenu,
   experimental_THREAD_ACTION_GROUPS,
@@ -1502,6 +1513,8 @@ export interface CapturedPluginApp {
   threadLists: PluginThreadListRegistration[];
   threadHeaderActions: PluginThreadHeaderActionRegistration[];
   threadActions: PluginThreadActionRegistration<unknown>[];
+  threadListGroupings: experimental_ThreadListGroupingRegistration<unknown>[];
+  threadRowDecorations: experimental_ThreadRowDecorationRegistration<unknown>[];
   browserToolbarActions: ExperimentalPluginBrowserToolbarActionRegistration[];
   fileOpeners: PluginFileOpenerRegistration[];
   sourceCodeRenderers: PluginSourceCodeRendererRegistration[];
@@ -1722,6 +1735,15 @@ export interface RenderSlotOptions<
   context?: { projectId?: string | null; threadId?: string | null };
   /** `experimental_usePluginId()` value; defaults to `test-plugin`. */
   pluginId?: string;
+  /** Real collected registrations, run by the same app-wide host as production. */
+  experimental_threadListPlugins?: readonly {
+    pluginId: string;
+    generation?: number;
+    registrations: Pick<
+      CapturedPluginApp,
+      "threadListGroupings" | "threadRowDecorations"
+    >;
+  }[];
   /** Initial `useRealtimeConnectionState()` value; defaults to `connected`. */
   realtimeConnectionState?: PluginRealtimeConnectionState;
   /** Initial state for this render's isolated composer scope and view. */
@@ -2512,7 +2534,31 @@ export function renderSlot<
   const renderSlotTree = (ui: ReactNode): ReactElement => (
     <SlotEnvContext.Provider value={env}>
       <SlotLifecycleGuard onUnmount={releaseComposerOwnership}>
-        {ui}
+        <ThreadListContributionProvider
+          groupings={(options.experimental_threadListPlugins ?? []).flatMap(
+            (plugin) =>
+              plugin.registrations.threadListGroupings.map((registration) => ({
+                ...registration,
+                pluginId: plugin.pluginId,
+                generation: plugin.generation ?? 1,
+              })),
+          )}
+          decorations={(options.experimental_threadListPlugins ?? []).flatMap(
+            (plugin) =>
+              plugin.registrations.threadRowDecorations.map((registration) => ({
+                ...registration,
+                pluginId: plugin.pluginId,
+                generation: plugin.generation ?? 1,
+              })),
+          )}
+          wrapCollector={(pluginId, child) => (
+            <SlotEnvContext.Provider value={{ ...env, pluginId }}>
+              {child}
+            </SlotEnvContext.Provider>
+          )}
+        >
+          {ui}
+        </ThreadListContributionProvider>
       </SlotLifecycleGuard>
     </SlotEnvContext.Provider>
   );

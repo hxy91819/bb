@@ -42,6 +42,8 @@ Read the installed SDK declarations for the exact current signatures.
 - `useComposer`
 - `useComposers`
 - `useComposerView` — deprecated, runtime-only for older plugins; use `useComposer`
+- `experimental_useThreadListContributions` — selectable grouping discovery and root projection
+- `experimental_useThreadRowDecorations` — composed row descriptions; see Plugin Guide → The thread list
 - `experimental_useSidebarThreads`
 - `experimental_useSidebarThreadActions` — deprecated, runtime-only for older
   plugins; use the thread action registry, `useSdk().threads`, and
@@ -291,3 +293,20 @@ Read the installed SDK declarations for the exact current signatures.
 - `StandardSchemaV1InferOutput`
 - `StandardSchemaV1Issue`
 - `StandardSchemaV1Result`
+
+## Thread list contribution types
+
+The Plugin Guide's The thread list card owns the grouping/row contract and examples.
+
+- `experimental_ThreadListAvatar`
+- `experimental_ThreadListGroup`
+- `experimental_ThreadListGroupProjection`
+- `experimental_ThreadListItemInput`
+- `experimental_ThreadListDataInput`
+- `experimental_ThreadListGroupingRegistration`
+- `experimental_ThreadListGroupingInfo`
+- `experimental_ThreadListContributionsInput`
+- `experimental_ThreadListContributions`
+- `experimental_ThreadRowDecoration`
+- `experimental_ThreadRowDecorationRegistration`
+- `experimental_ThreadRowDecorationEntry`

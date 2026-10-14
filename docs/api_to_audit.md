@@ -3988,3 +3988,38 @@ Stabilization requires exercising reconnect/reload, concurrent deduplication, ro
 `hosts.experimental_discoverRepos({ hostId })` asks the machine for git repositories under the user's home directory with local activity in the last 30 days, newest first, capped at 10. Each entry has `path`, `name`, `lastActivityAt`, `originUrl`, and `projectId` (the bb project already bound to that path on that machine, or null). `truncated` is true when the three-second walk budget ran out. The walk stops at each repository root, skips dot-directories, common build directories, scratch directories (`tmp`, `temp`, `tmp-*`, `Downloads`), linked worktrees, and submodules. The first-run setup guide and `bb project discover` use it. Host-daemon wire change: the `host.discover_repos` command (protocol 230).
 
 Stabilize after deciding whether depth, recency window, and limit should be caller options, and after exercising slow or network-mounted home directories and Windows hosts.
+
+## Composable thread list contributions
+
+`app.slots.experimental_threadListGrouping<Data>` registers
+`{ id, title, useData?, projection }`; `experimental_threadRowDecoration<Data>`
+registers `{ id, title, useData?, item }`. The app binds plugin identity and
+generation, mounts each collector in its plugin context, and isolates hook and
+projection failures. Public `experimental_ThreadList*` and
+`experimental_ThreadRowDecoration*` types expose data and pure descriptions,
+without list layout, atoms, drag models or external-store protocols.
+
+`experimental_useThreadListContributions({ rootThreadIds, groupingKey, visible? })`
+discovers providers and reads the selected projection. Provider keys are
+`<pluginId>/<registrationId>`. Visible consumers merge all candidate roots
+before folding/windowing. `experimental_useThreadRowDecorations(thread)` merges
+visible row demand and returns additions sorted by full registration key. Each
+registration has one app-wide collector; plugins own metadata batching/cache and
+realtime cleanup. Descriptions enforce text/accessible label bounds and same-origin
+avatars. Loading differs from ungrouped; errors preserve usable rows.
+
+The core app owns the runtime through `ThreadListContributions`; the bundled
+thread-list consumes it in `ProjectList`, `SidebarViewItems`, `useSidebarThreadReveal`
+and `ThreadRow`. Machine and contributed adapters share root-tree projection;
+project/custom mode policy, pinning, ordering and DnD remain private. Existing
+thread actions share the demand and collector boundary primitives. Missing or
+failed selected providers temporarily use chronological without rewriting saved
+preferences. Group state remains in the thread-list KV preferences.
+
+Stabilization requires public registration/consumer and built runtime tests for
+multiple owners and list consumers, root versus visible demand, plugin context,
+disposal/reload, loading/error recovery, bounded accessibility and stable identity;
+shared machine/external adapter invariants for parent trees and environment isolation;
+regressions for all three original modes and CLI/RPC preferences; and live desktop
+and compact Safari checks for navigation, reveal, dragging and actions. No member,
+creation or activity query semantics are supplied by these list contributions.

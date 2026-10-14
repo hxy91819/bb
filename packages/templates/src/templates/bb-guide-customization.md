@@ -604,3 +604,21 @@ stops the sampler and flushes the in-flight profile; existing files remain.
 The launch flag only grants permission and still requires a restart to change.
 
 Storage cleanup can run in the background with `bb storage cleanup --machine HOST_ID --kind orphans|development|worktrees --yes`. Inspect `maintenance` with `bb storage usage`; failures release the machine lock and can be retried. Archived storage cleanup waits through the archive undo grace and rechecks eligibility before each batch.
+
+### Plugin thread grouping preferences
+
+The bundled Thread list accepts `organizationMode` values `chronological`
+(the default), `project`, `machine`, or a registered `<pluginId>/<registrationId>`.
+The Organize menu lists enabled providers. Installing one leaves the choice
+unchanged. Missing or failing providers temporarily use chronological and keep
+the saved selection for recovery. Select through the CLI with
+`bb thread-list prefs set organizationMode example/owners`.
+
+Group collapse/order live in `collapsedContributionGroups` and
+`contributionGroupOrder`; `hiddenGroups` also accepts contributed group keys.
+Canonical keys are `contribution:` plus
+`encodeURIComponent(JSON.stringify([providerKey, kind, groupKey]))`, where `kind`
+is `group`, `ungrouped` or `loading` (the latter two have an empty key).
+Labels can change without resetting state; keys from other providers remain stored.
+Read and change these through `bb thread-list prefs list/get/set/reset` or the
+plugin preferences RPC. Open windows receive changes through the existing sync.
