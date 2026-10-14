@@ -37,6 +37,8 @@ function createFixture(): { binDir: string; dataDir: string; homeDir: string } {
   mkdirSync(homeDir, { recursive: true });
   writeFileSync(join(root, "package.json"), '{"type":"commonjs"}\n');
   symlinkSync(process.execPath, join(binDir, "node"));
+  writeExecutable(join(binDir, "systemctl"), "#!/bin/sh\nexit 1\n");
+  writeExecutable(join(binDir, "loginctl"), "#!/bin/sh\nexit 1\n");
   return { binDir, dataDir, homeDir };
 }
 
@@ -55,6 +57,7 @@ function createScriptEnv(
     ...process.env,
     BB_DATA_DIR: fixture.dataDir,
     BB_ENROLLMENT: bootstrapBundle(),
+    BB_INSTALL_SKIP_SERVICE: "0",
     HOME: fixture.homeDir,
     PATH: [fixture.binDir, "/usr/bin", "/bin"].join(delimiter),
     ...env,
@@ -344,6 +347,7 @@ exec '${process.execPath}' "$@"
       writeExecutable(join(fixture.binDir, "id"), `#!/bin/sh\necho ${uid}\n`);
       writeCurlArtifactMock(fixture, 404);
       const result = runScript(BOOTSTRAP_ARGS, fixture, {
+        BB_INSTALL_SKIP_SERVICE: "1",
         HOME: unset ? undefined : fixture.homeDir,
       });
       expect(result.status).not.toBe(0);
@@ -597,6 +601,7 @@ exec '${process.execPath}' "$@"
     const result = runScript(
       [...BOOTSTRAP_ARGS, "--host-daemon-port", "0"],
       fixture,
+      { BB_INSTALL_SKIP_SERVICE: "1" },
     );
 
     expect(result.status).toBe(2);
@@ -1156,6 +1161,7 @@ fs.writeFileSync(path.join(process.env.BB_DATA_DIR, "config.json"), JSON.stringi
     writeServerInstallTools(fixture, 200);
     const missingDir = join(fixture.homeDir, "elsewhere");
     const result = runScript(BOOTSTRAP_ARGS, fixture, {
+      BB_INSTALL_SKIP_SERVICE: "1",
       BB_DATA_DIR: "",
       BB_ENROLLMENT: JSON.stringify({
         ...JSON.parse(bootstrapBundle()),
@@ -1288,7 +1294,7 @@ fi
     const result = runScript(
       ["--adopt", "--data-dir", fixture.dataDir],
       fixture,
-      { BB_ENROLLMENT: undefined },
+      { BB_ENROLLMENT: undefined, BB_INSTALL_SKIP_SERVICE: "1" },
     );
 
     expect(result.status).toBe(1);
