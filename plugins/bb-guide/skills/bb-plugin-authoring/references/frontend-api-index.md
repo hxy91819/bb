@@ -61,6 +61,8 @@ Read the installed SDK declarations for the exact current signatures.
 - `experimental_PluginIcon`
 - `experimental_ThreadTitleText`
 - `useComposerView`
+- `experimental_useThreadListContributions` — selectable grouping discovery and root projection
+- `experimental_useThreadRowDecorations` — composed row descriptions; see Plugin Guide → The thread list
 - `experimental_useSidebarThreads`
 - `experimental_useSidebarThreadActions`
 - `experimental_useArchiveEnvironmentThreads`
@@ -414,3 +416,20 @@ For `app.slots.experimental_tab`, `ExperimentalTabRegistration`,
 `experimental_useAppPanel().experimental_openTab`, see
 [Thread side-panel tabs in the Plugin Guide](https://getbb.app/plugin-guide#surface-thread-panel).
 Source upgrades are in [Tab API migration](frontend-registration.md#tab-api-migration).
+
+## Thread list contribution types
+
+The Plugin Guide's The thread list card owns the grouping/row contract and examples.
+
+- `experimental_ThreadListAvatar`
+- `experimental_ThreadListGroup`
+- `experimental_ThreadListGroupProjection`
+- `experimental_ThreadListItemInput`
+- `experimental_ThreadListDataInput`
+- `experimental_ThreadListGroupingRegistration`
+- `experimental_ThreadListGroupingInfo`
+- `experimental_ThreadListContributionsInput`
+- `experimental_ThreadListContributions`
+- `experimental_ThreadRowDecoration`
+- `experimental_ThreadRowDecorationRegistration`
+- `experimental_ThreadRowDecorationEntry`

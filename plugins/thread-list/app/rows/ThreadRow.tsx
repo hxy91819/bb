@@ -43,6 +43,7 @@ import {
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
   experimental_THREAD_ACTION_GROUPS,
   experimental_useThreadActions,
+  experimental_useThreadRowDecorations,
   experimental_useSidebarThreadSplit,
   experimental_ProviderIcon as ProviderIcon,
   ThreadTitle,
@@ -432,6 +433,7 @@ function ThreadRowComponent({
   }, [openThreadInSplit, thread.id]);
   const rowActionKeys = useAtomValue(threadRowActionsAtom);
   const actionTarget = toThreadActionTarget(thread);
+  const decorations = experimental_useThreadRowDecorations(thread);
   const quickActions = experimental_useThreadActions(actionTarget, {
     keys: thread.archivedAt !== null ? ARCHIVED_ROW_ACTION_KEYS : rowActionKeys,
     requestRename: () => {
@@ -699,6 +701,33 @@ function ThreadRowComponent({
             </span>
           )}
         </span>
+        {!isEditing && decorations.length > 0 ? (
+          <span
+            data-sidebar-thread-decorations=""
+            className="pointer-events-none relative flex min-w-0 max-w-[40%] shrink items-center gap-1 overflow-hidden text-ui-xs text-muted-foreground"
+          >
+            {decorations.map(({ key, decoration }) => (
+              <span
+                key={key}
+                role="img"
+                aria-label={decoration.accessibleLabel}
+                title={decoration.accessibleLabel}
+                className="flex min-w-0 items-center gap-1"
+              >
+                {decoration.avatar ? (
+                  <img
+                    src={decoration.avatar.src}
+                    alt={decoration.avatar.alt}
+                    className="size-4 shrink-0 rounded-full object-cover"
+                  />
+                ) : null}
+                <span aria-hidden="true" className="truncate">
+                  {decoration.text}
+                </span>
+              </span>
+            ))}
+          </span>
+        ) : null}
         {crossProjectLabel !== null ? (
           <Tooltip>
             <TooltipTrigger asChild>

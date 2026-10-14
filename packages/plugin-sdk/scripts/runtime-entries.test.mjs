@@ -81,4 +81,44 @@ describe("published runtime entries", () => {
       expect(stdout.trim()).toBe("true");
     },
   );
+  it("renders public grouping and row hooks through the built facade and harness using one React runtime", async () => {
+    const { stdout } = await run(process.execPath, [
+      "--input-type=module",
+      "-e",
+      `
+        import { JSDOM } from "jsdom";
+        const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost" });
+        globalThis.window = dom.window;
+        globalThis.document = dom.window.document;
+        globalThis.HTMLElement = dom.window.HTMLElement;
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        const React = await import("react");
+        const app = await import(process.argv[1]);
+        const testing = await import(process.argv[2]);
+        testing.installTestPluginRuntime();
+        const registrations = await testing.loadPluginApp(app.definePluginApp((host) => {
+          host.slots.experimental_threadListGrouping({ id: "groups", title: "Groups",
+            useData: () => app.experimental_usePluginId(),
+            projection: ({ data }) => ({ status: "ready", group: { key: data, label: data } }) });
+          host.slots.experimental_threadRowDecoration({ id: "label", title: "Label",
+            useData: () => app.experimental_usePluginId(),
+            item: ({ data }) => ({ text: data, accessibleLabel: data }) });
+        }));
+        function Probe() {
+          const groups = app.experimental_useThreadListContributions({ rootThreadIds: ["root"], groupingKey: "fixture/groups" });
+          const row = app.experimental_useThreadRowDecorations({ id: "root" });
+          const group = groups.grouping?.({ id: "root" });
+          return React.createElement("output", null, group?.status === "ready" ? group.group?.label + "/" + row[0]?.decoration.text : "loading");
+        }
+        const slot = testing.renderSlot({ component: Probe }, {}, { experimental_threadListPlugins: [{ pluginId: "fixture", registrations }] });
+        await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 180)); });
+        console.log(slot.container.textContent);
+        slot.lifecycle.unmount();
+        dom.window.close();
+      `,
+      pathToFileURL(outputs.get("./app")).href,
+      pathToFileURL(outputs.get("./testing/app")).href,
+    ]);
+    expect(stdout.trim()).toBe("fixture/fixture");
+  });
 });
