@@ -7,6 +7,7 @@ import {
 } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import {
+  conflictingGroupingPreference,
   defaultPreferences,
   describePreference,
   getPreferenceDefault,
@@ -31,7 +32,9 @@ const preferenceKeySchema = z.enum(
 const preferenceValuesSchema = z.object(
   Object.fromEntries(
     PREFERENCE_KEYS.map((key) => [key, preferenceDefinitions[key].schema]),
-  ) as { [Key in PreferenceKey]: (typeof preferenceDefinitions)[Key]["schema"] },
+  ) as {
+    [Key in PreferenceKey]: (typeof preferenceDefinitions)[Key]["schema"];
+  },
 );
 
 export const threadListRpcContract = defineRpcContract({
@@ -41,15 +44,11 @@ export const threadListRpcContract = defineRpcContract({
   },
   setPreference: {
     input: z.object({ key: preferenceKeySchema, value: z.unknown() }).strict(),
-    output: z
-      .object({ key: preferenceKeySchema, value: z.unknown() })
-      .strict(),
+    output: z.object({ key: preferenceKeySchema, value: z.unknown() }).strict(),
   },
   resetPreference: {
     input: z.object({ key: preferenceKeySchema }).strict(),
-    output: z
-      .object({ key: preferenceKeySchema, value: z.unknown() })
-      .strict(),
+    output: z.object({ key: preferenceKeySchema, value: z.unknown() }).strict(),
   },
 });
 
@@ -89,6 +88,10 @@ export function createPreferenceStore(bb: BbPluginApi) {
     if (!parsed.success) {
       throw new PreferenceValidationError(key, parsed.message);
     }
+    const conflictingKey = conflictingGroupingPreference(key);
+    if (parsed.value === true && conflictingKey !== null) {
+      await write(conflictingKey, false);
+    }
     await bb.storage.kv.set(kvKey(key), parsed.value);
     bb.realtime.publish(PREFERENCES_CHANGED_CHANNEL, {
       key,
@@ -100,8 +103,12 @@ export function createPreferenceStore(bb: BbPluginApi) {
   async function reset<Key extends PreferenceKey>(
     key: Key,
   ): Promise<PreferenceValue<Key>> {
-    await bb.storage.kv.delete(kvKey(key));
     const value = getPreferenceDefault(key);
+    const conflictingKey = conflictingGroupingPreference(key);
+    if (value === true && conflictingKey !== null) {
+      await write(conflictingKey, false);
+    }
+    await bb.storage.kv.delete(kvKey(key));
     bb.realtime.publish(PREFERENCES_CHANGED_CHANNEL, { key, value });
     return value;
   }
@@ -149,7 +156,9 @@ export async function migrateFromUiPreferences(
     if (legacy === undefined) continue;
     const parsed = parsePreferenceValue(key, legacy.value);
     if (!parsed.success) continue;
-    if (JSON.stringify(parsed.value) === JSON.stringify(getPreferenceDefault(key))) {
+    if (
+      JSON.stringify(parsed.value) === JSON.stringify(getPreferenceDefault(key))
+    ) {
       continue;
     }
     await bb.storage.kv.set(kvKey(key), parsed.value);
@@ -198,7 +207,8 @@ export default async function threadListPlugin(bb: BbPluginApi) {
   bb.cli.register(
     defineCli({
       name: bb.pluginId,
-      summary: "Inspect and change the sidebar thread list's layout preferences",
+      summary:
+        "Inspect and change the sidebar thread list's layout preferences",
       description:
         "Organization mode, sort, section order, hidden groups, and collapsed groups for bb's sidebar thread list. Values are JSON; a bare word is read as a string.",
       commands: {
@@ -242,7 +252,8 @@ export default async function threadListPlugin(bb: BbPluginApi) {
             { name: "key", description: "Preference name", required: true },
             {
               name: "value",
-              description: 'JSON value, e.g. \'"machine"\' or \'["pinned","threads"]\'',
+              description:
+                'JSON value, e.g. \'"machine"\' or \'["pinned","threads"]\'',
               required: true,
             },
           ],

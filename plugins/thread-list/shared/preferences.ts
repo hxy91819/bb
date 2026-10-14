@@ -96,6 +96,12 @@ export const preferenceDefinitions = {
     "Show each thread's agent provider icon before its title.",
     null,
   ),
+  dateGrouping: definePreference(
+    z.boolean(),
+    true,
+    "Show date groups in Custom's Threads section when sorted by updated or created time.",
+    null,
+  ),
   threadLifecycles: definePreference(
     z
       .array(z.enum(["active", "archived"]))
@@ -214,6 +220,12 @@ export type PreferenceKey = keyof typeof preferenceDefinitions;
 export const PREFERENCE_KEYS = Object.keys(
   preferenceDefinitions,
 ) as PreferenceKey[];
+
+export function conflictingGroupingPreference(key: PreferenceKey) {
+  if (key === "dateGrouping") return "groupByReadStatus";
+  if (key === "groupByReadStatus") return "dateGrouping";
+  return null;
+}
 
 export type PreferenceValue<Key extends PreferenceKey> = z.infer<
   (typeof preferenceDefinitions)[Key]["schema"]
