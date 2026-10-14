@@ -1568,12 +1568,12 @@ batches. Confirm the platform coverage (Linux
 `/proc`, macOS `lsof`) and whether the grace should be per call.
 
 0b. **Process identity.** `experimental_readProcessIdentity(pid)` from
-   `@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
-   CIM on Windows) or null. bb's launcher uses the same probe to confirm a
-   recorded PID before stopping it. Storage & retention checks a development
-   instance's recorded launcher entry path and start time before signalling
-   it, so a reused PID is never killed. Confirm start-time precision per
-   platform and whether a combined verified-stop helper should replace it.
+`@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
+CIM on Windows) or null. bb's launcher uses the same probe to confirm a
+recorded PID before stopping it. Storage & retention checks a development
+instance's recorded launcher entry path and start time before signalling
+it, so a reused PID is never killed. Confirm start-time precision per
+platform and whether a combined verified-stop helper should replace it.
 
 0. **Call timeout.** `ExperimentalHostCallOptions.timeoutMs` (default 30s,
    capped at 30 minutes) lets a plugin run a long host call — a setup
@@ -4003,3 +4003,39 @@ Stabilize after deciding whether depth, recency window, and limit should be call
 `ExperimentalPluginProviderHostOptionsContext` defines that input. `ExperimentalNativeRootsResolveInput.experimental_providerOptions` carries the same validated base options to host root resolvers; it is omitted for declarations without the new hook, preserving existing installed resolvers. Native-root cache keys include the options. Host daemon protocol 234 advertises the changed execution configuration semantics on the desktop-v0.46.0 baseline (protocol 233).
 
 Stabilization requires independent-host and independent-provider discovery, execution and cache-isolation proof; invalid and throwing hooks must fail rather than silently switch identity. Preserve compatibility with declarations and installed root resolvers that do not opt in, and audit payload limits and settings changes before removing the experimental names.
+## Thread creation context
+
+`PluginAppBuilder.experimental_threadCreationContext` and
+`experimental_AppThreadCreationContext` / `experimental_AppThreadCreationContextRegistration`
+capture one synchronous client-local JSON contribution per plugin generation.
+`BbPluginApi.experimental_threadCreationContext`, `experimental_ThreadCreationContext`,
+`experimental_ThreadCreationDescriptor` and `experimental_ThreadCreationPrepareArgs`
+validate and asynchronously prepare only that plugin's initial metadata, including
+absent-context inheritance chosen by the plugin. Create/fork SDK requests and
+`NewThreadRequest.experimental_pluginContext` carry a namespace map independent of
+origin. Explicit maps, including `{}`, suppress frontend capture, not backend handlers.
+Legacy seed keys may not overlap prepared keys. All namespaces commit with the
+thread, and disposed generations cannot commit late results. Preparation must not
+perform persistent side effects. This does not change daemon wire or core tables.
+
+Core uses the same request preparation for NewThreadComposer, useCreateThread,
+message forks before their first await, provider handoff, and plugin-bound browser
+spawn/fork. PluginNewThreadComposer forwards the captured request. Server create,
+fork and backend SDK creation share the same preparation and immediate DB transaction.
+Existing-thread start, delayed dispatch and retries do not recapture or prepare.
+CLI spawn/fork accept `--experimental-plugin-context`; no browser identity is inferred.
+Unknown creation responses are not replayed or deduplicated.
+
+The frontend test surface adds `experimental_createThreadCreationContextHost`,
+`experimental_ThreadCreationContextHost` and
+`RenderSlotOptions.experimental_threadCreationContextHost` for independent clients
+and managed registration lifetimes; backend fake hosts expose the same registration
+contract and preparation driver.
+
+Before stabilization, verify independent-client snapshots, all native/plugin
+entrances and RPC forwarding, strict JSON and UTF-8 limits, legacy compatibility,
+parent/source separation, concurrent preparation, timeout/disposal fences, second
+namespace rollback and postcommit notification visibility. Exercise delayed dispatch,
+provider retry and unknown response recovery, and validate web, desktop and mobile
+WebView behavior with independent third-party consumers. No list or activity surface
+is introduced by this creation-only interface.
