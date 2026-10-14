@@ -3563,3 +3563,40 @@ Stabilize after exercising producer cancellation, reload, reconnect and byte lim
 - **Core callers:** `ThreadPromptContextBanner` (`apps/app/src/components/promptbox/banner/ThreadPromptContextBanner.tsx`) registers the parent thread (summary and details, including read-only history) and changed files (summary, merge-base action, details) through `definePluginApp` and the same collector, and renders them with plugin registrations through `useThreadContextSegments` and `ThreadContextSegmentMount` (`apps/app/src/components/plugin/PluginThreadContextSegments.tsx`). Core segments read pane-local data from a React context and render without a plugin crash boundary, as core Info rows do. The GitHub PR Status plugin registers the pull request segment in its own group `2_pullRequest`, between core's two and its Mark ready and merge actions. Active child threads are a separate core row above the context row (`ThreadChildThreadsBanner`), not a segment. Contract tests: `ThreadPromptContextBanner.segments.test.tsx`.
 - **Known coupling:** `environment` folds in the "Show Git changes and Commit button" setting so the pull request segment hides with core's changed files, as before; that setting should become the git plugin's own when changed files move out of core.
 - **Stabilization:** audit per-component mounts and crash recovery across reloads and plugin disable, `segments` stability while visibility settles, focus handoff between a plugin's summary and details, independent panes, and compact widths with several plugin segments. Then rename project-wide and remove this entry.
+
+## Thread creation context
+
+`PluginAppBuilder.experimental_threadCreationContext` and
+`experimental_AppThreadCreationContext` / `experimental_AppThreadCreationContextRegistration`
+capture one synchronous client-local JSON contribution per plugin generation.
+`BbPluginApi.experimental_threadCreationContext`, `experimental_ThreadCreationContext`,
+`experimental_ThreadCreationDescriptor` and `experimental_ThreadCreationPrepareArgs`
+validate and asynchronously prepare only that plugin's initial metadata, including
+absent-context inheritance chosen by the plugin. Create/fork SDK requests and
+`NewThreadRequest.experimental_pluginContext` carry a namespace map independent of
+origin. Explicit maps, including `{}`, suppress frontend capture, not backend handlers.
+Legacy seed keys may not overlap prepared keys. All namespaces commit with the
+thread, and disposed generations cannot commit late results. Preparation must not
+perform persistent side effects. This does not change daemon wire or core tables.
+
+Core uses the same request preparation for NewThreadComposer, useCreateThread,
+message forks before their first await, provider handoff, and plugin-bound browser
+spawn/fork. PluginNewThreadComposer forwards the captured request. Server create,
+fork and backend SDK creation share the same preparation and immediate DB transaction.
+Existing-thread start, delayed dispatch and retries do not recapture or prepare.
+CLI spawn/fork accept `--experimental-plugin-context`; no browser identity is inferred.
+Unknown creation responses are not replayed or deduplicated.
+
+The frontend test surface adds `experimental_createThreadCreationContextHost`,
+`experimental_ThreadCreationContextHost` and
+`RenderSlotOptions.experimental_threadCreationContextHost` for independent clients
+and managed registration lifetimes; backend fake hosts expose the same registration
+contract and preparation driver.
+
+Before stabilization, verify independent-client snapshots, all native/plugin
+entrances and RPC forwarding, strict JSON and UTF-8 limits, legacy compatibility,
+parent/source separation, concurrent preparation, timeout/disposal fences, second
+namespace rollback and postcommit notification visibility. Exercise delayed dispatch,
+provider retry and unknown response recovery, and validate web, desktop and mobile
+WebView behavior with independent third-party consumers. No list or activity surface
+is introduced by this creation-only interface.

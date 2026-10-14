@@ -3,6 +3,7 @@ import {
   readPendingAttachmentUploads,
   usePendingAttachmentUploads,
 } from "./usePendingAttachmentUploads";
+import { withThreadCreationContext } from "@/lib/thread-creation-context";
 import { useInitialPromptDraft } from "./mentions/initial-prompt-draft";
 import { ProviderRequirementBanner } from "./banner/ProviderRequirementBanner";
 import { Button } from "@bb/shared-ui/button";
@@ -1687,14 +1688,15 @@ export function NewThreadComposer({
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       setAttachmentError(null);
-      const clearedSubmittedDraft =
-        promptDraft.clearIfCurrentMatches(submittedDraft);
+      let clearedSubmittedDraft = false;
       recordTelemetryEvent({
         name: "new_thread_submit",
         properties: { outcome: "started" },
       });
       try {
-        await onSubmit(request);
+        const prepared = withThreadCreationContext(request);
+        clearedSubmittedDraft = promptDraft.clearIfCurrentMatches(submittedDraft);
+        await onSubmit(prepared);
         recordTelemetryEvent({
           name: "new_thread_submit",
           properties: { outcome: "accepted" },
