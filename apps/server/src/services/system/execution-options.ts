@@ -176,6 +176,7 @@ async function listInstalledPluginProviderInfos(
       const bridgeLaunch = resolveBridgeLaunchForProviderId(
         deps,
         registration.info.id,
+        hostId,
       );
       if (bridgeLaunch === null) return null;
       const cacheKey: ProviderHealthCacheKey = {
