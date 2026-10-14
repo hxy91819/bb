@@ -1694,8 +1694,20 @@ export function NewThreadComposer({
         properties: { outcome: "started" },
       });
       try {
-        const prepared = withThreadCreationContext(request);
-        clearedSubmittedDraft = promptDraft.clearIfCurrentMatches(submittedDraft);
+        let prepared: NewThreadComposerSubmission;
+        try {
+          prepared = withThreadCreationContext(request);
+        } catch (error) {
+          setAttachmentError(
+            getMutationErrorMessage({
+              error,
+              fallbackMessage: "Thread creation context preparation failed",
+            }),
+          );
+          throw error;
+        }
+        clearedSubmittedDraft =
+          promptDraft.clearIfCurrentMatches(submittedDraft);
         await onSubmit(prepared);
         recordTelemetryEvent({
           name: "new_thread_submit",
