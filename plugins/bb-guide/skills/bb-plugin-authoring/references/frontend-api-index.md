@@ -271,3 +271,21 @@ Read the installed SDK declarations for the exact current signatures.
 - `StandardSchemaV1InferOutput`
 - `StandardSchemaV1Issue`
 - `StandardSchemaV1Result`
+
+## Thread list contribution types
+
+The Plugin Guide's The thread list card owns the grouping/row contract and examples.
+
+- `experimental_ThreadListAvatar`
+- `experimental_ThreadListGroup`
+- `experimental_ThreadListGroupProjection`
+- `experimental_ThreadListItemInput`
+- `experimental_ThreadListDataInput`
+- `experimental_ThreadListGroupingRegistration`
+- `experimental_ThreadListGroupingInfo`
+- `experimental_ThreadListContributionsInput`
+- `experimental_ThreadListContributions`
+- `experimental_ThreadRowDecoration`
+- `experimental_ThreadRowDecorationRegistration`
+- `experimental_ThreadRowDecorationEntry`
+

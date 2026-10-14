@@ -356,3 +356,5 @@ change), then run `bb settings experiment performanceDiagnostics true|false`.
 Collection needs both; it adds overhead and writes CPU profiles every 30 seconds
 to `$BB_DATA_DIR/logs/performance/` (kept 12 hours), which contain local paths.
 Open a `.cpuprofile` in Chrome DevTools.
+
+Thread-list plugins may contribute grouping and row decoration through `experimental_useThreadListContributions` and `experimental_useThreadRowDecorations`. Select contribution groups in the sidebar display options; core grouping remains available. The Plugin Guide owns the API reference.

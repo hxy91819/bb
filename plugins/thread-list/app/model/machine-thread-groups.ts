@@ -1,4 +1,5 @@
 import type { SidebarThread } from "./sidebar-thread.js";
+import { projectRootThreadGroups } from "./project-thread-groups.js";
 
 interface MachineHost {
   id: string;
@@ -17,16 +18,12 @@ export function buildMachineThreadGroups(
   threads: readonly SidebarThread[],
   hosts: readonly MachineHost[],
 ): MachineThreadGroup[] {
-  const threadsByKey = new Map<string, SidebarThread[]>();
-  for (const thread of threads) {
-    const key = thread.host?.id ?? NO_MACHINE_GROUP_KEY;
-    const existing = threadsByKey.get(key);
-    if (existing) {
-      existing.push(thread);
-    } else {
-      threadsByKey.set(key, [thread]);
-    }
-  }
+  const threadsByKey = new Map(
+    projectRootThreadGroups(threads, (thread) => ({
+      key: thread.host?.id ?? NO_MACHINE_GROUP_KEY,
+      label: thread.host?.name ?? "No machine",
+    })).map((group) => [group.key, group.threads]),
+  );
 
   const groups: MachineThreadGroup[] = [];
   for (const host of hosts) {

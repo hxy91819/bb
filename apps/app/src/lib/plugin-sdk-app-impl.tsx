@@ -71,6 +71,10 @@ import {
 import { useCodeTheme } from "./plugin-code-theme";
 import { copyToClipboard } from "./clipboard";
 import { saveFile } from "./save-file";
+import {
+  useThreadListContributions,
+  useThreadRowDecorations,
+} from "@get-bb/plugin-sdk/internal/thread-contribution-runtime";
 
 function useArchiveEnvironmentThreads(): (
   environmentId: string,
@@ -113,6 +117,8 @@ export const pluginSdkAppImplementation = {
   experimental_useThreadActions: useThreadActionEntries,
   experimental_useArchiveEnvironmentThreads: useArchiveEnvironmentThreads,
   experimental_useThreadActionRegistrations: useThreadActionRegistrationInfos,
+  experimental_useThreadListContributions: useThreadListContributions,
+  experimental_useThreadRowDecorations: useThreadRowDecorations,
   experimental_ThreadActionsMenu: ThreadActionsMenu,
   experimental_ThreadActionsContextMenu: ThreadActionsContextMenu,
   experimental_THREAD_ACTION_GROUPS,

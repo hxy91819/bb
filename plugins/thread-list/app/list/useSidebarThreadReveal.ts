@@ -6,11 +6,19 @@ import { buildPinnedSidebarState } from "../model/pinned-sidebar-threads.js";
 import {
   CHRONOLOGICAL_CONTAINER_ID,
   resolveSidebarProjectId,
+  getCandidateRootThreads,
 } from "../model/project-thread-groups.js";
 import { sectionKeyForThreadSection } from "../model/section-keys.js";
 import type { CollapsibleSidebarSectionId } from "../model/sidebar-section-id.js";
-import { useBbContext } from "@get-bb/plugin-sdk/app";
-import type { OrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
+import {
+  useBbContext,
+  experimental_useThreadListContributions,
+} from "@get-bb/plugin-sdk/app";
+import {
+  builtInOrganizationModeSchema,
+  buildContributionGroupKey,
+  type OrganizationMode as SidebarOrganizationMode,
+} from "../../shared/preferences.js";
 import { useSidebarData } from "../model/use-sidebar-data.js";
 import {
   collapsedEnvironmentIdsAtom,
@@ -19,6 +27,7 @@ import {
   sidebarCollapsedMachinesAtom,
   sidebarCollapsedThreadSectionsAtom,
   sidebarOrganizationModeAtom,
+  sidebarCollapsedContributionGroupsAtom,
 } from "../preferences/atoms.js";
 import { usePreferencesReady } from "../preferences/PreferencesSync.js";
 import { useExpandThreadAncestors } from "./useReadStatusGrouping.js";
@@ -250,6 +259,21 @@ function useSidebarThreadRevealCore({
   personalProjectId,
 }: SidebarThreadRevealInputs): void {
   const organizationMode = useAtomValue(sidebarOrganizationModeAtom);
+  const providerKey = builtInOrganizationModeSchema.safeParse(organizationMode)
+    .success
+    ? null
+    : organizationMode;
+  const candidateRoots = useMemo(
+    () => getCandidateRootThreads(threads),
+    [threads],
+  );
+  const { grouping } = experimental_useThreadListContributions({
+    rootThreadIds: candidateRoots.map((thread) => thread.id),
+    groupingKey: providerKey,
+  });
+  const setCollapsedContributionGroups = useSetAtom(
+    sidebarCollapsedContributionGroupsAtom,
+  );
   const expandThreadAncestors = useExpandThreadAncestors();
   const setCollapsedEnvironmentIdList = useSetAtom(collapsedEnvironmentIdsAtom);
   const setCollapsedProjectIdList = useSetAtom(collapsedProjectIdsAtom);
@@ -269,6 +293,7 @@ function useSidebarThreadRevealCore({
     [threads],
   );
   const revealState = useRef(INITIAL_SIDEBAR_THREAD_REVEAL_STATE);
+  const pendingGroupingReveal = useRef(new Set<string>());
 
   useEffect(() => {
     const step = stepSidebarThreadReveal(revealState.current, {
@@ -279,9 +304,12 @@ function useSidebarThreadRevealCore({
       preferencesReady,
     });
     revealState.current = step.state;
-    for (const threadId of step.revealIds) {
+    if (!threadsReady || !preferencesReady) return;
+    const revealIds = new Set([...step.revealIds, ...pendingGroupingReveal.current]);
+    for (const threadId of revealIds) {
       const thread = threadById.get(threadId);
       if (!thread || thread.isHidden) {
+        pendingGroupingReveal.current.delete(threadId);
         continue;
       }
       const { threadIdsToExpand, environmentIdsToExpand, expansion } =
@@ -289,7 +317,7 @@ function useSidebarThreadRevealCore({
           thread,
           threadById,
           effectivePinnedThreadIds,
-          organizationMode,
+          organizationMode: providerKey ? "chronological" : organizationMode,
           personalProjectId,
         });
 
@@ -300,6 +328,22 @@ function useSidebarThreadRevealCore({
       setCollapsedEnvironmentIdList((current) =>
         removeCollapsedIds(current, environmentIdsToExpand),
       );
+      const isPinned = effectivePinnedThreadIds.has(thread.id);
+      let root = thread;
+      for (const ancestorId of threadIdsToExpand) root = threadById.get(ancestorId) ?? root;
+      let awaitingGroup = providerKey !== null && !isPinned;
+      if (providerKey && grouping && !isPinned) {
+        const result = grouping(root);
+        awaitingGroup = result.status !== "ready";
+        if (result.status === "ready") {
+          const key = result.group === null
+            ? buildContributionGroupKey(providerKey, "ungrouped")
+            : buildContributionGroupKey(providerKey, "group", result.group.key);
+          setCollapsedContributionGroups((current) => removeCollapsedIds(current, new Set([key])));
+        }
+      }
+      if (awaitingGroup) pendingGroupingReveal.current.add(threadId);
+      else pendingGroupingReveal.current.delete(threadId);
       if (expansion.machineKey) {
         const machineKey = expansion.machineKey;
         setCollapsedMachineKeyList((current) =>
@@ -331,6 +375,9 @@ function useSidebarThreadRevealCore({
     preferencesReady,
     personalProjectId,
     organizationMode,
+    providerKey,
+    grouping,
+    setCollapsedContributionGroups,
     threads,
     threadById,
     effectivePinnedThreadIds,
