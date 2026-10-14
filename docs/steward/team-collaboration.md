@@ -5,9 +5,9 @@
 ## 路线
 
 - [x] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表；[收敛设计已交付](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，独立架构审查完成。
-- [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/22cc8398c6226a6b505940cdccec50bf9fca1221)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/f80ebb145b692a6370e0baebbc0b9a091d390d7e)已提交、审查和推送。
+- [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已提交、审查和推送。
 - [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [成员与六头像基础已交付](https://github.com/hxy91819/bb-team/commit/ec21d4a7e7c425002a1e6cb740cd49e9c30abfc4)，[首轮 CI 通过](https://github.com/hxy91819/bb-team/actions/runs/38508674144)；等待完整 SDK 集成，唯一实现负责人为 thr_rtinkpqj5w。
-- [ ] 启动独立测试实例，完成两仓库的联合行为验收、独立审查、提交与 push；补验成员分组紧凑视口菜单、Guide 页面交互及打包 Node 24 的原生依赖准备。← 聚合全仓类型检查通过；补齐创建请求可选字段与活动命令索引，修正 Guide 合并文案后继续流水线（thr_kmvugsk2ci），随后产出同 SHA 的 BB/SDK 候选包。
+- [ ] 启动独立测试实例，完成两仓库的联合行为验收、独立审查、提交与 push；补验成员分组紧凑视口菜单和 Guide 页面交互。← [聚合候选 e7c2ef8409](https://github.com/hxy91819/bb/commit/e7c2ef8409d575c463cba97f366a936e724bfd98)已通过全仓类型检查、必要测试、Node 24 构建及原生检查；正在产出同 SHA 的 BB/SDK 包（thr_kmvugsk2ci），随后接入团队插件。
 - [ ] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件，交付其他环境的安装方式。← [SDK 发行资产实现已交付](https://github.com/hxy91819/bb/commit/8aad105f146bed78d5ff2284d831cdc50361dadc)，正式聚合发布待联合验收。
 - [ ] 完成 bb-team 插件打包并发布 GitHub Release，核对固定版本 tag、安装包及兼容 BB 版本，交付其他环境的安装方式。
 
