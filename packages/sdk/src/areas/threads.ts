@@ -1,3 +1,11 @@
+export type { ExperimentalActivityEvidence } from "@bb/server-contract";
+import type {
+  ExperimentalThreadActivityInput,
+  ExperimentalThreadActivityResponse,
+} from "@bb/server-contract";
+export type ExperimentalThreadActivityArgs = ExperimentalThreadActivityInput;
+export type ExperimentalThreadActivityResult =
+  ExperimentalThreadActivityResponse;
 import {
   parseThreadEventRow,
   type PromptInput,
@@ -596,6 +604,9 @@ export interface ThreadsArea {
   conversationOutline(
     args: ThreadConversationOutlineArgs,
   ): Promise<ThreadConversationOutlineResult>;
+  experimental_activity(
+    args: ExperimentalThreadActivityArgs,
+  ): Promise<ExperimentalThreadActivityResult>;
   count(args?: ThreadCountArgs): Promise<ThreadCountResult>;
   defaultExecutionOptions(
     args: ThreadStatusArgs,
@@ -1216,6 +1227,19 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
           },
           ...signalRequestArgs(input.signal),
         ),
+      );
+    },
+    async experimental_activity(input) {
+      if (
+        typeof input.metadata.equals === "number" &&
+        !Number.isFinite(input.metadata.equals)
+      ) {
+        throw new TypeError("metadata.equals must be a finite JSON number");
+      }
+      return transport.readJson(
+        transport.api.v1.threads["experimental-activity"].$post({
+          json: input,
+        }),
       );
     },
     async count(input) {
