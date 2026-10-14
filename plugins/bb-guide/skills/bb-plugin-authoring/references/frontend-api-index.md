@@ -7,9 +7,13 @@ Read the installed SDK declarations for the exact current signatures.
 ## Thread list contribution slots
 
 - `app.slots.experimental_threadListGrouping` — `projection` receives
-  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+  `experimental_ThreadListItemInput<Data>` with `thread`, `data` and `groupingKey`.
 - `app.slots.experimental_threadRowDecoration` — `item` receives
-  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+  `experimental_ThreadListItemInput<Data>` with `thread`, `data` and `groupingKey`.
+
+`groupingKey` is the current list's effective canonical `pluginId/registrationId`;
+built-in or fallback lists use `null`. Custom row consumers pass their effective
+key with `experimental_ThreadRowDecorationOptions`.
 
 Both registrations can supply `useData`, which receives
 `experimental_ThreadListDataInput` with `threadIds`. See Plugin Guide → The
@@ -72,6 +76,7 @@ thread list for registration behavior and examples.
 - `experimental_PluginIcon`
 - `experimental_ThreadTitleText`
 - `useComposerView`
+- `app.experimental_threadListContributionVersion` — host support for avatar-only, placement and effective grouping context
 - `experimental_useThreadListContributions` — selectable grouping discovery and root projection
 - `experimental_useThreadRowDecorations` — composed row descriptions; see Plugin Guide → The thread list
 - `experimental_useSidebarThreads`
@@ -443,4 +448,5 @@ The Plugin Guide's The thread list card owns the grouping/row contract and examp
 - `experimental_ThreadListContributions`
 - `experimental_ThreadRowDecoration`
 - `experimental_ThreadRowDecorationRegistration`
+- `experimental_ThreadRowDecorationOptions`
 - `experimental_ThreadRowDecorationEntry`

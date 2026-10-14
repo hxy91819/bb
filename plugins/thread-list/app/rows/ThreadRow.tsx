@@ -1,3 +1,4 @@
+import { ThreadListRowContext } from "../list/ThreadListRowContext.js";
 import {
   memo,
   createContext,
@@ -391,9 +392,11 @@ function ThreadRowComponent({
     hasComposerDraft,
   );
   const labelTitle = thread.displayTitle;
-  const crossProjectName = useSidebarProjectName(crossProjectId);
+  const groupingKey = useContext(ThreadListRowContext);
+  const rowProjectId = groupingKey ? thread.projectId : crossProjectId;
+  const crossProjectName = useSidebarProjectName(rowProjectId);
   const crossProjectLabel =
-    crossProjectId === null
+    rowProjectId === null
       ? null
       : crossProjectName
         ? `In project ${crossProjectName}`
@@ -433,7 +436,9 @@ function ThreadRowComponent({
   }, [openThreadInSplit, thread.id]);
   const rowActionKeys = useAtomValue(threadRowActionsAtom);
   const actionTarget = toThreadActionTarget(thread);
-  const decorations = experimental_useThreadRowDecorations(thread);
+  const decorations = experimental_useThreadRowDecorations(thread, {
+    groupingKey,
+  });
   const quickActions = experimental_useThreadActions(actionTarget, {
     keys: thread.archivedAt !== null ? ARCHIVED_ROW_ACTION_KEYS : rowActionKeys,
     requestRename: () => {
@@ -596,6 +601,78 @@ function ThreadRowComponent({
     rename.onCloseAutoFocus(event);
   };
 
+  const handleThreadLinkClick: MouseEventHandler<HTMLAnchorElement> = (
+    event,
+  ) => {
+    if (isEditing) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (splitAvailable && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      openInSplit();
+      return;
+    }
+    if (
+      consumeSidebarTitleDoubleClick(thread.id) &&
+      startEditingFromDoubleClick()
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    onProjectSelect?.();
+  };
+  const renderDecorations = (placement: "leading" | "trailing") => {
+    const entries = decorations.filter(
+      (entry) => entry.decoration.placement === placement,
+    );
+    if (isEditing || entries.length === 0) return null;
+    return (
+      <span
+        data-sidebar-thread-decorations={placement}
+        className={cn(
+          "pointer-events-none relative flex min-w-0 items-center gap-1 text-ui-xs text-muted-foreground",
+          placement === "leading"
+            ? "mr-1.5 max-w-[40%] shrink overflow-hidden"
+            : "max-w-[40%] shrink overflow-hidden",
+        )}
+      >
+        {entries.map(({ key, decoration }) => (
+          <a
+            key={key}
+            href={thread.href}
+            draggable={false}
+            tabIndex={-1}
+            role="img"
+            aria-label={decoration.accessibleLabel}
+            title={decoration.accessibleLabel}
+            className="pointer-events-auto relative z-[31] flex min-w-0 items-center gap-1"
+            onClick={handleThreadLinkClick}
+            onMouseDown={(event) => {
+              if (event.button === 0) event.preventDefault();
+            }}
+            onDoubleClick={isEditing ? undefined : startTitleEditing}
+          >
+            {decoration.avatar ? (
+              <img
+                src={decoration.avatar.src}
+                alt=""
+                className="size-4 shrink-0 rounded-full object-cover"
+              />
+            ) : null}
+            {decoration.text !== null ? (
+              <span aria-hidden="true" className="truncate">
+                {decoration.text}
+              </span>
+            ) : null}
+          </a>
+        ))}
+      </span>
+    );
+  };
+
   const rowContent = (
     <>
       {parentOptions?.stickyLevel !== undefined && parentGuideLeft !== null ? (
@@ -626,27 +703,7 @@ function ThreadRowComponent({
           data-sidebar-thread-shortcut-target=""
           data-sidebar-thread-id={thread.id}
           data-sidebar-rename-anchor=""
-          onClick={(event) => {
-            if (isEditing) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            if (splitAvailable && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              openInSplit();
-              return;
-            }
-            if (
-              consumeSidebarTitleDoubleClick(thread.id) &&
-              startEditingFromDoubleClick()
-            ) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            onProjectSelect?.();
-          }}
+          onClick={handleThreadLinkClick}
           onDoubleClick={isEditing ? undefined : startTitleEditing}
           aria-label={linkLabel}
           aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
@@ -660,6 +717,7 @@ function ThreadRowComponent({
               "flex-1",
           )}
         >
+          {renderDecorations("leading")}
           {provider ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -701,33 +759,7 @@ function ThreadRowComponent({
             </span>
           )}
         </span>
-        {!isEditing && decorations.length > 0 ? (
-          <span
-            data-sidebar-thread-decorations=""
-            className="pointer-events-none relative flex min-w-0 max-w-[40%] shrink items-center gap-1 overflow-hidden text-ui-xs text-muted-foreground"
-          >
-            {decorations.map(({ key, decoration }) => (
-              <span
-                key={key}
-                role="img"
-                aria-label={decoration.accessibleLabel}
-                title={decoration.accessibleLabel}
-                className="flex min-w-0 items-center gap-1"
-              >
-                {decoration.avatar ? (
-                  <img
-                    src={decoration.avatar.src}
-                    alt={decoration.avatar.alt}
-                    className="size-4 shrink-0 rounded-full object-cover"
-                  />
-                ) : null}
-                <span aria-hidden="true" className="truncate">
-                  {decoration.text}
-                </span>
-              </span>
-            ))}
-          </span>
-        ) : null}
+        {renderDecorations("trailing")}
         {crossProjectLabel !== null ? (
           <Tooltip>
             <TooltipTrigger asChild>

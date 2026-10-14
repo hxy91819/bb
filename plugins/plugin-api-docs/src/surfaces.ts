@@ -133,8 +133,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         summary:
           "Add grouping and row information, or replace the sidebar list. With this, a plugin can:",
         bullets: [
-          "Register selectable root grouping and compose bounded row labels or same-origin avatars",
-          "Batch all candidate roots for grouping and visible rows for decorations once app-wide",
+          "Register root grouping; add labels or avatar-only additions before or after row titles",
+          "Read each list's effective grouping key; batch root and visible row data once app-wide",
           "Keep parent trees, status, actions and saved preferences through loading, errors and reload",
           "Optionally replace the whole list and consume the same contributions with bb's sidebar hooks",
         ],
@@ -153,6 +153,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "experimental_ThreadListContributions",
           "experimental_ThreadRowDecoration",
           "experimental_ThreadRowDecorationEntry",
+          "experimental_ThreadRowDecorationOptions",
+          "PluginAppBuilder.experimental_threadListContributionVersion",
           "experimental_useThreadListContributions",
           "experimental_useThreadRowDecorations",
           "PluginThreadListRegistration",

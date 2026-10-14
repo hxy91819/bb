@@ -310,6 +310,7 @@ const _assertAllSlotsListed: MissingSlot extends never ? true : never = true;
 void _assertAllSlotsListed;
 
 const APP_BUILDER_FIELDS = [
+  "experimental_threadListContributionVersion",
   "commands",
   "experimental_icons",
   "slots",
@@ -373,8 +374,8 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "onNavigate",
     "searchQuery",
   ],
-  experimental_threadListGrouping: ["thread", "data"],
-  experimental_threadRowDecoration: ["thread", "data"],
+  experimental_threadListGrouping: ["thread", "data", "groupingKey"],
+  experimental_threadRowDecoration: ["thread", "data", "groupingKey"],
   experimental_threadHeaderAction: [
     "threadId",
     "projectId",
