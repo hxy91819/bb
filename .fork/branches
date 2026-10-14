@@ -39,3 +39,5 @@ fix/acp-checkpoint-probe              needs-feedback                            
 feature/codex-home-bindings            needs-feedback https://github.com/hxy91819/bb/issues/25     # 具名 CODEX_HOME 共享原生 Codex bridge，绕过 Pool，不复制或导入凭证；待上游反馈
 fix/git-fixture-isolation              needs-feedback                                             # Git 签名与 Linux user-unit fixture 不继承宿主配置和 root 身份
 feature/child-report-delivery          needs-feedback                                                             # 子线程汇报投递设计文档（docs/child-report-delivery-design.md），尚无实现
+feature/plugin-thread-context                   needs-feedback                                             # 通用提交上下文快照与多namespace插件metadata原子创建，SDK/CLI/Guide共用。
+feature/plugin-thread-list-contributions        needs-feedback                                             # 通用可选成员等分组与行装饰贡献，复用原生thread-list树/偏好/交互。
