@@ -11,9 +11,9 @@
 - [x] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件。← [fork-v0.46.0-20261014.1 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.1)，source 为 e7c2ef8409；四平台运行时、通用 SDK 和发布 CI 全通过，十一件正式资产及来源校验通过。
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
-- [x] 为新版插件补齐通用列表 SDK。← [列表 v2 已交付](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)：真实行首头像、实际分组上下文和项目 badge，通过审查、相关检查及独立浏览器验收，已 push。
-- [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 通过 17 项检查，20 个普通头像与 Admin 已完成；跨窗口及升级后入口缺失由 thr_9w3up3ngdi 定位，插件等待匹配候选接入列表 v2。
-- [ ] 用匹配的新 BB/SDK 完成独立实例验收与审查，公开更新插件和必要的 BB Release。← thr_kmvugsk2ci 正在生成含列表 v2 的候选 BB/SDK，供插件接入；旧 Release 保留，不覆盖资产或操作生产服务。
+- [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
+- [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 通过 17 项检查，20 个普通头像与 Admin 已完成；插件等待含列表 v2 和 overlay 修复的同 SHA 候选接入与联合验收。
+- [ ] 用匹配的新 BB/SDK 完成联合验收与更新 Release。← 候选受安装测试借用真实 user bus 阻塞，thr_rw8nn3x7aw 隔离修复后由 thr_kmvugsk2ci 重聚合；旧资产保留，生产服务不改。
 
 ## 关键决策
 
