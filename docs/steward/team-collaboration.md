@@ -4,7 +4,7 @@
 
 ## 路线
 
-- [ ] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表。← 进行中（设计 thr_8etps382jk；独立架构审查 thr_srauvwqytk）
+- [ ] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表。← [设计已交付](https://github.com/hxy91819/bb/blob/3e9e30f58fc9d563cf4ac6250fbcde16ae1c5323/docs/plugin-thread-context-design.md)，待独立架构审查收敛（thr_srauvwqytk）。
 - [ ] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide。
 - [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。
 - [ ] 完成两仓库的行为验证、独立审查、提交与 push，交付可安装插件及兼容的 BB 分支。
