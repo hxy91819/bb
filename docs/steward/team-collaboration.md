@@ -6,10 +6,10 @@
 
 - [x] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表；[收敛设计已交付](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，独立架构审查完成。
 - [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已提交、审查和推送。
-- [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [成员与六头像基础已公开](https://github.com/hxy91819/bb-team/commit/ec21d4a7e7c425002a1e6cb740cd49e9c30abfc4)；完整实现与候选验收已保存本地提交 8a67b06，正式 SDK 已公开，正在固定供应并完成公开 push（thr_pbj6j2khqk）。
-- [x] 在独立测试实例完成两仓库的候选联合行为验收与独立审查。← [聚合候选 e7c2ef8409](https://github.com/hxy91819/bb/commit/e7c2ef8409d575c463cba97f366a936e724bfd98)及同 SHA BB/SDK 包已验证；团队插件原生归属、分组、活动查询、Guide 与 Chromium/WebKit 紧凑视口旅程、生产冷安装均通过；审查发现已闭合，生产服务未改动。
+- [x] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [bb-team 完整实现 cd395a06](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已提交、审查和公开 push；身份、归属、成员分组与按需活动查询均已验收。
+- [x] 在独立测试实例完成两仓库的联合行为验收与独立审查。← 同 SHA 候选与正式 BB/SDK 的原生归属、分组、活动查询、Guide、Chromium/WebKit 紧凑视口、生产冷安装、完整归档与公开 Git tag 安装均通过；审查发现已闭合，生产服务未改动。确定性协议 fixture 不代表付费 AI 效果；既有队列失败和开发依赖告警保留在验证记录中。
 - [x] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件。← [fork-v0.46.0-20261014.1 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.1)，source 为 e7c2ef8409；四平台运行时、通用 SDK 和发布 CI 全通过，十一件正式资产及来源校验通过。
-- [ ] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，再发布 bb-team 插件 GitHub Release，交付其他环境的安装方式。 ← 完整候选归档、许可证、安装说明和发行脚本审查已完成；正式 BB/SDK 资产已验证，正在固定依赖、验证真实归档安装并完成公开交付（thr_pbj6j2khqk）。
+- [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
 ## 关键决策
 
