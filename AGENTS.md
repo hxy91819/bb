@@ -7,6 +7,8 @@
 - 本仓库是用户自行管理的 fork，维护方式见下方「Fork 维护」。改动完成并通过相关验证及适用的 review 后，必须主动提交本任务改动，push 到个人远端 `fork` 的对应分支，并核对远端 SHA；无需再次询问，不得停在未提交或仅本地提交的状态。只提交本任务文件。验证或 push 受阻时明确报告未完成状态；此授权不包含推送上游或部署服务。
 - Read the linked guidance when its topic applies to the task.
 
+BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
+
 ## Code And Contracts
 
 - Code comments are forbidden, except for semantic tool directives and Plugin SDK declaration comments.
