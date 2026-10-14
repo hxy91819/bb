@@ -10,11 +10,11 @@
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
 - [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
-- [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像。← 本地 checkpoint 24f43b27；正式 .2 的双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合；发布待匹配包联合验收。
+- [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像加独立 Admin。← 新版已随 v0.2.0 公开；双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合。
 - [x] 重聚合完整布局修复并交付匹配 BB/SDK。← 新候选 9ddb184943 包含头像和项目标签预算修复，完整流水线、102 包类型检查、改动包测试、冷 SDK 与独立 runtime 通过；父核对 hash/source 与合并审查。
 - [x] 闭合头像与整行宽度预算的源码修复。← [头像修复](https://github.com/hxy91819/bb/commit/b63855626b1c958bbe873494526f54a7a7465f61)与[项目标签预算](https://github.com/hxy91819/bb/commit/6beb3eb7e042f5746daae4bc70a563f3d5a06f82)分别保留独立分支；实际组合 192 行观测无溢出，头像 16px、标题至少 22px，117 项测试及审查通过。
 - [x] 完成新候选实际团队必要回归。← 9ddb184943 的 18 行头像均 16px、原时间分组溢出转绿，Chromium/WebKit 移动入口、Search、touch、冷窗口和生产安装构建通过，增量审查闭合。
-- [ ] 发布插件 v0.2.0。← thr_pbj6j2khqk 固定正式 BB/SDK .3 的 URL/integrity/source，完成冷 Git 与归档安装、CI、CodeQL 和公开回读后发布；旧资产保留，不操作生产服务。
+- [x] 发布[插件 v0.2.0](https://github.com/hxy91819/bb-team/releases/tag/v0.2.0)与[安装说明](https://github.com/hxy91819/bb-team/blob/v0.2.0/docs/distribution.md)。← main/tag 均为 214c5f6e，固定正式 BB/SDK .3；CI、CodeQL、冷 Git 与中文空格归档实装通过，三个公开附件逐字节一致；生产未动，开发告警保留。
 
 ## 关键决策
 
