@@ -30,6 +30,8 @@ import type {
   PluginSourceCodeRendererRegistration,
   PluginThreadHeaderActionRegistration,
   PluginThreadActionRegistration,
+  experimental_ThreadListGroupingRegistration,
+  experimental_ThreadRowDecorationRegistration,
   ExperimentalPluginBrowserToolbarActionRegistration,
   PluginThreadListRegistration,
   PluginThreadPanelActionRegistration,
@@ -356,6 +358,8 @@ export interface CollectedPluginAppRegistrations {
   threadLists: PluginThreadListRegistration[];
   threadHeaderActions: PluginThreadHeaderActionRegistration[];
   threadActions: PluginThreadActionRegistration<unknown>[];
+  threadListGroupings: experimental_ThreadListGroupingRegistration<unknown>[];
+  threadRowDecorations: experimental_ThreadRowDecorationRegistration<unknown>[];
   browserToolbarActions: ExperimentalPluginBrowserToolbarActionRegistration[];
   fileOpeners: PluginFileOpenerRegistration[];
   sourceCodeRenderers: PluginSourceCodeRendererRegistration[];
@@ -568,6 +572,8 @@ export function collectPluginAppRegistrations(
     threadLists: [],
     threadHeaderActions: [],
     threadActions: [],
+    threadListGroupings: [],
+    threadRowDecorations: [],
     browserToolbarActions: [],
     fileOpeners: [],
     sourceCodeRenderers: [],
@@ -601,6 +607,8 @@ export function collectPluginAppRegistrations(
     threadList: new Set<string>(),
     threadHeaderAction: new Set<string>(),
     threadAction: new Set<string>(),
+    threadListGrouping: new Set<string>(),
+    threadRowDecoration: new Set<string>(),
     browserToolbarAction: new Set<string>(),
     fileOpener: new Set<string>(),
     sourceCodeRenderer: new Set<string>(),
@@ -912,6 +920,46 @@ export function collectPluginAppRegistrations(
           ...(registration.useData !== undefined
             ? { useData: registration.useData }
             : {}),
+          item: registration.item,
+        });
+      },
+      experimental_threadListGrouping(registration) {
+        const kind = "slots.experimental_threadListGrouping";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadListGrouping, id);
+        if (typeof registration.projection !== "function") {
+          throw new Error(`${kind}: "projection" must be a function`);
+        }
+        if (
+          registration.useData !== undefined &&
+          typeof registration.useData !== "function"
+        ) {
+          throw new Error(`${kind}: "useData" must be a function`);
+        }
+        collected.threadListGroupings.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          ...(registration.useData ? { useData: registration.useData } : {}),
+          projection: registration.projection,
+        });
+      },
+      experimental_threadRowDecoration(registration) {
+        const kind = "slots.experimental_threadRowDecoration";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadRowDecoration, id);
+        if (typeof registration.item !== "function") {
+          throw new Error(`${kind}: "item" must be a function`);
+        }
+        if (
+          registration.useData !== undefined &&
+          typeof registration.useData !== "function"
+        ) {
+          throw new Error(`${kind}: "useData" must be a function`);
+        }
+        collected.threadRowDecorations.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          ...(registration.useData ? { useData: registration.useData } : {}),
           item: registration.item,
         });
       },

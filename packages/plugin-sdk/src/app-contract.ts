@@ -1533,6 +1533,103 @@ export interface PluginThreadActionRegistration<Data = undefined> {
   item(input: PluginThreadActionItemInput<Data>): PluginThreadAction | null;
 }
 
+/** A same-origin bundled asset; the host rejects remote and data URLs. */
+export interface experimental_ThreadListAvatar {
+  src: string;
+  alt: string;
+}
+
+/** Stable identity independent of its display label. */
+export interface experimental_ThreadListGroup {
+  key: string;
+  label: string;
+  avatar?: experimental_ThreadListAvatar | null;
+}
+
+/** Loading and failed roots are not the ungrouped bucket. */
+export type experimental_ThreadListGroupProjection =
+  | { status: "ready"; group: experimental_ThreadListGroup | null }
+  | { status: "loading" | "error" };
+
+/** Pure synchronous projection input; requests belong in useData. */
+export interface experimental_ThreadListItemInput<Data> {
+  thread: PluginSidebarThread;
+  data: Data;
+}
+
+/** Sorted, deduplicated IDs merged across visible consumers in this app window. */
+export interface experimental_ThreadListDataInput {
+  threadIds: readonly string[];
+}
+
+/**
+ * One selectable primary organization. The host calls useData once app-wide
+ * while selected, with all candidate root IDs before folding or windowing.
+ * Multiple visible lists merge their demands. Hook errors disable this
+ * generation; projection errors disable its selection until it recovers.
+ * Plugin-owned hooks manage batching (metadata reads allow 200 IDs), cache,
+ * realtime invalidation and cleanup. No layout or drag model crosses this interface.
+ */
+export interface experimental_ThreadListGroupingRegistration<Data = undefined> {
+  id: string;
+  title: string;
+  useData?(input: experimental_ThreadListDataInput): Data;
+  projection(
+    input: experimental_ThreadListItemInput<Data>,
+  ): experimental_ThreadListGroupProjection;
+}
+
+/** One bounded, noninteractive addition beside a row's title. */
+export interface experimental_ThreadRowDecoration {
+  /** 1–80 Unicode characters. */
+  text: string;
+  /** 1–160 Unicode characters, independent of the visible abbreviation. */
+  accessibleLabel: string;
+  avatar?: experimental_ThreadListAvatar | null;
+}
+
+/**
+ * useData runs once app-wide with the sorted, deduplicated visible row IDs.
+ * item is pure, returns null to hide this addition, and cannot replace the row.
+ * Errors omit only this contributor; titles, navigation and actions survive.
+ */
+export interface experimental_ThreadRowDecorationRegistration<
+  Data = undefined,
+> {
+  id: string;
+  title: string;
+  useData?(input: experimental_ThreadListDataInput): Data;
+  item(
+    input: experimental_ThreadListItemInput<Data>,
+  ): experimental_ThreadRowDecoration | null;
+}
+
+export interface experimental_ThreadListGroupingInfo {
+  /** Canonical <pluginId>/<registrationId>; IDs contain letters, digits, - and _. */
+  key: string;
+  title: string;
+}
+
+export interface experimental_ThreadListContributionsInput {
+  rootThreadIds: readonly string[];
+  groupingKey: string | null;
+  /** Hidden lists contribute no demand. Defaults to true. */
+  visible?: boolean;
+}
+
+export interface experimental_ThreadListContributions {
+  groupings: readonly experimental_ThreadListGroupingInfo[];
+  /** Null when absent or its useData crashed; preserve the saved selection. */
+  grouping:
+    | ((thread: PluginSidebarThread) => experimental_ThreadListGroupProjection)
+    | null;
+}
+
+export interface experimental_ThreadRowDecorationEntry {
+  key: string;
+  decoration: experimental_ThreadRowDecoration;
+}
+
 /**
  * A thread action as {@link PluginSdkApp.experimental_useThreadActions}
  * returns it: `run` is bound to the caller's `requestRename` (or bb's rename
@@ -2190,6 +2287,12 @@ export interface PluginAppSlots {
    */
   experimental_threadAction<Data = undefined>(
     registration: PluginThreadActionRegistration<Data>,
+  ): void;
+  experimental_threadListGrouping<Data = undefined>(
+    registration: experimental_ThreadListGroupingRegistration<Data>,
+  ): void;
+  experimental_threadRowDecoration<Data = undefined>(
+    registration: experimental_ThreadRowDecorationRegistration<Data>,
   ): void;
   /** Render a component beside each Browser tab's address bar. */
   experimental_browserToolbarAction(
@@ -3647,6 +3750,13 @@ export interface PluginSdkApp {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_useThreadActionRegistrations(): readonly PluginThreadActionRegistrationInfo[];
+  experimental_useThreadListContributions(
+    input: experimental_ThreadListContributionsInput,
+  ): experimental_ThreadListContributions;
+  /** Consume only for realized, visible rows; multiple consumers deduplicate IDs. */
+  experimental_useThreadRowDecorations(
+    thread: PluginSidebarThread,
+  ): readonly experimental_ThreadRowDecorationEntry[];
   /**
    * bb's thread menu behind a trigger (see
    * {@link PluginThreadActionsMenuProps}): the same items, order, choice

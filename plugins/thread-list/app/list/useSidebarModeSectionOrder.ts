@@ -6,8 +6,9 @@ import {
   sidebarManualSectionOrderAtom,
   sidebarMachineSectionOrderAtom,
   sidebarSectionOrderAtom,
+  sidebarContributionGroupOrderAtom,
 } from "../preferences/atoms.js";
-import type { OrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
+import type { BuiltInOrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
 import type { SidebarSectionId } from "../model/sidebar-section-id.js";
 import {
   buildSidebarEntitySectionId,
@@ -16,13 +17,18 @@ import {
 } from "../model/sidebar-section-order.js";
 
 const MODE_SECTION_ORDER_CONFIG: Record<
-  SidebarOrganizationMode,
+  SidebarOrganizationMode | "contribution",
   {
     atom: typeof sidebarSectionOrderAtom;
-    entityKind: "project" | "section" | "machine";
+    entityKind: "project" | "section" | "machine" | "contribution";
     legacyEntityAnchor: LegacySidebarEntityAnchor;
   }
 > = {
+  contribution: {
+    atom: sidebarContributionGroupOrderAtom,
+    entityKind: "contribution",
+    legacyEntityAnchor: "sections",
+  },
   project: {
     atom: sidebarSectionOrderAtom,
     entityKind: "project",
@@ -43,7 +49,7 @@ const MODE_SECTION_ORDER_CONFIG: Record<
 interface UseSidebarModeSectionOrderArgs {
   entitySectionIds: readonly SidebarSectionId[];
   hasThreadsSection?: boolean;
-  mode: SidebarOrganizationMode;
+  mode: SidebarOrganizationMode | "contribution";
   showPinnedSection: boolean;
 }
 

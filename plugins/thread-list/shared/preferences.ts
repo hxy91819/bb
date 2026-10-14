@@ -6,12 +6,59 @@ const LIST_MAX_LENGTH = 10_000;
 const listItemSchema = z.string().min(1).max(STRING_MAX_LENGTH);
 const stringListSchema = z.array(listItemSchema).max(LIST_MAX_LENGTH);
 
-export const organizationModeSchema = z.enum([
+export const builtInOrganizationModeSchema = z.enum([
   "project",
   "chronological",
   "machine",
 ]);
+export type BuiltInOrganizationMode = z.infer<
+  typeof builtInOrganizationModeSchema
+>;
+export const groupingProviderKeySchema = z
+  .string()
+  .max(256)
+  .regex(/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/);
+export const organizationModeSchema = z.union([
+  builtInOrganizationModeSchema,
+  groupingProviderKeySchema,
+]);
 export type OrganizationMode = z.infer<typeof organizationModeSchema>;
+
+export function buildContributionGroupKey(
+  providerKey: string,
+  kind: "group" | "ungrouped" | "loading",
+  key = "",
+): `contribution:${string}` {
+  return `contribution:${encodeURIComponent(JSON.stringify([providerKey, kind, key]))}`;
+}
+
+export const contributionGroupKeySchema = z
+  .string()
+  .max(4_096)
+  .refine((value) => {
+    if (!value.startsWith("contribution:")) return false;
+    try {
+      const decoded: unknown = JSON.parse(
+        decodeURIComponent(value.slice("contribution:".length)),
+      );
+      const parsed = z
+        .tuple([
+          groupingProviderKeySchema,
+          z.enum(["group", "ungrouped", "loading"]),
+          z.string().refine((key) => [...key].length <= 256),
+        ])
+        .safeParse(decoded);
+      return (
+        parsed.success &&
+        (parsed.data[1] === "group"
+          ? parsed.data[2].trim().length > 0
+          : parsed.data[2] === "") &&
+        value === buildContributionGroupKey(...parsed.data)
+      );
+    } catch {
+      return false;
+    }
+  }, "Expected a canonical contribution group key");
 
 export const chronologicalSortSchema = z.enum([
   "updated",
@@ -75,6 +122,7 @@ const hiddenGroupsSchema = z
     z.union([
       z.literal("threads"),
       listItemSchema.regex(/^(project|section|machine):\S+$/),
+      contributionGroupKeySchema,
     ]),
   )
   .max(LIST_MAX_LENGTH)
@@ -115,7 +163,7 @@ export const preferenceDefinitions = {
   organizationMode: definePreference(
     organizationModeSchema,
     "chronological",
-    "How the list groups threads: by project, chronologically with custom sections, or by machine.",
+    "How the list groups threads: project, chronological (custom sections), machine, or a registered <pluginId>/<registrationId>. Missing or failed providers temporarily use chronological without changing this selection.",
     "sidebar.organizationMode",
   ),
   environmentGrouping: definePreference(
@@ -160,10 +208,18 @@ export const preferenceDefinitions = {
     "Top-level order when organized by machine.",
     "sidebar.machineSectionOrder",
   ),
+  contributionGroupOrder: definePreference(
+    z
+      .array(z.union([z.literal("pinned"), contributionGroupKeySchema]))
+      .max(LIST_MAX_LENGTH),
+    ["pinned"],
+    "Order of contributed groups. Keys are contribution: followed by encodeURIComponent(JSON.stringify([providerKey, kind, groupKey])); kind is group, ungrouped, or loading. Other providers' entries are retained.",
+    null,
+  ),
   hiddenGroups: definePreference(
     hiddenGroupsSchema,
     [],
-    "Groups moved into More: threads, project:<id>, section:<id>, or machine:<id>.",
+    "Groups moved into More: threads, project:<id>, section:<id>, machine:<id>, or canonical contribution keys (see contributionGroupOrder).",
     "sidebar.hiddenGroups",
   ),
   rowActions: definePreference(
@@ -212,6 +268,12 @@ export const preferenceDefinitions = {
     stringListSchema,
     [],
     "Machine ids whose rows are collapsed.",
+    null,
+  ),
+  collapsedContributionGroups: definePreference(
+    z.array(contributionGroupKeySchema).max(LIST_MAX_LENGTH),
+    [],
+    "Canonical contribution group keys that are collapsed; labels can change without resetting collapse state.",
     null,
   ),
 } as const;

@@ -10,6 +10,17 @@ Creation registration: `PluginAppBuilder.experimental_threadCreationContext`,
 `NewThreadRequest.experimental_pluginContext` unchanged; see Plugin Guide's
 Thread plugin metadata card for capture, preparation and failure semantics.
 
+## Thread list contribution slots
+
+- `app.slots.experimental_threadListGrouping` — `projection` receives
+  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+- `app.slots.experimental_threadRowDecoration` — `item` receives
+  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+
+Both registrations can supply `useData`, which receives
+`experimental_ThreadListDataInput` with `threadIds`. See Plugin Guide → The
+thread list for registration behavior and examples.
+
 ## Runtime values
 
 - `experimental_Icon`
@@ -48,6 +59,8 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `useComposer`
 - `useComposers`
 - `useComposerView` — deprecated, runtime-only for older plugins; use `useComposer`
+- `experimental_useThreadListContributions` — selectable grouping discovery and root projection
+- `experimental_useThreadRowDecorations` — composed row descriptions; see Plugin Guide → The thread list
 - `experimental_useSidebarThreads`
 - `experimental_useSidebarThreadActions` — deprecated, runtime-only for older
   plugins; use the thread action registry, `useSdk().threads`, and
@@ -297,3 +310,20 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `StandardSchemaV1InferOutput`
 - `StandardSchemaV1Issue`
 - `StandardSchemaV1Result`
+
+## Thread list contribution types
+
+The Plugin Guide's The thread list card owns the grouping/row contract and examples.
+
+- `experimental_ThreadListAvatar`
+- `experimental_ThreadListGroup`
+- `experimental_ThreadListGroupProjection`
+- `experimental_ThreadListItemInput`
+- `experimental_ThreadListDataInput`
+- `experimental_ThreadListGroupingRegistration`
+- `experimental_ThreadListGroupingInfo`
+- `experimental_ThreadListContributionsInput`
+- `experimental_ThreadListContributions`
+- `experimental_ThreadRowDecoration`
+- `experimental_ThreadRowDecorationRegistration`
+- `experimental_ThreadRowDecorationEntry`
