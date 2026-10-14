@@ -385,6 +385,15 @@ export function bindSdkToPlugin(
           pluginId: args.pluginId ?? pluginId,
         });
       },
+      experimental_activity(args) {
+        return sdk.threads.experimental_activity({
+          ...args,
+          metadata: {
+            ...args.metadata,
+            pluginId: args.metadata.pluginId ?? pluginId,
+          },
+        });
+      },
       experimental_listPluginMetadata(
         args: Omit<PluginThreadMetadataListArgs, "pluginId"> & {
           pluginId?: string;

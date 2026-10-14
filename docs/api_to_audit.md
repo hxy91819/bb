@@ -2976,3 +2976,16 @@ directories, linked worktrees, and submodules. Core callers: the setup guide
 Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
+
+## Thread activity evidence
+
+`PluginBbSdk.threads.experimental_activity`, `ExperimentalPluginThreadActivityArgs`,
+`ExperimentalThreadActivityArgs`, `ExperimentalThreadActivityResult` and
+`ExperimentalActivityEvidence` expose bounded retained event facts through the
+public `POST /threads/experimental-activity` route. Core `bb thread
+experimental-activity` and the SDK use this same route and query service; the plugin
+binding only supplies its default metadata namespace. Stabilization requires
+scalar/type and public access filtering, binary/sequence keyset continuation,
+wire budgets, real fork startup boundary tests, retained/live coverage, and
+independent consumers exercising per-item cursors. The Plugin Guide's thread
+plugin metadata card owns the API reference. No daemon protocol change.
