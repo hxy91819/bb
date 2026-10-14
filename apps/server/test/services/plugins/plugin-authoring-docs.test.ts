@@ -44,6 +44,7 @@ import {
   type ExperimentalSidebarNavigationProps,
   type ExperimentalSidebarNavigationRegistration,
   type ExperimentalSidebarHeaderProps,
+  type experimental_ThreadListItemInput,
   type PluginSidebarFooterActionRegistration,
   type PluginThreadEventPayloads,
   type ExperimentalThreadActionTabProps,
@@ -280,6 +281,8 @@ type SlotPropsByName = {
   sidebarFooterAction: PluginSidebarFooterActionProps;
   experimental_threadList: PluginThreadListProps;
   experimental_sidebarNavigation: ExperimentalSidebarNavigationProps;
+  experimental_threadListGrouping: experimental_ThreadListItemInput<unknown>;
+  experimental_threadRowDecoration: experimental_ThreadListItemInput<unknown>;
   experimental_threadHeaderAction: PluginThreadHeaderActionProps;
   experimental_threadContextSegment: ExperimentalThreadContextSegmentProps;
   experimental_threadInfoRow: ExperimentalThreadInfoProps;
@@ -370,6 +373,8 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "onNavigate",
     "searchQuery",
   ],
+  experimental_threadListGrouping: ["thread", "data"],
+  experimental_threadRowDecoration: ["thread", "data"],
   experimental_threadHeaderAction: [
     "threadId",
     "projectId",

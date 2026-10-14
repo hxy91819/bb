@@ -319,7 +319,7 @@ export function useSidebarThreadRevealCore({
           thread,
           threadById,
           effectivePinnedThreadIds,
-          organizationMode,
+          organizationMode: providerKey ? "chronological" : organizationMode,
           personalProjectId,
         });
 
