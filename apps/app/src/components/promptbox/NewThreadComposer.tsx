@@ -1,4 +1,5 @@
 import { createCoreComposerActions } from "@/lib/plugin-composer-handle";
+import { withThreadCreationContext } from "@/lib/thread-creation-context";
 import { usePendingAttachmentUploads } from "./usePendingAttachmentUploads";
 import { useInitialPromptDraft } from "./mentions/initial-prompt-draft";
 import { ProviderRequirementBanner } from "./banner/ProviderRequirementBanner";
@@ -1657,10 +1658,23 @@ export function NewThreadComposer({
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       setAttachmentError(null);
-      const clearedSubmittedDraft =
-        promptDraft.clearIfCurrentMatches(submittedDraft);
+      let clearedSubmittedDraft = false;
       try {
-        await onSubmit(request);
+        let prepared: NewThreadComposerSubmission;
+        try {
+          prepared = withThreadCreationContext(request);
+        } catch (error) {
+          setAttachmentError(
+            getMutationErrorMessage({
+              error,
+              fallbackMessage: "Thread creation context preparation failed",
+            }),
+          );
+          throw error;
+        }
+        clearedSubmittedDraft =
+          promptDraft.clearIfCurrentMatches(submittedDraft);
+        await onSubmit(prepared);
         clearReuseEnvironment();
       } catch (submitError) {
         if (clearedSubmittedDraft) {

@@ -175,6 +175,7 @@ const BB_PLUGIN_API_KEYS = [
   "experimental_environments",
   "experimental_machines",
   "experimental_serverAccess",
+  "experimental_threadCreationContext",
   "sdk",
   "onDispose",
   "onInstall",
@@ -297,6 +298,7 @@ const APP_BUILDER_FIELDS = [
   "composer",
   "contentScripts",
   "experimental_sidebarFooter",
+  "experimental_threadCreationContext",
 ] as const satisfies readonly (keyof PluginAppBuilder)[];
 
 type MissingAppBuilderField = Exclude<

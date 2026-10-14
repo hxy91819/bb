@@ -58,6 +58,7 @@ Spawning:
     --origin-kind <kind>           Create a fork thread
     --source-thread <id>           Source thread for a fork
     --source-seq-end <seq>         Fork after the source turn containing this event sequence
+    --experimental-plugin-context <json>  Namespace-to-JSON creation context, independent of origin
 
   Execution defaults resolve from explicit flags, live parent execution, and
   remembered project defaults. With no remembered model, bb uses the explicitly
@@ -121,6 +122,7 @@ Forking:
     --agent-context-seed <text>    Persist agent-only context without a first run
     --file <path>                  CLI-local absolute path, file: URL, or uploaded file path
     --image <path>                 CLI-local absolute path, file: URL, or uploaded image path
+    --experimental-plugin-context <json>  Namespace-to-JSON creation context, independent of origin
 
   Forks clone the source provider session on the same machine and inherit the
   source conversation in their timeline. --source-seq-end anchors the fork on
@@ -137,6 +139,18 @@ Forking:
   idle fork. A visible idle fork without --title is named after its source with
   a numbered prefix: "foo" becomes "(1) foo" and "(1) foo" becomes "(2) foo".
   Forks created with a first prompt get a title from that prompt.
+
+  Creation context for spawn and fork is explicit JSON, for example
+  --experimental-plugin-context '{"my-plugin":{"selection":"A"}}'. The CLI
+  does not read browser selections. SDK spawn/fork use experimental_pluginContext.
+  The map is limited to 32 namespaces and 256 KiB UTF-8 total. Explicit context
+  requires an enabled handler; invalid input, preparation failure, timeout,
+  unload or conflicting legacy seed keys fail without creating a thread.
+  All initial metadata namespaces commit with the thread. Omission and {} both
+  allow enabled backend handlers to prepare absent context, including a plugin's
+  chosen parent inheritance. Existing-thread dispatch and retry keep saved metadata.
+  An unknown response may already have created a thread: there is no automatic
+  replay or creation deduplication. An explicit retry should reuse the same map.
 
 Editing a sent message:
 
