@@ -1,4 +1,6 @@
 import { notifyComposerSubmitted } from "@/lib/composer-submissions";
+import { withThreadCreationContext } from "@/lib/thread-creation-context";
+import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ThreadQueuedMessage } from "@bb/domain";
 import type {
@@ -124,7 +126,7 @@ async function deleteThreadQueuedMessageOrConfirmMissing({
 export function useCreateThread() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: {
       errorMessage: "Failed to create thread.",
       lifecycleOperation: "create_thread",
@@ -160,6 +162,20 @@ export function useCreateThread() {
       });
     },
   });
+  const { mutate: submit, mutateAsync: submitAsync } = mutation;
+  const mutate = useCallback(
+    (request: AppCreateThreadRequest, options?: Parameters<typeof submit>[1]) =>
+      submit(withThreadCreationContext(request), options),
+    [submit],
+  );
+  const mutateAsync = useCallback(
+    async (
+      request: AppCreateThreadRequest,
+      options?: Parameters<typeof submitAsync>[1],
+    ) => submitAsync(withThreadCreationContext(request), options),
+    [submitAsync],
+  );
+  return { ...mutation, mutate, mutateAsync };
 }
 
 export function useSendThreadMessage() {

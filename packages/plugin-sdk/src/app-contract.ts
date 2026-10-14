@@ -159,11 +159,10 @@ export interface ExperimentalQuestionFormHost {
  * the host adds room for its microphone controls when voice input is
  * available.
  */
-export interface ExperimentalVoiceInputTextareaProps
-  extends Omit<
-    ComponentPropsWithRef<"textarea">,
-    "value" | "defaultValue" | "onChange" | "children"
-  > {
+export interface ExperimentalVoiceInputTextareaProps extends Omit<
+  ComponentPropsWithRef<"textarea">,
+  "value" | "defaultValue" | "onChange" | "children"
+> {
   value: string;
   /**
    * Receives typed edits and finished transcripts, which the host appends to
@@ -1189,7 +1188,9 @@ export interface ExperimentalClipboardContent {
  */
 export type PluginBoundThreadsArea = Omit<
   BbSdkAreas["threads"],
-  "getPluginMetadata" | "updatePluginMetadata" | "experimental_listPluginMetadata"
+  | "getPluginMetadata"
+  | "updatePluginMetadata"
+  | "experimental_listPluginMetadata"
 > & {
   getPluginMetadata(
     args: Omit<ThreadPluginMetadataArgs, "pluginId"> & { pluginId?: string },
@@ -2368,7 +2369,33 @@ export interface ExperimentalAppIcons {
   register(registration: ExperimentalIconRegistration): void;
 }
 
+export interface experimental_AppThreadCreationContextRegistration {
+  /**
+   * Capture strict JSON synchronously at submission. Return undefined to omit
+   * this plugin's namespace. The host clones and freezes the snapshot; thrown
+   * errors or non-JSON values reject submission without clearing the draft.
+   */
+  capture(): JsonValue | undefined;
+}
+
+export interface experimental_AppThreadCreationContext {
+  /**
+   * Register one contributor per plugin generation. The host binds the plugin
+   * id and unregisters on unload; the returned function disposes early.
+   * Native creation, message forks, handoffs, and browser SDK spawn/fork share
+   * this capture path. Context is limited to 32 namespaces and 256 KiB total
+   * UTF-8 JSON. An explicit map, including {}, skips client recapture but does
+   * not skip backend preparation. Forward a NewThreadRequest snapshot unchanged
+   * through a composer callback or RPC. Explicit transport retries can reuse
+   * the snapshot; unknown responses are not automatically replayed or deduplicated.
+   */
+  register(
+    registration: experimental_AppThreadCreationContextRegistration,
+  ): () => void;
+}
+
 export interface PluginAppBuilder {
+  experimental_threadCreationContext: experimental_AppThreadCreationContext;
   experimental_icons: ExperimentalAppIcons;
   commands: PluginAppCommands;
   slots: PluginAppSlots;
@@ -3164,6 +3191,8 @@ export interface ExperimentalPermissionModePickerProps {
  * composer props.
  */
 export interface NewThreadRequest {
+  /** Forward this submission snapshot unchanged, including an empty map. */
+  experimental_pluginContext?: Record<string, JsonValue>;
   /**
    * The selected project id. Choosing "Don't work in a project" submits BB's
    * personal-project id (not `null`) together with a `personal` workspace

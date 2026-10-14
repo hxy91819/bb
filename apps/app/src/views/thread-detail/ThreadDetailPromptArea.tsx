@@ -1,4 +1,5 @@
 import { createCoreComposerActions } from "@/lib/plugin-composer-handle";
+import { withThreadCreationContext } from "@/lib/thread-creation-context";
 import { useQueuedMessagesExpanded } from "@/components/promptbox/banner/queued-messages-expanded";
 import type { MachineRemovalStatus } from "@/lib/machine-removal-display";
 import { ThreadMachineStatus } from "@/components/promptbox/banner/ThreadMachineStatus";
@@ -1201,11 +1202,15 @@ export function ThreadDetailPromptArea({
         ...baseRequest,
         ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
       };
-      const clearedSubmittedDraft =
-        promptDraft.clearIfCurrentMatches(submittedDraft);
+      let clearedSubmittedDraft = false;
+      let captured = false;
       setBottomAttachmentError(null);
       try {
-        const created = await createThread.mutateAsync(request);
+        const prepared = withThreadCreationContext(request);
+        captured = true;
+        clearedSubmittedDraft =
+          promptDraft.clearIfCurrentMatches(submittedDraft);
+        const created = await createThread.mutateAsync(prepared);
         navigate(
           getThreadRoutePath({
             projectId: created.projectId,
@@ -1215,6 +1220,13 @@ export function ThreadDetailPromptArea({
       } catch (error) {
         if (clearedSubmittedDraft) {
           promptDraft.restoreIfEmpty(submittedDraft);
+        }
+        if (!captured) {
+          showMutationErrorToast({
+            error,
+            fallbackMessage: "Failed to create thread.",
+            lifecycleOperation: "create_thread",
+          });
         }
         throw error;
       }
