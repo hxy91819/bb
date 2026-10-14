@@ -1,6 +1,7 @@
 import { compareCodepoint } from "./compare-codepoint.js";
 import { buildSectionKey } from "./section-keys.js";
 import type { SidebarThread } from "./sidebar-thread.js";
+import type { experimental_ThreadListGroup } from "@get-bb/plugin-sdk/app";
 import {
   getCollapsedChildActivity,
   type CollapsedChildActivity,
@@ -347,6 +348,39 @@ export function buildProjectThreadGroups(
     compareThreads,
     groupEnvironmentThreads,
   );
+}
+
+export function getCandidateRootThreads(
+  threads: readonly SidebarThread[],
+): SidebarThread[] {
+  return buildProjectThreadGroups(
+    threads,
+    compareStandardThreads,
+    false,
+  ).flatMap((item) => (item.kind === "thread" ? [item.node.thread] : []));
+}
+
+export function projectRootThreadGroups(
+  threads: readonly SidebarThread[],
+  projection: (thread: SidebarThread) => experimental_ThreadListGroup,
+): (experimental_ThreadListGroup & { threads: SidebarThread[] })[] {
+  const groups = new Map<
+    string,
+    experimental_ThreadListGroup & { threads: SidebarThread[] }
+  >();
+  for (const item of buildProjectThreadGroups(
+    threads,
+    compareStandardThreads,
+    false,
+  )) {
+    if (item.kind !== "thread") continue;
+    const group = projection(item.node.thread);
+    const existing = groups.get(group.key);
+    const descendants = getProjectThreadItemDescendants([item]);
+    if (existing) existing.threads.push(...descendants);
+    else groups.set(group.key, { ...group, threads: descendants });
+  }
+  return [...groups.values()];
 }
 
 function buildThreadTreeItems(

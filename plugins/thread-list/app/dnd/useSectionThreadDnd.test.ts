@@ -22,6 +22,7 @@ import {
   resolveSectionThreadSectionOverId,
   resolveThreadRowNestCollisions,
 } from "./useSectionThreadDnd.js";
+import { buildContributionGroupKey } from "../../shared/preferences.js";
 import { getSidebarThreadRowDroppableId } from "../rows/sidebarThreadRowDroppable.js";
 
 function createThread(overrides: SidebarThreadOverrides): SidebarThread {
@@ -1205,5 +1206,71 @@ describe("worktree group section dragging", () => {
       activeId,
       toParentKey: PINNED_THREAD_PARENT_KEY,
     });
+  });
+});
+
+describe("contributed group drag policy", () => {
+  const a = buildContributionGroupKey("adapter/owners", "group", "a");
+  const b = buildContributionGroupKey("adapter/owners", "group", "b");
+  function contributedLookup() {
+    const items = buildSectionThreadList(
+      [
+        createThread({ id: "a1", sectionId: "a" }),
+        createThread({ id: "a2", sectionId: "a" }),
+        createThread({ id: "b1", sectionId: "b" }),
+      ],
+      undefined,
+      [
+        { id: "a", name: "A" },
+        { id: "b", name: "B" },
+      ],
+      false,
+    );
+    for (const item of items) {
+      if (item.kind === "section") {
+        item.group.key = item.group.id === "a" ? a : b;
+        item.group.id = item.group.key;
+      }
+    }
+    return collectSectionThreadDndLookup(items, "contributed", [], [], {
+      groups: true,
+    });
+  }
+  it.each([b, "b1", a])(
+    "rejects readonly headers and cross-group reorder onto %s",
+    (over) => {
+      expect(
+        resolveSectionThreadDropDecision(
+          contributedLookup(),
+          "a1",
+          over,
+          null,
+          null,
+          { groups: true },
+        ),
+      ).toMatchObject({ kind: "rejected", reason: "read-only-group" });
+    },
+  );
+  it("keeps same-group root drops inert and explicit cross-group nesting without metadata writes", () => {
+    const lookup = contributedLookup();
+    expect(
+      resolveSectionThreadDropDecision(lookup, "a1", "a2", null, null, {
+        groups: true,
+      }),
+    ).toMatchObject({ kind: "unchanged", toParentKey: a });
+    expect(
+      resolveSectionThreadDropDecision(
+        lookup,
+        "a1",
+        getSidebarThreadRowDroppableId("b1"),
+        null,
+        null,
+        { groups: true },
+      ),
+    ).toMatchObject({
+      kind: "nest",
+      updates: [{ threadId: "a1", parentThreadId: "b1" }],
+    });
+    expect(lookup.threadByItemId.get("a1")?.sectionId).toBe("a");
   });
 });
