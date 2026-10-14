@@ -24,6 +24,8 @@
 
 个人 fork 的 `main` 是最新聚合入口，`origin/main` 是上游开发主干，两者用途不同。GitHub 默认分支设为 `main`，访客打开仓库或普通 clone 即可拿到最新聚合代码。聚合仍基于稳定 tag，因此 GitHub 与上游主干比较时可能显示落后；是否纳入新代码以基线 tag 和分支清单为准。
 
+日常检出、clone、部署和对外分享统一使用 `main` / `fork/main`。脚本中的 `aggregate/next` 仅是本地临时验证候选，验证后提升到 `main`；它不作为日常使用或对外发布的分支。
+
 ### 旧 checkout 的入口
 
 维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `main` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
@@ -80,12 +82,12 @@ Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-r
 手工分步时等价于：
 
 ```bash
-scripts/fork-aggregate                      # 只生成 aggregate/next
+scripts/fork-aggregate                      # 只生成本地临时验证候选 aggregate/next
 scripts/run-resource-isolated --profile package -- pnpm install --frozen-lockfile
 scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
 scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --continue --output-logs=errors-only --filter=<涉及的包>
-scripts/fork-aggregate --promote-only       # 提升验证过的 aggregate/next
-scripts/fork-aggregate --promote            # 旧方式：重新聚合并提升，SHA 会因时间戳变化，不要在验证之后用
+scripts/fork-aggregate --promote-only       # 把已验证候选提升到 main 并推送 fork/main
+scripts/fork-aggregate --promote            # 重新聚合并提升到 main；已验证的候选用 --promote-only
 ```
 
 全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住。

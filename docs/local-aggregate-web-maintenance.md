@@ -1,7 +1,7 @@
 # 本机聚合网页服务维护
 
 本说明适用于把 `main` 作为本机 Tailnet 网页服务运行的场景。
-它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `origin`，也不要从聚合分支创建上游 PR。
+它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `origin`，也不要从保存聚合结果的 `main` 创建上游 PR。
 
 ## 文件与保密边界
 
@@ -113,7 +113,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 外部 Cursor SDK 适配器
 
-`Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用该仓库 `local/aggregate` 的构建入口。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
+`Cursor (SDK)` 由独立 fork [hxy91819/cursor-acp](https://github.com/hxy91819/cursor-acp) 提供；本机使用 cursor-acp 仓库自己的 `local/aggregate` 构建入口；这是外部适配器的分支名，BB 的入口为 `main`。拉取或重新聚合后，在 `/data/code/cursor-acp` 执行 `nub install && nub run build`。SDK 凭据与 `cursor-agent` 登录相互独立：在运行 BB host daemon 的用户下执行 `node /data/code/cursor-acp/dist/index.js login`，凭据保存在 `~/.cursor/sdk/auth.json`；也可由 host 环境提供 `CURSOR_API_KEY`。不要把 key 放进 BB 插件设置或 `customAgents.env`。
 
 在 ACP providers 插件的 `customAgents` 设置中登记下列条目；保留原有条目。设置保存后立即生效，无需重启 BB。`nativeSkillRoots` 只决定 composer `/` 菜单列出哪些技能；全局提示词和技能是否进入 SDK 模型上下文由适配器负责。技能根不写 `recursive`：BB 的递归扫描会跳过软链接技能目录，非递归的用户根才会跟随软链接；`.agents/skills/.system` 因此单独列出。原则、分工和验证方法以 cursor-acp 仓库的 [docs/environment-discovery.md](https://github.com/hxy91819/cursor-acp/blob/fork-tooling/docs/environment-discovery.md) 为准，增删技能根时同步核对适配器实际加载的目录。
 
