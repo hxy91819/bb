@@ -150,6 +150,7 @@ vi.mock("@/components/promptbox/NewThreadPromptBox", () => ({
       <div data-testid="new-thread-prompt-box">
         {props.modeConfig?.banner ?? null}
         {props.modeConfig?.environmentProviderInputsSlot ?? null}
+        {props.attachments?.error ? <div>{props.attachments.error}</div> : null}
       </div>
     );
   },
@@ -2083,14 +2084,29 @@ describe("PluginNewThreadComposer seeding", () => {
     await waitFor(() =>
       expect(latestPromptBoxProps().isSubmitting).toBe(false),
     );
+    expect(screen.getByText("identity unavailable").textContent).toBe(
+      "identity unavailable",
+    );
     expect(draft.getCurrent()).toEqual(submittedDraft);
     expect(onSubmit).not.toHaveBeenCalled();
+    await act(async () => {
+      await expect(
+        latestPromptBoxProps().pluginComposerHost.submit(
+          { experimental_data: null },
+          undefined,
+        ),
+      ).rejects.toThrow("identity unavailable");
+    });
+    expect(draft.getCurrent()).toEqual(submittedDraft);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(latestPromptBoxProps().isSubmitting).toBe(false);
     fail = false;
     await submit();
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       experimental_pluginContext: { team: { memberId: "B" } },
     });
     expect(latestPromptBoxProps().value).toBe("");
+    expect(screen.queryByText("identity unavailable")).toBeNull();
   });
 
   it("restores the optimistically cleared draft when submission fails", async () => {
@@ -2116,6 +2132,7 @@ describe("PluginNewThreadComposer seeding", () => {
       expect(latestPromptBoxProps().isSubmitting).toBe(false);
     });
     expect(latestPromptBoxProps().value).toBe("review every PR for slop");
+    expect(latestPromptBoxProps().attachments.error).toBeNull();
   });
 
   it("does not replace a new draft when submission fails", async () => {
