@@ -59,7 +59,6 @@ import {
 import { cn } from "@bb/shared-ui/lib/utils";
 import { SecondaryPanelSelectionActions } from "./SecondaryPanelSelectionActions.js";
 import {
-  FILE_PREVIEW_WRAPPER_STYLE,
   FilePreviewHeaderFrame,
   FilePreviewPath,
 } from "./FilePreviewChrome.js";
@@ -223,7 +222,6 @@ const CSV_PREVIEW_MAX_COLUMNS = 100;
 const CSV_PREVIEW_MAX_ROWS = 500;
 const CSV_PREVIEW_ROW_HEIGHT_PX = 29;
 const CSV_PREVIEW_OVERSCAN_ROWS = 8;
-
 
 const HTML_FILE_PREVIEW_IFRAME_STYLE = {
   width: "100%",
@@ -537,7 +535,6 @@ export function FilePreview({
             ? "@container/page flex min-h-full flex-col"
             : "@container/page min-h-full"
       }
-      style={FILE_PREVIEW_WRAPPER_STYLE}
     >
       {headerMode === "file" ? (
         <FilePreviewHeader
