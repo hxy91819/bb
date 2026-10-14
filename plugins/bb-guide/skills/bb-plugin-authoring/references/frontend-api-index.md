@@ -4,6 +4,17 @@ Use this index to check public imports from `@get-bb/plugin-sdk/app`.
 Read the other frontend references for behavior, fields, and examples.
 Read the installed SDK declarations for the exact current signatures.
 
+## Thread list contribution slots
+
+- `app.slots.experimental_threadListGrouping` — `projection` receives
+  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+- `app.slots.experimental_threadRowDecoration` — `item` receives
+  `experimental_ThreadListItemInput<Data>` with `thread` and `data`.
+
+Both registrations can supply `useData`, which receives
+`experimental_ThreadListDataInput` with `threadIds`. See Plugin Guide → The
+thread list for registration behavior and examples.
+
 ## Runtime values
 
 - `experimental_Icon`
