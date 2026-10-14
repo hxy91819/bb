@@ -8,6 +8,8 @@
 
 **“归属成员”不是“真实创建者”或“实际操作者”。** 线程保存固定 memberId；显示时连接成员当前资料。人工新建与人工 fork 取本次提交快照，Agent 子线程可以由插件继承 parentThreadId 的归属。没有上下文且没有可继承关系的线程保留未归属。既有线程不凭标题、机器、模型或插件 origin 猜身份。活动报告统一称“归属该成员的 BB 工作进展”，不作考勤或人工操作审计。
 
+本轮父线程已裁决：活动查询使用有界事实与无状态游标；列表采用 app-wide useData 加纯投影；身份使用持久默认加窗口覆盖；时区自动预填并沿普通插件 settings 修改，管理员权限仍只用于创建成员。这些是本轮确定约定，具体实现仍未落地。
+
 本体负责收集上下文、校验、调用贡献者、原子保存、通用查询和列表贡献宿主。插件负责成员、继承策略、标签内容、分组定义和查询解释口径。不开辟账号认证、密码、邮箱注册、通用权限系统、任意请求中间件或独立 AI 服务。
 
 ## 2. 源码事实与落点
@@ -88,11 +90,15 @@ web/desktop 与紧凑浏览器都运行 apps/app，具有相同 collector 与插
 
 选择公共 frontend SDK 的注册/消费契约，**不是** bb-team 与 bundled thread-list 私下 import/RPC 的插件间协议。原因是列表的运行时注册和跨插件卸载由宿主管理，替代列表也能选择消费同样贡献；独立仓库不依赖 bundled 插件源码版本。thread-list 仍拥有布局、preferences、排序和移动实现。
 
-拟新增 `app.slots.experimental_threadListGrouping`、`app.slots.experimental_threadRowDecoration`，及列表消费者 `experimental_useThreadListContributions`。注册形状为 `{ id, title, getSnapshot, subscribe }`：getSnapshot 同步返回不可变、引用稳定的描述，subscribe 返回 disposer；插件通过现有 RPC/realtime 在共享 cache 更新后通知。注册表负责 pluginId 前缀、代际注销和单贡献者异常隔离。渲染回调不发请求；按当前列表 threadIds 批量读 metadata，沿用 `experimental_listPluginMetadata` 的 200 IDs 批次上限，缓存按 namespace/ID 去重，新增或失效的 ID 才补读，不逐行 RPC。注册时可声明所需 metadata namespace 为自己的 pluginId，宿主消费 hook 统一批读并提供给投影函数，未加载状态显式标识，不把加载中误当未归属。
+拟新增 `app.slots.experimental_threadListGrouping`、`app.slots.experimental_threadRowDecoration`，及列表消费者 `experimental_useThreadListContributions`。沿用 [app-contract.ts](../packages/plugin-sdk/src/app-contract.ts) 的 `PluginThreadActionRegistration<Data>` 范式：注册 `{ id, title, useData?, projection }`（行贡献使用 `item`），`useData({threadIds})` 是宿主每个注册 app-wide 调用一次的 React hook；纯同步 projection/item 只读取线程和 Data，不发请求、不调用 hook。宿主绑定 pluginId、挂载插件上下文、隔离单项异常，并在停用/重载时卸载 collector；参考 [thread-action-registry.tsx](../apps/app/src/lib/thread-actions/thread-action-registry.tsx) 的 `ThreadActionCollector`、`ThreadActionCollectorBoundary`。插件在 useData 内使用已有 useRpc/useRealtime/useSdk 与 React effect cleanup 管理自己的数据，不公开 getSnapshot/subscribe 缓存协议。
 
-分组 snapshot 含稳定 group key、显示名、可选头像描述及同步 `groupForRoot(thread, ownMetadata)`；返回 key 或 null。行 snapshot 含 `decorate(thread, ownMetadata)`，返回 `{ text, accessibleLabel, avatar: { src, alt } | null } | null`，注册声明 `placement: "leading" | "trailing"`，默认 trailing。src 使用插件随包同源资产 URL；宿主提供一行有界标签、头像尺寸、主题和无障碍渲染，不接收任意整行 React 替换。内建 provider icon 提取为 leading decoration 适配器，也由同一消费路径渲染；线程活动状态、标题与动作仍由原有专门控件负责。每个位置的贡献按完整 `<pluginId>/<id>` 排序全部组合，单项失败只移除该项，不能影响标题、状态图标、点击区域和动作菜单。
+行贡献的 threadIds 为可见行的去重集合；所选分组的 threadIds 则是当前列表候选根线程集合，必须在分组/窗口化之前取得，否则折叠或视口外成员会分错组。多列表消费时宿主合并集合；隐藏列表不贡献需求，未选分组不请求逐线程数据。集合去重、批量发布沿用 action collector 方式，不逐行挂载 useData。插件按 `experimental_listPluginMetadata` 的 200 IDs 批次读取自己的 namespace，缓存及 realtime 失效通过现有 hooks 完成；分组和标签可复用插件自己的查询 key，无需宿主再管理第二份 cache。useData 返回显式 loading/ready/error，未加载不能被投影成未归属。
 
-最小分组组合语义：多个插件可以注册多个可选组织提供者；用户**一次选择一个主组织模式**，它与 pinned、现有父子树、环境聚合、read-status 分层组合。第一版不做任意多维 group-by 管线。内建 project/machine/chronological 也改用同一分组描述消费路径，不能仅为 team 在 ProjectList 加 if 分支。内建原有默认排序和 section 规则保留在各自适配器与共享树构造器中。
+分组 `projection({thread,data})` 返回 `{ status: "ready", group: { key, label, avatar } | null }` 或 `{ status: "loading" | "error" }`，输入为公共 PluginSidebarThread 中的根线程，avatar 为 `{src,alt} | null`。null 表示确实没有分组；宿主保留单独未分组桶，loading/error 时列表仍可访问且显示状态。行 `item({thread,data})` 返回 `{ text, accessibleLabel, avatar: { src, alt } | null } | null`，宿主在标题旁的统一附加区域渲染。src 使用插件随包同源资产 URL；宿主负责一行有界标签、头像尺寸、主题和无障碍，不接收整行 React 替换。多项按完整 `<pluginId>/<id>` 排序组合；单项失败只移除该项，保留状态、标题、快捷键和操作按钮。
+
+最小分组组合语义：多个插件可注册多个可选组织提供者；用户**一次选择一个主组织模式**，它与 pinned、现有父子树、环境聚合、read-status 分层组合。实现落在 bundled thread-list 的组归属投影与行附加区域，而不是重写树引擎：从现有 [ProjectList.tsx](../plugins/thread-list/app/list/ProjectList.tsx) 的 `buildGroupSectionItem`/模式数据准备提取私有共同投影入口，归一化稳定 group key/label 与根归属，交还现有 buildProjectThreadGroups、排序及各模式渲染器。project、machine、chronological 均经过这个入口；machine 与外部成员分组是最先验证的两个真实 adapter。chronological 的 custom sections、项目/机器特殊操作和 pinned 仍为私有 adapter 的职责，不塞进公开贡献型别，也不为了统一形式替换 `ActiveSidebarModeSections` 的现有选择分支。
+
+共同验收边界是组归属投影、namespaced key、加载/失败、附加行展示及原有树消费，不是要求每个内建模式伪装成第三方插件。已有 provider icon 继续由原控件渲染；它是 provider 状态展示，不是本次成员附加信息，强制搬进新注册表没有第二个真实调用需求。已有 ThreadRow 在三模式与新增模式下使用同一附加区域，才是本次行贡献的共享落点。折叠、布局、排序、DnD、ProjectThreadItem 和内部 atoms 均不外泄到 SDK。
 
 ### 4.2 树、排序、拖拽与 preferences
 
@@ -115,13 +121,15 @@ web/desktop 与紧凑浏览器都运行 apps/app，具有相同 collector 与插
 使用 `bb.storage.database()` 的插件本地 SQLite；插件自己 append-only migrate，不读取 bb.db 路径、不导入 @bb/db 或 server 内部模块。最小表：
 
 - `members(member_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, avatar_id TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`；ID 由服务端生成，永不复用，显示名允许同名。
-- `team(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admin_member_id TEXT NOT NULL REFERENCES members(member_id), timezone TEXT NOT NULL)`。一个团队对应一个 BB server 的插件实例。
+- `team(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admin_member_id TEXT NOT NULL REFERENCES members(member_id))`。一个团队对应一个 BB server 的插件实例。
 
-`initialize({displayName,avatarId,timezone})` 用同步 immediate transaction：检查 singleton → 插入首成员 → 插入唯一 team 行。两个并发初始化仅先 commit 者成功；失败方收到 `already_initialized` 和选择现有身份的入口，不自动再建成员，不产生孤儿行。不另存 isAdmin 多份状态。团队 IANA timezone 初始化必填并验证；本期不做时区更改，避免同一日期报告口径漂移。
+`initialize({displayName,avatarId})` 用同步 immediate transaction：检查 singleton → 插入首成员 → 插入唯一 team 行。两个并发初始化仅先 commit 者成功；失败方收到 `already_initialized` 和选择现有身份的入口，不自动再建成员，不产生孤儿行。不另存 isAdmin 多份状态。团队 timezone 是普通插件设置，单一来源为 `bb.settings.define` 的字符串字段，使用 experimental_schema 校验 IANA 时区，后端缺省 UTC。初始化界面预填 `Intl.DateTimeFormat().resolvedOptions().timeZone`，允许直接确认或修改，检测失败则显示 UTC；已有保存值优先，不以每个访问者的浏览器时区覆盖团队设置。首成员初始化成功后，界面沿相同 settings 写入路径保存所确认值；设置写入失败明确显示已创建成员、时区尚未保存，可单独重试，不能宣称跨库原子提交或再次创建成员。并发初始化失败方不自动写时区。后续通过现有插件 settings UI/CLI/SDK 路径修改，任何已有 BB 设置访问者均可修改，不新增管理员设置权限。变更只影响之后开始的查询如何解析日期，不改事件 UTC 时间；设置 onChange 驱动显示刷新。
 
 RPC/CLI/SDK 共享插件 service：`initialize`、`members.resolve/list/get`、`members.create`、`members.updateSelf`、`identity.validate`、`activity.query/details`。管理员 create 以显式 `actorMemberId` 与 singleton 比较；普通成员只能在自选身份口径下修改自己资料，不能创建新身份。该检查是受信团队协作规则，不是登录鉴权，持有 BB 会话者能自述另一个 ID。displayName trim 后 1–80 字符，avatarId 必须命中随包清单；本期不增加成员删除、合并、转让管理员或改归属操作。
 
-客户端每个窗口保存当前 memberId，按 BB server/profile 分区；复用 [browser-storage.ts](../apps/app/src/lib/browser-storage.ts) 的 tab-scoped 存储思路。首次窗口选择已有成员，刷新恢复并向服务端验证；另一窗口更换身份不覆盖本窗口。关闭窗口后的跨会话选择恢复属于存储能力允许的范围，不能以服务端全局 KV 当作当前用户。CLI `bb team identity select/show/clear` 使用调用端本地配置、按 server 分区；SDK 明确传 memberId。浏览器选择不偷偷同步成 CLI 身份。
+客户端身份按 BB server/profile 的稳定作用域键分区，分两层：localStorage 保存持久默认 memberId，sessionStorage 保存本窗口覆盖（含显式未归属 null）。有效选择优先级为“本窗口覆盖（包括 null）→ 持久默认 → 未选择”；窗口首次读取默认后固定成本窗口值，使其他窗口修改默认不会切走当前身份。默认选择动作“记住此身份”同时写持久默认和本窗口；“仅本窗口使用”只写窗口覆盖；“恢复默认”移除覆盖并重新取当前持久默认。清除本窗口选择写显式 null，不删除其他窗口/持久默认；“忘记默认身份”才删持久默认且清本窗口选择，其他已打开窗口保持各自覆盖。新开或通常重开浏览器用持久默认，刷新恢复窗口覆盖；浏览器会话恢复若恢复 sessionStorage，则继续该覆盖，界面显示其为窗口选择。不做跨设备身份同步，也不使用服务端全局 KV 表示当前人。
+
+[browser-storage.ts](../apps/app/src/lib/browser-storage.ts) 已有 local/session 读取及 fallback；其 `createTabScopedStorage.setItem` 同时写两层，不能直接用来实现“仅本窗口”操作。独立插件用浏览器存储与自己的小型 hook 实现上述优先级，不导入 app 内部模块。存储不可用时仅在当前窗口内存保留并明确提示无法记住，不声称跨会话持久。恢复的 ID 必须向服务端验证，无效时提示重选，不能把本窗口错误扩散删除其他窗口。CLI `bb team identity select/show/clear` 使用调用端本地持久配置、按 server 分区；SDK 明确传 memberId。浏览器选择不偷偷同步成 CLI 身份。
 
 界面用已有 navPanel/settings/sidebar footer 能力提供初始化、选择、修改、管理员创建；保留原生 New Thread。预设生成头像随包发布，清单存固定 avatarId → asset URL，UI 显示和 CLI 列举同一清单。本阶段不生成资产。更新资料 commit 后发布 `members.changed`，所有窗口重新定向读取成员；重连重新查询，不能依赖一次性 signal。历史线程 metadata 只存 `{memberId}`，不复制姓名/头像。
 
@@ -133,11 +141,11 @@ RPC/CLI/SDK 共享插件 service：`initialize`、`members.resolve/list/get`、`
 
 查询步骤：按 memberId 或名称解析 → 明确日期/时区 → 在服务器过滤归属和时间内事件 → 返回紧凑可引用事实 → 当前 Agent 解释总结。名称精确匹配仍可能同名；零结果明确 not_found，多结果返回有界候选 ID/显示名供用户选择，模糊搜索也不能自行选第一个。更名后历史归属仍由 ID 连接；旧名称不作为隐藏别名自动认领。
 
-建议命令：`bb team activity --member <id-or-name> --date YYYY-MM-DD [--project <id>] [--limit N] [--max-chars N] [--cursor C] --json`；详情 `bb team activity details --thread <id> --date YYYY-MM-DD ...`。`today` 由服务端按 team.timezone 与请求开始时的 now 解析，响应回显 date/timezone/from/to/asOf。区间 `[当地当天00:00,次日00:00)` 转 UTC，不能简单加 24 小时（DST）。事件记录时间使用核心 events.createdAt，不是自然语言中声称的时间。
+建议命令：`bb team activity --member <id-or-name> --date YYYY-MM-DD [--project <id>] [--limit N] [--max-chars N] [--cursor C] --json`；详情 `bb team activity details --thread <id> --date YYYY-MM-DD ...`。`today` 由插件服务端按已保存的 timezone 设置与请求开始时的 now 解析，响应回显 date/timezone/from/to/asOf。区间 `[当地当天00:00,次日00:00)` 转 UTC，不能简单加 24 小时（DST）。事件记录时间使用核心 events.createdAt，不是自然语言中声称的时间。插件 cursor 保存首次解析的 memberId、date、timezone、UTC 范围和核心 cursor；继续分页沿用它们。期间修改时区只改变新查询，同一 cursor 不重新解释 today；显式传入相冲突过滤条件返回 cursor_query_mismatch。
 
-默认 20 个线程、完整序列化响应最多 8000 Unicode 字符；上限 100/24000。详情默认 20 个证据、8000 字符；姓名解析默认 10 个候选。预算含 envelope、cursor、标题和错误，不只是正文；不足以装入下一项时在该项之前结束，并提供 nextCursor。单项过长裁剪 excerpt 且标明 `excerptTruncated`，下一页不因长项永远停住。输出始终含 `totalThreads/totalEvidence`（对应模式的总数）、`returned`、`nextCursor`、`truncated`、`coverage`。CLI 文本与 JSON 同预算；不自动递归翻完所有页，不常驻注入完整成员名单。
+插件输出默认 20 个线程、完整序列化响应最多 8000 Unicode 字符；上限 100/24000，最小 max-chars 为 2048，不足以容纳 envelope 时明确拒绝参数。详情默认 20 个证据、8000 字符；姓名解析默认 10 个候选。预算含 envelope、cursor、标题和错误，不只是正文；单项过长裁剪 excerpt 且标明 `excerptTruncated`，至少能输出一项及有效继续位置。插件使用核心每项的 cursorAfter，在最后实际输出项处生成 nextCursor；不得直接使用已取回但尚未输出的页尾位置而跳项。输出始终含 `totalThreads/totalEvidence`（本页查询时计算的匹配总数，不是全程冻结总数）、`returned`、`nextCursor`、`hasMore`、`truncated`、`coverage`。因用户预算未输出的项以游标继续；CLI 文本与 JSON 同预算，不自动递归翻完所有页。用户选定的字符预算与团队措辞留在插件，核心只负责自己的硬响应上限与通用事实。
 
-事实投影以 [provider-event.ts](../packages/domain/src/provider-event.ts) 的真实事件为依据：已接受输入 `turn/input/accepted`、完成回合 `turn/completed` 的成功/失败状态、`item/completed` 中 Agent 回复/命令执行/fileChange/toolCall 的有界摘要。请求/排队不等于执行，tool 调用不等于成功，Agent 说“已完成”仅标记为 Agent 陈述；可验证命令结果单独标记。默认跳过思考文本、delta、全量工具输出和 diff。标题只作定位；updatedAt/createdAt 不算进展证据。每条证据含 threadId、eventId、sequence、事件时间、种类与状态；展示真实 thread 路由并保留 event 定位键，不编造尚不存在的事件锚点 URL。
+事实投影以 [provider-event.ts](../packages/domain/src/provider-event.ts) 的真实事件为依据：已接受输入 `turn/input/accepted`、完成回合 `turn/completed` 的成功/失败状态、`item/completed` 中 Agent 回复/命令执行/fileChange/toolCall 的有界摘要。请求/排队不等于执行，tool 调用不等于成功，Agent 说“已完成”仅标记为 Agent 陈述；可验证命令结果单独标记。默认跳过思考文本、delta、全量工具输出和 diff。标题只作定位；线程的 updatedAt/createdAt 不算进展证据。每条证据含 threadId、eventId、sequence、事件时间、种类与状态；展示真实 thread 路由并保留 event 定位键，不编造尚不存在的事件锚点 URL。
 
 ### 5.3 必须新增的通用查询能力
 
@@ -145,16 +153,22 @@ RPC/CLI/SDK 共享插件 service：`initialize`、`members.resolve/list/get`、`
 
 请求是判别联合：
 
-- `mode: "summary"`：`metadata: {pluginId, key, equals}`，key 只允许单个顶层键，equals 只允许 JSON scalar；`from/to` 为 UTC ms，`projectId` 可缺省，`limit/maxChars/cursor`。
-- `mode: "details"`：同样 metadata/date 约束加一个 `threadId`，按事件稳定键分页返回证据投影。团队总是使用 `{pluginId: 自身, key: "memberId", equals: 固定ID}`；详情不能绕过归属筛选。
+- `mode: "summary"`：`metadata: {pluginId, key, equals}`，key 只允许单个顶层键，equals 只允许 JSON scalar；`from/to` 为 UTC ms，`projectId` 可缺省，`limit/cursor`。
+- `mode: "details"`：同样 metadata/date 约束加一个 `threadId`，按该线程的事件序号分页返回证据投影。团队总是使用 `{pluginId: 自身, key: "memberId", equals: 固定ID}`；详情不能绕过归属筛选。
 
-JSON key 经参数化路径处理，无任意 SQL/JSONPath。复用元数据 schema 与公共线程访问过滤，默认包括归属的 archived/hidden 工作线程、排除 deleted 线程，响应明确口径。这不扩大现有 BB 身份权限。summary SQL 用 metadata → threads → events 定向 JOIN/WHERE，事件时间 `>=from AND <to`，限定可报告事件种类，COUNT/GROUP BY 在 DB 内完成；所有符合条件的旧线程都可被选到。details 也在 DB 限定 threadId、日期、类型，才提取有界 payload；不把所有历史拉进插件内存。SQL 先 LIMIT 候选并用 json_extract/substr 提取有限字段，完整 data 不进入摘要缓存；COUNT 与有界投影共享同一过滤条件。
+JSON key 经参数化路径处理，无任意 SQL/JSONPath。复用元数据 schema 与公共线程访问过滤，默认包括归属的 archived/hidden 工作线程、排除 deleted 线程，响应明确口径。每次请求都重新做访问与过滤校验，cursor 不是授权凭据。summary SQL 用 metadata → threads → events 定向 JOIN/WHERE，事件时间 `>=from AND <min(to,asOf)`，限定可报告事件种类，COUNT/GROUP BY 在 DB 内完成；所有符合条件的旧线程都可被选到。details 也在 DB 限定 threadId、日期、类型与序号范围后才提取有界 payload；不把所有历史拉进插件内存。
 
-分页采用**服务端短期只读结果快照**：第一页在一个同步读事务内确定有序摘要或证据投影、精确总数与 asOf；缓存只含有界投影，不缓存原始日志。每份至多 10000 项，5 分钟 TTL，进程内总上限 32 MiB、LRU 淘汰；超过项上限返回 `truncated=true` 和可枚举范围限制，要求缩短日期/项目，不能把可翻完前 10000 项说成全量。cursor 为不透明随机 snapshotId 加位置，绑定标准化查询参数与调用访问域；重用不同过滤参数拒绝。固定排序 summary=`lastActivityAt DESC, threadId ASC`，details=`createdAt ASC, sequence ASC, eventId ASC`。页内按字符预算取完整项，游标推进到下一项。新事件或更名不改变已生成页；新查询可见新数据。TTL/重启/淘汰返回 `activity_cursor_expired`，调用者重查第一页，不能暗自重复旧页。
+核心最小投影：summary 返回 threadId、有界标题、lastActivityAt、按事实种类/状态的计数，以及至多 3 条最近证据定位和短 excerpt；details 每项返回 eventId/threadId/sequence/createdAt、事件或 item 种类、可观察状态及短 excerpt。复用第 5.2 节的事件白名单，计数分别命名为 acceptedInputs/completedTurns/各 item 状态数，不能称为成果数；父报告与子结果是两条证据，不自动当成两份成果。未知或缺失结果标记 unknown，不生成业务总结。SQL 使用 json_extract/substr 提取允许字段，不返回完整 data；命令只含名称/exitCode/有界结果片段，文件变化只含有界路径/状态，省略 diff。核心每页默认 20、最多 100 项，单 excerpt 最多 512 Unicode 字符、标题最多 200 字符，序列化响应硬上限 256 KiB。达到字节上限在完整项边界结束；每项有 cursorAfter，响应有 nextCursor/hasMore/truncated 和实时 COUNT 总数，不能把 limit 后的条数说成总数。参数与 cursor 限额保证一项及 envelope 可放入响应。插件可进一步缩小用户输出预算，但不能放大核心上限。
 
-删除、改写与剪裁：每次返回页前校验该页证据仍可访问且 eventId/线程 rewrite generation、当前归属过滤未变；变更返回 `activity_snapshot_invalidated` 要求重查，不把删掉的资料从缓存继续输出。插件成员姓名仅是当前显示，不进入核心 snapshot 的成员事实；插件可在整个查询会话固定回显 memberId 和首次解析名，并注明新查询刷新姓名。这是稳定分页承诺，不是跨重启永久历史快照。摘要快照须记录相关线程的 rewrite generation 并验证引用事件仍存在；只检查 threadId 存在不足以发现证据被裁剪。
+**推荐无状态 keyset cursor，不保存查询结果。** 第一页在一次短读事务内取当前时间 asOf、计数和 limit+1 个候选；后续页各自读取当前数据。summary 按 `threadId ASC`（固定二进制比较）排序，以最后已输出 threadId 继续；lastActivityAt 仅展示、不作排序键，避免继续活动让线程来回移动。只纳入 `threads.createdAt < asOf` 的线程及上面的事件时间范围。details 首次还取该线程当前 MAX(sequence) 为 throughSequence，按 `sequence ASC`，继续条件 `lastSequence < sequence <= throughSequence`；已有 `(thread_id, sequence)` 唯一索引正好支持。时间不单调也不会破坏事件顺序，响应仍回显真实 createdAt。两种模式不先物化全结果，没有总项数门槛、TTL、LRU 或全局状态账本。
 
-核心模型只需现有 threads/thread_plugin_metadata/events，不增加团队表、操作者列或 daemon wire。查询计划落地时新增两个与查询直接相关的通用索引：metadata `(plugin_id, thread_id)` 和 events `(thread_id, created_at, sequence)`，已有 metadata 主键和 event sequence/type 索引不能替代此范围访问。通过 Drizzle schema 生成迁移与 snapshot，不手写 snapshot；以 EXPLAIN 与有旧线程的大数据集验证。若实测现有索引已满足同等计划，可省对应索引，不能为了“零迁移”接受全库读取。此为新增活动需求带来的索引迁移，创建上下文本身无需核心表迁移。
+cursor 为版本化、有长度上限的编码值，携带 mode、asOf、throughSequence（仅 details）、最后位置和标准化过滤条件摘要；校验 mode、namespace/key/value、projectId、threadId、from/to 与访问作用域一致，拒绝超长、非法位置和查询不匹配。limit 是分页大小，允许下页调整，不参与过滤摘要。核心按每项已知排序键生成 cursorAfter；插件只包装它，不理解核心编码。相同代码版本/数据库下重启可继续，不依赖内存缓存；不兼容 cursor 版本返回明确错误并要求重新开始，不自行从第一页拼接旧结果。
+
+一致性限度依据源码明确为实时分页：[events.ts](../packages/db/src/data/events.ts) 的 append 可使用调用方 createdAt，当前 events 只有每线程 sequence，**没有全库持久化递增 ingestion 高水位**。summary 的 asOf 是时间上界，不伪称冻结数据库；通常晚于 asOf 的新事件/线程不进入旧查询，但回填早时间的事件、已有线程改归属或同毫秒边界可能改变候选与计数。新出现的匹配 threadId 在游标之后会被看到，之前则本轮略过；客户端重新查询可看到。固定 ID 顺序避免因 lastActivityAt 更新导致同一 ID 反复翻出。details 的 throughSequence 排除正常追加，即使其 createdAt 回填到旧日期；事件删除/剪裁使未读项消失，改写可能替换或重用已有 sequence，使已读项变动或新增项落在游标之前。本期允许这些变化，不做逐页 rewrite generation 再验证、不声称无漏项或可重复读。
+
+每页在新查询中排除已删除或已不符合归属的行，不从缓存继续输出旧内容；总数随本页读取重新计算。coverage 固定回显 retained-events/live-pagination、asOf/throughSequence 及上述变化限制；能从当前数据确认的缺口附原因，不能声称检测到了全部中途变化。插件显示“截至此时间范围内、当前保留的证据；翻页期间数据可能变化”，按 ID 汇总同一次响应，不把各页 total 相加。更名只更新展示，memberId 不变；日期/时区固定在插件 cursor。选择这个语义是因为需求是有界事实与可继续查询，不是不可变导出或审计快照。
+
+核心模型只需现有 threads/thread_plugin_metadata/events，不增加团队表、操作者列或 daemon wire。查询计划落地时评估两个与查询直接相关的通用索引：metadata `(plugin_id, thread_id)` 和 events `(thread_id, created_at, sequence)`，已有 metadata 主键和 event sequence/type 索引的列顺序不同；details 序号分页可先复用现有唯一索引，summary 日期过滤是否需要新索引以 EXPLAIN 和代表数据量为准。通过 Drizzle schema 生成迁移与 snapshot，不手写 snapshot；以 EXPLAIN 与有旧线程的大数据集验证。只新增实测确有需要的索引，不能为了“零迁移”接受全库读取。若需要迁移，范围仅为经查询计划证明的索引；创建上下文本身无需核心表迁移。
 
 core 内部提取共享 `listActivityEvidence` 定向读取/投影模块，summary/details、现有单线程事件 route 可共用底层范围条件构造，避免团队专用 SQL；现有 events API 的原始事件响应契约不改变。落点：server-contract threads、SDK threads、server threads route/service、DB data/events 与 metadata 查询、CLI thread 命令。公开 SDK 符号在 Plugin Guide 登记。
 
@@ -211,19 +225,26 @@ fork 的复制历史不是该 fork 新做的工作。现有复制不带统一来
 | M01 | 两个初始化事务竞争，包括首事务回滚 | 恰好一 admin、无孤儿成员；失败者可选择已创建身份；回滚者不占管理员。 |
 | M02 | 普通成员创建后续成员、管理员创建、修改他人 | 普通成员创建拒绝；admin 创建成功；updateSelf 只更新请求选择身份，说明自选身份不等于认证。 |
 | M03 | 历史线程 A，A 改名/头像；两个客户端在线与断线重连 | thread metadata 不改，所有旧线程与分组显示新资料；ID/key 不变。 |
-| M04 | 初始化无效 timezone、非清单 avatar；客户端记住无效 ID | 边界拒绝、提示重选，不悄悄生成成员。 |
+| M04 | 初始化自动读取浏览器时区，确认/修改；无效 timezone、非清单 avatar | 合法值走普通 settings 保存，读取失败预填 UTC；非法值在对应边界拒绝，无需空白时区必填步骤。 |
+| M05 | 非管理员经 settings UI/CLI/SDK 修改时区，已有查询继续分页 | 修改成功，不需要 adminMemberId；事件 UTC 不变；旧 cursor 保留旧时区/范围，新查询使用新值；管理员仍只控制创建成员。 |
+| M06 | 默认 A；刷新、关闭重开、新窗口；窗口 B 选“仅本窗口” | 跨重开恢复持久默认 A，B 刷新保留覆盖但不改默认，其他打开窗口不切身份；按 server/profile 隔离。 |
+| M07 | 窗口显式未归属、恢复默认、忘记默认、无效 ID、禁用存储 | null 覆盖优先；各清除动作符合第 5.1 节，不误删其他窗口；无效 ID 提示重选，存储失败如实提示不能持久。 |
+| M08 | 并发初始化失败方、首成员成功但时区写入失败 | 失败方不改时区；成功成员不回滚/重复创建，可单独重试普通设置写入。 |
 | L01 | 同时启用两分组/三标签提供者 | 组织选择均可发现，标签组合顺序稳定，原状态/标题/行操作保留。 |
 | L02 | A 根下面 B 子线程，同环境另有 B 根 | 树不拆不复制；标签真实；环境不跨根组聚合。 |
 | L03 | 切组织、改名、隐藏/折叠、刷新、多客户端 preference 更新 | namespace 不冲突，组 key 稳定；沿用 thread-list RPC/CLI 同步。 |
 | L04 | 鼠标/触摸拖拽、nest、pin、move、拖入分屏 | 原行为/禁用条件一致；跨成员组不隐式改归属；紧凑导航关闭正常。 |
-| L05 | 提供者停用、crash、重载 | 列表回退可操作，其他贡献继续；恢复原选择，无悬挂监听。 |
-| L06 | 未装 team 时三种内建模式，排序/未读/section/窗口化 | 原 baseline 行为不回归；内建与插件使用相同消费边界测试表。 |
+| L05 | useData/projection 抛错、停用、重载；两个列表消费同一注册 | 每注册只有一个 app-wide collector；单项隔离、卸载清理；列表回退可操作，恢复原选择。 |
+| L06 | 未装 team 时三种内建模式，排序/未读/section/窗口化 | 原 baseline 行为不回归；三模式与插件共用组投影/行附加边界测试表，私有模式操作保持，不要求改成通用树引擎。 |
+| L07 | 折叠/视口外有不同成员根、 metadata 加载中、滚动显示新行 | 分组 useData 覆盖候选根，标签按可见行批读且每批至多 200 IDs；loading 不计为未归属，无每行 RPC。 |
 | Q01 | 小A 当天有 accepted input、命令成功、Agent 陈述；小B 无活动 | A 返回对应证据且区分陈述/结果；B 返回 0 和覆盖口径，不说 B 没工作。 |
 | Q02 | 昨天创建的 A 线程今天继续，今天只 rename 的线程 | 旧线程被纳入；只改标题不算工作证据；不能用 createdAt/updatedAt 筛进展。 |
 | Q03 | UTC 边界、团队本地零点、DST 的 23/25 小时日 | 半开区间，无相邻日期重复/漏事件；响应回显 UTC 范围与 IANA timezone。 |
 | Q04 | 同名小A、模糊匹配、改名后按固定 ID 查 | 歧义返回有界候选，不能任取一个；改名不丢历史关系。 |
-| Q05 | 多页、单项超长、完整输出预算、10000 项以上 | 总数/截断/cursor 可见；不超过预算、不卡长项；超快照上限要求缩小范围。 |
-| Q06 | 翻页时新增事件、更名、过期/重启、删除或 event rewrite | 快照不重复跳项；新查询见新事件；失效返回明确码而非混用数据。 |
+| Q05 | 多页、单项超长、核心取回多于插件预算、超过一万匹配项 | 核心响应不超过 256 KiB；插件满足用户字符预算；游标从最后实际输出项继续，无全结果门槛/提前物化，未输出项不跳过。 |
+| Q06 | summary 翻页时正常新增、回填早时间、改名、改归属、删除 | 固定 threadId 顺序，正常晚于 asOf 的事件排除；回填/改归属按游标前后规则可见或略过，总数可变且 coverage 明示；新查询反映当前状态。 |
+| Q14 | details 首次后正常追加（含早时间）、删除/改写并重用序号；服务重启 | 正常追加超 throughSequence 不入旧查询；删除不复活，改写按实时分页限制处理；同版本重启可继续，无缓存 TTL 依赖。 |
+| Q15 | cursor 换成员/项目/日期/mode、非法版本/长度；仅换 limit | 过滤不匹配和非法 cursor 明确拒绝；换 limit 可继续；每页重新访问校验，不把 cursor 当授权。 |
 | Q07 | 摘要选择 threadId 请求详情、伪造不属该成员 ID | 前者仅返回当日有界证据和真实定位键，后者无越过过滤结果；无整日志/diff。 |
 | Q08 | 插件停用期间旧归属线程继续、期间新建无归属线程 | 重启查到旧归属线程期间活动；新线程不倒推成员；无事件副本回放。 |
 | Q09 | 剪裁、缺失工具结果、只有 Agent 宣称成功 | coverage/证据级别真实，不能补造结果或声称人工操作已知。 |
@@ -236,16 +257,21 @@ fork 的复制历史不是该 fork 新做的工作。现有复制不带统一来
 
 ## 8. 我自行引入的决定
 
+本轮父线程裁决列在第 1 节；下表保留创建阶段未变的推荐，并只列本轮需由实现者遵守的具体取舍，不把已裁决事项重新当作待选方案。
+
 | 决定 | 原因 | 影响 |
 | --- | --- | --- |
 | 同步 capture、异步 prepare，collector 每插件一个 | 明确提交瞬间身份并避免多 pane 重复注册 | 插件先加载身份资料；提交快照不受之后选择影响。 |
 | 冲突键拒绝、显式 context 对已停用插件报错 | 避免按加载顺序悄悄改归属 | 已有无 context 调用不变；旧请求须重新提交才能移除失效贡献。 |
 | 无身份允许未归属，Agent fork 不从 source 继承 | 保留原生可用性，守住 parent/source 区分 | 人工未选择时不会被强制创建身份；以后扩展继承策略须插件明确实现。 |
-| 不增加创建幂等账本；不自动重发未知结果 | 现有创建无幂等契约，避免扩大本阶段接口与数据模型 | 显式重试可能重复，验收必须披露；不宣称 exactly-once。 |
-| 公共 SDK 注册列表贡献，一次一个主组织模式，成员组只读 | 复用现有交互，避免变成多维列表/归属编辑器 | 多插件共存、标签组合；不提供跨组拖动改成员。 |
-| team 实例按 server、窗口独立身份、timezone 初始化必填 | 避免多人窗口串扰和日期歧义 | 无多团队/管理员转让/时区变更；CLI 单独选择。 |
-| 顶层 scalar metadata 过滤加通用 activity 查询，短期快照分页 | 现有 SDK 缺口真实，稳定分页需要固定结果 | BB 增加只读查询与两项查询索引；不增加团队核心表或事件副本。 |
-| 活动预算、快照容量/TTL 与短 skill 限额 | 给下一阶段可测试的上下文/资源边界 | 见第 5 节具体限额；超量必须可见，不能自动拉完。 |
+| 不增加创建幂等账本；不自动重发未知结果 | 现有创建无幂等契约，避免扩大接口与数据模型 | 显式重试可能重复，验收必须披露；不宣称 exactly-once。 |
+| 一次一个主组织模式、成员组只读；私有 adapter 接入共同组投影 | 复用现有交互，避免多维列表/归属编辑器 | 三模式与插件共用真实投影边界，现有模式专用操作不外泄。 |
+| 分组按候选根需求加载，行标签按可见行加载 | 只加载可见行会错分未展开根 | useData 为 app-wide，复用批读和 hooks；不要求外部缓存生命周期协议。 |
+| team 按 server；持久默认加窗口覆盖，显式 null 表示未归属 | 将父线程确定的跨会话记忆与多窗口独立落到明确优先级 | 临时窗口选择不写默认；CLI 单独记忆，不跨设备同步。 |
+| 时区存普通 settings，缺省 UTC，首成员创建后单独保存确认值 | 沿用现有配置路径，避免团队表再保存一份或跨库原子性承诺 | 非管理员可修改；设置失败单独重试，未来查询用新时区。 |
+| summary 按 threadId、details 按 sequence 游标；asOf 加 details throughSequence | 使用现有稳定键与每线程高水位，无需全局账本 | 正常追加有明确边界；删除/回填/改写允许改变后续页，coverage 明示。 |
+| 顶层 scalar metadata 交集过滤、核心有界事实、插件用户预算 | 满足真实查询缺口，保持本体通用 | 具体投影和限额见第 5 节；索引仅在 SQL 计划证明需要时增加。 |
+| 每项返回 cursorAfter，插件在最后输出项继续 | 核心分页大小可能超过最终字符预算 | 插件不会跳过已取回但未输出的项，不需缓存剩余页。 |
 | 不追踪逐消息操作者 | 自选身份不能证明实际人，创建上下文只用于归属 | 查询报告工作进展，不做审计/考勤；额外消息上下文留下一版。 |
 
 ## 9. 冲突、待裁决与本阶段验证
@@ -254,8 +280,9 @@ fork 的复制历史不是该 fork 新做的工作。现有复制不带统一来
 - 现有 thread-list organizationMode 为封闭 enum，hiddenGroups 只认内建前缀，不能仅添加 UI 选项；preferences schema、存储解析、RPC/CLI 与测试须同步扩展。
 - 当前没有通用创建 collector、初始多 namespace 输出、可加成行标签/分组注册或 activity 查询。已有 NewThreadComposer、metadata 表与 batch read 可以复用，不能把推荐当作现成能力。
 - 原生 mobile 已用 WebView；handoff 不是 fork；CLI origin 也不能证明实际操作者。上述事实覆盖可能来自旧文档或直觉的相反假设。
-- 原任务“避免不必要的迁移”仍成立：创建与成员不需核心表迁移；新活动范围查询推荐添加有直接查询依据的索引。没有 server/daemon wire 改动，因此不需要提升 HOST_DAEMON_PROTOCOL_VERSION；若实现改变 wire，必须另行评估并遵守版本规则。
+- 现有 thread action 已提供 app-wide useData/纯 item，browser-storage 的 tab-scoped setter 会同时写 localStorage；新增列表贡献复用前者范式，身份窗口临时选择不能直接套用后者 setter。现有事件没有全局 ingestion 高水位，因此活动查询明确为实时分页，不承诺全结果快照。
+- 原任务“避免不必要的迁移”仍成立：创建与成员不需核心表迁移；新活动范围查询只增加实际 SQL 计划证明需要的索引。没有 server/daemon wire 改动，因此不需要提升 HOST_DAEMON_PROTOCOL_VERSION；若实现改变 wire，必须另行评估并遵守版本规则。
 
-当前没有阻塞设计交付、需要父线程裁决的问题。第 8 节为推荐实现选择，父线程可核实；如果将“创建网络重试必须恰好一次”“多维同时分组”“真实人工操作者审计”升级为硬需求，需要单独扩大范围，不能把本契约误当已经覆盖。
+本轮按父线程裁决替换了先前的全结果快照、外部 cache 协议和时区/身份约束；未改变第 3 节创建契约，创建实现由独立线程负责。当前没有阻塞设计交付、需要父线程裁决的问题。第 8 节为推荐实现选择，父线程可核实；如果将“创建网络重试必须恰好一次”“多维同时分组”“真实人工操作者审计”升级为硬需求，需要单独扩大范围，不能把本契约误当已经覆盖。
 
 本阶段验证只包括直接阅读上述调用链、路径/符号复核、需求覆盖与一致性复核、`git diff --check`、新增 publish range 的内容/身份隐私检查；没有运行产品测试，也不声称第 7 节已通过。只交付本设计文件；父线程维护工作簿与分支登记。
