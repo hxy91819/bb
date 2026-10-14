@@ -6,7 +6,7 @@
 
 - [x] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表；[收敛设计已交付](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，独立架构审查完成。
 - [ ] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide。← 创建链实现中（thr_57i4x8bbiz）。
-- [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← 成员基础实现中（thr_fxgrd87znj），头像生成中（thr_8etps382jk）。
+- [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [公开仓库已创建](https://github.com/hxy91819/bb-team)，成员基础实现中（thr_fxgrd87znj），头像生成中（thr_8etps382jk）。
 - [ ] 完成两仓库的行为验证、独立审查、提交与 push，交付可安装插件及兼容的 BB 分支。
 
 ## 关键决策
