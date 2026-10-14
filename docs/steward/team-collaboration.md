@@ -8,7 +8,7 @@
 - [ ] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide。← [创建链已推送](https://github.com/hxy91819/bb/commit/7dfd24612172a3a4b574791e85fddec574cc4c32)，补验中（thr_57i4x8bbiz）；列表贡献（thr_e4qmgsma5z）验证中，活动查询（thr_v88waqp8za）实现中。
 - [ ] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [成员与六头像基础已交付](https://github.com/hxy91819/bb-team/commit/ec21d4a7e7c425002a1e6cb740cd49e9c30abfc4)，[首轮 CI 通过](https://github.com/hxy91819/bb-team/actions/runs/38508674144)；等待完整 SDK 集成，唯一实现负责人为 thr_rtinkpqj5w。
 - [ ] 启动独立测试实例，完成两仓库的联合行为验收、独立审查、提交与 push。
-- [ ] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包和校验文件，交付其他环境的安装方式。
+- [ ] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件，交付其他环境的安装方式。
 - [ ] 完成 bb-team 插件打包并发布 GitHub Release，核对固定版本 tag、安装包及兼容 BB 版本，交付其他环境的安装方式。
 
 ## 关键决策
@@ -22,6 +22,7 @@
 - 2026-10-14 管家采用 BB 子线程顺序推进设计、实现与验收；本工作簿留在 fork-tooling，通用扩展从 .fork/branches 的稳定 tag 开发。原因：跨会话接续并保持可向上游提交的独立改动。影响：派发和 Git 交付。
 - 2026-10-14 接续前停止旧 writer、清队列并核对状态，同目录唯一负责人；重型验证共用锁，live run 持锁至进程清理。原因：旧线程被队列唤醒曾重复写入，后台验证进程曾阻塞 scope。影响：后续调度，保留并整合现场；refusal/OOM 仍算失败。
 - 2026-10-14 用户追加 BB 聚合包与插件包的 Release 交付，并要求当前环境由管家推动验收、启动独立测试实例，不使用主 BB 验收。原因：便于在其他环境测试且隔离现有服务。影响：联合验收、两仓库打包发布与安装说明；此授权不包含替换主 BB 服务。
+- 2026-10-14 管家采纳同一聚合 SHA 构建的完整 SDK tarball 作为 BB Release 通用资产，插件固定资产 URL 与 lockfile integrity，候选验收先使用该产物。原因：新增接口尚未发布到上游 npm，同版本号不能证明具备 fork 能力。影响：发布 workflow、开发与 CI 可复现性、插件兼容说明；不发布上游 npm 包。
 
 ## 用户待办
 
