@@ -12,9 +12,9 @@
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
 - [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
-- [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 通过 17 项检查，20 个普通头像与 Admin 已完成；插件等待含列表 v2 和 overlay 修复的同 SHA 候选接入与联合验收。
-- [ ] 重新聚合并交付同 SHA 的 BB/SDK 候选包。← 安装测试 fixture 隔离已修复，53 项及相关 182 项检查通过；thr_kmvugsk2ci 接续完整流水线与冷消费。
-- [ ] 用匹配的新 BB/SDK 完成联合验收与更新 Release。← 候选交付后接入插件，验收新版 UI、旧数据升级与活动查询，再更新两仓库 Release；旧资产保留，生产服务不改。
+- [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 与 20 个普通头像加 Admin 已本地完成；thr_pbj6j2khqk 接入正式 BB/SDK .2，收尾列表 v2、旧数据升级与独立联合验收。
+- [x] 取得包含新版 SDK 与挂载修复的正式 BB 供应。← [fork-v0.46.0-20261014.2](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.2)已公开，六个发布 jobs 成功；父核对 source 955e181051 包含全部所需修复与十一件资产元数据，插件消费时实际校验包。
+- [ ] 完成新版插件验收与 v0.2.0 Release。← 正式 URL/integrity、冷安装、双窗口与升级、Chromium/WebKit、CI、完整归档及公开回读仍待交付；旧资产保留，验收使用独立实例。
 
 ## 关键决策
 
