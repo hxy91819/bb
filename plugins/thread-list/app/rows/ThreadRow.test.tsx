@@ -1100,21 +1100,49 @@ describe("ThreadRow", () => {
         titleContainer?.classList.contains(
           "pr-(--bb-sidebar-hover-actions-inset)",
         ),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         titleContainer?.style.getPropertyValue(
           "--bb-sidebar-hover-actions-inset",
         ),
-      ).toBe("calc(var(--spacing) * 7.5)");
+      ).toBe("calc(var(--spacing) * 0)");
       expect(
         titleContainer?.classList.contains("[@media(hover:none)]:pr-0"),
-      ).toBe(true);
+      ).toBe(false);
       expect(navigationTarget?.classList.contains("flex-1")).toBe(true);
       expect(titleWrapper?.classList.contains("flex-1")).toBe(false);
+      expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
       fireEvent.click(toggle);
       expect(onToggleCollapsed).toHaveBeenCalledWith("thr_test");
     },
   );
+
+  it("keeps other quick actions on parents and archive on ordinary rows", () => {
+    getDefaultStore().set(preferenceValueAtom("rowActions"), [
+      "bb--core/pin",
+      "bb--core/copyLink",
+      "bb--core/archive",
+    ]);
+    renderThreadRow({
+      options: {
+        kind: "parent",
+        depth: 1,
+        isCompact: false,
+        isCollapsed: true,
+        childCount: 1,
+        childActivity: NO_COLLAPSED_CHILD_ACTIVITY,
+        onToggleCollapsed: vi.fn(),
+      },
+    });
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Pin" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy thread link" }),
+    ).toBeTruthy();
+    cleanup();
+    renderThreadRow();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeTruthy();
+  });
 
   it("routes a tap on the bare row through its navigation link", () => {
     renderThreadRow();
