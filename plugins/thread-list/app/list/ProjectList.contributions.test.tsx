@@ -42,7 +42,12 @@ afterEach(() => {
 
 const threads = [
   makeSidebarThread({ id: "root-a", title: "Alpha" }),
-  makeSidebarThread({ id: "child", title: "Nested", parentThreadId: "root-a" }),
+  makeSidebarThread({
+    id: "child",
+    title: "Nested",
+    parentThreadId: "root-a",
+    projectId: "child-project",
+  }),
   makeSidebarThread({ id: "root-b", title: "Beta" }),
 ];
 
@@ -61,6 +66,159 @@ function Harness({
 }
 
 describe("public thread-list contributions", () => {
+  it("renders avatar-only leading additions before provider and title, omits them for grouped rows and keeps native projects", async () => {
+    let mounts = 0;
+    const adapter = await loadPluginApp(
+      definePluginApp((app) => {
+        if (app.experimental_threadListContributionVersion < 2)
+          throw new Error("Missing list support");
+        app.slots.experimental_threadListGrouping({
+          id: "people",
+          title: "People",
+          projection: () => ({
+            status: "ready",
+            group: { key: "person", label: "Person" },
+          }),
+        });
+        app.slots.experimental_threadRowDecoration({
+          id: "person",
+          title: "Person",
+          useData() {
+            useEffect(() => {
+              mounts++;
+              return () => {
+                mounts--;
+              };
+            }, []);
+          },
+          item: ({ groupingKey }) =>
+            groupingKey === "fixture/people"
+              ? null
+              : {
+                  accessibleLabel: "Alex",
+                  avatar: { src: "/avatar.svg", alt: "Alex" },
+                  placement: "leading",
+                },
+        });
+      }),
+    );
+    const grouped = createStore();
+    grouped.set(preferencesReadyAtom(), true);
+    grouped.set(sidebarOrganizationModeAtom, "fixture/people");
+    const builtin = createStore();
+    builtin.set(preferencesReadyAtom(), true);
+    builtin.set(sidebarOrganizationModeAtom, "project");
+    const fixtureThreads = [
+      threads[0],
+      threads[1],
+      makeSidebarThread({
+        id: "pin",
+        title: "Pinned title",
+        pinnedAt: 1,
+        projectId: "pin-project",
+      }),
+    ];
+    const slot = renderSlot(
+      {
+        component: () => (
+          <>
+            <Harness store={grouped}>
+              <ProjectList activeThreadId={null} />
+            </Harness>
+            <Harness store={builtin}>
+              <ProjectList activeThreadId={null} />
+            </Harness>
+          </>
+        ),
+      },
+      {},
+      {
+        experimental_threadListPlugins: [
+          { pluginId: "fixture", registrations: adapter },
+        ],
+        providers: {
+          providers: [
+            {
+              id: "provider-test",
+              pluginId: "provider-test",
+              displayName: "Test Provider",
+              composerActions: [],
+              completedTurnDisplay: "collapse",
+              logoUrl: "/provider.svg",
+              available: true,
+              maintenance: { health: false, usage: false, installation: false },
+              capabilities: {
+                supportsThreadArchive: true,
+                supportsThreadRename: true,
+                supportsServiceTier: false,
+                supportsNativeUserQuestion: false,
+                supportsFork: true,
+                supportsSessionRewind: false,
+                modelCatalogScope: "workspace",
+                permissionModes: ["full"],
+              },
+            },
+          ],
+        },
+        sidebarThreads: {
+          threads: fixtureThreads,
+          projects: [
+            makePluginProject(),
+            makePluginProject({ id: "child-project", name: "Child project" }),
+            makePluginProject({ id: "pin-project", name: "Pin project" }),
+          ],
+          sections: [],
+        },
+      },
+    );
+    await screen.findByText("Person");
+    await waitFor(() =>
+      expect(screen.getAllByRole("img", { name: "Alex" })).toHaveLength(3),
+    );
+    expect(mounts).toBe(1);
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      fireEvent.click(
+        screen.getAllByRole("img", { name: "Alex" })[0],
+        modifier,
+      );
+    }
+    expect(slot.inspection.navigateCalls).toHaveLength(2);
+    expect(
+      slot.inspection.navigateCalls.every(
+        (call) => call.method === "toThread" && call.options?.split === true,
+      ),
+    ).toBe(true);
+    expect(
+      screen.getByRole("img", { name: "In project Pin project" }),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByRole("img", { name: "In project Child project" }),
+    ).toHaveLength(2);
+    for (const avatar of screen.getAllByRole("img", { name: "Alex" })) {
+      expect(avatar.textContent).toBe("");
+      expect(avatar.getAttribute("title")).toBe("Alex");
+      expect(avatar.getAttribute("tabindex")).toBe("-1");
+      const title = avatar
+        .closest("[data-sidebar-rename-row]")
+        ?.querySelector(".bb-thread-title");
+      expect(title).toBeTruthy();
+      const provider = avatar
+        .closest("[data-sidebar-rename-row]")
+        ?.querySelector("[data-sidebar-thread-provider]");
+      expect(provider).toBeTruthy();
+      expect(
+        avatar.compareDocumentPosition(provider!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        avatar.compareDocumentPosition(title!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    slot.lifecycle.unmount();
+    expect(mounts).toBe(0);
+  });
+
   it("merges root and visible demands once per owner, keeps entire trees and recovers saved selection after reload", async () => {
     let groupMounts = 0;
     let rowMounts = 0;
@@ -69,6 +227,7 @@ describe("public thread-list contributions", () => {
     let label = "Alpha group";
     let throws = false;
     let hookThrows = false;
+    const keys = new Map<string, string | null>();
     const adapter = await loadPluginApp(
       definePluginApp((app) => {
         app.slots.experimental_threadListGrouping({
@@ -113,7 +272,8 @@ describe("public thread-list contributions", () => {
             rowIds = threadIds;
             return owner;
           },
-          item({ thread, data }) {
+          item({ thread, data, groupingKey }) {
+            keys.set(thread.id, groupingKey);
             return {
               text: thread.id,
               accessibleLabel: `${data}: ${thread.displayTitle}`,
@@ -144,7 +304,10 @@ describe("public thread-list contributions", () => {
         experimental_threadListPlugins: plugins,
         sidebarThreads: {
           threads,
-          projects: [makePluginProject()],
+          projects: [
+            makePluginProject(),
+            makePluginProject({ id: "child-project", name: "Child project" }),
+          ],
           sections: [],
         },
       },
@@ -160,6 +323,10 @@ describe("public thread-list contributions", () => {
       expect(rowMounts).toBe(1);
     });
     expect(screen.getByRole("img", { name: "adapter: Nested" })).toBeTruthy();
+    expect(keys.get("child")).toBe("adapter/roots");
+    expect(
+      screen.getByRole("img", { name: "In project Child project" }),
+    ).toBeTruthy();
     const collapsedKey = buildContributionGroupKey(
       "adapter/roots",
       "group",
@@ -181,10 +348,12 @@ describe("public thread-list contributions", () => {
     slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
     await screen.findByText("Alpha");
     expect(screen.queryByText("Renamed group")).toBeNull();
+    expect(keys.get("root-a")).toBeNull();
     expect(store.get(sidebarOrganizationModeAtom)).toBe("adapter/roots");
     throws = false;
     slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
     await screen.findByText("Renamed group");
+    expect(keys.get("root-b")).toBe("adapter/roots");
     hookThrows = true;
     slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
     await screen.findByText("Alpha");
@@ -275,6 +444,35 @@ describe("public thread-list contributions", () => {
             throw new Error("broken item");
           },
         });
+        for (const [id, decoration] of [
+          ["empty", { accessibleLabel: "Empty" }],
+          [
+            "blank",
+            {
+              text: " ",
+              accessibleLabel: "Blank",
+              avatar: { src: "/avatar.svg", alt: "Avatar" },
+            },
+          ],
+          ["invisible", { text: "\u200b", accessibleLabel: "Invisible" }],
+          ["combining", { text: "\u034f", accessibleLabel: "Combining" }],
+          ["variation", { text: "\ufe0f", accessibleLabel: "Variation" }],
+          [
+            "placement",
+            {
+              text: "Placement",
+              accessibleLabel: "Placement",
+              placement: "middle",
+            },
+          ],
+        ] as const) {
+          app.slots.experimental_threadRowDecoration({
+            id,
+            title: id,
+            // @ts-expect-error Invalid external placement exercises the runtime boundary.
+            item: () => decoration,
+          });
+        }
         app.slots.experimental_threadRowDecoration({
           id: "remote",
           title: "Remote",

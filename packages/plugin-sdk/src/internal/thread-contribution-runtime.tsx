@@ -17,6 +17,7 @@ import type {
   experimental_ThreadListContributionsInput,
   experimental_ThreadListGroupingRegistration,
   experimental_ThreadRowDecorationEntry,
+  experimental_ThreadRowDecorationOptions,
   experimental_ThreadRowDecorationRegistration,
 } from "../app-contract.js";
 
@@ -295,7 +296,8 @@ function useRuntime(): ContributionRuntime {
 function boundedText(value: string, limit: number): boolean {
   return (
     typeof value === "string" &&
-    value.trim().length > 0 &&
+    value.replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, "").trim()
+      .length > 0 &&
     [...value].length <= limit
   );
 }
@@ -360,7 +362,11 @@ export function useThreadListContributions(
         ? (thread) => {
             if (!value) return { status: "loading" };
             try {
-              const result = record.projection({ thread, data: value.data });
+              const result = record.projection({
+                thread,
+                data: value.data,
+                groupingKey: registrationKey(record),
+              });
               if (result.status === "loading" || result.status === "error")
                 return result;
               if (
@@ -390,6 +396,7 @@ export function useThreadListContributions(
 /** @internal Shared app host lifecycle; not a plugin metadata cache contract. */
 export function useThreadRowDecorations(
   thread: PluginSidebarThread,
+  options?: experimental_ThreadRowDecorationOptions,
 ): readonly experimental_ThreadRowDecorationEntry[] {
   const runtime = useRuntime();
   const collected = useSyncExternalStore(
@@ -406,15 +413,32 @@ export function useThreadRowDecorations(
       const value = collected.get(`row/${instanceKey(record)}`);
       if (!value || value.failed) return [];
       try {
-        const decoration = record.item({ thread, data: value.data });
+        const decoration = record.item({
+          thread,
+          data: value.data,
+          groupingKey: options?.groupingKey ?? null,
+        });
         if (decoration === null) return [];
         if (
-          !boundedText(decoration.text, 80) ||
+          (decoration.text != null && !boundedText(decoration.text, 80)) ||
+          (decoration.text == null && decoration.avatar == null) ||
+          (decoration.placement !== undefined &&
+            decoration.placement !== "leading" &&
+            decoration.placement !== "trailing") ||
           !boundedText(decoration.accessibleLabel, 160) ||
           !validAvatar(decoration.avatar)
         )
           throw new Error("Invalid row decoration");
-        return [{ key: registrationKey(record), decoration }];
+        return [
+          {
+            key: registrationKey(record),
+            decoration: {
+              ...decoration,
+              text: decoration.text ?? null,
+              placement: decoration.placement ?? "trailing",
+            },
+          },
+        ];
       } catch (error) {
         console.error(
           `thread row contribution "${registrationKey(record)}" failed in item`,

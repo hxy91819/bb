@@ -96,19 +96,21 @@ describe("published runtime entries", () => {
         const app = await import(process.argv[1]);
         const testing = await import(process.argv[2]);
         testing.installTestPluginRuntime();
+        let version;
         const registrations = await testing.loadPluginApp(app.definePluginApp((host) => {
+          version = host.experimental_threadListContributionVersion;
           host.slots.experimental_threadListGrouping({ id: "groups", title: "Groups",
             useData: () => app.experimental_usePluginId(),
             projection: ({ data }) => ({ status: "ready", group: { key: data, label: data } }) });
           host.slots.experimental_threadRowDecoration({ id: "label", title: "Label",
             useData: () => app.experimental_usePluginId(),
-            item: ({ data }) => ({ text: data, accessibleLabel: data }) });
+            item: ({ data, groupingKey }) => ({ avatar: {src: "/avatar.svg", alt: data}, placement: "leading", accessibleLabel: data + ":" + groupingKey }) });
         }));
         function Probe() {
           const groups = app.experimental_useThreadListContributions({ rootThreadIds: ["root"], groupingKey: "fixture/groups" });
-          const row = app.experimental_useThreadRowDecorations({ id: "root" });
+          const row = app.experimental_useThreadRowDecorations({ id: "root" }, { groupingKey: "fixture/groups" });
           const group = groups.grouping?.({ id: "root" });
-          return React.createElement("output", null, group?.status === "ready" ? group.group?.label + "/" + row[0]?.decoration.text : "loading");
+          return React.createElement("output", null, group?.status === "ready" ? group.group?.label + "/" + row[0]?.decoration.accessibleLabel + "/" + row[0]?.decoration.placement + "/" + row[0]?.decoration.text + "/" + version : "loading");
         }
         const slot = testing.renderSlot({ component: Probe }, {}, { experimental_threadListPlugins: [{ pluginId: "fixture", registrations }] });
         await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 180)); });
@@ -119,6 +121,6 @@ describe("published runtime entries", () => {
       pathToFileURL(outputs.get("./app")).href,
       pathToFileURL(outputs.get("./testing/app")).href,
     ]);
-    expect(stdout.trim()).toBe("fixture/fixture");
+    expect(stdout.trim()).toBe("fixture/fixture:fixture/groups/leading/null/2");
   });
 });

@@ -1563,12 +1563,12 @@ batches. Confirm the platform coverage (Linux
 `/proc`, macOS `lsof`) and whether the grace should be per call.
 
 0b. **Process identity.** `experimental_readProcessIdentity(pid)` from
-   `@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
-   CIM on Windows) or null. bb's launcher uses the same probe to confirm a
-   recorded PID before stopping it. Storage & retention checks a development
-   instance's recorded launcher entry path and start time before signalling
-   it, so a reused PID is never killed. Confirm start-time precision per
-   platform and whether a combined verified-stop helper should replace it.
+`@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
+CIM on Windows) or null. bb's launcher uses the same probe to confirm a
+recorded PID before stopping it. Storage & retention checks a development
+instance's recorded launcher entry path and start time before signalling
+it, so a reused PID is never killed. Confirm start-time precision per
+platform and whether a combined verified-stop helper should replace it.
 
 0. **Call timeout.** `ExperimentalHostCallOptions.timeoutMs` (default 30s,
    capped at 30 minutes) lets a plugin run a long host call — a setup
@@ -4002,11 +4002,20 @@ without list layout, atoms, drag models or external-store protocols.
 `experimental_useThreadListContributions({ rootThreadIds, groupingKey, visible? })`
 discovers providers and reads the selected projection. Provider keys are
 `<pluginId>/<registrationId>`. Visible consumers merge all candidate roots
-before folding/windowing. `experimental_useThreadRowDecorations(thread)` merges
+before folding/windowing. `experimental_useThreadRowDecorations(thread, { groupingKey })` merges
 visible row demand and returns additions sorted by full registration key. Each
 registration has one app-wide collector; plugins own metadata batching/cache and
 realtime cleanup. Descriptions enforce text/accessible label bounds and same-origin
-avatars. Loading differs from ungrouped; errors preserve usable rows.
+avatars. Version 2 allows omitted/null text only with a visible avatar, normalizes
+placement to leading or trailing (default), and passes the actual canonical
+groupingKey to pure item callbacks (null for built-in or fallback modes). Custom
+list consumers pass their effective key through experimental_ThreadRowDecorationOptions.
+PluginAppBuilder.experimental_threadListContributionVersion is 2 in supported hosts;
+check app.experimental_threadListContributionVersion >= 2 during setup. Missing or 1
+means the old contract; do not infer host support from the SDK package version. The bundled list shares its effective mode through
+one row context and displays native project badges in contributed groups,
+including children and pinned rows, using the existing project-name cache.
+Loading differs from ungrouped; errors preserve usable rows.
 
 The core app owns the runtime through `ThreadListContributions`; the bundled
 thread-list consumes it in `ProjectList`, `SidebarViewItems`, `useSidebarThreadReveal`
