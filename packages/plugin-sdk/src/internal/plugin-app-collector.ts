@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { experimental_validatePluginContext, type JsonValue } from "@bb/domain";
 import type {
   ComposerCustomization,
   ExperimentalAppOverlayRegistration,
@@ -458,12 +459,99 @@ function collectPanelAction<C, Run>(
   };
 }
 
-/**
- * Run a plugin app definition against the canonical validating collector.
- * Both the BB app and the public test harness use this implementation so a
- * registration accepted by one cannot be rejected or normalized differently
- * by the other.
- */
+const threadCreationCaptures = new WeakMap<
+  object,
+  { capture: (() => JsonValue | undefined) | null }
+>();
+const contextSnapshots = new WeakMap<object, Record<string, JsonValue>>();
+
+function freezeContext<T extends JsonValue>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    for (const child of Object.values(value)) freezeContext(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function snapshotContext(value: unknown): Record<string, JsonValue> {
+  const existing =
+    value !== null && typeof value === "object"
+      ? contextSnapshots.get(value)
+      : undefined;
+  if (existing !== undefined) return existing;
+  const snapshot = freezeContext(experimental_validatePluginContext(value));
+  contextSnapshots.set(snapshot, snapshot);
+  return snapshot;
+}
+
+export class ThreadCreationContextRegistry {
+  private readonly registrations = new Map<string, object>();
+
+  set(pluginId: string, registrations: object): void {
+    this.registrations.set(pluginId, registrations);
+  }
+
+  remove(pluginId: string, expected?: object): void {
+    if (expected === undefined || this.registrations.get(pluginId) === expected)
+      this.registrations.delete(pluginId);
+  }
+
+  clear(): void {
+    this.registrations.clear();
+  }
+
+  capture(): Record<string, JsonValue> {
+    const snapshot = [...this.registrations.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([pluginId, registrations]) => ({
+        pluginId,
+        registrations,
+        capture: threadCreationCaptures.get(registrations)?.capture,
+      }));
+    const values: Record<string, JsonValue> = {};
+    for (const { pluginId, registrations, capture } of snapshot) {
+      const value = capture?.();
+      if (value !== undefined) {
+        const cloned = experimental_validatePluginContext({
+          [pluginId]: value,
+        });
+        Object.assign(values, cloned);
+      }
+      if (
+        this.registrations.get(pluginId) !== registrations ||
+        threadCreationCaptures.get(registrations)?.capture !== capture
+      ) {
+        throw new Error("plugin_context_changed");
+      }
+    }
+    if (
+      snapshot.length !== this.registrations.size ||
+      snapshot.some(
+        ({ pluginId, registrations, capture }) =>
+          this.registrations.get(pluginId) !== registrations ||
+          threadCreationCaptures.get(registrations)?.capture !== capture,
+      )
+    ) {
+      throw new Error("plugin_context_changed");
+    }
+    return snapshotContext(values);
+  }
+
+  prepare<T extends object>(
+    request: T,
+  ): T & { experimental_pluginContext: Record<string, JsonValue> } {
+    const explicit =
+      "experimental_pluginContext" in request
+        ? request.experimental_pluginContext
+        : undefined;
+    return {
+      ...request,
+      experimental_pluginContext:
+        explicit === undefined ? this.capture() : snapshotContext(explicit),
+    };
+  }
+}
+
 export function collectPluginAppRegistrations(
   definition: PluginAppDefinition,
   onComposerCustomizationRejected: (reason: string) => void = (reason) =>
@@ -500,6 +588,10 @@ export function collectPluginAppRegistrations(
     contentScripts: [],
   };
   sidebarFooterItemsByRegistrationSet.set(collected, sidebarFooterItems);
+  const threadCreationCapture: {
+    capture: (() => JsonValue | undefined) | null;
+  } = { capture: null };
+  threadCreationCaptures.set(collected, threadCreationCapture);
   const seenIds = {
     homepageSection: new Set<string>(),
     settingsSection: new Set<string>(),
@@ -1004,6 +1096,24 @@ export function collectPluginAppRegistrations(
           machineProviderId,
           component: requireComponent(kind, registration.component),
         });
+      },
+    },
+    experimental_threadCreationContext: {
+      register(registration) {
+        if (threadCreationCapture.capture !== null)
+          throw new Error(
+            "experimental_threadCreationContext.register: duplicate registration",
+          );
+        if (typeof registration?.capture !== "function")
+          throw new Error(
+            "experimental_threadCreationContext.register: capture must be a function",
+          );
+        const capture = registration.capture;
+        threadCreationCapture.capture = capture;
+        return () => {
+          if (threadCreationCapture.capture === capture)
+            threadCreationCapture.capture = null;
+        };
       },
     },
     experimental_sidebarFooter: new SidebarFooterCollector(

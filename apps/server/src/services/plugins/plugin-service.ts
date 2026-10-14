@@ -1416,6 +1416,11 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
 
     hooks: {
       listHooks: listPluginHooks,
+      listThreadCreationContexts: () =>
+        [...loaded.values()].flatMap((plugin) => {
+          const record = plugin.handle.threadCreationContext;
+          return record === null || record.signal.aborted ? [] : [record];
+        }),
       invokeHook: invokeIsolated,
       decisionTimeoutMs: DEFAULT_PLUGIN_HOOK_TIMEOUT_MS,
     },

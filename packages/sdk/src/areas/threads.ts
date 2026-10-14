@@ -12,6 +12,7 @@ import {
   type ThreadQueuedMessage,
   type ThreadStatus,
   validatePluginMetadata,
+  experimental_validatePluginContext,
 } from "@bb/domain";
 import {
   DEFAULT_TURN_RETRY_REASON,
@@ -222,8 +223,7 @@ export type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 export type ThreadStorageLocationResult = ThreadStorageLocationResponse;
 export type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
-export type ThreadDefaultExecutionOptionsResult =
-  ResolvedThreadExecutionOptions | null;
+export type ThreadDefaultExecutionOptionsResult = ResolvedThreadExecutionOptions | null;
 export type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
 export type ThreadTimelineTurnSummaryDetailsResult =
   TimelineTurnSummaryDetailsResponse;
@@ -817,6 +817,13 @@ function spawnJson(args: ThreadSpawnArgs): CreateThreadRequest {
   } = args;
   return {
     ...request,
+    ...(args.experimental_pluginContext === undefined
+      ? {}
+      : {
+          experimental_pluginContext: experimental_validatePluginContext(
+            args.experimental_pluginContext,
+          ),
+        }),
     ...(args.pluginMetadata === undefined
       ? {}
       : { pluginMetadata: validatePluginMetadata(args.pluginMetadata) }),
@@ -830,6 +837,13 @@ function spawnJson(args: ThreadSpawnArgs): CreateThreadRequest {
 function forkJson(args: ThreadForkArgs): ForkThreadRequest {
   return {
     ...args,
+    ...(args.experimental_pluginContext === undefined
+      ? {}
+      : {
+          experimental_pluginContext: experimental_validatePluginContext(
+            args.experimental_pluginContext,
+          ),
+        }),
     ...(args.pluginMetadata === undefined
       ? {}
       : { pluginMetadata: validatePluginMetadata(args.pluginMetadata) }),

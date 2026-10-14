@@ -88,6 +88,9 @@ export async function createThreadForkFromRequest(
       ...(request.pluginMetadata === undefined
         ? {}
         : { pluginMetadata: request.pluginMetadata }),
+      ...(request.experimental_pluginContext === undefined
+        ? {}
+        : { experimental_pluginContext: request.experimental_pluginContext }),
       originKind: "fork",
       permissionMode:
         request.permissionMode ??
