@@ -170,7 +170,7 @@ This index lists every command path that the core CLI registers, including alias
 - `bb thread read`
 - `bb thread unread`
 - `bb thread reorder-pinned`
-- `bb thread experimental-activity --plugin <id> --key <key> --equals <JSON-scalar> --from <UTC-ms> --to <UTC-ms> [--thread <id>] [--project <id>] [--limit <n>] [--cursor <C>] [--json]`
+- `bb thread experimental-activity`
 - `bb thread count`
 - `bb thread queue`
 - `bb thread queue list`
