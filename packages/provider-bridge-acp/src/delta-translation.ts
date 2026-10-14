@@ -826,6 +826,7 @@ export function createAcpDeltaTranslator(
   function translateTurnCompleted(
     stopReason: AcpStopReason,
     context: AcpDeltaTranslationContext | undefined,
+    providerCheckpointId?: string,
   ): ThreadDelta[] {
     const status = turnStatusForStopReason(stopReason);
     return [
@@ -833,6 +834,9 @@ export function createAcpDeltaTranslator(
       {
         kind: "turn.boundary",
         status,
+        ...(status === "completed" && providerCheckpointId
+          ? { providerCheckpointId }
+          : {}),
         ...(status === "failed"
           ? { error: { message: `Agent stopped the turn: ${stopReason}` } }
           : {}),
@@ -882,7 +886,11 @@ export function createAcpDeltaTranslator(
         if (!params.success) {
           return [];
         }
-        return translateTurnCompleted(params.data.stopReason, context);
+        return translateTurnCompleted(
+          params.data.stopReason,
+          context,
+          params.data.providerCheckpointId,
+        );
       }
 
       case ACP_COMPACTION_STARTED_METHOD: {
