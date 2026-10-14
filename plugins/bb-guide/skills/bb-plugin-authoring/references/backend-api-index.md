@@ -28,6 +28,10 @@ Read the installed declarations for exact current signatures.
 - `DiffViewMode`
 - `ExperimentalAppPanel`
 - `ExperimentalAppPanelSurface`
+- `ExperimentalActivityEvidence`
+- `ExperimentalThreadActivityArgs`
+- `ExperimentalThreadActivityResult`
+- `ExperimentalPluginThreadActivityArgs`
 - `ExperimentalDesktopBrowserAcquireInput`
 - `ExperimentalDesktopBrowserCreateInput`
 - `ExperimentalDesktopBrowserLease`
@@ -437,3 +441,6 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalCreateHostEntryHarnessOptions`
 - `ExperimentalHostEntryHarness`
 - `ExperimentalHostHarnessSignal`
+
+Activity API reference: the Plugin Guide's Thread plugin metadata card describes
+`PluginBbSdk.threads.experimental_activity`.

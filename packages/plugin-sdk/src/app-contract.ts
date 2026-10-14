@@ -1,3 +1,5 @@
+import type { ExperimentalPluginThreadActivityArgs } from "./backend-contract.js";
+import type { ExperimentalThreadActivityResult } from "@bb/sdk";
 import type {
   ComponentPropsWithRef,
   ComponentPropsWithoutRef,
@@ -159,11 +161,10 @@ export interface ExperimentalQuestionFormHost {
  * the host adds room for its microphone controls when voice input is
  * available.
  */
-export interface ExperimentalVoiceInputTextareaProps
-  extends Omit<
-    ComponentPropsWithRef<"textarea">,
-    "value" | "defaultValue" | "onChange" | "children"
-  > {
+export interface ExperimentalVoiceInputTextareaProps extends Omit<
+  ComponentPropsWithRef<"textarea">,
+  "value" | "defaultValue" | "onChange" | "children"
+> {
   value: string;
   /**
    * Receives typed edits and finished transcripts, which the host appends to
@@ -1189,8 +1190,14 @@ export interface ExperimentalClipboardContent {
  */
 export type PluginBoundThreadsArea = Omit<
   BbSdkAreas["threads"],
-  "getPluginMetadata" | "updatePluginMetadata" | "experimental_listPluginMetadata"
+  | "getPluginMetadata"
+  | "updatePluginMetadata"
+  | "experimental_listPluginMetadata"
+  | "experimental_activity"
 > & {
+  experimental_activity(
+    args: ExperimentalPluginThreadActivityArgs,
+  ): Promise<ExperimentalThreadActivityResult>;
   getPluginMetadata(
     args: Omit<ThreadPluginMetadataArgs, "pluginId"> & { pluginId?: string },
   ): Promise<ThreadPluginMetadataResult>;

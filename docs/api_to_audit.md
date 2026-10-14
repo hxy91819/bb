@@ -1563,12 +1563,12 @@ batches. Confirm the platform coverage (Linux
 `/proc`, macOS `lsof`) and whether the grace should be per call.
 
 0b. **Process identity.** `experimental_readProcessIdentity(pid)` from
-   `@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
-   CIM on Windows) or null. bb's launcher uses the same probe to confirm a
-   recorded PID before stopping it. Storage & retention checks a development
-   instance's recorded launcher entry path and start time before signalling
-   it, so a reused PID is never killed. Confirm start-time precision per
-   platform and whether a combined verified-stop helper should replace it.
+`@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
+CIM on Windows) or null. bb's launcher uses the same probe to confirm a
+recorded PID before stopping it. Storage & retention checks a development
+instance's recorded launcher entry path and start time before signalling
+it, so a reused PID is never killed. Confirm start-time precision per
+platform and whether a combined verified-stop helper should replace it.
 
 0. **Call timeout.** `ExperimentalHostCallOptions.timeoutMs` (default 30s,
    capped at 30 minutes) lets a plugin run a long host call — a setup
@@ -3988,3 +3988,16 @@ Stabilization requires exercising reconnect/reload, concurrent deduplication, ro
 `hosts.experimental_discoverRepos({ hostId })` asks the machine for git repositories under the user's home directory with local activity in the last 30 days, newest first, capped at 10. Each entry has `path`, `name`, `lastActivityAt`, `originUrl`, and `projectId` (the bb project already bound to that path on that machine, or null). `truncated` is true when the three-second walk budget ran out. The walk stops at each repository root, skips dot-directories, common build directories, scratch directories (`tmp`, `temp`, `tmp-*`, `Downloads`), linked worktrees, and submodules. The first-run setup guide and `bb project discover` use it. Host-daemon wire change: the `host.discover_repos` command (protocol 230).
 
 Stabilize after deciding whether depth, recency window, and limit should be caller options, and after exercising slow or network-mounted home directories and Windows hosts.
+
+## Thread activity evidence
+
+`PluginBbSdk.threads.experimental_activity`, `ExperimentalPluginThreadActivityArgs`,
+`ExperimentalThreadActivityArgs`, `ExperimentalThreadActivityResult` and
+`ExperimentalActivityEvidence` expose bounded retained event facts through the
+public `POST /threads/experimental-activity` route. Core `bb thread
+experimental-activity` and the SDK use this same route and query service; the plugin
+binding only supplies its default metadata namespace. Stabilization requires
+scalar/type and public access filtering, binary/sequence keyset continuation,
+wire budgets, real fork startup boundary tests, retained/live coverage, and
+independent consumers exercising per-item cursors. The Plugin Guide's thread
+plugin metadata card owns the API reference. No daemon protocol change.

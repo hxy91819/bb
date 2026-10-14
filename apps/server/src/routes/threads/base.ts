@@ -1,3 +1,4 @@
+import { queryThreadActivity } from "../../services/threads/thread-activity.js";
 import { countUnarchivedThreadDescendants } from "../../services/threads/thread-archive.js";
 import { cancelAbandonedProviderCreations } from "../../services/threads/thread-environment-providers.js";
 import {
@@ -224,6 +225,10 @@ export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
   });
   const routes = publicApiRoutes.threads;
+
+  post(routes.experimental_activity, (context, payload) =>
+    context.json(queryThreadActivity(deps.db, payload)),
+  );
 
   get(routes.count, (context, query) => {
     if (query.projectId) {

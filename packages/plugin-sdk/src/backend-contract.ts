@@ -24,6 +24,8 @@ import type {
 import type { ProviderFork } from "@bb/domain/provider-fork";
 import type {
   BbSdk,
+  ExperimentalThreadActivityArgs,
+  ExperimentalThreadActivityResult,
   PluginThreadMetadataListArgs,
   PluginThreadMetadataListResult,
   ThreadPluginMetadataArgs,
@@ -2036,6 +2038,78 @@ export interface PluginStatusApi {
 }
 
 /**
+ * Query retained activity through `sdk.threads.experimental_activity`.
+ * The metadata namespace defaults to this plugin's id; an explicit pluginId
+ * selects another namespace. Metadata uses one exact top-level key (1–128
+ * characters) and a JSON scalar (strings at most 256); null differs from a
+ * missing key and booleans differ from numbers. No JSONPath is accepted.
+ * pluginId and projectId cap at 128 characters. UTC millisecond from/to are
+ * safe nonnegative integers with from < to. Details additionally require a
+ * threadId (at most 128) and enforce the same ownership and date intersection.
+ *
+ * Summary returns threadId/projectId, a title of at most 200 Unicode
+ * characters, lastActivityAt, acceptedInputs/completedTurns, counts by observed
+ * type/status, and at most three recentEvidence locators. Details return
+ * eventId/threadId/sequence/createdAt, type/status/outcome and excerpts of at
+ * most 512 Unicode characters, with excerptTruncated. commandName caps at
+ * 128 and the first changed filePath at 256. Agent replies are statements;
+ * only integer command exit codes produce exit-zero/exit-nonzero outcomes.
+ * Other outcomes are unknown. Reasoning, deltas, full command arguments,
+ * full tool results and diff are omitted.
+ *
+ * Pages default to 20, cap at 100 and 256 KiB complete compact JSON UTF-8,
+ * including the envelope. budget.encoding is compact-json-utf8. Every item
+ * has cursorAfter; nextCursor marks the last returned item when hasMore.
+ * Wire truncation stops at a complete item and marks truncated/hasMore.
+ * Downstream budgets must measure their actual serialization, including
+ * pretty JSON or text whitespace, and continue at their last emitted
+ * cursorAfter rather than a fetched page's unused tail.
+ *
+ * Summary fixes asOf and orders threadId ASC with binary comparison, retaining
+ * threads.createdAt < asOf and events in [from,min(to,asOf)). Details fixes
+ * throughSequence and orders sequence ASC. Cursors cap at 2048 characters,
+ * are versioned and bound to mode, namespace/key/value, project/thread,
+ * date range and public access scope; limit may change. Invalid cursors and
+ * cursor_query_mismatch reject explicitly. Same-version restarts need no
+ * cache or TTL. Each page rechecks current public standard projects, metadata
+ * and deletion, includes archived/hidden threads and recomputes current
+ * totalThreads/totalEvidence. asOf does not freeze the database: backfills,
+ * ownership changes, deletion and rewritten/reused sequences can change or
+ * skip evidence. coverage.source is retained-events and pagination is
+ * live-pagination; undetected lost history is never claimed complete.
+ *
+ * Forks exclude copied history through the first retained local
+ * thread/identity. Missing identities exclude all fork evidence. Prefix
+ * sequence gaps retain confirmed suffix evidence but mark incomplete.
+ * coverage.forkBoundaryGaps reports count, missingIdentityCount,
+ * uncertainPrefixCount and at most ten thread/project/reason samples,
+ * including forks with no summary row. An earlier local boundary may have
+ * been lost, so earlier local activity can be omitted.
+ *
+ * Core CLI: bb thread experimental-activity --plugin ID --key KEY --equals
+ * JSON --from MS --to MS [--project ID] [--thread ID] [--limit N] [--cursor C].
+ * A build containing this experimental API is required; unmodified
+ * desktop-v0.46.0 does not provide it.
+ */
+export type ExperimentalPluginThreadActivityArgs =
+  | (Omit<
+      Extract<ExperimentalThreadActivityArgs, { mode: "summary" }>,
+      "metadata"
+    > & {
+      metadata: Omit<ExperimentalThreadActivityArgs["metadata"], "pluginId"> & {
+        pluginId?: string;
+      };
+    })
+  | (Omit<
+      Extract<ExperimentalThreadActivityArgs, { mode: "details" }>,
+      "metadata"
+    > & {
+      metadata: Omit<ExperimentalThreadActivityArgs["metadata"], "pluginId"> & {
+        pluginId?: string;
+      };
+    });
+
+/**
  * The BB SDK bound to one plugin (`bb.sdk`). `threads.getPluginMetadata`,
  * `threads.experimental_listPluginMetadata` and `threads.updatePluginMetadata`
  * default `pluginId` to that plugin's id. An
@@ -2045,11 +2119,18 @@ export interface PluginStatusApi {
  * patch whose merged namespace would exceed 256 KiB fails with HTTP 413 and
  * leaves the namespace unchanged.
  */
+
 export type PluginBbSdk = Omit<BbSdk, "threads"> & {
   threads: Omit<
     BbSdk["threads"],
-    "getPluginMetadata" | "updatePluginMetadata" | "experimental_listPluginMetadata"
+    | "getPluginMetadata"
+    | "updatePluginMetadata"
+    | "experimental_listPluginMetadata"
+    | "experimental_activity"
   > & {
+    experimental_activity(
+      args: ExperimentalPluginThreadActivityArgs,
+    ): Promise<ExperimentalThreadActivityResult>;
     getPluginMetadata(
       args: Omit<ThreadPluginMetadataArgs, "pluginId"> & { pluginId?: string },
     ): Promise<ThreadPluginMetadataResult>;

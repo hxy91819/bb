@@ -38,6 +38,7 @@ function makeSdk() {
   const threads = {
     spawn: vi.fn(async (args: unknown) => args),
     fork: vi.fn(async (args: unknown) => args),
+    experimental_activity: vi.fn(async (args: unknown) => args),
     getPluginMetadata: vi.fn(async (args: unknown) => args),
     updatePluginMetadata: vi.fn(async (args: unknown) => args),
     update: vi.fn(async ({ threadId }: { threadId: string }) =>
@@ -177,6 +178,26 @@ describe("bindSdkToPlugin", () => {
   it("defaults the plugin id on metadata calls without hiding an explicit one", async () => {
     const { sdk, queryClient, threads } = makeSdk();
     const bound = bindSdkToPlugin(sdk, "thread-list", queryClient);
+    const activity = {
+      mode: "summary" as const,
+      metadata: { key: "memberId", equals: "a" },
+      from: 1,
+      to: 2,
+    };
+    await bound.threads.experimental_activity(activity);
+    await bound.threads.experimental_activity({
+      ...activity,
+      metadata: { ...activity.metadata, pluginId: "other" },
+    });
+    expect(
+      threads.experimental_activity.mock.calls.map((call) => call[0]),
+    ).toEqual([
+      {
+        ...activity,
+        metadata: { ...activity.metadata, pluginId: "thread-list" },
+      },
+      { ...activity, metadata: { ...activity.metadata, pluginId: "other" } },
+    ]);
     await bound.threads.getPluginMetadata({ threadId: "thr_1" });
     expect(threads.getPluginMetadata).toHaveBeenCalledWith({
       threadId: "thr_1",

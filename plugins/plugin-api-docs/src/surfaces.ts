@@ -1295,13 +1295,18 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         summary:
           "Use a private JSON record on each thread. With this, a plugin can:",
         bullets: [
-          "Keep plugin data with the thread it belongs to, hidden from the model",
+          "Keep plugin data with a thread, hidden from the model",
           "Seed it when spawning or forking a thread",
-          "Read it when configuring that thread's agent",
-          "Read it for many threads at once, along with each thread's ancestors",
+          "Read it for many threads and when configuring their agents",
+          "Query bounded, dated activity facts for plugin-owned threads, including archived and hidden ones",
         ],
         apiSymbols: [
           "PluginBbSdk",
+          "PluginBbSdk.threads.experimental_activity",
+          "ExperimentalPluginThreadActivityArgs",
+          "ExperimentalThreadActivityArgs",
+          "ExperimentalThreadActivityResult",
+          "ExperimentalActivityEvidence",
           "PluginAgentConfigurationContext",
           "ReadonlyJsonValue",
           "BbPluginApi",

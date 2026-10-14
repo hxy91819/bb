@@ -182,6 +182,7 @@ move and downloads the new server's bb-app package for its service.
 - `bb thread read`
 - `bb thread unread`
 - `bb thread reorder-pinned`
+- `bb thread experimental-activity --plugin <id> --key <key> --equals <JSON-scalar> --from <UTC-ms> --to <UTC-ms> [--thread <id>] [--project <id>] [--limit <n>] [--cursor <C>] [--json]`
 - `bb thread count`
 - `bb thread queue`
 - `bb thread queue list`
