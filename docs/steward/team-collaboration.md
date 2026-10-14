@@ -4,17 +4,17 @@
 
 ## 路线
 
-- [x] 确定创建上下文、侧栏分组与标签、Agent 活动查询的契约及行为验收表；[收敛设计已交付](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，独立架构审查完成。
-- [x] 在稳定基线的独立分支实现 BB 扩展，同步 SDK、CLI 与 Plugin Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献及契约补修](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已提交、审查和推送。
+- [x] 完成[设计与审查](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，在稳定基线实现 BB 通用扩展、SDK、CLI 与 Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已审查和推送。
 - [x] 在独立 GitHub 仓库实现团队插件、预设头像和安装文档。← [bb-team 完整实现 cd395a06](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已提交、审查和公开 push；身份、归属、成员分组与按需活动查询均已验收。
 - [x] 在独立测试实例完成联合验收与独立审查。← 同 SHA 候选及正式 BB/SDK 的归属、分组、活动、Guide、Chromium/WebKit、冷安装与公开包安装通过；审查闭合，生产未动。协议 fixture 不代表付费 AI 效果；既有队列失败和开发告警保留。
 - [x] 完成 BB 聚合打包并发布 GitHub Release，核对聚合 SHA、各平台安装包、匹配 SDK 包和校验文件。← [fork-v0.46.0-20261014.1 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.1)，source 为 e7c2ef8409；四平台运行时、通用 SDK 和发布 CI 全通过，十一件正式资产及来源校验通过。
 - [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
 
 - [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
-- [ ] 按用户反馈完成插件身份入口、默认管理员、列表展示与头像。← 身份/Admin 与 20 个普通头像加 Admin 已本地完成；thr_pbj6j2khqk 接入正式 BB/SDK .2，收尾列表 v2、旧数据升级与独立联合验收。
+- [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像。← 本地 checkpoint 24f43b27；正式 .2 的双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合；发布仍待宿主头像修复。
 - [x] 取得包含新版 SDK 与挂载修复的正式 BB 供应。← [fork-v0.46.0-20261014.2](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.2)已公开，六个发布 jobs 成功；父核对 source 955e181051 包含全部所需修复与十一件资产元数据，插件消费时实际校验包。
-- [ ] 完成新版插件验收与 v0.2.0 Release。← 正式 URL/integrity、冷安装、双窗口与升级、Chromium/WebKit、CI、完整归档及公开回读仍待交付；旧资产保留，验收使用独立实例。
+- [ ] 修复通用行首头像宽度并提供匹配的新 BB/SDK。← thr_zcee9kvvy6 在独立布局分支修复，要求长标题、项目、child/pinned 下保持完整 16px；通过后再聚合发行。
+- [ ] 完成新版插件验收与 v0.2.0 Release。← 宿主头像修复后核对匹配供应，完成必要布局回归、冷安装、CI、完整归档及公开回读；既有绿色验收保留，旧资产不覆盖。
 
 ## 关键决策
 
