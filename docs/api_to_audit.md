@@ -3563,3 +3563,26 @@ Stabilize after exercising producer cancellation, reload, reconnect and byte lim
 - **Core callers:** `ThreadPromptContextBanner` (`apps/app/src/components/promptbox/banner/ThreadPromptContextBanner.tsx`) registers the parent thread (summary and details, including read-only history) and changed files (summary, merge-base action, details) through `definePluginApp` and the same collector, and renders them with plugin registrations through `useThreadContextSegments` and `ThreadContextSegmentMount` (`apps/app/src/components/plugin/PluginThreadContextSegments.tsx`). Core segments read pane-local data from a React context and render without a plugin crash boundary, as core Info rows do. The GitHub PR Status plugin registers the pull request segment in its own group `2_pullRequest`, between core's two and its Mark ready and merge actions. Active child threads are a separate core row above the context row (`ThreadChildThreadsBanner`), not a segment. Contract tests: `ThreadPromptContextBanner.segments.test.tsx`.
 - **Known coupling:** `environment` folds in the "Show Git changes and Commit button" setting so the pull request segment hides with core's changed files, as before; that setting should become the git plugin's own when changed files move out of core.
 - **Stabilization:** audit per-component mounts and crash recovery across reloads and plugin disable, `segments` stability while visibility settles, focus handoff between a plugin's summary and details, independent panes, and compact widths with several plugin segments. Then rename project-wide and remove this entry.
+
+## `BbNavigate.toThread` message navigation (`experimental_messageSeq`)
+
+`useBbNavigate().toThread(threadId, { split?, experimental_messageSeq? })`
+opens the requested thread and scrolls to the specified message using exact
+message-link match semantics (`#msg=N`), matching the `experimental_messageSeq`
+field on `ThreadChatMessageReference`. When `experimental_messageSeq` is
+omitted, navigation behavior is unchanged. In split-pane layouts, navigation
+focuses an already-open pane (with `replace: true`) or splits a new pane to the
+right, carrying the message anchor hash into the focused pane's route. Opening
+also uncollapses the thread's conversation if collapsed.
+
+Core's command palette thread search (`ThreadSearchPaletteMode`) shares this
+same core navigation implementation (`openThread`), passing sequence match
+semantics (`searchMessageSeq`).
+
+Before stabilization, verify:
+- Scroll-to-message reliability across lazy/paginated timeline loading and
+  deferred message details.
+- Alignment with `ThreadChatMessageReference.experimental_messageSeq` and
+  whether the option stabilizes as `messageSeq` or retains parity with message references.
+- Multi-pane split layouts when navigating between messages across different panes.
+
