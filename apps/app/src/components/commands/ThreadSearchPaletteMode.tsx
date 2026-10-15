@@ -306,7 +306,10 @@ export function ThreadSearchPaletteMode({
           threadId: row.threadId,
           isCompact,
           split,
-          target: { match: "sequence", seq: row.messageSeq },
+          target:
+            row.messageSeq === null
+              ? undefined
+              : { match: "sequence", seq: row.messageSeq },
         });
       });
     },

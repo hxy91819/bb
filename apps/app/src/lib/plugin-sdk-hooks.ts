@@ -30,7 +30,7 @@ import type {
   ExperimentalPluginFixedTabReference,
   JsonValue,
 } from "@get-bb/plugin-sdk";
-import { jsonValueSchema } from "@bb/domain";
+import { jsonValueSchema, PERSONAL_PROJECT_ID } from "@bb/domain";
 import {
   PluginSlotOwnershipContext,
   usePluginId,
@@ -77,7 +77,6 @@ import {
 import { useRouteState } from "@/hooks/useRouteState";
 import { useStore } from "jotai";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
-import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { lookupCachedThread } from "@/lib/plugin-sidebar-hooks";
 import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
 import { openThread } from "@/lib/thread-navigation";
@@ -370,14 +369,7 @@ export function useBbNavigate(): BbNavigate {
       void sdk.threads
         .get({ threadId })
         .then((thread) => open(thread.projectId))
-        .catch(() => {
-          store.set(getThreadConversationCollapsedAtom(threadId), false);
-          const hash =
-            options?.experimental_messageSeq !== undefined
-              ? `#msg=${options.experimental_messageSeq}`
-              : "";
-          void navigate(`/threads/${threadId}${hash}`);
-        });
+        .catch(() => open(PERSONAL_PROJECT_ID));
     },
     [isCompact, navigate, queryClient, store],
   );
