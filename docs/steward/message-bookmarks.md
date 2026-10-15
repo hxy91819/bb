@@ -5,8 +5,8 @@
 ## 路线
 
 - [x] 阶段 1：核心 `feature/thread-message-navigation`，`BbNavigate.toThread` 支持 `experimental_messageSeq`（f7b53a6004）
-- [ ] 阶段 2：独立插件 `~/code/bb-plugin-bookmarks`（选区菜单加书签、侧栏底部与全页列表、CLI），在阶段 1 源码 dev 实例验证 ← 进行中（最近线程 thr_xrb88vdavb）
-- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件
+- [x] 阶段 2：独立插件 `~/code/bb-plugin-bookmarks`（选区菜单加书签、侧栏底部与全页列表、CLI），dev 实例已验收（ecd59a4）
+- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 待用户授权
 
 ## 关键决策
 
