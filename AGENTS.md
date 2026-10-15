@@ -9,6 +9,8 @@
 
 BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
 
+会话消息书签插件的管家工作簿在 [docs/steward/message-bookmarks.md](docs/steward/message-bookmarks.md)，推进此目标时存在则先读，只报未完成的用户待办。
+
 ## Code And Contracts
 
 - Code comments are forbidden, except for semantic tool directives and Plugin SDK declaration comments.
