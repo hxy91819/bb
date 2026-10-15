@@ -331,6 +331,23 @@ function FileNavigationProbe() {
   );
 }
 
+function ThreadNavigationProbe() {
+  const navigate = useBbNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        navigate.toThread("thr_123", {
+          split: true,
+          experimental_messageSeq: 42,
+        })
+      }
+    >
+      Open message in split
+    </button>
+  );
+}
+
 function MalformedFileLinkProbe() {
   return (
     <FileLink
@@ -1545,6 +1562,23 @@ describe("renderSlot", () => {
       {
         method: "openUrl",
         url: "https://example.com/imperative",
+      },
+    ]);
+  });
+
+  it("records toThread navigation with experimental_messageSeq and split options", () => {
+    const slot = renderSlot({ component: ThreadNavigationProbe }, {});
+    fireEvent.click(
+      slot.getByRole("button", { name: "Open message in split" }),
+    );
+    expect(slot.inspection.navigateCalls).toEqual([
+      {
+        method: "toThread",
+        threadId: "thr_123",
+        options: {
+          split: true,
+          experimental_messageSeq: 42,
+        },
       },
     ]);
   });

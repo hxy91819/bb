@@ -3971,6 +3971,28 @@ Stabilize once message links have shipped and the seq has stayed stable across
 edit-and-rerun, forks and context clears, and decide whether `sourceSeqEnd`
 should remain alongside it.
 
+## `BbNavigate.toThread` message navigation (`experimental_messageSeq`)
+
+`useBbNavigate().toThread(threadId, { split?, experimental_messageSeq? })`
+opens the requested thread and scrolls to the specified message using exact
+message-link match semantics (`#msg=N`), matching the `experimental_messageSeq`
+field on `ThreadChatMessageReference`. When `experimental_messageSeq` is
+omitted, navigation behavior is unchanged. In split-pane layouts, navigation
+focuses an already-open pane (with `replace: true`) or splits a new pane to the
+right, carrying the message anchor hash into the focused pane's route. Opening
+also uncollapses the thread's conversation if collapsed.
+
+Core's command palette thread search (`ThreadSearchPaletteMode`) shares this
+same core navigation implementation (`openThread`), passing sequence match
+semantics (`searchMessageSeq`).
+
+Before stabilization, verify:
+- Scroll-to-message reliability across lazy/paginated timeline loading and
+  deferred message details.
+- Alignment with `ThreadChatMessageReference.experimental_messageSeq` and
+  whether the option stabilizes as `messageSeq` or retains parity with message references.
+- Multi-pane split layouts when navigating between messages across different panes.
+
 ## `PluginSidebarThreadActions.experimental_archiveEnvironmentThreads`
 
 Archives an environment's active thread trees through the host flow, including optimistic cache updates, pane cleanup, shared toast styling, and one ten-second Undo action. Undo restores only returned archived IDs, sequentially with lifecycle owners first. Archive failures show a host error toast and reject; Undo failures show a host error toast.

@@ -50,8 +50,7 @@ import {
   NO_THREADS_MESSAGE,
   ThreadListEmptyState,
 } from "@bb/shared-ui/thread-list-empty-state";
-import { getThreadRoutePath } from "@/lib/route-paths";
-import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
+import { openThread } from "@/lib/thread-navigation";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import { countPanes, findPaneByContent, MAX_PANES } from "@/lib/split-layout";
 import {
@@ -300,31 +299,15 @@ export function ThreadSearchPaletteMode({
         return;
       }
       runAfterClose(() => {
-        const state =
-          row.messageSeq === null
-            ? undefined
-            : {
-                searchMessageSeq: row.messageSeq,
-                searchThreadId: row.threadId,
-              };
-        if (split) {
-          openThreadInSplit({
-            store,
-            navigate,
-            projectId: row.projectId,
-            threadId: row.threadId,
-            isCompact,
-            state,
-          });
-          return;
-        }
-        navigate(
-          getThreadRoutePath({
-            projectId: row.projectId,
-            threadId: row.threadId,
-          }),
-          { state },
-        );
+        openThread({
+          store,
+          navigate,
+          projectId: row.projectId,
+          threadId: row.threadId,
+          isCompact,
+          split,
+          target: { match: "sequence", seq: row.messageSeq },
+        });
       });
     },
     [isCompact, navigate, runAfterClose, store],
