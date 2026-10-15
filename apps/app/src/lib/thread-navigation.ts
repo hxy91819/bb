@@ -1,14 +1,22 @@
-import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
+import type { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
+import { getThreadConversationCollapsedAtom as getCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { getMessageLinkPath, getThreadRoutePath } from "@/lib/route-paths";
 import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
+import type { splitLayoutAtom } from "@/lib/split-layout/atoms";
+import type { SplitLayout } from "@/lib/split-layout";
+
+type ThreadConversationCollapsedAtom = ReturnType<
+  typeof getThreadConversationCollapsedAtom
+>;
 
 export type ThreadNavigationTarget =
   | { match: "message"; seq: number }
-  | { match: "sequence"; seq: number | null };
+  | { match: "sequence"; seq: number };
 
 export interface OpenThreadStore {
-  get(atom: any): any;
-  set(atom: any, ...args: any[]): any;
+  get(atom: typeof splitLayoutAtom): SplitLayout | null;
+  set(atom: typeof splitLayoutAtom, value: SplitLayout): void;
+  set(atom: ThreadConversationCollapsedAtom, value: boolean): void;
 }
 
 export interface OpenThreadOptions {
@@ -33,11 +41,17 @@ export function openThread({
   split = false,
   target,
 }: OpenThreadOptions): void {
-  store.set(getThreadConversationCollapsedAtom(threadId), false);
+  store.set(getCollapsedAtom(threadId), false);
+  const route =
+    target?.match === "message"
+      ? getMessageLinkPath({ projectId, threadId, seq: target.seq })
+      : getThreadRoutePath({ projectId, threadId });
   const hash =
-    target?.match === "message" ? `#msg=${target.seq}` : undefined;
+    target?.match === "message"
+      ? route.slice(route.indexOf("#"))
+      : undefined;
   const state =
-    target?.match === "sequence" && target.seq !== null
+    target?.match === "sequence"
       ? { searchMessageSeq: target.seq, searchThreadId: threadId }
       : undefined;
   if (split) {
@@ -52,11 +66,5 @@ export function openThread({
     });
     return;
   }
-  const route =
-    target?.match === "message"
-      ? getMessageLinkPath({ projectId, threadId, seq: target.seq })
-      : getThreadRoutePath({ projectId, threadId });
-  const navigateOptions =
-    target?.match === "sequence" ? { state } : undefined;
-  navigate(route, navigateOptions);
+  navigate(route, state === undefined ? undefined : { state });
 }
