@@ -1,3 +1,4 @@
+import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import { useCallback, useContext, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
@@ -16,7 +17,6 @@ import {
 import { RouteNavigationCallbackContext } from "@/components/ui/app-route-anchor";
 import { useStore } from "jotai";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
-import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { lookupCachedThread } from "@/lib/cached-thread";
 import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
 import { openThread } from "@/lib/thread-navigation";
@@ -62,11 +62,7 @@ export function useBbNavigate(): BbNavigate {
       void sdk.threads
         .get({ threadId })
         .then((thread) => open(thread.projectId))
-        .catch(() => {
-          store.set(getThreadConversationCollapsedAtom(threadId), false);
-          const hash = options?.experimental_messageSeq !== undefined ? `#msg=${options.experimental_messageSeq}` : "";
-          void navigate(`/threads/${threadId}${hash}`);
-        });
+        .catch(() => open(PERSONAL_PROJECT_ID));
     },
     [isCompact, navigate, onNavigate, queryClient, store],
   );

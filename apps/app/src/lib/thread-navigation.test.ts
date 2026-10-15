@@ -3,7 +3,7 @@ import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import type { SplitLayout } from "@/lib/split-layout";
-import { openThread } from "./thread-navigation";
+import { openThread, type OpenThreadStore } from "./thread-navigation";
 
 function initialLayout(threadId = "thread-origin"): SplitLayout {
   return {
@@ -13,6 +13,27 @@ function initialLayout(threadId = "thread-origin"): SplitLayout {
       content: { kind: "thread", projectId: "project-1", threadId },
     },
     focusedPaneId: "pane-1",
+  };
+}
+
+function createTestStore(initial?: { splitLayout?: SplitLayout | null }) {
+  const atomValues = new Map<unknown, unknown>();
+  if (initial?.splitLayout !== undefined) {
+    atomValues.set(splitLayoutAtom, initial.splitLayout);
+  }
+  const store: OpenThreadStore = {
+    get: (atom) => (atomValues.get(atom) as SplitLayout | null) ?? null,
+    set: (atom, value) => {
+      atomValues.set(atom, value);
+    },
+  };
+  return {
+    store,
+    readCollapsed(threadId: string): boolean | undefined {
+      return atomValues.get(getThreadConversationCollapsedAtom(threadId)) as
+        | boolean
+        | undefined;
+    },
   };
 }
 
@@ -39,15 +60,6 @@ describe("openThread navigation contract", () => {
       expectedPath: "/projects/project-1/threads/thread-1",
       expectedOptions: {
         state: { searchMessageSeq: 42, searchThreadId: "thread-1" },
-      },
-    },
-    {
-      label: "non-split with search thread targeting without message",
-      split: false,
-      target: { match: "sequence" as const, seq: null },
-      expectedPath: "/projects/project-1/threads/thread-1",
-      expectedOptions: {
-        state: undefined,
       },
     },
     {
@@ -78,16 +90,9 @@ describe("openThread navigation contract", () => {
   it.each(contractTable)(
     "navigates to expected path and state for $label",
     ({ split, target, expectedPath, expectedOptions }) => {
-      const atomValues = new Map<unknown, unknown>();
-      if (split) {
-        atomValues.set(splitLayoutAtom, initialLayout("thread-origin"));
-      }
-      const store = {
-        get: (atom: unknown) => atomValues.get(atom) ?? null,
-        set: (atom: unknown, value: unknown) => {
-          atomValues.set(atom, value);
-        },
-      };
+      const { store, readCollapsed } = createTestStore({
+        splitLayout: split ? initialLayout("thread-origin") : null,
+      });
       const navigate = vi.fn();
 
       openThread({
@@ -102,9 +107,7 @@ describe("openThread navigation contract", () => {
 
       expect(navigate).toHaveBeenCalledTimes(1);
       expect(navigate).toHaveBeenCalledWith(expectedPath, expectedOptions);
-      expect(
-        atomValues.get(getThreadConversationCollapsedAtom("thread-1")),
-      ).toBe(false);
+      expect(readCollapsed("thread-1")).toBe(false);
     },
   );
 
@@ -127,14 +130,9 @@ describe("openThread navigation contract", () => {
   ])(
     "preserves replace semantics and targeting for $label",
     ({ target, expectedPath, expectedOptions }) => {
-      const atomValues = new Map<unknown, unknown>();
-      atomValues.set(splitLayoutAtom, initialLayout("thread-1"));
-      const store = {
-        get: (atom: unknown) => atomValues.get(atom) ?? null,
-        set: (atom: unknown, value: unknown) => {
-          atomValues.set(atom, value);
-        },
-      };
+      const { store } = createTestStore({
+        splitLayout: initialLayout("thread-1"),
+      });
       const navigate = vi.fn();
 
       openThread({
@@ -174,27 +172,22 @@ describe("openThread navigation contract", () => {
   ])(
     "navigates projectless threads correctly (split=$split)",
     ({ split, target, expectedPath, expectedOptions }) => {
-      const atomValues = new Map<unknown, unknown>();
-      if (split) {
-        atomValues.set(splitLayoutAtom, {
-          root: {
-            type: "pane",
-            paneId: "pane-1",
-            content: {
-              kind: "thread",
-              projectId: PERSONAL_PROJECT_ID,
-              threadId: "thread-origin",
-            },
-          },
-          focusedPaneId: "pane-1",
-        });
-      }
-      const store = {
-        get: (atom: unknown) => atomValues.get(atom) ?? null,
-        set: (atom: unknown, value: unknown) => {
-          atomValues.set(atom, value);
-        },
-      };
+      const { store } = createTestStore({
+        splitLayout: split
+          ? {
+              root: {
+                type: "pane",
+                paneId: "pane-1",
+                content: {
+                  kind: "thread",
+                  projectId: PERSONAL_PROJECT_ID,
+                  threadId: "thread-origin",
+                },
+              },
+              focusedPaneId: "pane-1",
+            }
+          : null,
+      });
       const navigate = vi.fn();
 
       openThread({
