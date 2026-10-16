@@ -1075,7 +1075,7 @@ describe("ThreadRow", () => {
     expect(projectBadge?.textContent).toBe("");
     expect(projectBadge?.getAttribute("role")).toBe("img");
     expect(projectBadge?.getAttribute("aria-label")).toBe("Web App");
-    expect(projectBadge?.getAttribute("title")).toBe("Project: Web App");
+    expect(projectBadge?.hasAttribute("title")).toBe(false);
     expect(projectBadge?.querySelector('[data-icon="Folder"]')).not.toBeNull();
     expect(screen.getByRole("img", { name: "Web App" })).toBe(projectBadge);
   });

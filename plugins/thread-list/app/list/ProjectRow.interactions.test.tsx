@@ -166,6 +166,7 @@ function renderPinnedParentWithChild({
     .rootNodes[0];
   const { container } = renderTree(
     <ThreadTreeNodeRow
+      parentProjectId={null}
       projectId="proj_test"
       node={node}
       depthOffset={0}
@@ -1346,6 +1347,7 @@ describe("thread project label in tree rendering", () => {
 
     const { container } = renderTree(
       <ThreadTreeNodeRow
+        parentProjectId={null}
         projectId="proj_main"
         node={node}
         depthOffset={0}
@@ -1403,6 +1405,7 @@ describe("thread project label in tree rendering", () => {
 
     const { container } = renderTree(
       <ThreadTreeNodeRow
+        parentProjectId={null}
         projectId="proj_parent"
         node={node}
         depthOffset={0}
@@ -1435,5 +1438,69 @@ describe("thread project label in tree rendering", () => {
       childRow?.querySelector("[data-sidebar-thread-project-name]")
         ?.textContent,
     ).toBe("Child Project");
+  });
+
+  it("omits project label for same-project children grouped by worktree beneath a parent", () => {
+    const project = makeSidebarProject({
+      id: "proj_main",
+      name: "Main Project",
+    });
+    const parent = makeThread({
+      id: "thr_parent",
+      title: "Parent Thread",
+      projectId: "proj_main",
+      pinnedAt: 1,
+    });
+    const worktree = makeSidebarEnvironment({
+      id: "env_child",
+      name: "Child workspace",
+      branchName: "feat/child",
+      providerId: "git-worktree",
+      isWorktree: true,
+    });
+    const children = ["thr_child_a", "thr_child_b"].map((id) =>
+      makeThread({
+        id,
+        title: id,
+        parentThreadId: "thr_parent",
+        projectId: "proj_main",
+        environment: worktree,
+      }),
+    );
+    const threads = [parent, ...children];
+    const node = buildPinnedSidebarState({
+      threads,
+      groupEnvironmentThreads: true,
+    }).rootNodes[0];
+
+    const { container } = renderTree(
+      <ThreadTreeNodeRow
+        parentProjectId={null}
+        projectId="proj_main"
+        node={node}
+        depthOffset={0}
+        isEnvGrouped={false}
+        showProjectName={true}
+        collapsedThreadIds={new Set()}
+        collapsedEnvironmentIds={new Set()}
+        onToggleThreadCollapsed={vi.fn()}
+        onToggleEnvironmentCollapsed={vi.fn()}
+        sortableRef={() => undefined}
+      />,
+      { threads, projects: [project] },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "New thread in environment" }),
+    ).toBeTruthy();
+    for (const child of children) {
+      const childRow = container.querySelector(
+        `[data-sidebar-thread-id="${child.id}"]`,
+      )?.parentElement;
+      expect(childRow).toBeTruthy();
+      expect(
+        childRow?.querySelector("[data-sidebar-thread-project-name]"),
+      ).toBeNull();
+    }
   });
 });

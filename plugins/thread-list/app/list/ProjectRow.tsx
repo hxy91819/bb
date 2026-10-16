@@ -276,7 +276,7 @@ interface ProjectThreadTreeGroupProps {
 
 interface ThreadTreeNodeRowProps {
   projectId: string;
-  parentProjectId?: string | null;
+  parentProjectId: string | null;
   node: ProjectThreadNode;
   depthOffset: number;
   isEnvGrouped: boolean;
@@ -297,7 +297,7 @@ interface ThreadTreeNodeRowProps {
 interface ThreadTreeItemRowProps {
   isEnvGrouped?: boolean;
   projectId: string | null;
-  parentProjectId?: string | null;
+  parentProjectId: string | null;
   item: ProjectThreadItem;
   depthOffset: number;
   showProjectName: boolean;
@@ -356,6 +356,7 @@ interface EnvironmentThreadGroupRowProps {
   sortableRef?: (element: HTMLDivElement | null) => void;
   sortableStyle?: CSSProperties;
   projectId: string;
+  parentProjectId: string | null;
   environmentThreadGroup: EnvironmentThreadGroup;
   depthOffset: number;
   showProjectName: boolean;
@@ -938,6 +939,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
   sortableRef,
   sortableStyle,
   projectId,
+  parentProjectId,
   environmentThreadGroup,
   depthOffset,
   showProjectName,
@@ -1037,7 +1039,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
                   <SectionDndItemRow
                     key={node.thread.id}
                     projectId={projectId}
-                    parentProjectId={null}
+                    parentProjectId={parentProjectId}
                     item={nodeItems[index]}
                     sectionDnd={sectionDnd}
                     depthOffset={depthOffset + 1}
@@ -1092,6 +1094,7 @@ export const PinnedEnvironmentThreadGroupRow = memo(
     return (
       <EnvironmentThreadGroupRow
         projectId={group.nodes[0].thread.projectId}
+        parentProjectId={null}
         environmentThreadGroup={group}
         showProjectName={showProjectName}
         sectionDnd={sectionDnd ?? undefined}
@@ -1118,7 +1121,7 @@ export const PinnedEnvironmentThreadGroupRow = memo(
 const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
   isEnvGrouped = false,
   projectId,
-  parentProjectId = null,
+  parentProjectId,
   item,
   depthOffset,
   showProjectName,
@@ -1188,6 +1191,7 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
   return (
     <EnvironmentThreadGroupRow
       projectId={projectId ?? item.group.nodes[0].thread.projectId}
+      parentProjectId={parentProjectId}
       environmentThreadGroup={item.group}
       sectionDnd={sectionDnd}
       dragBindings={dragBindings}
@@ -1464,7 +1468,7 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
 
 export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
   projectId,
-  parentProjectId = null,
+  parentProjectId,
   node,
   depthOffset,
   isEnvGrouped,

@@ -154,7 +154,7 @@ export type ThreadRowOptions =
 interface ThreadRowProps {
   thread: SidebarThread;
   crossProjectId: string | null;
-  parentProjectId?: string | null;
+  parentProjectId: string | null;
   showProjectName: boolean;
   isActive: boolean;
   onProjectSelect?: () => void;
@@ -362,7 +362,7 @@ function useThreadSplitMiniMap(
 function ThreadRowComponent({
   thread,
   crossProjectId,
-  parentProjectId = null,
+  parentProjectId,
   showProjectName,
   isActive,
   onProjectSelect,
@@ -659,8 +659,7 @@ function ThreadRowComponent({
         />
         <span
           className={cn(
-            "pointer-events-none relative flex items-center self-stretch",
-            projectName ? "min-w-24 flex-1" : "min-w-0",
+            "pointer-events-none relative flex min-w-0 items-center self-stretch",
             ((crossProjectLabel === null && (!parentOptions || !hasChildren)) ||
               isEditing) &&
               "flex-1",
@@ -698,12 +697,8 @@ function ThreadRowComponent({
             <span
               className={cn(
                 "bb-thread-title",
-                (crossProjectLabel !== null || projectName) && "truncate",
-                projectName
-                  ? "min-w-24"
-                  : crossProjectLabel !== null
-                    ? "min-w-0"
-                    : undefined,
+                (crossProjectLabel !== null || projectName) &&
+                  "min-w-0 truncate",
               )}
               title={labelTitle}
               onDoubleClick={startTitleEditing}
@@ -740,7 +735,6 @@ function ThreadRowComponent({
                   data-sidebar-thread-project-name=""
                   role="img"
                   aria-label={projectName}
-                  title={`Project: ${projectName}`}
                   className="relative z-[31] flex size-5 shrink-0 items-center justify-center text-muted-foreground"
                   onClick={(event) => {
                     event.preventDefault();
@@ -757,7 +751,7 @@ function ThreadRowComponent({
             <span
               data-sidebar-thread-project-name=""
               title={`Project: ${projectName}`}
-              className="pointer-events-none min-w-0 max-w-24 shrink-[2] truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
+              className="pointer-events-none min-w-5 max-w-24 shrink-[100] truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
             >
               {projectName}
             </span>
