@@ -1,12 +1,12 @@
 # 会话消息书签插件：选中文字加书签，按项目分组查看，点击跳回原消息
 
-更新：2026-10-15
+更新：2026-10-16
 
 ## 路线
 
 - [x] 阶段 1：核心 `feature/thread-message-navigation`，`BbNavigate.toThread` 支持 `experimental_messageSeq`（f7b53a6004）
 - [x] 阶段 2：独立插件 `~/code/bb-plugin-bookmarks`（选区菜单加书签、侧栏底部与全页列表、CLI），dev 实例已验收（ecd59a4）
-- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 待用户授权
+- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 打包中（最近线程 thr_46e4spvtt7）
 
 ## 关键决策
 
@@ -18,5 +18,5 @@
 
 | 状态 | 事项 | 为什么只能用户做 | 挡住 | 提出 |
 | --- | --- | --- | --- | --- |
-| 待办 | 授权部署新聚合版到本机 BB 服务（重启服务） | 停止/替换 BB 服务需用户明确授权 | 阶段 3 | 2026-10-15 |
-| 待办 | 是否为插件建 GitHub 仓库（hxy91819/bb-plugin-bookmarks）并推送 | 对外发布需用户确认 | 不挡 | 2026-10-15 |
+| 待办 | 打包完成后在 BB 外用 local-aggregate-deploy 部署新聚合版（已同意） | 重启 BB 服务须由 BB 外 Agent 执行 | 阶段 3 | 2026-10-15 |
+| 已完成 | 是否为插件建 GitHub 仓库（hxy91819/bb-plugin-bookmarks）并推送 | 对外发布需用户确认 | 不挡 | 2026-10-15 |
