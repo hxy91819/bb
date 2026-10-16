@@ -254,6 +254,7 @@ interface ChronologicalBuiltInSidebarSections {
 
 interface ChronologicalSectionThreadSectionsProps extends SectionThreadTreeProps {
   builtInSections: ChronologicalBuiltInSidebarSections;
+  environmentGrouping?: boolean;
   onCreateThread?: () => void;
   topLevelSectionOrder: readonly SidebarSectionId[];
   fullSectionOrder: readonly SidebarSectionId[];
@@ -1962,6 +1963,7 @@ export const ChronologicalSectionThreadSections = memo(
     onToggleThreadCollapsed,
     onToggleEnvironmentCollapsed,
     builtInSections,
+    environmentGrouping,
     topLevelSectionOrder,
     fullSectionOrder,
     onTopLevelSectionOrderChange,
@@ -1983,9 +1985,11 @@ export const ChronologicalSectionThreadSections = memo(
       },
       [collapsedThreadIds, onToggleThreadCollapsed],
     );
-    const groupThreadsByEnvironment = useAtomValue(
+    const preferredEnvironmentGrouping = useAtomValue(
       sidebarGroupThreadsByEnvironmentAtom,
     );
+    const groupThreadsByEnvironment =
+      environmentGrouping ?? preferredEnvironmentGrouping;
     const rootItems = useMemo(
       () =>
         buildSectionThreadList(
