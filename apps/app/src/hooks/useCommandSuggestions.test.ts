@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { promptActionCommandSuggestions } from "./useCommandSuggestions";
+import {
+  panelCommandSuggestions,
+  promptActionCommandSuggestions,
+} from "./useCommandSuggestions";
 
 const promptActions = [
   { kind: "skills", text: "/" },
@@ -51,5 +54,50 @@ describe("promptActionCommandSuggestions", () => {
         trigger: "/",
       }).map((suggestion) => suggestion.name),
     ).toEqual(["plan"]);
+  });
+});
+
+describe("panelCommandSuggestions", () => {
+  const panelCommands = [
+    {
+      name: "side",
+      pluginId: "side-chat",
+      actionId: "side-chat",
+      description: "Start side chat",
+    },
+  ];
+
+  it("turns panel commands into suggestions carrying the panel action", () => {
+    expect(panelCommandSuggestions({ panelCommands, query: "" })).toEqual([
+      {
+        kind: "command",
+        name: "side",
+        source: "command",
+        origin: "user",
+        description: "Start side chat",
+        argumentHint: null,
+        pluginId: "side-chat",
+        panelAction: {
+          pluginId: "side-chat",
+          actionId: "side-chat",
+        },
+      },
+    ]);
+  });
+
+  it("filters panel commands by the active query", () => {
+    expect(
+      panelCommandSuggestions({ panelCommands, query: "si" }).map(
+        (suggestion) => suggestion.name,
+      ),
+    ).toEqual(["side"]);
+    expect(
+      panelCommandSuggestions({ panelCommands, query: "chat" }).map(
+        (suggestion) => suggestion.name,
+      ),
+    ).toEqual(["side"]);
+    expect(panelCommandSuggestions({ panelCommands, query: "deploy" })).toEqual(
+      [],
+    );
   });
 });
