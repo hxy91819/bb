@@ -97,6 +97,7 @@ const PinnedRootItem = memo(function PinnedRootItem({
   return (
     <ThreadTreeNodeRow
       projectId={node.thread.projectId}
+      parentProjectId={null}
       node={node}
       depthOffset={0}
       isEnvGrouped={false}

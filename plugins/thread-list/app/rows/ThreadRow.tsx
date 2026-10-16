@@ -157,6 +157,7 @@ export type ThreadRowOptions =
 interface ThreadRowProps {
   thread: SidebarThread;
   crossProjectId: string | null;
+  parentProjectId: string | null;
   showProjectName: boolean;
   isActive: boolean;
   onProjectSelect?: () => void;
@@ -364,6 +365,7 @@ function useThreadSplitMiniMap(
 function ThreadRowComponent({
   thread,
   crossProjectId,
+  parentProjectId,
   showProjectName,
   isActive,
   onProjectSelect,
@@ -389,7 +391,14 @@ function ThreadRowComponent({
     hasComposerDraft,
   );
   const labelTitle = thread.displayTitle;
-  const projectName = useSidebarProjectName(showProjectName ? thread.projectId : null);
+  const isDeduplicatedChild =
+    options.depth > 0 &&
+    parentProjectId !== null &&
+    parentProjectId === thread.projectId;
+  const shouldShowProjectName = showProjectName && !isDeduplicatedChild;
+  const projectName = useSidebarProjectName(
+    shouldShowProjectName ? thread.projectId : null,
+  );
   const groupingKey = useContext(ThreadListRowContext);
   const rowProjectId = groupingKey ? thread.projectId : crossProjectId;
   const crossProjectName = useSidebarProjectName(rowProjectId);
@@ -707,7 +716,8 @@ function ThreadRowComponent({
       ) : null}
       <span
         className={cn(
-          "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
+          "relative flex min-w-0 flex-1 items-center self-stretch",
+          projectName && !isCompactViewport ? "gap-0" : "gap-1.5",
           !isActionsOpen &&
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
@@ -780,7 +790,8 @@ function ThreadRowComponent({
             <span
               className={cn(
                 "bb-thread-title",
-                crossProjectLabel !== null && "min-w-0 truncate",
+                (crossProjectLabel !== null || projectName) &&
+                  "min-w-0 truncate",
               )}
               title={labelTitle}
               onPointerDownCapture={recordTitlePointer}
@@ -812,13 +823,34 @@ function ThreadRowComponent({
           </Tooltip>
         ) : null}
         {projectName ? (
-          <span
-            data-sidebar-thread-project-name=""
-            title={`Project: ${projectName}`}
-            className="pointer-events-none max-w-24 shrink-0 truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
-          >
-            {projectName}
-          </span>
+          isCompactViewport ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-sidebar-thread-project-name=""
+                  role="img"
+                  aria-label={projectName}
+                  className="relative z-[31] flex size-5 shrink-0 items-center justify-center text-muted-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    rowLinkRef.current?.click();
+                  }}
+                >
+                  <Icon name="Folder" className="size-3.5" aria-hidden />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">{projectName}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <span
+              data-sidebar-thread-project-name=""
+              title={`Project: ${projectName}`}
+              className="pointer-events-none min-w-5 max-w-24 shrink-[100] truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
+            >
+              {projectName}
+            </span>
+          )
         ) : null}
         {parentOptions && hasChildren ? (
           <SidebarChildToggleChevron
