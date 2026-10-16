@@ -15,9 +15,7 @@ import {
 import { TruncateStart } from "@/components/ui/truncate-start.js";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
 
-export const FILE_PREVIEW_WRAPPER_STYLE = {
-  "--md-content-w": "100cqi",
-} as CSSProperties;
+export const FILE_PREVIEW_WRAPPER_STYLE = {} as CSSProperties;
 
 export function FilePreviewHeaderFrame({
   children,
