@@ -271,7 +271,11 @@ export async function buildThreadStartCommand(
     environment: args.environment,
     model: args.execution.model,
   });
-  const bridgeLaunch = requireBridgeLaunchForProviderId(deps, args.providerId);
+  const bridgeLaunch = requireBridgeLaunchForProviderId(
+    deps,
+    args.providerId,
+    args.environment.hostId,
+  );
   return {
     type: "thread.start",
     environmentId: args.environment.id,
@@ -310,6 +314,7 @@ function buildPreparedTurnSubmitCommandPayload(
   const bridgeLaunch = requireBridgeLaunchForProviderId(
     args.deps,
     args.runtimeContext.providerId,
+    args.hostId,
   );
   return {
     type: "turn.submit",
@@ -501,6 +506,7 @@ export function dispatchArchivedThreadProviderArchiveCommand(
   const bridgeLaunch = resolveBridgeLaunchForProviderId(
     deps,
     thread.providerId,
+    environment.hostId,
   );
   if (bridgeLaunch === null) {
     return false;
@@ -547,6 +553,7 @@ export function dispatchThreadUnarchiveCommand(
   const bridgeLaunch = resolveBridgeLaunchForProviderId(
     deps,
     args.thread.providerId,
+    args.environment.hostId,
   );
   if (bridgeLaunch === null) {
     return false;
