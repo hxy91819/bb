@@ -228,6 +228,7 @@ function createThreadListEntry(
 ): ThreadWithPendingInteractionState {
   return {
     ...args.thread,
+    completionNotice: true,
     modelOverride: null,
     reasoningLevelOverride: null,
     storageDeletedAt: null,

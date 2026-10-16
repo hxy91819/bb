@@ -12,6 +12,7 @@ import {
   threadArchiveAllResponseSchema,
   threadChildSummaryResponseSchema,
   threadListResponseSchema,
+  threadResponseSchema,
 } from "@bb/server-contract";
 import { describe, expect, it } from "vitest";
 import { waitForQueuedCommand } from "../helpers/commands.js";
@@ -102,58 +103,152 @@ describe("public thread parenting routes", () => {
     },
   );
 
-  it("creates a child thread under a parent", async () => {
-    await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps);
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        projectId: project.id,
-      });
-      const parentThread = seedThread(harness.deps, {
-        environmentId: environment.id,
-        projectId: project.id,
-      });
-      seedThreadRuntimeState(harness.deps, {
-        environmentId: environment.id,
-        inputText: "Coordinate child work",
-        providerThreadId: "provider-parent-create-child",
-        threadId: parentThread.id,
-      });
-
-      const response = await harness.app.request("/api/v1/threads", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          origin: "app",
+  it.each([undefined, "fork"] as const)(
+    "rejects disabled completion notices without a hierarchy parent (originKind=%s)",
+    async (originKind) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps);
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
           projectId: project.id,
-          providerId: "codex",
-          model: "gpt-5",
-          input: [{ type: "text", text: "Create child work" }],
-          environment: {
-            type: "reuse",
-            environmentId: environment.id,
-          },
-          parentThreadId: parentThread.id,
-        }),
+        });
+        const source = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+        });
+        const response = await harness.app.request("/api/v1/threads", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            origin: "cli",
+            projectId: project.id,
+            providerId: "codex",
+            input: [{ type: "text", text: "Synchronous work" }],
+            environment: { type: "reuse", environmentId: environment.id },
+            completionNotice: false,
+            ...(originKind ? { originKind, parentThreadId: source.id } : {}),
+          }),
+        });
+        expect(response.status).toBe(400);
+        expect(apiErrorSchema.parse(await readJson(response))).toMatchObject({
+          code: "invalid_request",
+          message:
+            "completionNotice false requires a parentThreadId and no originKind",
+        });
       });
+    },
+  );
 
-      expect(response.status).toBe(201);
-      const createdThread = threadSchema.parse(await readJson(response));
-      expect(createdThread.parentThreadId).toBe(parentThread.id);
-      await expect(
-        waitForQueuedCommand(
-          harness,
-          ({ command }) =>
-            command.type === "turn.submit" &&
-            command.threadId === parentThread.id,
-          100,
-        ),
-      ).rejects.toThrow("Timed out waiting for queued command");
-    });
-  });
+  it.each([undefined, false] as const)(
+    "creates and preserves a child with completionNotice=%s",
+    async (completionNotice) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps);
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+        });
+        const parentThread = seedThread(harness.deps, {
+          environmentId: environment.id,
+          projectId: project.id,
+        });
+        seedThreadRuntimeState(harness.deps, {
+          environmentId: environment.id,
+          inputText: "Coordinate child work",
+          providerThreadId: "provider-parent-create-child",
+          threadId: parentThread.id,
+        });
+
+        const response = await harness.app.request("/api/v1/threads", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            origin: "app",
+            projectId: project.id,
+            providerId: "codex",
+            model: "gpt-5",
+            input: [{ type: "text", text: "Create child work" }],
+            environment: {
+              type: "reuse",
+              environmentId: environment.id,
+            },
+            parentThreadId: parentThread.id,
+            completionNotice,
+          }),
+        });
+
+        expect(response.status).toBe(201);
+        const createdThread = threadResponseSchema.parse(
+          await readJson(response),
+        );
+        expect(createdThread).toMatchObject({
+          parentThreadId: parentThread.id,
+          completionNotice: completionNotice ?? true,
+        });
+        const detail = await harness.app.request(
+          `/api/v1/threads/${createdThread.id}`,
+        );
+        expect(detail.status).toBe(200);
+        expect(await readJson(detail)).toMatchObject({
+          completionNotice: completionNotice ?? true,
+          parentThreadId: parentThread.id,
+        });
+        const list = await harness.app.request(
+          `/api/v1/threads?parentThreadId=${parentThread.id}`,
+        );
+        expect(list.status).toBe(200);
+        expect(
+          threadListResponseSchema
+            .parse(await readJson(list))
+            .map((row) => row.id),
+        ).toEqual([createdThread.id]);
+        const sidebar = await harness.app.request("/api/v1/sidebar-bootstrap");
+        expect(sidebar.status).toBe(200);
+        const bootstrap = sidebarBootstrapResponseSchema.parse(
+          await readJson(sidebar),
+        );
+        expect(
+          bootstrap.projects.find((row) => row.id === project.id)?.threads,
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: createdThread.id,
+              parentThreadId: parentThread.id,
+            }),
+          ]),
+        );
+        await expect(
+          waitForQueuedCommand(
+            harness,
+            ({ command }) =>
+              command.type === "turn.submit" &&
+              command.threadId === parentThread.id,
+            100,
+          ),
+        ).rejects.toThrow("Timed out waiting for queued command");
+        const archived = await harness.app.request(
+          `/api/v1/threads/${parentThread.id}/archive-all`,
+          { method: "POST" },
+        );
+        expect(archived.status).toBe(200);
+        expect(
+          threadArchiveAllResponseSchema.parse(await readJson(archived))
+            .archivedThreadIds,
+        ).toContain(createdThread.id);
+        expect(getThread(harness.db, createdThread.id)).toMatchObject({
+          parentThreadId: parentThread.id,
+          completionNotice: completionNotice ?? true,
+          archivedAt: expect.any(Number),
+        });
+      });
+    },
+  );
 
   it("inherits a hidden parent's visibility unless the request states one", async () => {
     await withTestHarness(async (harness) => {

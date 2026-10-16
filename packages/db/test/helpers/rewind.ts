@@ -10,7 +10,15 @@ export function dropPluginEnabledFollowsDefaultColumn(db: DbConnection): void {
 }
 
 export function rewindThreadPruningWork(db: DbConnection): void {
+  const threadColumns = db.$client
+    .prepare<[], { name: string }>("PRAGMA table_info(threads)")
+    .all();
+  if (threadColumns.some((column) => column.name === "completion_notice")) {
+    db.$client.exec("ALTER TABLE threads DROP COLUMN completion_notice");
+  }
   db.$client.exec(`
+    DROP INDEX IF EXISTS events_thread_created_sequence_idx;
+    DROP INDEX IF EXISTS thread_plugin_metadata_plugin_thread_idx;
     DROP TABLE IF EXISTS thread_pruning_work;
     DELETE FROM __drizzle_migrations WHERE created_at >= 1791399370294;
   `);

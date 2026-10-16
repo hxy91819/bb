@@ -298,6 +298,7 @@ describe("plugin thread lifecycle events", () => {
         providerId: "codex",
         startedOnBehalfOf: null,
         titleFallback: "Plugin event test thread",
+        completionNotice: true,
         visibility: "visible",
       };
       const thread = createThreadRecord(
@@ -345,6 +346,7 @@ describe("plugin thread lifecycle events", () => {
               providerId: "codex",
               startedOnBehalfOf: null,
               titleFallback: "Hidden plugin worker",
+              completionNotice: true,
               visibility: "hidden",
             },
           },

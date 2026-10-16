@@ -1,5 +1,6 @@
 import {
   getEnvironment,
+  getThread,
   getSessionById,
   listActiveBackgroundTaskCountsByThreadIds,
   listLatestClosedSessionsForHosts,
@@ -333,6 +334,8 @@ export function toThreadResponseFromThread(
   });
   return {
     ...threadWithRuntime,
+    completionNotice:
+      getThread(deps.db, args.thread.id)?.completionNotice ?? true,
     activeBackgroundAgentCount:
       listActiveBackgroundTaskCountsByThreadIds(deps.db, {
         threadIds: [args.thread.id],

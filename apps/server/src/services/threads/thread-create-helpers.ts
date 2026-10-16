@@ -110,6 +110,7 @@ export function createThreadRecord(
       sectionId,
       pinned: args.request.pinned ?? false,
       parentThreadId: args.request.parentThreadId ?? null,
+      completionNotice: args.request.completionNotice,
       sourceThreadId: args.request.sourceThreadId ?? null,
       lifecycleOwnerThreadId: args.request.lifecycleOwnerThreadId,
       originKind: args.request.originKind,

@@ -1,0 +1,1 @@
+ALTER TABLE `threads` ADD `completion_notice` integer DEFAULT true NOT NULL;

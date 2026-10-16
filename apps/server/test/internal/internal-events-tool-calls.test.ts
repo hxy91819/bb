@@ -10,6 +10,7 @@ import {
   getThread,
   listEnvironments,
   listQueuedThreadMessages,
+  queuedThreadMessages,
   threads,
 } from "@bb/db";
 import { threadScope, turnScope, type ToolCallResponse } from "@bb/domain";
@@ -704,71 +705,131 @@ describe("internal event and tool-call routes", () => {
     });
   });
 
-  it("notifies a parent when a hidden delegated child root turn completes", async () => {
-    await withChildThreadNotificationClock(async (harness) => {
-      const { session } = seedHostSession(harness.deps);
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: session.hostId,
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: session.hostId,
-        projectId: project.id,
-      });
-      const parentThread = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-        providerId: "codex",
-        status: "idle",
-      });
-      seedThreadRuntimeState(harness.deps, {
-        environmentId: environment.id,
-        inputText: "Coordinate hidden child work",
-        providerThreadId: "provider-hidden-parent",
-        threadId: parentThread.id,
-      });
-      const childThread = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-        parentThreadId: parentThread.id,
-        providerId: "codex",
-        status: "active",
-        visibility: "hidden",
-      });
+  it.each(
+    [
+      { completionNotice: undefined, status: "completed" as const },
+      { completionNotice: undefined, status: "failed" as const },
+      { completionNotice: undefined, status: "interrupted" as const },
+      { completionNotice: false, status: "completed" as const },
+      { completionNotice: false, status: "failed" as const },
+      { completionNotice: false, status: "interrupted" as const },
+    ].flatMap((scenario) =>
+      (["idle", "active"] as const).map((parentStatus) => ({
+        ...scenario,
+        parentStatus,
+      })),
+    ),
+  )(
+    "child root $status with completionNotice=$completionNotice and parent=$parentStatus",
+    async ({ completionNotice, status, parentStatus }) => {
+      await withChildThreadNotificationClock(async (harness) => {
+        const { session } = seedHostSession(harness.deps);
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: session.hostId,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: session.hostId,
+          projectId: project.id,
+        });
+        const parentThread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+          providerId: "codex",
+          status: parentStatus,
+        });
+        seedThreadRuntimeState(harness.deps, {
+          environmentId: environment.id,
+          inputText: "Coordinate hidden child work",
+          providerThreadId: "provider-hidden-parent",
+          threadId: parentThread.id,
+        });
+        const previousParentRequests = harness.db
+          .select()
+          .from(events)
+          .where(eq(events.threadId, parentThread.id))
+          .all()
+          .filter((event) => event.type === "client/turn/requested").length;
+        if (parentStatus === "active") {
+          const started = await postEventBatch({
+            harness,
+            sessionId: session.id,
+            events: [
+              {
+                threadId: parentThread.id,
+                event: {
+                  type: "turn/started",
+                  threadId: parentThread.id,
+                  providerThreadId: "provider-hidden-parent",
+                  scope: turnScope("parent-root-turn"),
+                },
+              },
+            ],
+          });
+          expect(started.status).toBe(200);
+        }
+        const childThread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+          parentThreadId: parentThread.id,
+          providerId: "codex",
+          status: status === "interrupted" ? "stopping" : "active",
+          visibility: "hidden",
+          completionNotice,
+        });
 
-      const response = await postEventBatch({
-        harness,
-        sessionId: session.id,
-        events: [
-          {
-            threadId: childThread.id,
-            event: {
-              type: "turn/started",
+        const response = await postEventBatch({
+          harness,
+          sessionId: session.id,
+          events: [
+            {
               threadId: childThread.id,
-              providerThreadId: "provider-hidden-child",
-              scope: turnScope("hidden-child-root-turn"),
+              event: {
+                type: "turn/started",
+                threadId: childThread.id,
+                providerThreadId: "provider-hidden-child",
+                scope: turnScope("hidden-child-root-turn"),
+              },
             },
-          },
-          {
-            threadId: childThread.id,
-            event: {
-              type: "turn/completed",
+            {
               threadId: childThread.id,
-              providerThreadId: "provider-hidden-child",
-              scope: turnScope("hidden-child-root-turn"),
-              status: "completed",
+              event: {
+                type: "turn/completed",
+                threadId: childThread.id,
+                providerThreadId: "provider-hidden-child",
+                scope: turnScope("hidden-child-root-turn"),
+                status,
+              },
             },
-          },
-        ],
-      });
+          ],
+        });
 
-      expect(response.status).toBe(200);
-      await flushChildThreadNotifications();
-      expect(getThread(harness.db, childThread.id)?.status).toBe("idle");
-      expect(
-        listQueuedThreadCommands(harness, "turn.submit", parentThread.id),
-      ).toHaveLength(1);
-    });
-  });
+        expect(response.status).toBe(200);
+        await flushChildThreadNotifications();
+        expect(getThread(harness.db, childThread.id)?.status).toBe(
+          status === "failed" ? "error" : "idle",
+        );
+        expect(
+          listQueuedThreadCommands(harness, "turn.submit", parentThread.id),
+        ).toHaveLength(completionNotice === false ? 0 : 1);
+        expect(
+          harness.db
+            .select()
+            .from(queuedThreadMessages)
+            .where(eq(queuedThreadMessages.threadId, parentThread.id))
+            .all(),
+        ).toEqual([]);
+        const parentMessages = harness.db
+          .select()
+          .from(events)
+          .where(eq(events.threadId, parentThread.id))
+          .all()
+          .filter((event) => event.type === "client/turn/requested");
+        expect(parentMessages).toHaveLength(
+          previousParentRequests + (completionNotice === false ? 0 : 1),
+        );
+      });
+    },
+  );
 
   it("does not notify a parent when a side-chat child root turn completes", async () => {
     await withChildThreadNotificationClock(async (harness) => {

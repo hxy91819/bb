@@ -551,6 +551,13 @@ export async function createThreadFromRequest(
     (originKind !== null ? requestInput.parentThreadId : undefined);
   const hierarchyParentThreadId =
     originKind === null ? requestInput.parentThreadId : undefined;
+  if (requestInput.completionNotice === false && !hierarchyParentThreadId) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      "completionNotice false requires a parentThreadId and no originKind",
+    );
+  }
   const parentThread = hierarchyParentThreadId
     ? assertValidParentThread(deps, {
         parentThreadId: hierarchyParentThreadId,
@@ -663,6 +670,7 @@ export async function createThreadFromRequest(
   }
   const request: ThreadCreateServiceRequest = {
     ...requestRest,
+    completionNotice: requestInput.completionNotice ?? true,
     ...(hierarchyParentThreadId
       ? { parentThreadId: hierarchyParentThreadId }
       : {}),

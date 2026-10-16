@@ -70,8 +70,9 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
   is visible by default; a child thread inherits its parent's visibility, so a
   hidden thread's subagents are hidden too. Pass `--visibility` to override the
   inherited value. A hidden child still reports its turns and blockers to its
-  parent thread; only forks and side chats stay silent. Promote or hide an
+  parent thread by default; forks and side chats stay silent. Promote or hide an
   existing thread with `bb thread update <id> --visibility visible|hidden`.
+- With a parent, `--no-completion-notice` suppresses completion, failure, and interruption notices; needs-attention notices remain enabled.
 - Stop a finished hidden worker with `bb thread stop <id>` to release its agent
   runtime promptly. Archive it first when it no longer belongs in active thread
   lists. Stop preserves the thread and supports a later resume.

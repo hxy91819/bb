@@ -456,14 +456,17 @@ describe("bb thread show command output", () => {
   });
 
   it("bb thread show --json prints the thread in status payload format", async () => {
-    const thread: domain.Thread = fixtures.makeThread({
-      id: "thread-json-show",
-      projectId: "proj-1",
-      providerId: "codex",
-      status: "idle",
-      createdAt: 1,
-      updatedAt: 2,
-    });
+    const thread = {
+      ...fixtures.makeThread({
+        id: "thread-json-show",
+        projectId: "proj-1",
+        providerId: "codex",
+        status: "idle",
+        createdAt: 1,
+        updatedAt: 2,
+      }),
+      completionNotice: false,
+    };
     const get = vi.fn(async () => thread);
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
     stubServerApi({

@@ -616,52 +616,89 @@ describe("bb thread spawn command output", () => {
     );
   });
 
-  it("bb thread spawn with --parent-thread forwards parent thread id", async () => {
-    vi.stubEnv("BB_PROJECT_ID", "proj-1");
-    const thread: domain.Thread = fixtures.makeThread({
-      id: "thread-2",
-      projectId: "proj-1",
-      providerId: "codex",
-      status: "starting",
-      parentThreadId: "thread-parent",
-      createdAt: 1,
-      updatedAt: 1,
-    });
-    const post = vi.fn(async () => thread);
-    stubServerApi({ "v1.threads.$post": post });
+  it.each([
+    { parentArgs: [] },
+    {
+      parentArgs: ["--parent-thread", "thread-parent", "--origin-kind", "fork"],
+    },
+  ])(
+    "rejects --no-completion-notice without a hierarchy parent (%j)",
+    async ({ parentArgs }) => {
+      const post = vi.fn();
+      stubServerApi({ "v1.threads.$post": post });
+      await expect(
+        runCommand(
+          [
+            "thread",
+            "spawn",
+            "--project",
+            "proj-1",
+            "--prompt",
+            "hello",
+            "--no-completion-notice",
+            ...parentArgs,
+          ],
+          register,
+        ),
+      ).rejects.toThrow("process.exit:1");
+      expect(collectLogLines(vi.mocked(console.error))).toContain(
+        "Error: --no-completion-notice requires --parent-thread or --parent-self and cannot be used with --origin-kind.",
+      );
+      expect(post).not.toHaveBeenCalled();
+    },
+  );
 
-    await runCommand(
-      [
-        "thread",
-        "spawn",
-        "--project",
-        "proj-1",
-        "--parent-thread",
-        "thread-parent",
-        "--prompt",
-        "hello",
-        "--provider",
-        "codex",
-        "--model",
-        "gpt-5",
-      ],
-      register,
-    );
-
-    expect(post).toHaveBeenCalledWith({
-      json: {
-        origin: "cli",
-        startedOnBehalfOf: null,
-        originKind: null,
+  it.each([true, false])(
+    "bb thread spawn forwards parent and completionNotice=%s",
+    async (completionNotice) => {
+      vi.stubEnv("BB_PROJECT_ID", "proj-1");
+      const thread: domain.Thread = fixtures.makeThread({
+        id: "thread-2",
         projectId: "proj-1",
         providerId: "codex",
-        model: "gpt-5",
-        input: [{ type: "text", text: "hello", mentions: [] }],
+        status: "starting",
         parentThreadId: "thread-parent",
-        environment: { type: "project-default" },
-      },
-    });
-  });
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const post = vi.fn(async () => thread);
+      stubServerApi({ "v1.threads.$post": post });
+
+      await runCommand(
+        [
+          "thread",
+          "spawn",
+          "--project",
+          "proj-1",
+          ...(completionNotice ? [] : ["--no-completion-notice"]),
+          "--parent-thread",
+          "thread-parent",
+          "--prompt",
+          "hello",
+          "--provider",
+          "codex",
+          "--model",
+          "gpt-5",
+        ],
+        register,
+      );
+
+      expect(post).toHaveBeenCalledWith({
+        json: {
+          origin: "cli",
+          startedOnBehalfOf: null,
+          originKind: null,
+          projectId: "proj-1",
+          providerId: "codex",
+          model: "gpt-5",
+          input: [{ type: "text", text: "hello", mentions: [] }],
+          parentThreadId: "thread-parent",
+          ...(completionNotice ? {} : { completionNotice: false }),
+          environment: { type: "project-default" },
+        },
+      });
+    },
+  );
 
   it("bb thread spawn does not default parent thread id from BB_THREAD_ID", async () => {
     vi.stubEnv("BB_PROJECT_ID", "proj-1");

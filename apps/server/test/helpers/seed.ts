@@ -206,6 +206,7 @@ export function seedThread(
     status?: ThreadStatus;
     title?: string | null;
     parentThreadId?: string | null;
+    completionNotice?: boolean;
     sourceThreadId?: string | null;
     lifecycleOwnerThreadId?: string | null;
     originKind?: ThreadOriginKind | null;
@@ -222,6 +223,7 @@ export function seedThread(
     title: args.title ?? "Test Thread",
     titleFallback: args.titleFallback ?? "Test Thread",
     parentThreadId: args.parentThreadId ?? null,
+    completionNotice: args.completionNotice,
     sourceThreadId: args.sourceThreadId ?? null,
     lifecycleOwnerThreadId: args.lifecycleOwnerThreadId ?? null,
     originKind: args.originKind ?? null,

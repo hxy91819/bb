@@ -411,12 +411,13 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      "Thread creation may omit root-thread presentation and execution fields so the server can resolve project/provider defaults.",
+      "Thread creation may omit presentation, parent completion notices, and execution fields so the server can resolve defaults at creation.",
     fields: [
       "createThreadRequestSchema.sectionId",
       "createThreadRequestSchema.pinned",
       "createThreadRequestSchema.model",
       "createThreadRequestSchema.parentThreadId",
+      "createThreadRequestSchema.completionNotice",
       "createThreadRequestSchema.providerId",
       "createThreadRequestSchema.permissionMode",
       "createThreadRequestSchema.reasoningLevel",

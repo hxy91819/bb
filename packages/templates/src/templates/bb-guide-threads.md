@@ -22,6 +22,7 @@ Spawning:
     --project <id>                 Project (required; when omitted the error prints this thread's project ID to add)
     --parent-thread <id>           Parent thread (may be in another project)
     --parent-self                  Parent to the current thread (BB_THREAD_ID)
+    --no-completion-notice         Suppress completion, failure, and interruption notices to the parent; needs-attention notices remain enabled
     --lifecycle-owner-thread <id>  Archive/delete with this owner
     --provider <id>                Provider override
     --model <model>                Model override
@@ -76,7 +77,8 @@ Spawning:
   A new child thread inherits the visibility of its parent, so the subagents of
   a hidden thread stay hidden too. Pass --visibility to override the inherited
   value. A hidden child still reports its turns and blockers to its parent
-  thread; only source-derived forks stay silent.
+  thread by default; source-derived forks stay silent.
+  With a parent, --no-completion-notice suppresses completion, failure, and interruption notices; needs-attention notices remain enabled.
   A machine selector accepts an exact ID or an unambiguous name. It works with
   an unmanaged --environment path, --new-environment worktree, or the personal
   workspace. It cannot be combined with an existing environment ID because that

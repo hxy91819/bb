@@ -32,6 +32,7 @@ export interface ThreadCreateServiceRequestInput {
   originPluginId?: CreateThreadRequest["originPluginId"];
   originKind?: ThreadOriginKind | null;
   parentThreadId?: string;
+  completionNotice?: boolean;
   lifecycleOwnerThreadId?: string;
   permissionMode?: CreateThreadRequest["permissionMode"];
   projectId: string;
@@ -47,8 +48,9 @@ export interface ThreadCreateServiceRequestInput {
 
 export interface ThreadCreateServiceRequest extends Omit<
   ThreadCreateServiceRequestInput,
-  "environment" | "pluginMetadata" | "providerId"
+  "completionNotice" | "environment" | "pluginMetadata" | "providerId"
 > {
+  completionNotice: boolean;
   environment: EnvironmentArgs | ProviderEnvironmentArgs;
   pluginMetadata: { pluginId: string; metadata: JsonObject } | null;
   providerId: string;

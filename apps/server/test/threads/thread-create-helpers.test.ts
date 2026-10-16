@@ -128,6 +128,7 @@ describe("createThreadRecord", () => {
               providerId: "codex",
               startedOnBehalfOf: null,
               titleFallback: null,
+              completionNotice: true,
               visibility: "visible",
             },
           },
@@ -190,6 +191,7 @@ describe("createThreadRecord", () => {
             providerId: "codex",
             startedOnBehalfOf: null,
             titleFallback: null,
+            completionNotice: true,
             visibility: "visible",
           },
         });

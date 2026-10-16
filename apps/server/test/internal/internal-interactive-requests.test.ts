@@ -417,121 +417,125 @@ describe("internal interactive request lifecycle", () => {
     });
   });
 
-  it("notifies a parent thread when a child needs attention for a pending interaction", async () => {
-    await withTestHarness(async (harness) => {
-      const { host, session } = seedHostSession(harness.deps, {
-        id: "host-child-needs-attention",
-      });
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-      });
-      const parentEnvironment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        path: "/tmp/child-needs-attention-parent",
-        projectId: project.id,
-      });
-      const childEnvironment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        path: "/tmp/child-needs-attention-child",
-        projectId: project.id,
-      });
-      const parentThread = seedThread(harness.deps, {
-        environmentId: parentEnvironment.id,
-        projectId: project.id,
-        title: "Project coordinator",
-      });
-      seedThreadRuntimeState(harness.deps, {
-        environmentId: parentEnvironment.id,
-        inputText: "Initial parent task",
-        providerThreadId: "provider-parent-needs-attention",
-        threadId: parentThread.id,
-      });
-      const childThread = seedThread(harness.deps, {
-        environmentId: childEnvironment.id,
-        parentThreadId: parentThread.id,
-        projectId: project.id,
-        title: "Backend port validation cleanup",
-      });
-      const body = buildCommandApprovalInteractiveRequest({
-        sessionId: session.id,
-        suffix: "child-needs-attention",
-        threadId: childThread.id,
-      });
+  it.each([undefined, false] as const)(
+    "notifies a parent when a child needs attention with completionNotice=%s",
+    async (completionNotice) => {
+      await withTestHarness(async (harness) => {
+        const { host, session } = seedHostSession(harness.deps, {
+          id: "host-child-needs-attention",
+        });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+        });
+        const parentEnvironment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          path: "/tmp/child-needs-attention-parent",
+          projectId: project.id,
+        });
+        const childEnvironment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          path: "/tmp/child-needs-attention-child",
+          projectId: project.id,
+        });
+        const parentThread = seedThread(harness.deps, {
+          environmentId: parentEnvironment.id,
+          projectId: project.id,
+          title: "Project coordinator",
+        });
+        seedThreadRuntimeState(harness.deps, {
+          environmentId: parentEnvironment.id,
+          inputText: "Initial parent task",
+          providerThreadId: "provider-parent-needs-attention",
+          threadId: parentThread.id,
+        });
+        const childThread = seedThread(harness.deps, {
+          environmentId: childEnvironment.id,
+          parentThreadId: parentThread.id,
+          completionNotice,
+          projectId: project.id,
+          title: "Backend port validation cleanup",
+        });
+        const body = buildCommandApprovalInteractiveRequest({
+          sessionId: session.id,
+          suffix: "child-needs-attention",
+          threadId: childThread.id,
+        });
 
-      const response = await registerInteractiveRequest({ body, harness });
-      expect(response.status).toBe(200);
-      await expect(readJson(response)).resolves.toMatchObject({
-        outcome: "created",
-        status: "pending",
-      });
+        const response = await registerInteractiveRequest({ body, harness });
+        expect(response.status).toBe(200);
+        await expect(readJson(response)).resolves.toMatchObject({
+          outcome: "created",
+          status: "pending",
+        });
 
-      const parentTurnCommand = await waitForQueuedCommand(
-        harness,
-        ({ command, row }) =>
-          row.state === "pending" &&
-          command.type === "turn.submit" &&
-          command.threadId === parentThread.id,
-      );
-      if (parentTurnCommand.command.type !== "turn.submit") {
-        throw new Error(
-          `Expected parent turn command, got ${parentTurnCommand.command.type}`,
-        );
-      }
-      const threadMention = `@thread:${childThread.id}`;
-      const expectedText = renderTemplate(
-        "systemMessageChildThreadNeedsAttention",
-        {
-          blockerSummary: [
-            "Blocked on command approval:",
-            "Command: git push",
-            "Cwd: /tmp/project",
-          ].join("\n"),
-          threadMention,
-        },
-      );
-      const mentionStart = expectedText.indexOf(threadMention);
-      expect(parentTurnCommand.command.input).toEqual(
-        expect.arrayContaining([
-          {
-            type: "text",
-            text: expectedText,
-            mentions: [
-              {
-                start: mentionStart,
-                end: mentionStart + threadMention.length,
-                resource: {
-                  kind: "thread",
-                  label: "Backend port validation cleanup",
-                  projectId: project.id,
-                  threadId: childThread.id,
-                },
-              },
-            ],
-          },
-        ]),
-      );
-
-      const retryResponse = await registerInteractiveRequest({
-        body,
-        harness,
-      });
-      expect(retryResponse.status).toBe(200);
-      await expect(readJson(retryResponse)).resolves.toMatchObject({
-        outcome: "existing",
-        status: "pending",
-      });
-      await expect(
-        waitForQueuedCommandAfter(
+        const parentTurnCommand = await waitForQueuedCommand(
           harness,
-          parentTurnCommand.row.cursor,
-          ({ command }) =>
+          ({ command, row }) =>
+            row.state === "pending" &&
             command.type === "turn.submit" &&
             command.threadId === parentThread.id,
-          100,
-        ),
-      ).rejects.toThrow("Timed out waiting for queued command");
-    });
-  });
+        );
+        if (parentTurnCommand.command.type !== "turn.submit") {
+          throw new Error(
+            `Expected parent turn command, got ${parentTurnCommand.command.type}`,
+          );
+        }
+        const threadMention = `@thread:${childThread.id}`;
+        const expectedText = renderTemplate(
+          "systemMessageChildThreadNeedsAttention",
+          {
+            blockerSummary: [
+              "Blocked on command approval:",
+              "Command: git push",
+              "Cwd: /tmp/project",
+            ].join("\n"),
+            threadMention,
+          },
+        );
+        const mentionStart = expectedText.indexOf(threadMention);
+        expect(parentTurnCommand.command.input).toEqual(
+          expect.arrayContaining([
+            {
+              type: "text",
+              text: expectedText,
+              mentions: [
+                {
+                  start: mentionStart,
+                  end: mentionStart + threadMention.length,
+                  resource: {
+                    kind: "thread",
+                    label: "Backend port validation cleanup",
+                    projectId: project.id,
+                    threadId: childThread.id,
+                  },
+                },
+              ],
+            },
+          ]),
+        );
+
+        const retryResponse = await registerInteractiveRequest({
+          body,
+          harness,
+        });
+        expect(retryResponse.status).toBe(200);
+        await expect(readJson(retryResponse)).resolves.toMatchObject({
+          outcome: "existing",
+          status: "pending",
+        });
+        await expect(
+          waitForQueuedCommandAfter(
+            harness,
+            parentTurnCommand.row.cursor,
+            ({ command }) =>
+              command.type === "turn.submit" &&
+              command.threadId === parentThread.id,
+            100,
+          ),
+        ).rejects.toThrow("Timed out waiting for queued command");
+      });
+    },
+  );
 
   it("notifies a parent when a hidden delegated child needs attention", async () => {
     await withTestHarness(async (harness) => {

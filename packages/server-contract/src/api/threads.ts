@@ -106,6 +106,7 @@ export const createThreadRequestSchema = z
     executionInputSources: createExecutionInputSourcesSchema.optional(),
     environment: createThreadEnvironmentArgsSchema,
     parentThreadId: z.string().min(1).optional(),
+    completionNotice: z.boolean().optional(),
     sectionId: z.string().min(1).nullable().optional(),
     pinned: z.boolean().optional(),
     sourceThreadId: z.string().min(1).optional(),
@@ -491,6 +492,7 @@ export const threadSearchResponseSchema = z
 export type ThreadSearchResponse = z.infer<typeof threadSearchResponseSchema>;
 
 export const threadResponseSchema = threadWithRuntimeSchema.extend({
+  completionNotice: z.boolean().optional(),
   activeBackgroundAgentCount: z.number().int().nonnegative(),
   /**
    * Whether `POST /threads/:id/restore-environment` would build this thread a
