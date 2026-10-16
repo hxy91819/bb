@@ -309,6 +309,14 @@ describe("cross-provider permission changes: Codex", () => {
 });
 
 describe("cross-provider permission changes: Claude", () => {
+  beforeEach(() => {
+    if (process.getuid) {
+      vi.spyOn(process, "getuid").mockReturnValue(1000);
+    }
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it.each(permissionChangeCases(["accept-edits", "auto", "full"]))(
     "permission contract: $before -> $after on $method",
     async (scenario) => {
