@@ -6,7 +6,7 @@
 
 - [x] 阶段 1：核心 `feature/thread-message-navigation`，`BbNavigate.toThread` 支持 `experimental_messageSeq`（f7b53a6004）
 - [x] 阶段 2：独立插件 `~/code/bb-plugin-bookmarks`（选区菜单加书签、侧栏底部与全页列表、CLI），dev 实例已验收（ecd59a4）
-- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 聚合 c7046510d3 / tag `fork-v0.46.0-20261016.4` 已推，Release 补发中
+- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 聚合 47d0999698 / Release `fork-v0.46.0-20261016.6` 已发布，待用户部署
 
 ## 关键决策
 
