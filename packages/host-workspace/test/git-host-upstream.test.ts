@@ -326,12 +326,18 @@ describe("pull request lookup for differently named upstream branches", () => {
       vi.stubEnv("PATH", path.dirname(stdout.trim().split(/\r?\n/)[0]!));
     } else {
       await fs.symlink(stdout.trim(), path.join(binPath, "git"));
+      const { stdout: bashPath } = await execFileAsync("which", ["bash"]).catch(
+        () => ({ stdout: "" }),
+      );
+      if (bashPath.trim()) {
+        await fs.symlink(bashPath.trim(), path.join(binPath, "bash"));
+      }
       vi.stubEnv("PATH", binPath);
     }
 
-    await expect(
-      new Workspace(workspacePath).getPullRequest(),
-    ).resolves.toEqual({
+    const workspace = new Workspace(workspacePath);
+    await expect(workspace.currentBranch).resolves.toBe(localBranch);
+    await expect(workspace.getPullRequest()).resolves.toEqual({
       outcome: "unavailable",
       message: "GitHub CLI is not available",
     });
