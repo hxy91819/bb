@@ -47,3 +47,4 @@ fix/leading-thread-avatar-layout              needs-feedback                    
 fix/thread-project-label-width                needs-feedback                                             # 线程项目标签行宽预算与收缩修复；叠在 feature/thread-project-label 上
 fix/mobile-add-to-chat                        needs-feedback                                             # 移动端 Add to chat 后展开输入框，保持触屏端不自动弹键盘
 feature/thread-message-navigation            needs-feedback                                             # 插件 toThread 支持 experimental_messageSeq 定位消息，与命令面板会话搜索共用实现
+fix/codex-compaction-warning                  fork-only                                                  # 屏蔽 Codex 长会话多次压缩准确率提示（按第一句前缀过滤 warning）
