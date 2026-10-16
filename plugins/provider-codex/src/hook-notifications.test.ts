@@ -19,6 +19,47 @@ function createHarness() {
 }
 
 describe("Codex lifecycle notification diagnostics", () => {
+  const compactionWarning =
+    "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
+
+  it.each(["thread-test", null])(
+    "suppresses the compaction accuracy warning with threadId %s",
+    (threadId) => {
+      const translate = createHarness();
+      expect(
+        translate("warning", { threadId, message: compactionWarning }),
+      ).toEqual([]);
+    },
+  );
+
+  it("suppresses the compaction accuracy warning when its recommendation changes", () => {
+    const translate = createHarness();
+    expect(
+      translate("warning", {
+        threadId: "thread-test",
+        message:
+          "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Consider starting a new thread.",
+      }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["configWarning", "config"],
+    ["deprecationNotice", "deprecation"],
+  ])("preserves %s even with the compaction warning text", (method, category) => {
+    const translate = createHarness();
+    expect(
+      translate(method, { summary: compactionWarning, details: "Details" }),
+    ).toEqual([
+      expect.objectContaining({
+        type: "provider/warning",
+        category,
+        summary: compactionWarning,
+        details: "Details",
+      }),
+    ]);
+  });
+
   it.each(["hook/started", "hook/completed"])(
     "suppresses routine %s notifications",
     (method) => {
