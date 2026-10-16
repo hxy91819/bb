@@ -673,6 +673,7 @@ function ThreadRowComponent({
               "pointer-events-auto relative z-[31] flex h-4 min-w-0 max-w-full shrink-0 items-center gap-1",
               decoration.avatar && "min-w-4",
             )}
+            onPointerDownCapture={recordTitlePointer}
             onClick={handleThreadLinkClick}
             onMouseDown={(event) => {
               if (event.button === 0) event.preventDefault();
@@ -708,7 +709,8 @@ function ThreadRowComponent({
       ) : null}
       <span
         className={cn(
-          "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
+          "relative flex min-w-0 flex-1 items-center self-stretch",
+          projectName ? "gap-0" : "gap-1.5",
           !isActionsOpen &&
             "group-data-[sidebar-touch-armed=true]/thread-row:hidden",
           !shortcut &&
@@ -816,7 +818,7 @@ function ThreadRowComponent({
           <span
             data-sidebar-thread-project-name=""
             title={`Project: ${projectName}`}
-            className="pointer-events-none max-w-24 shrink-0 truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
+            className="pointer-events-none min-w-5 max-w-24 shrink truncate rounded-sm bg-muted/50 px-1.5 py-0.5 text-2xs leading-none text-subtle-foreground"
           >
             {projectName}
           </span>
