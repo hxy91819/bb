@@ -35,7 +35,7 @@
       "labels": {
         "anchor": ["Pinned", "Plugin group", "Label"]
       },
-      "fixtureClassAnchors": ["text-ui-xs"],
+      "fixtureClassAnchors": ["text-xs"],
       "sources": [
         {
           "path": "plugins/thread-list/app/list/ProjectList.tsx",
