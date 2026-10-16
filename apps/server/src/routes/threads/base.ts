@@ -221,7 +221,14 @@ function buildThreadSearchResponse(
 
 export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
   const { get, post, patch, del } = typedRoutes<PublicApiSchema>(app, {
-    onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
+    onValidationError: (msg) =>
+      new ApiError(
+        msg.startsWith("plugin_context_too_large:") ? 413 : 400,
+        msg.startsWith("plugin_context_too_large:")
+          ? "plugin_context_too_large"
+          : "invalid_request",
+        msg,
+      ),
   });
   const routes = publicApiRoutes.threads;
 
