@@ -649,15 +649,14 @@ function ThreadRowComponent({
       (entry) => entry.decoration.placement === placement,
     );
     if (isEditing || entries.length === 0) return null;
+    const hasAvatar = entries.some((entry) => entry.decoration.avatar);
     return (
       <span
         data-sidebar-thread-decorations={placement}
-        className={cn(
-          "pointer-events-none relative flex min-w-0 items-center gap-1 text-ui-xs text-muted-foreground",
-          placement === "leading"
-            ? "mr-1.5 max-w-[40%] shrink overflow-hidden"
-            : "max-w-[40%] shrink overflow-hidden",
-        )}
+        className="pointer-events-none relative flex h-4 w-max min-w-0 max-w-[40%] shrink flex-wrap content-start items-center gap-1 overflow-hidden text-ui-xs text-muted-foreground"
+        style={{
+          minWidth: hasAvatar ? "1rem" : undefined,
+        }}
       >
         {entries.map(({ key, decoration }) => (
           <a
@@ -668,7 +667,10 @@ function ThreadRowComponent({
             role="img"
             aria-label={decoration.accessibleLabel}
             title={decoration.accessibleLabel}
-            className="pointer-events-auto relative z-[31] flex min-w-0 items-center gap-1"
+            className={cn(
+              "pointer-events-auto relative z-[31] flex h-4 min-w-0 max-w-full shrink-0 items-center gap-1",
+              decoration.avatar && "min-w-4",
+            )}
             onPointerDownCapture={recordTitlePointer}
             onClick={handleThreadLinkClick}
             onMouseDown={(event) => {
@@ -732,15 +734,20 @@ function ThreadRowComponent({
           aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
           className="absolute inset-0 rounded-md outline-none"
         />
+        {renderDecorations("leading")}
         <span
           className={cn(
-            "pointer-events-none relative flex min-w-0 items-center self-stretch",
+            "pointer-events-none relative flex items-center self-stretch",
+            decorations.length > 0
+              ? provider
+                ? "min-w-11"
+                : "min-w-5"
+              : "min-w-0",
             ((crossProjectLabel === null && (!parentOptions || !hasChildren)) ||
               isEditing) &&
               "flex-1",
           )}
         >
-          {renderDecorations("leading")}
           {provider ? (
             <Tooltip>
               <TooltipTrigger asChild>
