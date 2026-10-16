@@ -721,6 +721,7 @@ describe("bridge", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
@@ -1550,6 +1551,9 @@ describe("bridge", () => {
   });
 
   it("falls back to well-known install locations when PATH discovery fails", () => {
+    if (process.getuid) {
+      vi.spyOn(process, "getuid").mockReturnValue(1000);
+    }
     const homeDir = mkdtempSync(join(tmpdir(), "bb-claude-home-"));
     tempDirs.push(homeDir);
     const localBinDir = join(homeDir, ".local", "bin");
