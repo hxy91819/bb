@@ -6,8 +6,8 @@
 
 - [x] 阶段 1：核心 `feature/thread-message-navigation`，`BbNavigate.toThread` 支持 `experimental_messageSeq`（f7b53a6004）
 - [x] 阶段 2：独立插件 `~/code/bb-plugin-bookmarks`（选区菜单加书签、侧栏底部与全页列表、CLI），dev 实例已验收（ecd59a4）
-- [ ] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单 ← 已部署 47d0999698，安装与实测中（最近线程 thr_7ifnhuaanp）
-- [ ] 阶段 4：入口改为右侧面板标签页（默认当前项目，可取消过滤看全部；加书签后自动打开并定位），移除侧栏底部与全页入口，重装实测
+- [x] 阶段 3：分支登记 `.fork/branches`，聚合打包发布，部署后在本机 BB 安装插件，补测真实 assistant 选区菜单（本机已安装，实测通过）
+- [ ] 阶段 4：入口改为右侧面板标签页（默认当前项目，可取消过滤看全部；加书签后自动打开并定位），移除侧栏底部与全页入口，支持 GitHub 直装，重装实测 ← 进行中（最近线程 thr_qwniinabzn）
 
 ## 关键决策
 
