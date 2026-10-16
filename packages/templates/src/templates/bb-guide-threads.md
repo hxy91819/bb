@@ -511,3 +511,17 @@ directories are inside that storage before removing files, including dev
 servers in nested checkouts. On macOS and Linux this uses the same SIGTERM
 grace period and SIGKILL fallback as worktree removal. Windows does not
 enumerate process working directories.
+
+Experimental activity facts:
+
+  bb thread experimental-activity --plugin <id> --key <key> --equals '"member-id"' --from <UTC-ms> --to <UTC-ms> [--project <id>] [--thread <id>] [--limit <1-100>] [--cursor <C>] [--json]
+
+  Omit --thread for summaries; pass it for details under the same metadata/date
+  filters. --equals is a JSON scalar, and --key is an exact top-level key.
+  Defaults to 20 items and compact JSON output (256 KiB hard wire limit).
+  Each item has cursorAfter; resume from the last item actually consumed.
+  totalThreads/totalEvidence are current counts, not frozen across pages.
+  Coverage is retained events with live pagination; archived/hidden threads
+  are included, deleted threads and non-public projects excluded. Agent
+  statements are not verified results. See the Plugin Guide thread metadata
+  card for the experimental API and pagination limitations.
