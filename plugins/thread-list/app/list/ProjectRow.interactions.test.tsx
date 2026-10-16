@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { SidebarThread } from "../model/sidebar-thread.js";
+import type { SidebarProject } from "../model/use-sidebar-data.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarRenameProvider } from "../rows/SidebarInlineRename.js";
@@ -112,6 +113,7 @@ function Harness({ children, store }: HarnessProps) {
 
 interface RenderTreeOptions {
   threads?: readonly SidebarThread[];
+  projects?: readonly SidebarProject[];
   draftThreadIds?: readonly string[];
   sdk?: PluginSdkTestFakes;
   store?: ReturnType<typeof createStore>;
@@ -119,7 +121,13 @@ interface RenderTreeOptions {
 
 function renderTree(
   children: ReactNode,
-  { threads = [], draftThreadIds = [], sdk, store }: RenderTreeOptions = {},
+  {
+    threads = [],
+    projects,
+    draftThreadIds = [],
+    sdk,
+    store,
+  }: RenderTreeOptions = {},
 ): RenderedSlot {
   return renderSlot(
     { component: Harness },
@@ -127,7 +135,7 @@ function renderTree(
     {
       sidebarThreads: {
         threads,
-        projects: [makeSidebarProject()],
+        projects: projects ?? [makeSidebarProject()],
       },
       sidebarDraftThreadIds: draftThreadIds,
       sdk,
@@ -1310,4 +1318,122 @@ describe("environment creation placement", () => {
       ]);
     },
   );
+});
+
+describe("thread project label in tree rendering", () => {
+  afterEach(cleanup);
+
+  it("omits project label for same-project child threads while showing it on parent", () => {
+    const project = makeSidebarProject({
+      id: "proj_main",
+      name: "Main Project",
+    });
+    const parent = makeThread({
+      id: "thr_parent",
+      title: "Parent Thread",
+      projectId: "proj_main",
+      pinnedAt: 1,
+    });
+    const child = makeThread({
+      id: "thr_child",
+      title: "Child Thread",
+      parentThreadId: "thr_parent",
+      projectId: "proj_main",
+    });
+    const node = buildPinnedSidebarState({
+      threads: [parent, child],
+    }).rootNodes[0];
+
+    const { container } = renderTree(
+      <ThreadTreeNodeRow
+        projectId="proj_main"
+        node={node}
+        depthOffset={0}
+        isEnvGrouped={false}
+        showProjectName={true}
+        collapsedThreadIds={new Set()}
+        collapsedEnvironmentIds={new Set()}
+        onToggleThreadCollapsed={vi.fn()}
+        onToggleEnvironmentCollapsed={vi.fn()}
+        sortableRef={() => undefined}
+      />,
+      { threads: [parent, child], projects: [project] },
+    );
+
+    const parentRow = container.querySelector(
+      '[data-sidebar-thread-id="thr_parent"]',
+    )?.parentElement;
+    expect(
+      parentRow?.querySelector("[data-sidebar-thread-project-name]")
+        ?.textContent,
+    ).toBe("Main Project");
+
+    const childRow = container.querySelector(
+      '[data-sidebar-thread-id="thr_child"]',
+    )?.parentElement;
+    expect(
+      childRow?.querySelector("[data-sidebar-thread-project-name]"),
+    ).toBeNull();
+  });
+
+  it("shows project label on different-project child threads", () => {
+    const parentProject = makeSidebarProject({
+      id: "proj_parent",
+      name: "Parent Project",
+    });
+    const childProject = makeSidebarProject({
+      id: "proj_child",
+      name: "Child Project",
+    });
+    const parent = makeThread({
+      id: "thr_parent",
+      title: "Parent Thread",
+      projectId: "proj_parent",
+      pinnedAt: 1,
+    });
+    const child = makeThread({
+      id: "thr_child",
+      title: "Child Thread",
+      parentThreadId: "thr_parent",
+      projectId: "proj_child",
+    });
+    const node = buildPinnedSidebarState({
+      threads: [parent, child],
+    }).rootNodes[0];
+
+    const { container } = renderTree(
+      <ThreadTreeNodeRow
+        projectId="proj_parent"
+        node={node}
+        depthOffset={0}
+        isEnvGrouped={false}
+        showProjectName={true}
+        collapsedThreadIds={new Set()}
+        collapsedEnvironmentIds={new Set()}
+        onToggleThreadCollapsed={vi.fn()}
+        onToggleEnvironmentCollapsed={vi.fn()}
+        sortableRef={() => undefined}
+      />,
+      {
+        threads: [parent, child],
+        projects: [parentProject, childProject],
+      },
+    );
+
+    const parentRow = container.querySelector(
+      '[data-sidebar-thread-id="thr_parent"]',
+    )?.parentElement;
+    expect(
+      parentRow?.querySelector("[data-sidebar-thread-project-name]")
+        ?.textContent,
+    ).toBe("Parent Project");
+
+    const childRow = container.querySelector(
+      '[data-sidebar-thread-id="thr_child"]',
+    )?.parentElement;
+    expect(
+      childRow?.querySelector("[data-sidebar-thread-project-name]")
+        ?.textContent,
+    ).toBe("Child Project");
+  });
 });
