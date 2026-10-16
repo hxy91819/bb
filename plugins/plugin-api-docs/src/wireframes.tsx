@@ -550,14 +550,14 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
       <span className="block px-2 pb-1 pt-1.5 text-xs text-subtle-foreground/75">
         Pinned
       </span>
-      <span data-guide-thread-group="" className="block px-2 text-ui-xs text-muted-foreground">Plugin group</span>
+      <span data-guide-thread-group="" className="block px-2 text-xs text-muted-foreground">Plugin group</span>
       {SIDEBAR_THREADS.map((thread) => (
         <span
           key={thread.title}
           className="flex h-6.5 items-center gap-2 rounded-md px-2"
         >
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-          <span data-guide-thread-decoration="" role="img" aria-label="Plugin row information" className="text-ui-xs text-muted-foreground">Label</span>
+          <span data-guide-thread-decoration="" role="img" aria-label="Plugin row information" className="text-xs text-muted-foreground">Label</span>
           {thread.glyph === "spin" ? (
             <Mark
               id="thread-row-status"
