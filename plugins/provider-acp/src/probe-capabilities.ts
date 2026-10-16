@@ -13,12 +13,14 @@ export function applyAcpAgentProbe(
   if (!probe.reachable) {
     return null;
   }
-  const declaredFork = agent.fork ?? "none";
-  if (declaredFork === "none" || probe.fork) {
+  const fork = probe.fork ? "tip" : "none";
+  if (agent.fork === "none" || agent.fork === fork) {
     return null;
   }
   return {
-    agent: { ...agent, fork: "none" },
-    reason: `the agent does not advertise session/fork, but bb declared fork "${declaredFork}"`,
+    agent: { ...agent, fork },
+    reason: probe.fork
+      ? "the agent advertises session/fork"
+      : "the agent does not advertise session/fork",
   };
 }
