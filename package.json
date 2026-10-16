@@ -93,7 +93,10 @@
       "brace-expansion@>=2 <2.1.7": "2.1.7",
       "brace-expansion@>=5 <5.0.12": "5.0.12",
       "joi@>=17 <17.13.8": "17.13.8",
-      "moment@>=2 <2.31.0": "2.31.0"
+      "moment@>=2 <2.31.0": "2.31.0",
+      "@tanstack/react-start@>=1 <1.168.60": "1.168.60",
+      "@tanstack/start-server-core@>=1 <1.169.39": "1.169.39",
+      "@modelcontextprotocol/sdk@>=1 <1.31.0": "1.31.0"
     },
     "patchedDependencies": {
       "app-builder-lib@26.15.7": "patches/app-builder-lib@26.15.7.patch",
