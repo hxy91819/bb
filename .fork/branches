@@ -45,4 +45,4 @@ feature/thread-activity-query                  needs-feedback                   
 fix/plugin-overlay-recovery                    needs-feedback                                             # 插件内容脚本隔离期间放行 React root 挂载，避免全局 overlay 节点被拒
 fix/leading-thread-avatar-layout              needs-feedback                                             # 通用行首头像布局与宽度保障；叠在 feature/plugin-thread-list-contributions 上
 fix/thread-project-label-width                needs-feedback                                             # 线程项目标签行宽预算与收缩修复；叠在 feature/thread-project-label 上
-feature/child-completion-notice             needs-feedback                                             # spawn --no-completion-notice 保留父子关联，关闭结束通知，保留求助通知
+feature/child-completion-notice             needs-feedback                                             # spawn --no-completion-notice 保留父子关联，关闭结束通知，保留求助通知；叠在 feature/thread-activity-query 上
