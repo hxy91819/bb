@@ -90,6 +90,7 @@ function sdkStubs() {
       },
     },
     system: {
+      config: async () => ({ primaryHostId: "host-one" }),
       providerStates: async () => ({ providers: [] }),
     },
     plugins: {
@@ -7270,4 +7271,144 @@ describe("Account Pool nested proxy", () => {
     expect(allowed.status).toBe(200);
     expect(await allowed.json()).toEqual({ claude: true, codex: false });
   });
+});
+
+describe("pooled text AI service", () => {
+  it.each(["missing", "expired"])(
+    "generates text with %s local Codex auth using pool credentials",
+    async (localAuth) => {
+      const seen: string[] = [];
+      const fixture = await createOAuthRequestFixture(
+        "codex",
+        async (_input, init) => {
+          seen.push(new Headers(init?.headers).get("authorization") ?? "");
+          return new Response(
+            `data: ${JSON.stringify({
+              type: "response.completed",
+              response: {
+                status: "completed",
+                output: [
+                  {
+                    type: "message",
+                    content: [
+                      { type: "output_text", text: "Repair pooled titles" },
+                    ],
+                  },
+                ],
+              },
+            })}\r\n\r\n`,
+            { headers: { "content-type": "text/event-stream" } },
+          );
+        },
+        Date.now,
+      );
+      vi.stubEnv("CODEX_HOME", fixture.dataDir);
+      if (localAuth === "expired") {
+        await fs.writeFile(
+          path.join(fixture.dataDir, "auth.json"),
+          JSON.stringify({
+            tokens: {
+              access_token: testJwt({ exp: 1 }),
+              account_id: "local-account",
+            },
+          }),
+        );
+      }
+      const service =
+        fixture.host.harness.registrations.aiServiceRegistrations[0];
+      expect(service?.complete).toBeTypeOf("function");
+      expect(await service?.status?.()).toEqual({ ready: true });
+      const cancelled = new AbortController();
+      cancelled.abort(new Error("Cancelled title request"));
+      await expect(
+        service?.complete?.("Cancelled request", {
+          signal: cancelled.signal,
+        }),
+      ).rejects.toThrow("Cancelled title request");
+      expect(seen).toEqual([]);
+      await expect(
+        service?.complete?.("Summarize this request", {
+          signal: new AbortController().signal,
+        }),
+      ).resolves.toBe("Repair pooled titles");
+      expect(seen).toEqual(["Bearer oauth-old"]);
+      await fixture.host.harness.behavior.runCli(["routing", "codex", "--off"]);
+      expect(await service?.status?.()).toMatchObject({ ready: false });
+      await expect(
+        service?.complete?.("Another title", {
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow();
+      expect(seen).toHaveLength(1);
+    },
+  );
+
+  it("uses the next text model when the pool returns a transient failure", async () => {
+    const models: string[] = [];
+    const fixture = await createOAuthRequestFixture(
+      "codex",
+      async (_input, init) => {
+        const body = z
+          .object({ model: z.string() })
+          .parse(await new Response(init?.body).json());
+        models.push(body.model);
+        if (body.model === "gpt-6-luna")
+          return Response.json(
+            { error: { message: "Unavailable" } },
+            { status: 503 },
+          );
+        return new Response(
+          `data: ${JSON.stringify({
+            type: "response.completed",
+            response: {
+              status: "completed",
+              output: [
+                {
+                  type: "message",
+                  content: [{ type: "output_text", text: "Fallback title" }],
+                },
+              ],
+            },
+          })}\n\n`,
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      },
+      Date.now,
+    );
+    const service =
+      fixture.host.harness.registrations.aiServiceRegistrations[0];
+    expect(service?.complete).toBeTypeOf("function");
+    await expect(
+      service?.complete?.("Write a title", {
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toBe("Fallback title");
+    expect(models).toEqual(["gpt-6-luna", "gpt-5.6-luna"]);
+  });
+
+  it.each(["response.failed", "response.incomplete", "truncated"])(
+    "rejects %s after partial text instead of publishing it",
+    async (failureType) => {
+      const fixture = await createOAuthRequestFixture(
+        "codex",
+        async () =>
+          new Response(
+            `data: ${JSON.stringify({ type: "response.output_text.delta", delta: "Partial" })}\n\n` +
+              (failureType === "truncated"
+                ? ""
+                : `data: ${JSON.stringify({ type: failureType, response: { status: "failed" } })}\n\n`),
+            { headers: { "content-type": "text/event-stream" } },
+          ),
+        Date.now,
+      );
+      const service =
+        fixture.host.harness.registrations.aiServiceRegistrations[0];
+      expect(service?.complete).toBeTypeOf("function");
+      await expect(
+        service?.complete?.("Write a title", {
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow();
+    },
+  );
 });
