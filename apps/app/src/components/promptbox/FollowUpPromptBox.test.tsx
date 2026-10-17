@@ -944,6 +944,35 @@ describe("FollowUpPromptBox", () => {
     ).toBeNull();
   });
 
+  it("expands a quoted draft on mobile without moving focus", () => {
+    mocks.isCompactViewport = true;
+    mocks.isPointerCoarse = true;
+    const props = createFollowUpPromptBoxProps({ kind: "ready" });
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    try {
+      const { rerender } = render(
+        <FollowUpPromptBox {...props} focusEndKey={0} />,
+      );
+      expect(screen.getByTestId("prompt-box").dataset.compact).toBe("true");
+      if (!props.composer) throw new Error("Missing composer");
+      const quotedProps = {
+        ...props,
+        composer: { ...props.composer, message: "> selected text\n" },
+      };
+      rerender(<FollowUpPromptBox {...quotedProps} focusEndKey={1} />);
+
+      expect(screen.getByTestId("prompt-box").dataset.compact).toBe("false");
+      expect(
+        document.querySelector("[data-follow-up-composer-footer]"),
+      ).not.toBeNull();
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      outside.remove();
+    }
+  });
+
   it("shows the full editor immediately for message edits on mobile", () => {
     mocks.isCompactViewport = true;
     vi.useFakeTimers();
@@ -1543,7 +1572,9 @@ describe("FollowUpPromptBox", () => {
   it("stays compact on mount when a coarse pointer will not focus the editor", () => {
     mocks.isPointerCoarse = true;
     render(
-      <FollowUpPromptBox {...createFollowUpPromptBoxProps({ kind: "ready" })} />,
+      <FollowUpPromptBox
+        {...createFollowUpPromptBoxProps({ kind: "ready" })}
+      />,
     );
 
     expect(
