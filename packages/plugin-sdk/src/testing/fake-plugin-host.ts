@@ -10,7 +10,12 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { CronExpressionParser } from "cron-parser";
 import { Hono } from "hono";
-import { deepFreezePluginMetadata, validatePluginMetadata } from "@bb/domain";
+import {
+  deepFreezePluginMetadata,
+  validatePluginMetadata,
+  experimental_validateStrictJson,
+  type JsonObject,
+} from "@bb/domain";
 import {
   adoptHttpRouteResponse,
   aiServiceAlreadyRegisteredMessage,
@@ -114,6 +119,7 @@ import type {
   ExperimentalPluginRpcHandlerContext,
   StandardSchemaV1,
   JsonValue,
+  experimental_ThreadCreationPrepareArgs,
 } from "@get-bb/plugin-sdk";
 import {
   createFakeSdk,
@@ -353,6 +359,9 @@ export interface FakePluginInspectionState {
 
 /** Deterministic inputs that stand in for behavior normally driven by BB. */
 export interface FakePluginBehaviorDrivers {
+  experimental_prepareThreadCreationContext(
+    args: Omit<experimental_ThreadCreationPrepareArgs<unknown>, "signal">,
+  ): Promise<JsonObject | null>;
   /** Deliver an unexpected host-worker exit to every registered client. */
   experimental_emitHostWorkerExit(hostId: string): Promise<void>;
   /** Deliver a host signal through its registered payload schema. */
@@ -1148,6 +1157,12 @@ function createFakePluginHostInternal(
   } = {
     "message.dispatch": null,
   };
+  let prepareThreadCreationContext:
+    | ((
+        args: Omit<experimental_ThreadCreationPrepareArgs<unknown>, "signal">,
+      ) => Promise<JsonObject | null>)
+    | null = null;
+  const creationControllers = new Set<AbortController>();
   const environmentCompositions = new Map<
     string,
     NormalizedPluginEnvironmentComposition
@@ -1512,6 +1527,109 @@ function createFakePluginHostInternal(
     ui,
     events,
     experimental_hooks,
+    experimental_threadCreationContext: {
+      register(registration) {
+        assertLive();
+        if (prepareThreadCreationContext !== null)
+          throw new Error("Thread creation context already registered");
+        if (
+          !isStandardSchema(registration.input) ||
+          typeof registration.prepare !== "function"
+        )
+          throw new Error("Invalid thread creation context registration");
+        const controller = new AbortController();
+        creationControllers.add(controller);
+        const prepare = async (
+          args: Omit<experimental_ThreadCreationPrepareArgs<unknown>, "signal">,
+        ) => {
+          assertLive();
+          const callController = new AbortController();
+          const relayAbort = () => callController.abort();
+          controller.signal.addEventListener("abort", relayAbort, {
+            once: true,
+          });
+          const work = Promise.resolve().then(async () => {
+            const parsed = args.context.present
+              ? await registration.input["~standard"].validate(
+                  experimental_validateStrictJson(args.context.value),
+                )
+              : null;
+            if (parsed?.issues) throw new Error("plugin_context_invalid_input");
+            if (controller.signal.aborted || callController.signal.aborted)
+              throw new Error("plugin_context_changed");
+            return registration.prepare({
+              ...args,
+              context:
+                parsed === null
+                  ? { present: false }
+                  : { present: true, value: parsed.value },
+              creation: Object.freeze(structuredClone(args.creation)),
+              legacySeed:
+                args.legacySeed === null
+                  ? null
+                  : deepFreezePluginMetadata(structuredClone(args.legacySeed)),
+              parentMetadata:
+                args.parentMetadata === null
+                  ? null
+                  : deepFreezePluginMetadata(
+                      structuredClone(args.parentMetadata),
+                    ),
+              sourceMetadata:
+                args.sourceMetadata === null
+                  ? null
+                  : deepFreezePluginMetadata(
+                      structuredClone(args.sourceMetadata),
+                    ),
+              signal: callController.signal,
+            });
+          });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          let abort = () => {};
+          try {
+            const cancellation = new Promise<never>((_, reject) => {
+              abort = () => reject(new Error("plugin_context_changed"));
+              callController.signal.addEventListener("abort", abort, {
+                once: true,
+              });
+            });
+            const timeout = new Promise<never>((_, reject) => {
+              timer = setTimeout(() => {
+                reject(new Error("plugin_context_timeout"));
+                callController.abort();
+              }, 10_000);
+            });
+            const value = await Promise.race([work, cancellation, timeout]);
+            if (controller.signal.aborted || callController.signal.aborted)
+              throw new Error("plugin_context_changed");
+            if (value === null) return null;
+            const metadata = validatePluginMetadata(
+              experimental_validateStrictJson(value),
+            );
+            const seed = args.legacySeed;
+            if (
+              seed &&
+              Object.keys(metadata).some((key) => Object.hasOwn(seed, key))
+            )
+              throw new Error("plugin_context_metadata_conflict");
+            validatePluginMetadata({ ...seed, ...metadata });
+            return metadata;
+          } finally {
+            clearTimeout(timer);
+            callController.signal.removeEventListener("abort", abort);
+            controller.signal.removeEventListener("abort", relayAbort);
+          }
+        };
+        prepareThreadCreationContext = prepare;
+        const dispose = () => {
+          controller.abort();
+          creationControllers.delete(controller);
+          if (prepareThreadCreationContext === prepare)
+            prepareThreadCreationContext = null;
+        };
+        disposeHooks.push(dispose);
+        return { dispose };
+      },
+    },
     experimental_environments,
     experimental_machines,
     experimental_serverAccess: {
@@ -1553,6 +1671,7 @@ function createFakePluginHostInternal(
   async function disposeHost(cleanupStorage: boolean): Promise<void> {
     if (disposed) return;
     disposed = true;
+    for (const controller of creationControllers) controller.abort();
     for (const [id, pending] of pendingInteractions) {
       clearTimeout(pending.timer);
       pendingInteractions.delete(id);
@@ -1587,6 +1706,12 @@ function createFakePluginHostInternal(
   }
 
   const harness: FakePluginHarness = {
+    async experimental_prepareThreadCreationContext(args) {
+      assertLive();
+      if (prepareThreadCreationContext === null)
+        throw new Error("plugin_context_unavailable");
+      return prepareThreadCreationContext(args);
+    },
     get behavior() {
       return this;
     },

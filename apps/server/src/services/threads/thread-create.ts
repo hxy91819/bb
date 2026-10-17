@@ -1,4 +1,5 @@
 import { requestThreadStorageDeletion } from "./thread-lifecycle.js";
+import { prepareThreadCreationContext } from "../plugins/plugin-thread-creation-context.js";
 import { assertEnvironmentPathAvailable } from "../environments/path-admission.js";
 import {
   markThreadDeleted,
@@ -346,24 +347,6 @@ function requireLiveSourceThread(
   return sourceThread;
 }
 
-/**
- * Creates the thread row and hands its first message to the dispatch
- * checkpoint.
- *
- * This is the whole of thread creation's dispatch story now, and it replaced a
- * pair of near-identical functions — one that provisioned immediately and one
- * that queued the first turn — whose only real difference was
- * whether anything was allowed to run yet. That is a question the checkpoint
- * answers, so asking it here as well meant two code paths that had to be kept
- * in agreement about forks, execution defaults, telemetry and cleanup.
- *
- * The row inserts `pending`: created, with its provider resolved, and nothing
- * provisioned. Creation itself is unhooked — it is a cheap row — and admission
- * happens at the first message's attempt. A cleared attempt moves the thread
- * to `starting` and provisions with the message riding along; a queued one
- * leaves the thread exactly where it is, with the start context recorded so a
- * later drain (or a later server) can start it.
- */
 async function createPendingThreadAndAttemptFirstDispatch(
   deps: ThreadCreateDeps,
   args: CreateProvisioningThreadArgs & {
@@ -375,14 +358,6 @@ async function createPendingThreadAndAttemptFirstDispatch(
     args.environmentId === null
       ? null
       : getEnvironment(deps.db, args.environmentId);
-  if (environment !== null)
-    assertEnvironmentPathAvailable(deps, { ...environment, threadId: null });
-  if (args.request.sourceThreadId) {
-    requireLiveSourceThread(deps, {
-      projectId: args.request.projectId,
-      sourceThreadId: args.request.sourceThreadId,
-    });
-  }
   const startContext: PendingThreadStartContext = {
     environmentIntent: args.environmentIntent,
     fork: args.fork?.descriptor ?? null,
@@ -396,8 +371,37 @@ async function createPendingThreadAndAttemptFirstDispatch(
     deps,
     args.environmentIntent,
   );
+  const prepared = await prepareThreadCreationContext({
+    db: deps.db,
+    context: args.request.experimental_pluginContext,
+    creation: {
+      projectId: args.request.projectId,
+      origin: args.request.origin,
+      originPluginId: args.request.originPluginId ?? null,
+      originKind: args.request.originKind ?? null,
+      parentThreadId: args.request.parentThreadId ?? null,
+      sourceThreadId: args.request.sourceThreadId ?? null,
+      startedOnBehalfOf: args.request.startedOnBehalfOf,
+    },
+    seed: args.request.pluginMetadata[0] ?? null,
+  });
+  args.request.pluginMetadata = prepared.metadata;
+  if (environment !== null)
+    assertEnvironmentPathAvailable(deps, { ...environment, threadId: null });
+  if (args.request.sourceThreadId) {
+    requireLiveSourceThread(deps, {
+      projectId: args.request.projectId,
+      sourceThreadId: args.request.sourceThreadId,
+    });
+  }
+  if (args.request.parentThreadId) {
+    assertValidParentThread(deps, {
+      parentThreadId: args.request.parentThreadId,
+    });
+  }
   if (placementHostId !== null)
     requireEnvironmentPlacementHost(deps, placementHostId);
+  prepared.assertValid();
   const thread = createThreadRecord(deps, {
     request: args.request,
     environmentId: args.environmentId,
@@ -497,7 +501,7 @@ function resolveCreateThreadPluginMetadata(
   >,
 ): ThreadCreateServiceRequest["pluginMetadata"] {
   if (request.pluginMetadata === undefined) {
-    return null;
+    return [];
   }
   if (request.originPluginId === undefined) {
     throw new ApiError(
@@ -506,10 +510,12 @@ function resolveCreateThreadPluginMetadata(
       'pluginMetadata requires origin "plugin"',
     );
   }
-  return {
-    pluginId: request.originPluginId,
-    metadata: request.pluginMetadata,
-  };
+  return [
+    {
+      pluginId: request.originPluginId,
+      metadata: request.pluginMetadata,
+    },
+  ];
 }
 
 export async function createThreadFromRequest(

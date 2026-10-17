@@ -344,3 +344,16 @@ owner must be live; other projects, environments and hosts are allowed.
 Ownership is immutable. Stop does not cascade. Archive retains history; delete
 waits for dependent storage cleanup with durable retries. Unarchive the owner
 before explicitly unarchiving dependents.
+
+## Creation context
+
+Spawn and fork accept `--experimental-plugin-context '{"my-plugin":{"selection":"A"}}'`.
+SDK callers use `experimental_pluginContext`. This explicit namespace-to-JSON map
+does not change origin or read browser selections. It is limited to 32 namespaces
+and 256 KiB total UTF-8. Explicit namespaces require an enabled handler; invalid
+input, preparation errors, timeout, unload and legacy seed conflicts reject creation.
+All initial metadata commits atomically with the thread. Omission and `{}` still
+run enabled backend handlers with absent context, allowing plugin-owned inheritance.
+Existing-thread dispatch/retry preserves saved metadata. An unknown creation
+response is not automatically replayed or deduplicated; an explicit retry can
+create another thread and should reuse its original context.
