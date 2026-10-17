@@ -16,7 +16,7 @@ Core concepts:
 - Terminal — a persistent PTY session scoped to a thread, environment, or machine path. Use terminals for long-running commands such as dev servers.
 - Provider — the agent backend powering a thread (e.g., codex, claude-code). Each provider supports different models.
 
-Threads can have a parent-child relationship. The parent coordinates the child and receives lifecycle notifications when it completes, fails, or is interrupted. Threads without a parent are managed directly by the user.
+Threads can have a parent-child relationship. The parent coordinates the child and receives lifecycle notifications when it completes, fails, or is interrupted. The user can also speak directly to a child; completion notices identify turns with direct user input. Threads without a parent are managed directly by the user.
 
 Context variables set automatically inside a thread environment:
 
