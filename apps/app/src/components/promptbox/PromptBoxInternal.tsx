@@ -1348,9 +1348,7 @@ export function PromptBoxInternal({
     if (resource.kind !== "attachment") {
       return mentionResolveLink?.(resource) ?? null;
     }
-    const attachment = attachments.find(
-      (item) => item.path === resource.path,
-    );
+    const attachment = attachments.find((item) => item.path === resource.path);
     const projectId = attachment?.sourceProjectId ?? attachmentProjectId;
     if (
       !attachment ||
@@ -2487,15 +2485,11 @@ export function PromptBoxInternal({
   useLayoutEffect(() => {
     if (focusEndKey === undefined) return;
     if (focusEndKey === lastFocusEndKeyRef.current) return;
-    if (isPointerCoarse) {
-      lastFocusEndKeyRef.current = focusEndKey;
-      return;
-    }
     if (!editor) return;
     lastFocusEndKeyRef.current = focusEndKey;
     focusEditorAtEnd(editor);
     scheduleRevealEditorSelection();
-  }, [editor, focusEndKey, isPointerCoarse, scheduleRevealEditorSelection]);
+  }, [editor, focusEndKey, scheduleRevealEditorSelection]);
 
   useLayoutEffect(() => {
     scheduleRevealEditorSelection();
