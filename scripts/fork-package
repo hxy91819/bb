@@ -182,7 +182,8 @@ if [ "$build" = 1 ]; then
 
 生成只读 cutover/回退计划（当前服务目录：${old_dir:-未知}）：
   node "$wt/scripts/fork-cutover.mjs" "$config" "$target" "$result"
-计划根据实际 unit 校验并同时更新 ExecStart 与 WorkingDirectory。生产执行仅限 BB 外的 Agent，
-先确认无 BB_* 上下文且不在 $unit 的 cgroup，再停服备份并应用计划；双端口健康之外还须核对实际版本。
+计划根据实际 unit 校验并同时更新 ExecStart 与 WorkingDirectory。允许从 BB 线程内发起：
+先用 upgrade-resume 记录恢复批次，再按部署 skill 将完整切换、验证和回退交给独立 systemd 任务。
+执行任务须位于 $unit 的 cgroup 之外；恢复后核对任务结果、双端口健康和实际版本。
 EOF
 fi
