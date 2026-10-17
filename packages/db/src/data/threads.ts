@@ -275,6 +275,7 @@ export interface CreateThreadInput {
   originKind?: ThreadOriginKind | null;
   originPluginId?: string | null;
   pluginMetadata?: { pluginId: string; metadata: JsonObject } | null;
+  initialPluginMetadata?: readonly { pluginId: string; metadata: JsonObject }[];
   startupContext?: string;
   visibility?: ThreadVisibility;
 }
@@ -366,16 +367,12 @@ export function createThread(
         titleFallback: createdThread.titleFallback,
         updatedAt: now,
       });
-      if (
-        input.pluginMetadata !== undefined &&
-        input.pluginMetadata !== null &&
-        Object.keys(input.pluginMetadata.metadata).length > 0
-      ) {
-        insertThreadPluginMetadata(tx, {
-          threadId: createdThread.id,
-          pluginId: input.pluginMetadata.pluginId,
-          metadata: input.pluginMetadata.metadata,
-        });
+      for (const namespace of [
+        ...(input.pluginMetadata ? [input.pluginMetadata] : []),
+        ...(input.initialPluginMetadata ?? []),
+      ]) {
+        if (Object.keys(namespace.metadata).length === 0) continue;
+        insertThreadPluginMetadata(tx, { threadId: createdThread.id, ...namespace });
       }
       return createdThread;
     },

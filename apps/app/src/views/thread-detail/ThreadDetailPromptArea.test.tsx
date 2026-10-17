@@ -27,6 +27,11 @@ import type {
 } from "@bb/server-contract";
 import { createDeferredPromise } from "@bb/test-helpers";
 import {
+  collectPluginAppRegistrations,
+  definePluginApp,
+} from "@/lib/plugin-app-definition";
+import { threadCreationContextRegistry } from "@/lib/thread-creation-context";
+import {
   makeThreadQueuedMessage as makeThreadQueuedMessageFixture,
   makeThreadWithRuntime as makeThreadWithRuntimeFixture,
 } from "@bb/test-helpers/domain-fixtures";
@@ -2201,6 +2206,45 @@ describe("ThreadDetailPromptArea", () => {
     );
     expect(mocks.sendMessageMutateAsync).not.toHaveBeenCalled();
     expect(mocks.createQueuedMessageMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("preserves handoff input when capture fails and snapshots before clearing it", async () => {
+    let fail = true;
+    threadCreationContextRegistry.set(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({
+            capture: () => {
+              if (fail) throw new Error("identity unavailable");
+              expect(
+                mocks.promptDraft.clearIfCurrentMatches,
+              ).not.toHaveBeenCalled();
+              return { memberId: "B" };
+            },
+          });
+        }),
+      ),
+    );
+    mocks.promptDraft.text = "Keep going";
+    mocks.createThreadMutateAsync.mockResolvedValue({
+      id: "thr_new",
+      projectId: "proj_1",
+    });
+    renderPromptArea();
+    fireEvent.click(screen.getByRole("button", { name: "Start handoff" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
+    expect(mocks.promptDraft.clearIfCurrentMatches).not.toHaveBeenCalled();
+    expect(mocks.createThreadMutateAsync).not.toHaveBeenCalled();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    await waitFor(() =>
+      expect(mocks.createThreadMutateAsync).toHaveBeenCalled(),
+    );
+    expect(mocks.createThreadMutateAsync.mock.calls[0]?.[0]).toMatchObject({
+      experimental_pluginContext: { team: { memberId: "B" } },
+    });
   });
 
   it("creates a same-provider handoff with unchanged execution marked explicit", async () => {

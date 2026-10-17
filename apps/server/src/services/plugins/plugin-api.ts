@@ -5,6 +5,10 @@ import {
   type NormalizedPluginInteractionRequest,
 } from "@get-bb/plugin-sdk/internal/host-policy";
 import { createMachineBootstrapApi } from "../machines/bootstrap.js";
+import {
+  bindThreadCreationContext,
+  type ThreadCreationContextRegistration,
+} from "./plugin-thread-creation-context.js";
 import type { MachineEnrollments } from "../machines/enrollments.js";
 import { listServerAccessProviders } from "./plugin-server-access-registry.js";
 import { detachActivePluginToolCallForUserInput } from "./plugin-tool-calls.js";
@@ -265,6 +269,8 @@ export interface PluginApiHandle {
   threadEventHandlers: PluginThreadEventHandlers;
   /** Hook handlers recorded by `bb.experimental_hooks.on`. */
   hooks: PluginHookRecords;
+  readonly threadCreationContext: ThreadCreationContextRegistration | null;
+  abortThreadCreationContext(): void;
   environmentCompositions: Map<string, NormalizedPluginEnvironmentComposition>;
   environmentProviders: Map<string, NormalizedPluginEnvironmentProvider>;
   machineProviders: Map<string, NormalizedPluginMachineProvider>;
@@ -610,6 +616,9 @@ export function createPluginApi(options: {
   const hooks: PluginHookRecords = {
     "message.dispatch": null,
   };
+  let threadCreationContext: ReturnType<
+    typeof bindThreadCreationContext
+  > | null = null;
   const environmentCompositions = new Map<
     string,
     NormalizedPluginEnvironmentComposition
@@ -1336,6 +1345,26 @@ export function createPluginApi(options: {
     ui,
     events,
     experimental_hooks,
+    experimental_threadCreationContext: {
+      register(registration) {
+        assertLive();
+        if (threadCreationContext !== null)
+          throw new Error("Thread creation context already registered");
+        if (
+          !isStandardSchema(registration.input) ||
+          typeof registration.prepare !== "function"
+        )
+          throw new Error("Invalid thread creation context registration");
+        const bound = bindThreadCreationContext(pluginId, registration);
+        threadCreationContext = bound;
+        const dispose = () => {
+          bound.dispose();
+          if (threadCreationContext === bound) threadCreationContext = null;
+        };
+        disposeHooks.push(dispose);
+        return { dispose };
+      },
+    },
     experimental_environments,
     experimental_machines,
     experimental_serverAccess,
@@ -1384,6 +1413,12 @@ export function createPluginApi(options: {
     databaseHandles,
     threadEventHandlers,
     hooks,
+    get threadCreationContext() {
+      return threadCreationContext?.record ?? null;
+    },
+    abortThreadCreationContext() {
+      threadCreationContext?.dispose();
+    },
     environmentCompositions,
     environmentProviders,
     machineProviders,
@@ -1447,6 +1482,7 @@ export function createPluginApi(options: {
     },
     invalidate() {
       invalidated = true;
+      threadCreationContext?.dispose();
       rpcCaller.revoke();
     },
   };
