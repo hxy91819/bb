@@ -1,3 +1,4 @@
+import { registerActivityCommand } from "./activity.js";
 import { registerContextCommand } from "./context.js";
 import { Command } from "commander";
 import { registerActionsCommands } from "./actions.js";
@@ -22,6 +23,7 @@ export function registerThreadCommands(
   registerForkCommand(thread, getUrl);
   registerListCommand(thread, getUrl);
   registerCountCommand(thread, getUrl);
+  registerActivityCommand(thread, getUrl);
   registerContextCommand(thread, getUrl);
   registerShowCommand(thread, getUrl);
   registerOpenCommand(thread, getUrl);
