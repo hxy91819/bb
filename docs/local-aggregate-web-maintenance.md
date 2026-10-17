@@ -45,7 +45,7 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 配置与服务切换的边界
 
-不需要重启服务的 provider 设置、账号绑定和 dispatch alias 修改，在用户已授权范围内由 BB 线程直接完成并验证。会停止、重启或替换当前 BB 服务的命令，按部署技能交给 BB 外部 Agent 执行；已有部署授权继续有效，无需重复询问。
+不需要重启服务的 provider 设置、账号绑定和 dispatch alias 修改，在用户已授权范围内由 BB 线程直接完成并验证。会停止、重启或替换当前 BB 服务的操作，允许从 BB 线程内发起，按 [部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md#3-cutover-from-bb-or-an-external-agent) 准备线程恢复，并交给独立 systemd 任务完成切换与失败回退；服务启动后由恢复的线程核验结果。已有部署授权继续有效，无需重复询问。
 
 ## 首次配置
 
