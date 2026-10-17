@@ -12,6 +12,11 @@ import { makeThreadQueuedMessage as makeThreadQueuedMessageFixture } from "@bb/t
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BbHttpError, sdk } from "@/lib/sdk";
 import { subscribeComposerSubmitted } from "@/lib/composer-submissions";
+import {
+  collectPluginAppRegistrations,
+  definePluginApp,
+} from "@/lib/plugin-app-definition";
+import { threadCreationContextRegistry } from "@/lib/thread-creation-context";
 import { wsManager } from "@/lib/ws";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import {
@@ -153,11 +158,56 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  threadCreationContextRegistry.clear();
   cleanup();
   vi.clearAllMocks();
 });
 
 describe("thread runtime mutations", () => {
+  it("freezes a context before asynchronous mutation admission and reuses it on transport retry", async () => {
+    const { queryClient, wrapper } = createQueryClientTestHarness();
+    queryClient.setDefaultOptions({ mutations: { retry: 1, retryDelay: 0 } });
+    let memberId = "A";
+    const capture = vi.fn(() => ({ memberId }));
+    threadCreationContextRegistry.set(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({ capture });
+        }),
+      ),
+    );
+    vi.mocked(sdk.threads.spawn).mockRejectedValueOnce(
+      new Error("temporary transport failure"),
+    );
+    const { result } = renderHook(() => useCreateThread(), { wrapper });
+    const request = {
+      projectId: "project-1",
+      environment: { type: "project-default" as const },
+      input: [{ type: "text" as const, text: "work", mentions: [] }],
+    };
+    await act(async () => {
+      const pending = result.current.mutateAsync(request);
+      memberId = "B";
+      await pending;
+    });
+    expect(capture).toHaveBeenCalledTimes(1);
+    for (const [sent] of vi.mocked(sdk.threads.spawn).mock.calls) {
+      expect(sent.experimental_pluginContext).toEqual({
+        team: { memberId: "A" },
+      });
+    }
+    await act(async () => {
+      await result.current.mutateAsync(request);
+    });
+    expect(
+      vi.mocked(sdk.threads.spawn).mock.lastCall?.[0]
+        .experimental_pluginContext,
+    ).toEqual({ team: { memberId: "B" } });
+    expect(capture).toHaveBeenCalledTimes(2);
+    queryClient.clear();
+  });
+
   it("prefetches queued message detail as soon as a queued thread is created", async () => {
     const { queryClient, wrapper } = createQueryClientTestHarness();
     const { result } = renderHook(() => useCreateThread(), { wrapper });

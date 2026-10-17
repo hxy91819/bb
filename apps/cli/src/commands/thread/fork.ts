@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import {
   threadVisibilitySchema,
+  experimental_validatePluginContext,
   type PromptInput,
   type Thread,
 } from "@bb/domain";
@@ -23,6 +24,7 @@ import {
 } from "./spawn.js";
 
 interface ThreadForkCommandOptions {
+  experimentalPluginContext?: string;
   agentContextSeed?: string;
   baseBranch?: string;
   environment?: string;
@@ -152,6 +154,10 @@ export function registerForkCommand(
       [],
     )
     .option("--json", "Print machine-readable JSON output")
+    .option(
+      "--experimental-plugin-context <json>",
+      "Explicit plugin creation context snapshot; no browser identity is inferred",
+    )
     .action(
       action(
         async (sourceThreadIdValue: string, opts: ThreadForkCommandOptions) => {
@@ -223,6 +229,14 @@ export function registerForkCommand(
             }
             thread = await sdk.threads.fork({
               sourceThreadId,
+              ...(opts.experimentalPluginContext === undefined
+                ? {}
+                : {
+                    experimental_pluginContext:
+                      experimental_validatePluginContext(
+                        JSON.parse(opts.experimentalPluginContext),
+                      ),
+                  }),
               ...(opts.lifecycleOwnerThread !== undefined
                 ? { lifecycleOwnerThreadId: opts.lifecycleOwnerThread }
                 : {}),
