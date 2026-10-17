@@ -227,7 +227,16 @@ export const acpInitializeResultSchema = z
         loadSession: z.boolean().optional(),
         sessionCapabilities: z
           .object({
-            fork: z.object({}).passthrough().nullable().optional(),
+            fork: z
+              .object({
+                _meta: z
+                  .object({ "cursor-acp/checkpoint": z.boolean().optional() })
+                  .passthrough()
+                  .optional(),
+              })
+              .passthrough()
+              .nullable()
+              .optional(),
           })
           .passthrough()
           .optional(),
@@ -414,6 +423,10 @@ export type AcpStopReason = z.infer<typeof acpStopReasonSchema>;
 export const acpPromptResultSchema = z
   .object({
     stopReason: acpStopReasonSchema,
+    _meta: z
+      .object({ "cursor-acp/checkpoint": z.string().min(1).optional() })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
