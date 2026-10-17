@@ -166,6 +166,8 @@ describe("third-party marketplaces", () => {
     const repo = await mkdtemp(join(tmpdir(), "bb-marketplace-repo-"));
     cleanup.push(repo);
     await run("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+    await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
     await run("git", ["config", "user.email", "test@example.com"], {
       cwd: repo,
     });
@@ -704,6 +706,8 @@ describe("third-party marketplaces", () => {
       const repo = await mkdtemp(join(tmpdir(), "bb-plugin-repo-"));
       cleanup.push(repo);
       await run("git", ["init", "-q", "-b", "main"], { cwd: repo });
+      await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+      await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
       await run("git", ["config", "user.email", "test@example.com"], {
         cwd: repo,
       });
