@@ -17,23 +17,23 @@ import {
 import { createIntegrationHarness } from "../helpers/harness.js";
 
 const adapterEntry = process.env.BB_CURSOR_SDK_ACP_ENTRY;
+const extensionsPath = process.env.BB_ACP_EXTENSIONS_PLUGIN_PATH;
 const execFile = promisify(execFileCallback);
 const execution = {
   model: "composer-2.5",
   permissionMode: "accept-edits" as const,
 };
 
-describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
+describe.skipIf(!adapterEntry || !extensionsPath)("Cursor SDK native BB Fork", () => {
   it.each(["tip", "checkpoint"] as const)(
     "forks at %s through the BB API and preserves isolated context after daemon restarts",
     async (fork) => {
-      if (!adapterEntry) throw new Error("BB_CURSOR_SDK_ACP_ENTRY is required");
+      if (!adapterEntry || !extensionsPath)
+        throw new Error("BB_CURSOR_SDK_ACP_ENTRY and BB_ACP_EXTENSIONS_PLUGIN_PATH are required");
       const directory = await mkdtemp(path.join(tmpdir(), "bb-cursor-fork-"));
       const childCwd = path.join(directory, "child");
       await mkdir(childCwd);
-      const harness = await createIntegrationHarness({
-        builtinPlugins: ["provider-acp"],
-      });
+      const harness = await createIntegrationHarness();
       const inheritedToken = randomBytes(12).toString("hex");
       const laterToken = randomBytes(12).toString("hex");
       const parentToken = randomBytes(12).toString("hex");
@@ -85,6 +85,12 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
         );
       };
       try {
+        const install = await fetch(`${harness.serverUrl}/api/v1/plugins/install`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: `path:${path.resolve(extensionsPath)}` }),
+        });
+        expect(install.status, await install.clone().text()).toBe(200);
         const entry = {
           id: "cursor-sdk-fork-test",
           displayName: "Cursor SDK Fork Test",
@@ -93,7 +99,7 @@ describe.skipIf(!adapterEntry)("Cursor SDK native BB Fork", () => {
           env: { CURSOR_ACP_CONFIG_DIR: path.join(directory, "acp-config") },
         };
         const settingsResponse = await fetch(
-          `${harness.serverUrl}/api/v1/plugins/provider-acp/settings`,
+          `${harness.serverUrl}/api/v1/plugins/acp-extensions/settings`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
