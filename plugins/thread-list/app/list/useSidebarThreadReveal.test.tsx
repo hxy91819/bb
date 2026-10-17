@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 
+import {
+  installTestPluginRuntime,
+  renderSlot,
+  loadPluginApp,
+  type RenderSlotOptions,
+} from "@get-bb/plugin-sdk/testing/app";
+import { definePluginApp } from "@get-bb/plugin-sdk/app";
+import { buildContributionGroupKey } from "../../shared/preferences.js";
 import type { ReactNode } from "react";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, waitFor } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SidebarThread } from "../model/sidebar-thread.js";
@@ -16,12 +24,15 @@ import {
   collapsedThreadIdsAtom,
   sidebarCollapsedThreadSectionsAtom,
   sidebarOrganizationModeAtom,
+  sidebarCollapsedMachinesAtom,
+  sidebarCollapsedContributionGroupsAtom,
 } from "../preferences/atoms.js";
 import {
   useSidebarThreadRevealCore,
   type SidebarThreadRevealInputs,
 } from "./useSidebarThreadReveal.js";
 
+installTestPluginRuntime();
 afterEach(cleanup);
 
 function thread(id: string, overrides: SidebarThreadOverrides = {}) {
@@ -38,6 +49,7 @@ function thread(id: string, overrides: SidebarThreadOverrides = {}) {
 function setup(
   threads: SidebarThread[],
   initial: Partial<SidebarThreadRevealInputs> = {},
+  options: RenderSlotOptions = {},
 ) {
   const store = createStore();
   store.set(sidebarOrganizationModeAtom, "chronological");
@@ -46,23 +58,6 @@ function setup(
     "chronological::second",
     "chronological::third",
   ]);
-  function Wrapper({ children }: { children: ReactNode }) {
-    return <Provider store={store}>{children}</Provider>;
-  }
-  const hook = renderHook<void, SidebarThreadRevealInputs>(
-    (inputs) => useSidebarThreadRevealCore(inputs),
-    {
-      wrapper: Wrapper,
-      initialProps: {
-        selectedThreadId: "first",
-        threads,
-        threadsReady: true,
-        preferencesReady: true,
-        personalProjectId: "proj_personal",
-        ...initial,
-      },
-    },
-  );
   const current: SidebarThreadRevealInputs = {
     selectedThreadId: "first",
     threads,
@@ -71,9 +66,25 @@ function setup(
     personalProjectId: "proj_personal",
     ...initial,
   };
+  function Probe({ inputs }: { inputs: SidebarThreadRevealInputs }) {
+    useSidebarThreadRevealCore(inputs);
+    return null;
+  }
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <Provider store={store}>{children}</Provider>;
+  }
+  const hook = renderSlot(
+    { component: Wrapper },
+    { children: <Probe inputs={current} /> },
+    options,
+  );
   const update = (next: Partial<SidebarThreadRevealInputs>) => {
     Object.assign(current, next);
-    hook.rerender({ ...current });
+    hook.lifecycle.rerender(
+      <Wrapper>
+        <Probe inputs={{ ...current }} />
+      </Wrapper>,
+    );
   };
   return { ...hook, store, update };
 }
@@ -246,3 +257,84 @@ describe("useSidebarThreadReveal", () => {
     );
   });
 });
+
+it("reveals a machine group using the root host when a child belongs to another machine", () => {
+  const { store, update } = setup(
+    [
+      thread("root", { host: { id: "a", name: "A" } }),
+      thread("child", { parentThreadId: "root", host: { id: "b", name: "B" } }),
+    ],
+    { selectedThreadId: undefined },
+  );
+  act(() => {
+    store.set(sidebarOrganizationModeAtom, "machine");
+    store.set(sidebarCollapsedMachinesAtom, ["a", "b"]);
+  });
+  update({ selectedThreadId: "child" });
+  expect(store.get(sidebarCollapsedMachinesAtom)).toEqual(["b"]);
+});
+
+it.each(["absent", "hook", "projection"] as const)(
+  "finishes a pending group reveal after %s recovery and then respects manual collapse",
+  async (failure) => {
+    let unavailable = true;
+    const registration = await loadPluginApp(
+      definePluginApp((app) => {
+        app.slots.experimental_threadListGrouping({
+          id: "groups",
+          title: "Groups",
+          useData() {
+            if (failure === "hook" && unavailable)
+              throw new Error("unavailable grouping");
+          },
+          projection() {
+            return failure === "projection" && unavailable
+              ? { status: "error" }
+              : {
+                  status: "ready",
+                  group: { key: "saved", label: "Saved group" },
+                };
+          },
+        });
+      }),
+    );
+    const plugins =
+      failure === "absent"
+        ? []
+        : [{ pluginId: "adapter", generation: 1, registrations: registration }];
+    const { store, update } = setup(
+      [thread("root"), thread("child", { parentThreadId: "root" })],
+      { selectedThreadId: undefined },
+      { experimental_threadListPlugins: plugins },
+    );
+    const key = buildContributionGroupKey("adapter/groups", "group", "saved");
+    act(() => {
+      store.set(sidebarOrganizationModeAtom, "adapter/groups");
+      store.set(sidebarCollapsedContributionGroupsAtom, [key]);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    update({ selectedThreadId: "child" });
+    expect(store.get(sidebarCollapsedContributionGroupsAtom)).toEqual([key]);
+    unavailable = false;
+    plugins.splice(0, plugins.length, {
+      pluginId: "adapter",
+      generation: 2,
+      registrations: registration,
+    });
+    update({});
+    await waitFor(() =>
+      expect(store.get(sidebarCollapsedContributionGroupsAtom)).toEqual([]),
+    );
+    expect(store.get(sidebarOrganizationModeAtom)).toBe("adapter/groups");
+    act(() => store.set(sidebarCollapsedContributionGroupsAtom, [key]));
+    update({
+      threads: [
+        thread("root", { title: "Renamed" }),
+        thread("child", { parentThreadId: "root" }),
+      ],
+    });
+    expect(store.get(sidebarCollapsedContributionGroupsAtom)).toEqual([key]);
+  },
+);
