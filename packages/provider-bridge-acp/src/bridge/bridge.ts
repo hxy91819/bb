@@ -2315,10 +2315,10 @@ function submitTurnPrompt(
   ctx: AcpTurnContext,
   pending: AcpPendingTurnInput,
   delivery: AcpInputDelivery | undefined,
-): Promise<{ stopReason: z.infer<typeof acpStopReasonSchema> }> {
+): Promise<z.infer<typeof acpPromptResultSchema>> {
   const prompt = buildPromptContentBlocks(session, pending.input);
   ctx.inFlight += 1;
-  let request: Promise<{ stopReason: z.infer<typeof acpStopReasonSchema> }>;
+  let request: Promise<z.infer<typeof acpPromptResultSchema>>;
   try {
     request = session.connection.request({
       method: "session/prompt",
