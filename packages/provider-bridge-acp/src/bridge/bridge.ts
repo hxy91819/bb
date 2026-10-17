@@ -179,6 +179,7 @@ interface AcpThreadSession {
   connection: AcpAgentConnection;
   supportsImageInput: boolean;
   supportsLoadSession: boolean;
+  supportsCheckpointFork: boolean;
   policy: AcpSessionPolicy;
   pendingInstructions: string | undefined;
   activePromptKind: "turn" | "compaction" | null;
@@ -1726,6 +1727,7 @@ type AcpSessionStartRequest =
       kind: "fork";
       params: AcpSessionParams;
       sourceProviderThreadId: string;
+      sourceProviderCheckpointId?: string;
     };
 
 async function startAgentSession(
@@ -1822,6 +1824,7 @@ async function startAgentSession(
     connection,
     supportsImageInput: false,
     supportsLoadSession: false,
+    supportsCheckpointFork: false,
     policy: {
       permissionMode: params.permissionMode,
       workspaceWriteRoots: params.workspaceWriteRoots,
@@ -1862,12 +1865,25 @@ async function startAgentSession(
       initializeResult.agentCapabilities?.loadSession ?? false;
     const supportsFork =
       initializeResult.agentCapabilities?.sessionCapabilities?.fork != null;
+    session.supportsCheckpointFork =
+      initializeResult.agentCapabilities?.sessionCapabilities?.fork?._meta?.[
+        "cursor-acp/checkpoint"
+      ] === true;
     if (request.kind === "fork" && !supportsFork) {
       throw new Error(
         `ACP agent "${agentLabel}" does not advertise session/fork support.`,
       );
     }
     session.supportsLoadSession = supportsLoadSession;
+    if (
+      request.kind === "fork" &&
+      request.sourceProviderCheckpointId !== undefined &&
+      !session.supportsCheckpointFork
+    ) {
+      throw new Error(
+        `ACP agent "${agentLabel}" cannot fork at a checkpoint: checkpoint support was not advertised`,
+      );
+    }
     const mcpServers = await buildSessionMcpServers(params);
     const mcpServer = mcpServers[0];
     if (mcpServer) {
@@ -1895,6 +1911,13 @@ async function startAgentSession(
           sessionId: request.sourceProviderThreadId,
           cwd: params.cwd,
           mcpServers,
+          ...(request.sourceProviderCheckpointId !== undefined
+            ? {
+                _meta: {
+                  "cursor-acp/checkpoint": request.sourceProviderCheckpointId,
+                },
+              }
+            : {}),
         },
         resultSchema: acpSessionForkResultSchema,
       });
@@ -2137,6 +2160,7 @@ function dropQueuedTurnInputs(session: AcpThreadSession, reason: string): void {
 function finishTurn(
   session: AcpThreadSession,
   stopReason: z.infer<typeof acpStopReasonSchema>,
+  providerCheckpointId?: string,
 ): void {
   if (session.activePromptKind !== "turn") {
     return;
@@ -2149,6 +2173,7 @@ function finishTurn(
   emitForSession(session, ACP_TURN_COMPLETED_METHOD, {
     threadId: session.bbThreadId,
     stopReason,
+    ...(providerCheckpointId ? { providerCheckpointId } : {}),
   });
 }
 
@@ -2171,6 +2196,7 @@ function runTurn(
       }
 
       let stopReason: z.infer<typeof acpStopReasonSchema>;
+      let providerCheckpointId: string | undefined;
       session.cancelRequested = false;
       try {
         const previousSession = session;
@@ -2189,20 +2215,23 @@ function runTurn(
           });
         }
         session.promptRequestPending = true;
-        const promptResult = session.connection.request({
-          method: "session/prompt",
-          params: {
-            sessionId: session.providerThreadId,
-            prompt: buildPromptContentBlocks(session, pending.input),
-          },
-          resultSchema: acpPromptResultSchema,
-        });
+        const promptResult: Promise<z.infer<typeof acpPromptResultSchema>> =
+          session.connection.request({
+            method: "session/prompt",
+            params: {
+              sessionId: session.providerThreadId,
+              prompt: buildPromptContentBlocks(session, pending.input),
+            },
+            resultSchema: acpPromptResultSchema,
+          });
         acceptTurnInput(session, pending);
         if (session.queuedInputs.length > 0) {
           requestSteerCancel(session);
         }
         const result = await promptResult;
         stopReason = result.stopReason;
+        if (session.supportsCheckpointFork && stopReason === "end_turn")
+          providerCheckpointId = result._meta?.["cursor-acp/checkpoint"];
         const grokUsage = grokContextUsageFromPromptResult(result);
         if (grokUsage !== undefined) {
           emitGrokContextWindow(session, grokUsage.used);
@@ -2241,7 +2270,7 @@ function runTurn(
         }
       }
 
-      finishTurn(session, stopReason);
+      finishTurn(session, stopReason, providerCheckpointId);
       return;
     }
   })();
@@ -2754,7 +2783,7 @@ async function handleRequest(
           threadArchive: false,
           threadRename: false,
           threadGoalClear: false,
-          fork: "tip",
+          fork: "checkpoint",
           approvalEnforcedBy: "runtime",
           grammarVersions: [THREAD_DELTA_GRAMMAR_V3, THREAD_DELTA_GRAMMAR_V3],
           steerMode: "queue",
@@ -2819,17 +2848,6 @@ async function handleRequest(
     case "thread/start":
     case "thread/resume":
     case "thread/fork": {
-      if (
-        request.method === "thread/fork" &&
-        request.params.sourceProviderCheckpointId !== undefined
-      ) {
-        sendError(
-          request.id,
-          BRIDGE_JSON_RPC_ERRORS.FORK_CHECKPOINT_UNSUPPORTED,
-          "ACP session/fork cannot fork at a checkpoint; only tip forks are supported",
-        );
-        return;
-      }
       const params = request.params;
       const launchSpec = decodeLaunchSpec(params.options.providerOptions);
       if (launchSpec === null) {
@@ -2871,6 +2889,8 @@ async function handleRequest(
                 kind: "fork",
                 params: sessionParams,
                 sourceProviderThreadId: request.params.sourceProviderThreadId,
+                sourceProviderCheckpointId:
+                  request.params.sourceProviderCheckpointId,
               }
             : { kind: "start", params: sessionParams },
       );
