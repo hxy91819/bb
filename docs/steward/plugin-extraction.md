@@ -31,7 +31,7 @@
 
 集合仓库的 README 和 docs/migration.md 是实际安装与迁移入口。迁移脚本先保存配置；已登记 Git 来源的书签切换后核对数量与首条 ID；本地路径移动保留启用状态。测试使用独立实例与合成数据，用户库与迁移回执不进入 Git。
 
-BB 侧按 fork-maintenance.md 验证并推送；运行服务切换仍由外部 Agent 按 local-aggregate-deploy 执行。
+BB 侧按 fork-maintenance.md 验证并推送；运行服务切换仍按 local-aggregate-deploy，通过独立 systemd 任务执行并在恢复后核验；本轮不切换服务。
 
 ## 用户待办
 
