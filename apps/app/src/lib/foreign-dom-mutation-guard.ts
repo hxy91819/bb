@@ -98,7 +98,14 @@ function refusePluginReparent(node: Node, newParent: Node): boolean {
   if (isolationDepth === 0) return false;
   if (node.parentNode === newParent) return false;
   if (!isReactHostNode(node)) return false;
-  if (node.parentNode === null && isReactHostNode(newParent)) return false;
+  if (
+    node.parentNode === null &&
+    (isReactHostNode(newParent) ||
+      Object.getOwnPropertyNames(newParent).some((key) =>
+        key.startsWith("__reactContainer$"),
+      ))
+  )
+    return false;
   recordRefusedMove(node, newParent);
   return true;
 }
