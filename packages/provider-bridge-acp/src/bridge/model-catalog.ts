@@ -107,13 +107,32 @@ export function findAcpThoughtLevelConfigOption(
   );
 }
 
-const ACP_NATIVE_REASONING_VALUE_ALIASES_BY_LEVEL: Readonly<
+const ACP_NATIVE_REASONING_LEVEL_BY_VALUE: Readonly<
+  Partial<Record<string, ReasoningLevel>>
+> = {
+  none: "none",
+  off: "none",
+  minimal: "low",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  ultracode: "ultracode",
+  max: "max",
+  ultra: "ultra",
+};
+
+const ACP_NATIVE_REASONING_VALUE_CANDIDATES_BY_LEVEL: Readonly<
   Partial<Record<ReasoningLevel, readonly string[]>>
 > = {
-  low: ["minimal"],
-  ultracode: ["xhigh"],
-  max: ["xhigh"],
-  ultra: ["max"],
+  none: ["none", "off"],
+  low: ["low", "minimal"],
+  medium: ["medium"],
+  high: ["high"],
+  xhigh: ["xhigh"],
+  ultracode: ["ultracode", "xhigh"],
+  max: ["max", "xhigh"],
+  ultra: ["ultra", "max"],
 };
 
 export function acpNativeReasoningLevelToValue(
