@@ -35,3 +35,4 @@ fix/mobile-add-to-chat                        needs-feedback                    
 feature/thread-message-navigation            needs-feedback                                             # 插件 toThread 支持 experimental_messageSeq 定位消息，与命令面板会话搜索共用实现
 fix/codex-compaction-warning                  fork-only                                                  # 屏蔽 Codex 长会话多次压缩准确率提示（按第一句前缀过滤 warning）
 fix/pool-ai-fallback                         needs-feedback                                             # Account Pool 提供标题与提交消息 AI 服务，无本地 Codex 登录时参与自动回退
+feature/pool-auth-file                       needs-feedback                                             # Account Pooler 支持 --auth-file 导入指定 Codex 凭证文件，保留软链与默认路径
