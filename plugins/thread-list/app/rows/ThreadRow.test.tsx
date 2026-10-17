@@ -1592,12 +1592,33 @@ describe("ThreadRow", () => {
     const { rerenderThreadRow } = renderThreadRow({ thread });
     const link = screen.getByRole("link", { name: "Open Thread" });
 
-    fireEvent.click(link);
+    fireEvent.click(link, { detail: 1 });
     rerenderThreadRow(thread);
-    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }));
+    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }), {
+      detail: 1,
+    });
 
     expect(
       await screen.findByRole("textbox", { name: "Thread name" }),
     ).toHaveProperty("value", "Thread");
   });
+
+  it.each(["touch", "pen", "mouse"])(
+    "only renames wide-viewport double clicks from a mouse (%s)",
+    (pointerType) => {
+      renderThreadRow({ isCompactViewport: false });
+      const link = screen.getByRole("link", { name: "Open Thread" });
+      fireEvent.pointerDown(link, { pointerType });
+      expect(fireEvent.click(link, { detail: 1 })).toBe(true);
+      fireEvent.pointerDown(link, { pointerType });
+      expect(fireEvent.click(link, { detail: 2 })).toBe(
+        pointerType !== "mouse",
+      );
+      fireEvent.doubleClick(link);
+      const editor = screen.queryByRole("textbox", { name: "Thread name" });
+      if (pointerType === "mouse")
+        expect(editor).toHaveProperty("value", "Thread");
+      else expect(editor).toBeNull();
+    },
+  );
 });
