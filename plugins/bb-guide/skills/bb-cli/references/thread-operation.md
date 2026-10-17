@@ -220,3 +220,13 @@ For review or fix pipelines, get the environment ID from
   same scope, size, and title. It does not replay the original launch command.
 
 Clearing a thread's parent with `bb thread update --clear-parent-thread` inherits the former parent's section unless the update explicitly supplies a section. Children released by environment archiving also inherit their former parent's section.
+
+## Retained activity facts
+
+Use `bb thread experimental-activity --plugin ID --key KEY --equals '"VALUE"'
+--from UTC_MS --to UTC_MS [--project ID] [--thread ID] [--limit N] [--cursor C]
+--json`. Without `--thread` it returns summaries; details enforce the same
+metadata and date filters. Output is compact JSON, default 20/max 100 items,
+hard 256 KiB. Continue from the last consumed item's `cursorAfter` when applying
+a smaller budget. Counts and evidence reflect currently retained data and may
+change across live pages. Agent statements do not prove results.
