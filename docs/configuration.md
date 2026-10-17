@@ -265,6 +265,11 @@ bb cloud (`bb`, the `bb-ai` plugin, for a signed-in bb account) first,
 then all other registered services in lexicographic order of plugin id and
 service id, including third-party plugins. Only services supporting the task
 participate; unavailable services and failed requests fall through to the next.
+Account Pooler (`codex-pool`, the `account-pool` plugin) provides titles and
+commit messages when Codex routing is enabled with an available pool account;
+it needs no local Codex login and is tried before local Codex. Select it with
+`bb settings ai-services set thread-title codex-pool` or keep Automatic for
+service fallback. The pool service does not provide voice transcription.
 Codex (`codex`, the `provider-codex` plugin) uses the Codex CLI login on the
 primary machine. bb cloud is on by default once you sign in; `bb ai off` turns it off
 (it then sends nothing to getbb.app) and `bb ai on` turns it back on. A service you pick
