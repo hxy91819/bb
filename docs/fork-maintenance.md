@@ -32,6 +32,8 @@
 
 ## 1. 开发新功能或修复
 
+个性化业务优先使用公开插件扩展点，统一插件维护与迁移入口见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
+
 从当前基线 tag 拉分支，在独立 worktree 里开发：
 
 ```bash
