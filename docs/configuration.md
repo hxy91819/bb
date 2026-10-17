@@ -1141,3 +1141,5 @@ provider child. Recordings can contain secrets; redact them with
 App production builds cache React Compiler output at
 `<git-common-dir>/bb-cache/react-compiler`; it has no configuration and can be
 deleted while no build runs.
+
+Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.

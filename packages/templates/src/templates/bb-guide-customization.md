@@ -356,3 +356,5 @@ change), then run `bb settings experiment performanceDiagnostics true|false`.
 Collection needs both; it adds overhead and writes CPU profiles every 30 seconds
 to `$BB_DATA_DIR/logs/performance/` (kept 12 hours), which contain local paths.
 Open a `.cpuprofile` in Chrome DevTools.
+
+Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.
