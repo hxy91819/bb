@@ -31,7 +31,7 @@ feature/plugin-thread-context                   needs-feedback                  
 feature/plugin-thread-list-contributions        needs-feedback                                             # 通用可选成员等分组与行装饰贡献，复用原生thread-list树/偏好/交互。
 feature/thread-activity-query                  needs-feedback                                             # 通用有界线程活动事实查询，SQL namespace/metadata/date过滤与SDK/CLI分页
 fix/plugin-overlay-recovery                    needs-feedback                                             # 插件内容脚本隔离期间放行 React root 挂载，避免全局 overlay 节点被拒
-fix/mobile-add-to-chat                        needs-feedback                                             # 移动端 Add to chat 后展开输入框，保持触屏端不自动弹键盘
+fix/mobile-add-to-chat                        needs-feedback                                             # 移动端 Add to chat 后展开输入框并将光标移到引用后的回复位置
 feature/thread-message-navigation            needs-feedback                                             # 插件 toThread 支持 experimental_messageSeq 定位消息，与命令面板会话搜索共用实现
 fix/codex-compaction-warning                  fork-only                                                  # 屏蔽 Codex 长会话多次压缩准确率提示（按第一句前缀过滤 warning）
 fix/pool-ai-fallback                         needs-feedback                                             # Account Pool 提供标题与提交消息 AI 服务，无本地 Codex 登录时参与自动回退
