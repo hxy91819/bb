@@ -2578,6 +2578,10 @@ export function PromptBoxInternal({
   const focusEnd = useCallback(() => {
     if (isPointerCoarse) {
       pendingFocusEndRef.current = false;
+      const currentEditor = editorRef.current;
+      if (currentEditor && !currentEditor.isDestroyed) {
+        currentEditor.view.dispatch(currentEditor.state.tr.setSelection(TextSelection.atEnd(currentEditor.state.doc)));
+      }
       return;
     }
     const currentEditor = editorRef.current;

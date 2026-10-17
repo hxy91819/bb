@@ -595,7 +595,9 @@ function useComposerRendererHostApi({
     if (focusEndKey === undefined) return;
     if (focusEndKey === lastFocusEndKeyRef.current) return;
     lastFocusEndKeyRef.current = focusEndKey;
-    getEditorRef.current?.().focusEnd();
+    const editor = getEditorRef.current?.();
+    editor?.focusEnd();
+    editor?.focus();
   }, [focusEndKey]);
   const attachEditor: ComposerRootHost["attachEditor"] = (getEditor) => {
     getEditorRef.current = getEditor;

@@ -1432,12 +1432,11 @@ describe("ComposerBox controlled value sync", () => {
     }
   });
 
-  it("does not honor focus-end requests on coarse pointers", async () => {
+  it("does not honor imperative focus calls on coarse pointers", async () => {
     const restoreMatchMedia = mockPointerCoarse(true);
     try {
       const promptBoxRef = createRef<PromptBoxHandle>();
       const baseProps = createPromptBoxProps({
-        focusEndKey: 0,
         promptBoxRef,
       });
       const view = render(<ComposerBox {...baseProps} />);
@@ -1447,7 +1446,6 @@ describe("ComposerBox controlled value sync", () => {
       document.body.append(outsideTarget);
       outsideTarget.focus();
 
-      view.rerender(<ComposerBox {...baseProps} focusEndKey={1} />);
       promptBoxRef.current?.focusEnd();
 
       expect(document.activeElement).toBe(outsideTarget);
@@ -1648,32 +1646,44 @@ describe("ComposerBox controlled value sync", () => {
     expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
   });
 
-  it("places focus-end insertion below an added quote", async () => {
-    const onChange = vi.fn();
-    const promptBoxRef = createRef<PromptBoxHandle>();
-    const baseProps = createPromptBoxProps({
-      onChange,
-      promptBoxRef,
-      value: "",
-      focusEndKey: 0,
-    });
-    const view = render(<ComposerBox {...baseProps} />);
+  it.each([false, true])(
+    "focuses below an added quote (coarse pointer: %s)",
+    async (isPointerCoarse) => {
+      const restoreMatchMedia = mockPointerCoarse(isPointerCoarse);
+      try {
+        const onChange = vi.fn();
+        const promptBoxRef = createRef<PromptBoxHandle>();
+        const baseProps = createPromptBoxProps({
+          onChange,
+          promptBoxRef,
+          value: "",
+          autoFocus: false,
+          focusEndKey: 0,
+        });
+        const view = render(<ComposerBox {...baseProps} />);
 
-    view.rerender(
-      <ComposerBox
-        {...baseProps}
-        value={"> selected text\n"}
-        focusEndKey={1}
-      />,
-    );
+        view.rerender(
+          <ComposerBox
+            {...baseProps}
+            value={"> selected text\n"}
+            focusEndKey={1}
+          />,
+        );
 
-    await waitForPromptFocus();
-    await act(async () => {
-      promptBoxRef.current?.voice?.deliverTranscript("reply", "insert");
-    });
+        await waitForPromptFocus();
+        await act(async () => {
+          promptBoxRef.current?.insertTextAtCursor("reply");
+        });
 
-    expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
-  });
+        expect(onChange).toHaveBeenLastCalledWith(
+          "> selected text\n\nreply",
+          [],
+        );
+      } finally {
+        restoreMatchMedia();
+      }
+    },
+  );
 });
 
 describe("ComposerBox programmatic submit", () => {
