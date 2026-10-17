@@ -945,33 +945,25 @@ describe("FollowUpPromptBox", () => {
     ).toBeNull();
   });
 
-  it("expands a quoted draft on mobile without moving focus", () => {
+  it("expands a quoted draft on mobile", () => {
     mocks.isCompactViewport = true;
     mocks.isPointerCoarse = true;
     const props = createFollowUpPromptBoxProps({ kind: "ready" });
-    const outside = document.createElement("button");
-    document.body.append(outside);
-    outside.focus();
-    try {
-      const { rerender } = render(
-        <FollowUpPromptBox {...props} focusEndKey={0} />,
-      );
-      expect(screen.getByTestId("prompt-box").dataset.compact).toBe("true");
-      if (!props.composer) throw new Error("Missing composer");
-      const quotedProps = {
-        ...props,
-        composer: { ...props.composer, message: "> selected text\n" },
-      };
-      rerender(<FollowUpPromptBox {...quotedProps} focusEndKey={1} />);
+    const { rerender } = render(
+      <FollowUpPromptBox {...props} focusEndKey={0} />,
+    );
+    expect(screen.getByTestId("prompt-box").dataset.compact).toBe("true");
+    if (!props.composer) throw new Error("Missing composer");
+    const quotedProps = {
+      ...props,
+      composer: { ...props.composer, message: "> selected text\n" },
+    };
+    rerender(<FollowUpPromptBox {...quotedProps} focusEndKey={1} />);
 
-      expect(screen.getByTestId("prompt-box").dataset.compact).toBe("false");
-      expect(
-        document.querySelector("[data-follow-up-composer-footer]"),
-      ).not.toBeNull();
-      expect(document.activeElement).toBe(outside);
-    } finally {
-      outside.remove();
-    }
+    expect(screen.getByTestId("prompt-box").dataset.compact).toBe("false");
+    expect(
+      document.querySelector("[data-follow-up-composer-footer]"),
+    ).not.toBeNull();
   });
 
   it("shows the full editor immediately for message edits on mobile", () => {

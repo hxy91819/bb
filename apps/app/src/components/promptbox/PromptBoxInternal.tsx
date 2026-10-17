@@ -2487,15 +2487,11 @@ export function PromptBoxInternal({
   useLayoutEffect(() => {
     if (focusEndKey === undefined) return;
     if (focusEndKey === lastFocusEndKeyRef.current) return;
-    if (isPointerCoarse) {
-      lastFocusEndKeyRef.current = focusEndKey;
-      return;
-    }
     if (!editor) return;
     lastFocusEndKeyRef.current = focusEndKey;
     focusEditorAtEnd(editor);
     scheduleRevealEditorSelection();
-  }, [editor, focusEndKey, isPointerCoarse, scheduleRevealEditorSelection]);
+  }, [editor, focusEndKey, scheduleRevealEditorSelection]);
 
   useLayoutEffect(() => {
     scheduleRevealEditorSelection();
