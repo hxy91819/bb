@@ -30,6 +30,7 @@ export interface AcpAgentCapabilities {
     close: boolean;
     delete: boolean;
     fork: boolean;
+    checkpointFork: boolean;
     additionalDirectories: boolean;
   };
   logout: boolean;
@@ -158,6 +159,7 @@ export function readAcpAgentCapabilities(
       close: isPresent(session, "close"),
       delete: isPresent(session, "delete"),
       fork: isPresent(session, "fork"),
+      checkpointFork: readMeta(objectAt(session, "fork"))?.["cursor-acp/checkpoint"] === true,
       additionalDirectories: isPresent(session, "additionalDirectories"),
     },
     logout: isPresent(auth, "logout"),
