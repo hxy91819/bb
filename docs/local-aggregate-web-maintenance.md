@@ -103,6 +103,8 @@ git check-ignore -v config/local-aggregate-web.json
 
 ## 日常升级
 
+每次升级同时执行 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件)，包括路径来源的源码检查、构建与重载；外置插件更新属于已授权环境升级的收尾。实际版本从本机与远端读取，保留本机配置、数据和启停状态。
+
 聚合按 [Fork 维护](fork-maintenance.md) 用 `scripts/fork-aggregate --promote` 生成并推送；
 构建与服务替换以 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 为唯一入口。
 

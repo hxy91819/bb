@@ -7,6 +7,8 @@
 - 本仓库是用户自行管理的 fork。整项任务的最终交付按下方「Fork 维护」完成提交、推送及适用的发布收尾；只提交本任务文件，保留他人的工作。验证、推送或发布实际受阻时明确报告未完成的步骤与原因。
 - Read the linked guidance when its topic applies to the task.
 
+修改功能、排查问题、调整插件或升级 BB 环境前，先读 [功能维护与插件更新索引](docs/feature-index.md)，按维护边界进入对应仓库。新增功能、改变职责、插件 ID 或迁仓时同步索引；环境升级须执行其中的外置插件更新与验收流程。
+
 BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
 
 会话消息书签插件的管家工作簿在 [docs/steward/message-bookmarks.md](docs/steward/message-bookmarks.md)，推进此目标时存在则先读，只报未完成的用户待办。
@@ -71,7 +73,7 @@ BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/s
 本仓库是个人 fork（远端 `fork` = hxy91819/bb，上游 `origin` = get-bb/bb）。目标只有三个：每个改动是独立、可直接提给上游的分支；方便本机聚合打包；能纳入上游稳定版。完整流程见 [docs/fork-maintenance.md](docs/fork-maintenance.md)，不要引入领域分支、补丁登记表或冻结清单。
 
 - 根目录永远检出 `main`，个人 fork 的默认分支也设为 `main`：它是 `scripts/fork-aggregate` 每次从稳定 tag 重新生成的产物。不在这里写产品代码，不从它拉分支，不从它提上游 PR。
-- 插件定制、迁仓或维护入口收敛时，先读 [插件迁出说明](docs/steward/plugin-extraction.md)；业务优先使用公开插件扩展点。
+- 业务优先使用公开插件扩展点；迁移旧插件或核对淘汰决定时读 [插件迁出说明](docs/steward/plugin-extraction.md)，日常维护位置以功能索引为准。
 - 新功能/修复：从 `.fork/branches` 的 `base` tag 拉 `feature/<name>` 或 `fix/<name>`，放在 `.worktrees/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `fork`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
 - 聚合打包：`scripts/fork-package` 一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
 - 发布收尾：功能、修复及影响安装产物的依赖改动完成必要验证与适用的 review 后，默认在整项任务最后统一执行 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包)，完成聚合、推送、tag 触发流水线及 Release 核验；已有持续授权，无需另问是否打包。纯规则与文档改动、已有发布的复用和用户明确要求不发布的处理以该流程为准；分支推送或清单登记完成不等于产品已发布。

@@ -32,7 +32,7 @@
 
 ## 1. 开发新功能或修复
 
-个性化业务优先使用公开插件扩展点，统一插件维护与迁移入口见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
+修改功能前先读 [功能维护与插件更新索引](feature-index.md)，业务定制优先使用公开插件扩展点；旧安装来源迁移见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
 
 从当前基线 tag 拉分支，在独立 worktree 里开发：
 
@@ -197,6 +197,8 @@ node /path/to/fork-tooling/scripts/fork-release/smoke-sdk.mjs /tmp/sdk-candidate
 本机安装、构建和冷消费检查应放在既有资源隔离流程内串行执行。正式 Release 从同一聚合 SHA 使用相同脚本构建；候选包的字节 hash 不必与正式构建相同，正式 URL/integrity 以正式资产为准。插件 owner 联合验收后固定该 URL 和 lockfile；兼容声明写明实际验收的 BB fork tag 与聚合 SHA，不能仅写 SDK 原版本。BB 发布不依赖尚未发布的插件。
 
 ### 在其他机器安装
+
+新装或升级目标实例时，同时按 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件) 检查集合与升级续跑插件。BB 安装包不会自动更新外置 Git/path 插件；兼容的新版本默认在同一项环境更新任务里完成安装和验收，保留目标机的配置与启停状态。
 
 从 Release 下载匹配平台的 `.tar.gz` 和同名 `.sha256`。例如 Linux x64：
 

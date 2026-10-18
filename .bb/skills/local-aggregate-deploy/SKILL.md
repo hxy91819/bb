@@ -13,6 +13,8 @@ Use the ignored `config/local-aggregate-web.json`, or `config/local-aggregate-we
 
 Compare the selected config with the actual system unit's ExecStart, WorkingDirectory, environment and drop-ins. The unit is authoritative for the installed target; an old config is a build input, not permission to replace the service with that old checkout. Preserve the unit's data directory, arguments, environment and mount requirements.
 
+Every authorized environment upgrade also follows the [external plugin update checklist](../../../docs/feature-index.md#升级时同步外置插件). Inspect actual sources and remote revisions, including local path plugins that `bb plugin update --all` skips. Prepare compatible updates before cutover and finish deferred updates after the new server is healthy; retain settings, data and enabled states.
+
 ## 2. Build (old service keeps running)
 
 `scripts/fork-package` normally leaves a built checkout at `.worktrees/aggregate-deploy-<short sha>` whose HEAD equals `fork/main`; reuse it and skip to the cutover prompt it printed. Otherwise build from a clean checkout at that commit: `git worktree add --detach .worktrees/aggregate-deploy-<short sha> fork/main`. Record the old running SHA and the new SHA for rollback.
@@ -62,7 +64,7 @@ Read the saved result and `journalctl -u <cutover-unit>` before taking further a
 
 1. Poll server `/health` and host-daemon `/health`; check the target unit is `active`, actual ExecStart and WorkingDirectory identify the intended source/package, `/api/v1/system/version` matches the intended version, and `NRestarts=0` after a short interval. For a Release package, require `release.json.source` to equal the verified aggregate SHA. The independent script uses these same gates before reporting success; health alone cannot distinguish a healthy old package from the new one.
 2. Check `bb upgrade-resume status --json` and report resumed, skipped, pending or uncertain threads. If the task rolled back, verify the old version and report the failed deployment instead of automatically repeating the switch.
-3. For changes touching persistence or provider parameters, run one real API-level check against the service. Remove the completed transient timer/service and temporary script only after retaining any needed diagnosis and confirming no cutover work remains.
+3. Finish the external plugin checklist, including path-source builds/reloads and real configuration/data readback. Report per-plugin source revisions and outcomes with the BB release identity. For changes touching persistence or provider parameters, run one real API-level check against the service. Remove the completed transient timer/service and temporary script only after retaining any needed diagnosis and confirming no cutover work remains.
 
 ## 4. Failure and rollback
 
