@@ -4,7 +4,7 @@
 
 - Carry the requested change through implementation, relevant verification, and fixes for failures it causes. Continue authorized, reversible local work without asking for approval at each step; ask when a missing user decision blocks progress.
 - Match verification to the change. Once relevant checks pass, broaden or repeat them only for new changes, failures, or unresolved concerns.
-- 本仓库是用户自行管理的 fork，维护方式见下方「Fork 维护」。改动完成并通过相关验证及适用的 review 后，必须主动提交本任务改动，push 到个人远端 `fork` 的对应分支，并核对远端 SHA；无需再次询问，不得停在未提交或仅本地提交的状态。只提交本任务文件。验证或 push 受阻时明确报告未完成状态；此授权不包含推送上游或部署服务。
+- 本仓库是用户自行管理的 fork。整项任务的最终交付按下方「Fork 维护」完成提交、推送及适用的发布收尾；只提交本任务文件，保留他人的工作。验证、推送或发布实际受阻时明确报告未完成的步骤与原因。
 - Read the linked guidance when its topic applies to the task.
 
 BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
@@ -74,7 +74,7 @@ BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/s
 - 插件定制、迁仓或维护入口收敛时，先读 [插件迁出说明](docs/steward/plugin-extraction.md)；业务优先使用公开插件扩展点。
 - 新功能/修复：从 `.fork/branches` 的 `base` tag 拉 `feature/<name>` 或 `fix/<name>`，放在 `.worktrees/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `fork`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
 - 聚合打包：`scripts/fork-package` 一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
-- 打包收尾：用户要求聚合打包或为聚合版构建部署包时，成功后必须按 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包) 给实际打包的聚合 SHA 打 `fork-v*` tag 并推送到 `fork`，核对远端 SHA 和 Release 结果；这是默认授权，无需再次询问。同一 SHA 已发布则复用；用户明确要求仅验证、不发布时跳过。
+- 发布收尾：功能、修复及影响安装产物的依赖改动完成必要验证与适用的 review 后，默认在整项任务最后统一执行 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包)，完成聚合、推送、tag 触发流水线及 Release 核验；已有持续授权，无需另问是否打包。纯规则与文档改动、已有发布的复用和用户明确要求不发布的处理以该流程为准；分支推送或清单登记完成不等于产品已发布。
 - 上游反馈：分支就是 PR 材料；向 get-bb/bb 提 issue/评论/PR 前必须经用户逐项确认，状态记在 `.fork/branches`。
 - 会停止、重启或替换当前 BB 服务的操作需要用户明确授权，使用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)。允许从 BB 线程内发起并在恢复后完成核验；停服到重新启动及失败回退由独立于目标服务的 systemd 任务执行，线程恢复使用 upgrade-resume 插件。不需要重启服务的 provider 配置、账号绑定和 dispatch alias 修改可由 BB 线程在用户已授权范围内直接完成并验证。
 
