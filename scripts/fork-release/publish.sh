@@ -7,20 +7,15 @@ test "$remote_source" = "$GITHUB_SHA"
 node scripts/fork-release/verify-sdk.mjs release "$RELEASE_TAG" "$GITHUB_SHA"
 cd release
 
-assets=()
-for platform in linux darwin; do
-  for arch in x64 arm64; do
-    archive="bb-${RELEASE_TAG}-${platform}-${arch}.tar.gz"
-    test -s "$archive"
-    test -s "$archive.sha256"
-    if command -v sha256sum >/dev/null 2>&1; then
-      sha256sum --check "$archive.sha256"
-    else
-      shasum -a 256 --check "$archive.sha256"
-    fi
-    assets+=("$archive" "$archive.sha256")
-  done
-done
+archive="bb-${RELEASE_TAG}-linux-x64.tar.gz"
+test -s "$archive"
+test -s "$archive.sha256"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum --check "$archive.sha256"
+else
+  shasum -a 256 --check "$archive.sha256"
+fi
+assets=("$archive" "$archive.sha256")
 
 sdk="bb-plugin-sdk-${RELEASE_TAG}"
 assets+=("$sdk.tgz" "$sdk.tgz.sha256" "$sdk.json")
@@ -30,11 +25,11 @@ Prebuilt BB fork aggregate from commit ${GITHUB_SHA}.
 
 The universal Plugin SDK npm tarball and provenance JSON come from the same commit. They are for plugin development; SDK package names and versions retain their upstream values.
 
-Download the archive matching your OS and CPU. Verify its accompanying SHA-256 checksum, extract it, then run bin/bb-app or bin/bb --help inside the extracted directory.
+This release targets the self-hosted Linux x64 deployment. Download its linux-x64 archive. Verify its accompanying SHA-256 checksum, extract it, then run bin/bb-app or bin/bb --help inside the extracted directory.
 
 Node, the web app, server, host daemon, CLI and built-in plugins are included. No source checkout, aggregation, rebase, pnpm or compilation is needed on the target machine.
 
-Linux requires glibc 2.35 or newer (Ubuntu 22.04 or equivalent). macOS archives are built on macOS 15; use macOS 15 or newer. Runtime and data migration behavior follows the upstream BB version; keep the existing data directory and stop the old instance before starting the replacement.
+Linux requires glibc 2.35 or newer (Ubuntu 22.04 or equivalent). Runtime and data migration behavior follows the upstream BB version; keep the existing data directory and stop the old instance before starting the replacement.
 
 [Installation and release instructions](https://github.com/${GH_REPO}/blob/${RELEASE_TAG}/docs/fork-maintenance.md)
 EOF

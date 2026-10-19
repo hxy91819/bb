@@ -134,7 +134,7 @@ scripts/fork-aggregate --promote            # 重新聚合并提升到 main；�
 1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `main` 被其他任务移动，也使用这个已验证的 SHA。
 2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
 3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
-4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开且四个平台的包和校验文件齐全。
+4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开，Linux x64 包、校验文件及通用 SDK 三件资产齐全。
 5. 交付 tag、聚合 SHA 和 Release 链接。tag 推送成功只代表已触发构建；流水线失败、无法查询或资产不全时，明确报告发布未完成。
 
 以下是新发布的命令示例，版本、日期、序号和聚合 SHA 以本次打包结果为准：
@@ -150,14 +150,11 @@ git ls-remote fork 'refs/tags/fork-v0.44.0-20261001.1^{}'
 
 workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
 
-在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有四个平台与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
+在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。默认只为本机自部署构建 Linux x64，不等待 macOS、ARM 或桌面客户端。Linux x64 使用 GitHub 托管 runner 构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有 Linux x64 与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
 
 | 包名后缀              | 目标机器                                              |
 | --------------------- | ----------------------------------------------------- |
 | `linux-x64.tar.gz`    | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
-| `linux-arm64.tar.gz`  | Linux aarch64，glibc ≥ 2.35                           |
-| `darwin-x64.tar.gz`   | Intel Mac，macOS 15 或更新                            |
-| `darwin-arm64.tar.gz` | Apple Silicon Mac，macOS 15 或更新                    |
 
 这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
 
@@ -165,7 +162,7 @@ workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点�
 
 ### 独立插件开发使用 SDK
 
-SDK 是通用 npm tarball，不是第五种平台服务包。每次新 Release 额外包含：
+SDK 是通用 npm tarball，不是平台服务包。每次新 Release 额外包含：
 
 - `bb-plugin-sdk-<fork-tag>.tgz`：完整的 `@get-bb/plugin-sdk`，保留源码中的包名与版本。
 - 同名 `.tgz.sha256`：`sha256sum --check` 可读的校验文件。
@@ -202,7 +199,7 @@ node /path/to/fork-tooling/scripts/fork-release/smoke-sdk.mjs /tmp/sdk-candidate
 
 新装或升级目标实例时，同时按 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件) 检查集合与升级续跑插件。BB 安装包不会自动更新外置 Git/path 插件；兼容的新版本默认在同一项环境更新任务里完成安装和验收，保留目标机的配置与启停状态。
 
-从 Release 下载匹配平台的 `.tar.gz` 和同名 `.sha256`。例如 Linux x64：
+从 Release 下载 Linux x64 的 `.tar.gz` 和同名 `.sha256`：
 
 ```bash
 tag=fork-v0.44.0-20261001.1
@@ -215,7 +212,7 @@ tar -xzf "$asset" -C "$HOME/.local/opt/bb"
 "$HOME/.local/opt/bb/bb-${tag}-linux-x64/bin/bb-app"
 ```
 
-macOS 对应换成 `darwin-x64` 或 `darwin-arm64`，校验命令用 `shasum -a 256 --check "${asset}.sha256"`。保持解压目录完整，直接调用其中的 `bin/bb-app`、`bin/bb-server`、`bin/bb-host-daemon`、`bin/bb`；可以把该目录的 `bin` 加入 `PATH`，不要把启动脚本软链接到别处。脚本始终用包内的 Node，因此不受系统 Node 版本影响。
+历史 Release 的其他平台包继续保留；今后新增平台需明确修改 workflow 和资产校验，不加入默认发布依赖。保持解压目录完整，直接调用其中的 `bin/bb-app`、`bin/bb-server`、`bin/bb-host-daemon`、`bin/bb`；可以把该目录的 `bin` 加入 `PATH`，不要把启动脚本软链接到别处。脚本始终用包内的 Node，因此不受系统 Node 版本影响。
 
 升级时下载并解压新包，停下旧实例，再让现有 service 的启动命令指向新包的 `bin/bb-app`（或原先使用的单独 server/host-daemon 启动入口）。默认仍使用 `~/.bb`；原有启动参数、数据目录和 service 环境变量应保留。包不会安装或重启服务。数据库 schema 变化时沿用部署流程的备份与迁移规则，同一个数据目录只运行一个实例。本机现有服务的切换仍按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 执行。
 
@@ -223,7 +220,7 @@ macOS 对应换成 `darwin-x64` 或 `darwin-arm64`，校验命令用 `shasum -a 
 
 构建或验证失败时修复所属分支，重新聚合后使用新 tag 发布。纯网络或 runner 故障可在 Actions 重跑原 tag。
 
-上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和完整资产清单（四个平台的八件资产与 SDK 的三件资产），不覆盖已发布包。需要修订已发布版本时使用新 tag。新 workflow 缺 SDK 资产会失败，不降级；历史已公开且不含 SDK 的 Release 不回填、不修改，仍使用其原 workflow。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
+上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和完整资产清单（Linux x64 的两件资产与 SDK 的三件资产），不覆盖已发布包。需要修订已发布版本时使用新 tag。新 workflow 缺 SDK 资产会失败，不降级；历史已公开且不含 SDK 的 Release 不回填、不修改，仍使用其原 workflow。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
 
 ## 4. 向上游反馈
 

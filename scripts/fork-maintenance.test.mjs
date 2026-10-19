@@ -304,13 +304,10 @@ test("release publication requires SDK identity and completes drafts without ove
     };
     const provenancePath = join(root, "release", `bb-plugin-sdk-${tag}.json`);
     writeFileSync(provenancePath, JSON.stringify(provenance));
-    for (const platform of ["linux", "darwin"])
-      for (const arch of ["x64", "arm64"]) {
-        const name = `bb-${tag}-${platform}-${arch}.tar.gz`;
-        const file = join(root, "release", name);
-        writeFileSync(file, "runtime fixture");
-        writeFileSync(`${file}.sha256`, `${digest(file)}  ${name}\n`);
-      }
+    const runtimeName = `bb-${tag}-linux-x64.tar.gz`;
+    const runtimePath = join(root, "release", runtimeName);
+    writeFileSync(runtimePath, "runtime fixture");
+    writeFileSync(`${runtimePath}.sha256`, `${digest(runtimePath)}  ${runtimeName}\n`);
     const assets = readdirSync(join(root, "release")).map((name) => ({
       name,
       size: 1,
@@ -403,6 +400,14 @@ if [ "$1 $2" = 'release view' ]; then cat "$FIXTURE_ROOT/state.json"; fi
       assert.equal(readFileSync(join(root, "calls"), "utf8"), "");
     }
     writeFileSync(provenancePath, JSON.stringify(provenance));
+    state(true);
+    writeFileSync(runtimePath, "corrupted runtime");
+    assert.notEqual(invoke().status, 0);
+    assert.equal(readFileSync(join(root, "calls"), "utf8"), "");
+    rmSync(runtimePath);
+    assert.notEqual(invoke().status, 0);
+    assert.equal(readFileSync(join(root, "calls"), "utf8"), "");
+    writeFileSync(runtimePath, "runtime fixture");
     writeFileSync(archive, "corrupted");
     assert.notEqual(invoke().status, 0);
     rmSync(archive);
