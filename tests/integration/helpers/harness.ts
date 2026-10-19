@@ -223,7 +223,9 @@ async function startIntegrationServer(
   const telemetry = createNoopTelemetryService();
   const skillTreeRegistry = new SkillTreeRegistry();
   const providerRegistry = createProviderRegistryService({});
-  await registerFirstPartyProviders(providerRegistry);
+  await registerFirstPartyProviders(providerRegistry, {
+    excludePluginIds: options.builtinPlugins,
+  });
   const pluginHostArtifacts = new PluginHostArtifactRegistry();
   await registerFakeProviders(providerRegistry, pluginHostArtifacts);
   await recordFirstPartyProviderBridgeArtifacts(pluginHostArtifacts);
