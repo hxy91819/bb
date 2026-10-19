@@ -20,6 +20,8 @@ import type {
   PluginSourceCodeRendererRegistration,
   PluginThreadHeaderActionRegistration,
   PluginThreadActionRegistration,
+  experimental_ThreadListGroupingRegistration,
+  experimental_ThreadRowDecorationRegistration,
   ExperimentalPluginBrowserToolbarActionRegistration,
   PluginThreadListRegistration,
   PluginThreadPanelActionRegistration,
@@ -49,6 +51,8 @@ export interface PluginRegistrationSet {
   threadLists?: readonly PluginThreadListRegistration[];
   threadHeaderActions?: readonly PluginThreadHeaderActionRegistration[];
   threadActions?: readonly PluginThreadActionRegistration<unknown>[];
+  threadListGroupings?: readonly experimental_ThreadListGroupingRegistration<unknown>[];
+  threadRowDecorations?: readonly experimental_ThreadRowDecorationRegistration<unknown>[];
   browserToolbarActions?: readonly ExperimentalPluginBrowserToolbarActionRegistration[];
   fileOpeners: readonly PluginFileOpenerRegistration[];
   sourceCodeRenderers?: readonly PluginSourceCodeRendererRegistration[];
@@ -92,6 +96,14 @@ interface PluginThreadHeaderActionSlot
   extends PluginThreadHeaderActionRegistration, PluginSlotBase {}
 export interface PluginThreadActionSlot
   extends PluginThreadActionRegistration<unknown>, PluginSlotBase {}
+export interface PluginThreadListGroupingSlot
+  extends
+    experimental_ThreadListGroupingRegistration<unknown>,
+    PluginSlotBase {}
+export interface PluginThreadRowDecorationSlot
+  extends
+    experimental_ThreadRowDecorationRegistration<unknown>,
+    PluginSlotBase {}
 export interface PluginBrowserToolbarActionSlot
   extends ExperimentalPluginBrowserToolbarActionRegistration, PluginSlotBase {}
 export interface PluginFileOpenerSlot
@@ -129,6 +141,8 @@ export interface PluginSlotSnapshot {
   threadLists: readonly PluginThreadListSlot[];
   threadHeaderActions: readonly PluginThreadHeaderActionSlot[];
   threadActions: readonly PluginThreadActionSlot[];
+  threadListGroupings: readonly PluginThreadListGroupingSlot[];
+  threadRowDecorations: readonly PluginThreadRowDecorationSlot[];
   browserToolbarActions: readonly PluginBrowserToolbarActionSlot[];
   fileOpeners: readonly PluginFileOpenerSlot[];
   sourceCodeRenderers: readonly PluginSourceCodeRendererSlot[];
@@ -156,6 +170,8 @@ export const EMPTY_PLUGIN_SLOT_SNAPSHOT: PluginSlotSnapshot = {
   threadLists: [],
   threadHeaderActions: [],
   threadActions: [],
+  threadListGroupings: [],
+  threadRowDecorations: [],
   browserToolbarActions: [],
   fileOpeners: [],
   sourceCodeRenderers: [],
@@ -190,6 +206,8 @@ const SLOT_KINDS: readonly SlotKind[] = [
   "threadLists",
   "threadHeaderActions",
   "threadActions",
+  "threadListGroupings",
+  "threadRowDecorations",
   "browserToolbarActions",
   "fileOpeners",
   "sourceCodeRenderers",
@@ -248,6 +266,8 @@ function flattenRegistrations(
     threadLists: stamp(set.threadLists),
     threadHeaderActions: stamp(set.threadHeaderActions),
     threadActions: stamp(set.threadActions),
+    threadListGroupings: stamp(set.threadListGroupings),
+    threadRowDecorations: stamp(set.threadRowDecorations),
     browserToolbarActions: stamp(set.browserToolbarActions),
     fileOpeners: stamp(set.fileOpeners),
     sourceCodeRenderers: stamp(set.sourceCodeRenderers),

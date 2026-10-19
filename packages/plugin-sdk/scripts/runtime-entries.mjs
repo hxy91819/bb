@@ -12,6 +12,7 @@ const NODE_ESM_REQUIRE_BANNER = [
 const PACKAGE_EXTERNALS = ["zod", "zod/*", "cross-spawn"];
 
 const EXTRA_EXTERNALS = {
+  "./internal/thread-contribution-runtime": ["react", "react/*"],
   "./testing": ["better-sqlite3", "cron-parser", "hono", "hono/*"],
   "./testing/app": [
     "@testing-library/react",
