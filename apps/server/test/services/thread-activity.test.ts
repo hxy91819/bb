@@ -7,8 +7,6 @@ import {
 } from "@bb/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createConnection,
-  migrate,
   projects,
   threads,
   events,
@@ -16,6 +14,7 @@ import {
   deriveStoredEventItemFields,
   type DbConnection,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import { eq } from "drizzle-orm";
 import {
   experimentalThreadActivityRequestSchema,
@@ -110,8 +109,7 @@ function event(
     .run();
 }
 beforeEach(() => {
-  db = createConnection(":memory:");
-  migrate(db);
+  db = createMigratedConnection();
   db.insert(projects)
     .values({ id: "project", name: "Activity", createdAt: 1, updatedAt: 1 })
     .run();
