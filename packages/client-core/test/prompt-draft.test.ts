@@ -189,7 +189,11 @@ describe("prompt draft helpers", () => {
         { start: 30, end: 48, resource: removed },
       ],
       attachments: [
-        { type: "localFile", path: "Pasted-text-1.txt", name: "Pasted text.txt" },
+        {
+          type: "localFile",
+          path: "Pasted-text-1.txt",
+          name: "Pasted text.txt",
+        },
       ],
     });
 
@@ -297,12 +301,12 @@ describe("prompt draft helpers", () => {
 });
 
 describe("appendQuoteToDraftText", () => {
-  it("appends a one-line quote to an empty draft with a trailing newline", () => {
+  it("appends a one-line quote with a blank line for an unquoted reply", () => {
     const next = appendQuoteToDraftText(
       emptyPromptDraftState(),
       "  hello world  ",
     );
-    expect(next.text).toBe("> hello world\n");
+    expect(next.text).toBe("> hello world\n\n");
   });
 
   it("prefixes each line of a multi-line quote and prefixes blank lines as `>`", () => {
@@ -310,19 +314,19 @@ describe("appendQuoteToDraftText", () => {
       emptyPromptDraftState(),
       "para one\n\npara two",
     );
-    expect(next.text).toBe("> para one\n>\n> para two\n");
+    expect(next.text).toBe("> para one\n>\n> para two\n\n");
   });
 
   it("appends to existing text separated by a newline", () => {
     const base = { text: "existing reply", mentions: [], attachments: [] };
     const next = appendQuoteToDraftText(base, "quoted");
-    expect(next.text).toBe("existing reply\n> quoted\n");
+    expect(next.text).toBe("existing reply\n> quoted\n\n");
   });
 
   it("stacks a second quote below the first, separated by a blank line", () => {
     const first = appendQuoteToDraftText(emptyPromptDraftState(), "first");
     expect(appendQuoteToDraftText(first, "second").text).toBe(
-      "> first\n\n> second\n",
+      "> first\n\n> second\n\n",
     );
   });
 
@@ -366,7 +370,7 @@ describe("appendQuoteAndAttachmentsToDraft", () => {
     );
 
     expect(next).toEqual({
-      text: "> review this\n",
+      text: "> review this\n\n",
       mentions: [],
       attachments: [
         {

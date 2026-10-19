@@ -58,6 +58,7 @@ import { ComposerTestProviders } from "@/test/fixtures/composer-test-providers";
 import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
 import { ThreadContextWindowIndicator } from "@/components/thread/timeline/ThreadContextWindowIndicator";
 import {
+  appendQuoteToDraftText,
   emptyPromptDraftState,
   promptInputToDraft,
   type PromptDraftState,
@@ -1665,7 +1666,10 @@ describe("ComposerBox controlled value sync", () => {
         view.rerender(
           <ComposerBox
             {...baseProps}
-            value={"> selected text\n"}
+            value={
+              appendQuoteToDraftText(emptyPromptDraftState(), "selected text")
+                .text
+            }
             focusEndKey={1}
           />,
         );
