@@ -307,4 +307,3 @@ The Plugin Guide's The thread list card owns the grouping/row contract and examp
 - `experimental_ThreadRowDecorationRegistration`
 - `experimental_ThreadRowDecorationOptions`
 - `experimental_ThreadRowDecorationEntry`
-
