@@ -1,5 +1,6 @@
 import { setAppIcons } from "@bb/shared-ui/icon-registry";
 import { useSyncExternalStore } from "react";
+import { threadCreationContextRegistry } from "./thread-creation-context";
 import type {
   ComposerCustomization,
   ExperimentalAppOverlayRegistration,
@@ -445,6 +446,7 @@ export function setPluginSlotRegistrations(
   registrations: PluginRegistrationSet,
 ): void {
   registrationsByPluginId.set(pluginId, registrations);
+  threadCreationContextRegistry.set(pluginId, registrations);
   const generation = (generationByPluginId.get(pluginId) ?? 0) + 1;
   generationByPluginId.set(pluginId, generation);
   flattenedByPluginId.set(
@@ -456,6 +458,7 @@ export function setPluginSlotRegistrations(
 
 export function removePluginSlotRegistrations(pluginId: string): void {
   if (!registrationsByPluginId.delete(pluginId)) return;
+  threadCreationContextRegistry.remove(pluginId);
   flattenedByPluginId.delete(pluginId);
   emitChange();
 }
@@ -477,6 +480,7 @@ export function usePluginSlots(): PluginSlotSnapshot {
 }
 
 export function resetPluginSlotStoreForTest(): void {
+  threadCreationContextRegistry.clear();
   registrationsByPluginId.clear();
   generationByPluginId.clear();
   flattenedByPluginId.clear();
