@@ -236,7 +236,7 @@ export function resolveThreadRevealExpansion({
   const expansion = getThreadSidebarExpansion({
     organizationMode,
     isPinned: effectivePinnedThreadIds.has(thread.id),
-    thread,
+    thread: organizationMode === "machine" ? (currentThread ?? thread) : thread,
     sidebarProjectId: resolveSidebarProjectId(thread, threadById),
     personalProjectId,
   });
