@@ -17,7 +17,8 @@ import { CODEX_NATIVE_ROOTS_DECLARATION } from "./src/native-roots.js";
 export default async function plugin(bb: BbPluginApi) {
   registerUsageSource(bb);
   registerCodexAiService(bb);
-  registerAsyncQuestions(bb);
+  const providerIds = new Set(["codex"]);
+  registerAsyncQuestions(bb, providerIds);
 
   bb.settings.define({
     memoryEnabled: {
@@ -114,6 +115,9 @@ export default async function plugin(bb: BbPluginApi) {
         ),
       ),
     );
+    providerIds.clear();
+    providerIds.add("codex");
+    for (const binding of bindings) providerIds.add(`codex-${binding.id}`);
   };
   apply((await settings.get()).homeBindings);
   settings.onChange((next) => apply(next.homeBindings));
