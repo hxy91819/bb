@@ -243,7 +243,7 @@ export function resolveThreadRevealExpansion({
   return { threadIdsToExpand, environmentIdsToExpand, expansion };
 }
 
-interface SidebarThreadRevealInputs {
+export interface SidebarThreadRevealInputs {
   selectedThreadId: string | undefined;
   threads: readonly SidebarThread[];
   threadsReady: boolean;
@@ -251,7 +251,7 @@ interface SidebarThreadRevealInputs {
   personalProjectId: string | null;
 }
 
-function useSidebarThreadRevealCore({
+export function useSidebarThreadRevealCore({
   selectedThreadId,
   threads,
   threadsReady,
