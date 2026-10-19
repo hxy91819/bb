@@ -546,6 +546,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Bring any CLI agent into bb, with its own models and icon",
           "Run every thread started with it through a bridge the plugin ships",
           "Report context usage, service tiers, and install status",
+          "Resolve host-specific options and refresh model catalogs when external identities change",
         ],
         apiSymbols: [
           "contextSnapshotSchema",
@@ -553,6 +554,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "ContextCategory",
           "ContextEntry",
           "PluginProviderDeclaration",
+          "ExperimentalPluginProviderHostOptionsContext",
+          "ExperimentalNativeRootsResolveInput",
           "AvailableModel",
           "ModelServiceTier",
           "providerInstallationStatusParamsSchema",
