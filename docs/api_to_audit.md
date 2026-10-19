@@ -3076,3 +3076,25 @@ scalar/type and public access filtering, binary/sequence keyset continuation,
 wire budgets, real fork startup boundary tests, retained/live coverage, and
 independent consumers exercising per-item cursors. The Plugin Guide's thread
 plugin metadata card owns the API reference. No daemon protocol change.
+## `BbNavigate.toThread` message navigation (`experimental_messageSeq`)
+
+`useBbNavigate().toThread(threadId, { split?, experimental_messageSeq? })`
+opens the requested thread and scrolls to the specified message using exact
+message-link match semantics (`#msg=N`), matching the `experimental_messageSeq`
+field on `ThreadChatMessageReference`. When `experimental_messageSeq` is
+omitted, navigation behavior is unchanged. In split-pane layouts, navigation
+focuses an already-open pane (with `replace: true`) or splits a new pane to the
+right, carrying the message anchor hash into the focused pane's route. Opening
+also uncollapses the thread's conversation if collapsed.
+
+Core's command palette thread search (`ThreadSearchPaletteMode`) shares this
+same core navigation implementation (`openThread`), passing sequence match
+semantics (`searchMessageSeq`).
+
+Before stabilization, verify:
+- Scroll-to-message reliability across lazy/paginated timeline loading and
+  deferred message details.
+- Alignment with `ThreadChatMessageReference.experimental_messageSeq` and
+  whether the option stabilizes as `messageSeq` or retains parity with message references.
+- Multi-pane split layouts when navigating between messages across different panes.
+
