@@ -1,9 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   createFakePluginHost,
+  makeThreadResponse,
   type FakePluginHost,
 } from "@get-bb/plugin-sdk/testing";
 import plugin from "../server.js";
@@ -127,4 +128,71 @@ it("applies the memory opt-out to both default and bound native providers", asyn
       }),
     ).toMatchObject({ memoryEnabled: false });
   }
+});
+
+it("opens bound-provider questions, returns answers to that thread, and stops handling removed bindings", async () => {
+  const host = await load();
+  await host.harness.behavior.setSettings({
+    homeBindings: JSON.stringify([binding]),
+  });
+  host.harness.sdk.stub(
+    "threads.events.list",
+    async (args: { threadId: string; afterSeq: string }) =>
+      Number(args.afterSeq) > 0
+        ? []
+        : [
+            {
+              id: "bound-question",
+              threadId: args.threadId,
+              seq: 1,
+              createdAt: 1,
+              scope: { kind: "thread" },
+              type: "thread/extensionState/updated",
+              data: {
+                kind: "provider-codex/async-question",
+                payload: {
+                  itemId: "call-bound",
+                  questions: [{ title: "Continue?", options: ["Yes", "No"] }],
+                },
+              },
+            },
+          ],
+  );
+  host.harness.sdk.stub("threads.send", async () => ({}));
+  await host.harness.emitThreadEvent("experimental_thread.events", {
+    thread: makeThreadResponse({
+      id: "thr_bound_question",
+      providerId: "codex-work",
+    }),
+    sequence: 1,
+  });
+  await vi.waitFor(() =>
+    expect(host.harness.pendingInteractions).toHaveLength(1),
+  );
+  const pending = host.harness.pendingInteractions[0]!;
+  expect(pending.threadId).toBe("thr_bound_question");
+  host.harness.submitInteraction(pending.id, {
+    answers: { "question-1": { selected: ["option-1"] } },
+  });
+  await vi.waitFor(() =>
+    expect(host.harness.sdk.callsTo("threads.send")).toEqual([
+      [
+        {
+          threadId: "thr_bound_question",
+          mode: "auto",
+          input: [{ type: "text", text: "> Continue?\n\nYes", mentions: [] }],
+        },
+      ],
+    ]),
+  );
+  await host.harness.behavior.setSettings({ homeBindings: "[]" });
+  await host.harness.emitThreadEvent("experimental_thread.events", {
+    thread: makeThreadResponse({
+      id: "thr_removed_question",
+      providerId: "codex-work",
+    }),
+    sequence: 1,
+  });
+  expect(host.harness.sdk.callsTo("threads.events.list")).toHaveLength(1);
+  expect(host.harness.pendingInteractions).toHaveLength(0);
 });
