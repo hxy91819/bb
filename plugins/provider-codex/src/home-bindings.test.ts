@@ -104,3 +104,27 @@ it.each([
     ).toEqual(["codex", "codex-work"]);
   },
 );
+
+it("applies the memory opt-out to both default and bound native providers", async () => {
+  const host = await load();
+  await host.harness.behavior.setSettings({
+    memoryEnabled: false,
+    homeBindings: JSON.stringify([binding]),
+  });
+  const providers = host.harness.registrations.providerRegistrations;
+  expect(providers.map((provider) => provider.id)).toEqual([
+    "codex",
+    "codex-work",
+  ]);
+  for (const provider of providers) {
+    expect(
+      provider.deriveProviderOptions?.({
+        threadId: "memory-disabled",
+        projectId: "project",
+        model: "gpt-5",
+        permissionMode: "full",
+        settings: { memoryEnabled: false },
+      }),
+    ).toMatchObject({ memoryEnabled: false });
+  }
+});
