@@ -7,6 +7,7 @@ import {
 } from "@bb/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  createConnection,
   projects,
   threads,
   events,
