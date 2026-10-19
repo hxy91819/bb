@@ -4109,3 +4109,13 @@ scalar/type and public access filtering, binary/sequence keyset continuation,
 wire budgets, real fork startup boundary tests, retained/live coverage, and
 independent consumers exercising per-item cursors. The Plugin Guide's thread
 plugin metadata card owns the API reference. No daemon protocol change.
+
+## Host-scoped provider options
+
+`PluginProviderDeclaration.models.experimental_cache` defaults to `true`. Setting it to `false` makes each server catalog read await a host probe, coalesces concurrent requests, and prevents serving a previous identity's catalog on failure. This is intended for externally managed credentials; bridge-local connections may still be reused while their credentials are unchanged. Stabilization requires API-level identity-change, concurrent-probe, failure and recovery coverage while default providers retain the existing cache behavior.
+
+`PluginProviderDeclaration.experimental_deriveHostOptions(context)` resolves a bounded plain JSON object synchronously from the target `hostId` and the plugin's current non-secret settings. It uses the same 64 KiB validation as bridge options. The server merges the result over static bridge options for model discovery, health, usage, installation, thread execution and native-root resolution; thread-specific `deriveProviderOptions` values override base values during execution. Failures identify the provider and do not fall back to default configuration. Core treats provider fields as opaque JSON.
+
+`ExperimentalPluginProviderHostOptionsContext` defines that input. `ExperimentalNativeRootsResolveInput.experimental_providerOptions` carries the same validated base options to host root resolvers; it is omitted for declarations without the new hook, preserving existing installed resolvers. Native-root cache keys include the options. Host daemon protocol 236 advertises the restored execution configuration semantics after published protocol 235 removed the earlier home-binding support.
+
+Stabilization requires independent-host and independent-provider discovery, execution and cache-isolation proof; invalid and throwing hooks must fail rather than silently switch identity. Preserve compatibility with declarations and installed root resolvers that do not opt in, and audit payload limits and settings changes before removing the experimental names.
