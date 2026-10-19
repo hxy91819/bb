@@ -53,13 +53,13 @@ it("returns an uncached 503 when marketplace data is unavailable", async () => {
   expect(await response.text()).toBe("page");
 });
 
-it("caches a healthy marketplace page", async () => {
+it("requires revalidation for a healthy marketplace page", async () => {
   const response = await server.fetch(
     new Request("https://web.test/marketplace"),
   );
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe(
-    "public, max-age=300, must-revalidate",
+    "no-cache",
   );
 });
 
