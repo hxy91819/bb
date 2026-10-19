@@ -289,6 +289,41 @@ describe("foreign DOM mutation guard", () => {
     container.remove();
   });
 
+  it.each(["before", "after"] as const)(
+    "mounts a new root sibling %s existing content while a content script awaits",
+    async (position) => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      installForeignDomMutationGuard();
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+      act(() => root.render(<main key="main">App content</main>));
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const mounting = runWithPluginDomIsolationAsync(() => pending, "pending");
+      try {
+        const overlay = <aside key="overlay">App overlay</aside>;
+        const main = <main key="main">App content</main>;
+        act(() =>
+          root.render(
+            position === "before" ? [overlay, main] : [main, overlay],
+          ),
+        );
+        expect(container.querySelector("aside")?.textContent).toBe(
+          "App overlay",
+        );
+        expect(pluginHostNodeMoveRefusalCount()).toBe(0);
+      } finally {
+        finish();
+        await mounting;
+        act(() => root.unmount());
+        container.remove();
+      }
+    },
+  );
+
   it("preserves MutationObserver subclass identity", () => {
     installForeignDomMutationGuard();
     class ExtraObserver extends MutationObserver {}
