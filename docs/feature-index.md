@@ -26,7 +26,7 @@
 
 原生 Codex 多 home 入口（`Codex`、`Codex · L`）由内置 `provider-codex` 与核心参数传递共同实现，聚合输入为 `feature/codex-home-bindings`；保留要求见 `.fork/branches`。
 
-已淘汰的 `/side` 专用补全、移动端第二排队按钮不作为新实现入口；原生侧聊与长按 Queue/Steer 仍保留。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
+`/side` 主输入框快捷入口与原生侧聊入口一起保留。移动端使用原生长按 Queue/Steer，不恢复常驻第二排队按钮。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
 
 ## 升级时同步外置插件
 

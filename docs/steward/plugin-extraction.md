@@ -14,7 +14,7 @@
 
 - 团队、书签、图标保留已有插件 ID 和存储格式，迁入同一仓库；旧仓库保留历史并指向新维护位置。
 - 侧栏与 ACP 定制使用独立 ID，避免占用内置插件保留 ID；迁移复制既有偏好和 customAgents，保留 acp-* provider ID。
-- 原生侧聊保留，退出 `/side` 专用 typeahead；移动排队保留原生长按菜单，退出第二按钮及附带 ghost 样式；Codex home bindings 当时退出聚合，后于 2026-10-19 恢复，见文末恢复记录。
+- 原生侧聊保留；`/side` 专用 typeahead 当时退出，后按用户要求恢复；移动排队保留原生长按菜单，退出第二按钮及附带 ghost 样式；Codex home bindings 当时退出聚合，后于 2026-10-19 恢复，见文末恢复记录。
 - DSH 注册和自定义 fork 策略归 ACP 插件；resume/config、steer 投递及 checkpoint/history/probe 属于共享协议，保留独立核心分支。
 - 账号池 fallback 保留在现有账号池插件。其 hub、凭据和配置由该插件持有，普通附加插件没有等价调用契约，复制账号池将增加维护。
 - 头像宽度修复回到列表贡献功能分支。过时缓解与独立设计分支结束活跃维护；纯设计项不再作为产品输入聚合。
@@ -34,7 +34,7 @@
 | `feature/acp-custom-agent-icon`                                                                                        | 迁出             | 集合 `acp-profile-icons`；provider 图标插槽已足够                              |
 | `fix/acp-mid-turn-steering`                                                                                            | 替换             | 独立 `fix/acp-steering-delivery`；共享协议投递和时间线必须一致                 |
 | `fix/leading-thread-avatar-layout`                                                                                     | 收回基础分支     | `feature/plugin-thread-list-contributions`；通用行装饰布局属于贡献 API         |
-| `feature/side-chat-command`、`fix/side-chat-main-composer`                                                             | 淘汰             | 移除 `/side` 专用补全，保留原生侧聊入口与聚焦修复                              |
+| `feature/side-chat-command`、`fix/side-chat-main-composer`                                                             | 当时退出，已恢复 | 用户要求保留 `/side` 快捷入口，恢复主输入框补全与原生面板调用                              |
 | `feature/mobile-queue-action`                                                                                          | 淘汰             | 移除常驻第二按钮，保留原生长按 Queue/Steer                                     |
 | `feature/codex-home-bindings`                                                                                          | 当时退出，已恢复 | 2026-10-19 恢复原生双入口，保留要求见 `.fork/branches`                                |
 | `feature/child-report-delivery`、`fix/acp-mid-turn-steering-design`                                                    | 结束活跃维护     | 纯设计资料留在归档历史，不参与产品聚合；其他尚未登记的通知候选不在本次删除范围 |
@@ -96,3 +96,7 @@
 用户随后明确要求退出账号池，恢复 `Codex` 与 `Codex · L` 两个原生入口。此前“未配置所以退出聚合”的判断不再适用；重新纳入 `feature/codex-home-bindings`，使用原生 Codex 插件的 `homeBindings` 配置独立 home，不复制原生 provider，也不由额度面板注册入口。绑定登录、执行、模型、额度与技能均跟随所选 home，现有 `auth.json` 软链继续由 Codex 读取和刷新；两个入口共用原生插件的记忆开关。
 
 重新引入 host options wire 字段时，daemon 协议从已发布的 235 提升至 236。功能分支登记与推送不等于运行服务已经升级；安装包替换和双入口运行验收需按部署流程完成后才能记为生效。
+
+## 2026-10-19 快捷入口保留
+
+用户确认恢复 `/side` 快捷入口，重新纳入 `feature/side-chat-command` 与叠放的 `fix/side-chat-main-composer`。移动端已有原生长按 Queue/Steer，继续不纳入常驻第二按钮。长时间线与移动端显示选项旧修复、两份独立设计分支保持现状。
