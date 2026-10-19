@@ -36,3 +36,4 @@ feature/thread-message-navigation            needs-feedback                     
 fix/codex-compaction-warning                  fork-only                                                  # 屏蔽 Codex 长会话多次压缩准确率提示（按第一句前缀过滤 warning）
 fix/pool-ai-fallback                         needs-feedback                                             # Account Pool 提供标题与提交消息 AI 服务，无本地 Codex 登录时参与自动回退
 feature/pool-auth-file                       needs-feedback                                             # Account Pooler 支持 --auth-file 导入指定 Codex 凭证文件，保留软链与默认路径
+feature/codex-home-bindings                   needs-feedback                                             # 原生 Codex 命名 home：独立登录、模型、额度与技能，复用软链并绕过账号池
