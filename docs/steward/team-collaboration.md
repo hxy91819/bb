@@ -1,0 +1,38 @@
+# BB 团队协作插件交付
+
+更新：2026-10-17
+
+## 路线
+
+- [x] 完成[设计与审查](https://github.com/hxy91819/bb/blob/adce9d02e11e8704967796e78f4232b54b99dd41/docs/plugin-thread-context-design.md)，在稳定基线实现 BB 通用扩展、SDK、CLI 与 Guide；[创建链](https://github.com/hxy91819/bb/commit/423984b91481a4e0155a24d935b82419f5afee67)、[列表贡献](https://github.com/hxy91819/bb/commit/9eb58c81aebe0a96c0755b7dc0778dd662d8d5c3)、[活动查询](https://github.com/hxy91819/bb/commit/d68692c1a4f6b7e9a09efc2c4c16d2f6f4d5a744)已审查和推送。
+- [x] 在独立仓库实现团队插件、头像和安装文档，并完成同 SHA 两仓库联合验收及审查；[v0.1 源码](https://github.com/hxy91819/bb-team/commit/cd395a06fae2d6c8c4b91597cfd7688b4c992a7f)已公开。身份、归属、分组、按需活动、升级与 Chromium/WebKit 通过；协议 fixture 不代表付费 AI 效果，既有基线失败与开发告警保留。
+- [x] 完成 BB 聚合打包与正式 Release。← [fork-v0.46.0-20261014.3 已公开](https://github.com/hxy91819/bb/releases/tag/fork-v0.46.0-20261014.3)，精确指向已验收 source 9ddb184943；四平台、通用 SDK 与发布 CI 全通过，十一件正式资产及来源校验通过，Linux 正式包独立 smoke 通过。
+- [x] 固定正式 SDK URL/integrity 与兼容 BB 版本，完成冷安装、完整归档安装、CI 和公开 push，发布 bb-team 插件 GitHub Release。← [v0.1.0 已公开](https://github.com/hxy91819/bb-team/releases/tag/v0.1.0)，main/tag CI 与 CodeQL 均通过，三个公开附件逐字节回读通过；[其他环境安装说明](https://github.com/hxy91819/bb-team/blob/v0.1.0/docs/distribution.md)已交付。
+
+- [x] 为新版插件交付通用列表 SDK 并修复身份 overlay 挂载。← [列表 v2](https://github.com/hxy91819/bb/commit/9a85f3e136833739ea5af490c7c93981136a6513)与[跨窗口、升级挂载修复](https://github.com/hxy91819/bb/commit/c4b942e8482af2906ca11e5be47ffc148b4a6ede)均已审查、检查及独立浏览器验收，已 push。
+- [x] 完成新版插件身份入口、默认 Admin、列表接入与 20 个普通头像加独立 Admin。← 新版已随 v0.2.0 公开；双窗口、旧数据升级、child/pinned 项目与 Chromium/WebKit 移动布局通过，插件审查闭合。
+- [x] 重聚合完整布局修复并交付匹配 BB/SDK。← 新候选 9ddb184943 包含头像和项目标签预算修复，完整流水线、102 包类型检查、改动包测试、冷 SDK 与独立 runtime 通过；父核对 hash/source 与合并审查。
+- [x] 闭合头像与整行宽度预算的源码修复。← [头像修复](https://github.com/hxy91819/bb/commit/b63855626b1c958bbe873494526f54a7a7465f61)与[项目标签预算](https://github.com/hxy91819/bb/commit/6beb3eb7e042f5746daae4bc70a563f3d5a06f82)分别保留独立分支；实际组合 192 行观测无溢出，头像 16px、标题至少 22px，117 项测试及审查通过。
+- [x] 完成新候选实际团队必要回归。← 9ddb184943 的 18 行头像均 16px、原时间分组溢出转绿，Chromium/WebKit 移动入口、Search、touch、冷窗口和生产安装构建通过，增量审查闭合。
+- [x] 发布[插件 v0.2.0](https://github.com/hxy91819/bb-team/releases/tag/v0.2.0)与[安装说明](https://github.com/hxy91819/bb-team/blob/v0.2.0/docs/distribution.md)。← main/tag 均为 214c5f6e，固定正式 BB/SDK .3；CI、CodeQL、冷 Git 与中文空格归档实装通过，三个公开附件逐字节一致；生产未动，开发告警保留。
+
+## 关键决策
+
+- 2026-10-17 用户要求迁入统一插件集合 hxy91819/bb-plugins，保持 team 插件 ID、数据迁移和已有头像；后续维护路径改为 plugins/team，旧仓库保留历史。原因：统一维护与验证。影响：仓库、安装来源与交付说明。
+
+- 2026-10-14 用户确认采用通用 SDK 扩展加独立团队插件；保留原生创建入口与编辑器，由公共创建路径携带客户端插件上下文。原因：减少本体业务和 UI 复制。影响：BB 扩展与插件。
+- 2026-10-14 用户确认受信团队使用自选身份，后续成员由管理员预建，成员 ID 固定；本轮将管理员改为默认创建的 Admin 与固定头像，保留已有管理员 ID；管理员仍只创建成员。原因：减少初始化步骤。影响：成员数据、升级与界面。
+- 2026-10-14 用户确认头像先生成一组随插件交付，并公开创建 hxy91819/bb-team。原因：便于团队安装和分享。影响：插件资产与 GitHub 交付。
+- 2026-10-14 用户补充 Agent 应能回答“统计小A今天干了啥”，并明确要求优化上下文占用。原因：自然语言查询团队的 BB 工作进展。影响：按需发现的查询能力、日期与证据口径、分页摘要；线程归属不能作为具体操作者的证据。
+- 2026-10-14 用户要求通过 improve-codebase-architecture 独立审查，并授权管家自行依据专业判断取舍结果。原因：核实扩展点与维护成本。影响：有证据的必要调整和范围内改进直接推进，无需逐项确认；其余作为后续候选。
+- 2026-10-14 管家采纳独立审查的四项必要调整，先实施共同创建链；要求查询采用有界事实分页而非完整结果快照，列表沿现有 useData/纯投影模式，身份持久默认加窗口覆盖，时区自动检测并作为普通设置可改。原因：避免公共契约与首次使用过重。影响：设计修订及后续实现，不增加管理员权限。
+- 2026-10-14 管家采用 BB 子线程顺序推进设计、实现与验收；本工作簿留在 fork-tooling，通用扩展从 .fork/branches 的稳定 tag 开发。原因：跨会话接续并保持可向上游提交的独立改动。影响：派发和 Git 交付。
+- 2026-10-14 同目录仅一个 writer；接续先停旧线程并清队列，重型验证与 live 全程持共享锁。user manager 被 OOM 终止后，临时以同预算系统 scope 调用既有 runner，按实际 scope 清理，不恢复全局 manager；中断/refusal/OOM 仍记失败。原因：隔离验收并保护生产。影响：SDK、插件和打包。
+- 2026-10-14 用户追加 BB 聚合包与插件包的 Release 交付，并要求当前环境由管家推动验收、启动独立测试实例，不使用主 BB 验收。原因：便于在其他环境测试且隔离现有服务。影响：联合验收、两仓库打包发布与安装说明；此授权不包含替换主 BB 服务。
+- 2026-10-14 同一聚合 SHA 的完整 SDK tarball 作为 BB Release 通用资产；候选联合验收后先发布 BB，再固定插件正式 URL/integrity。原因：新增接口未进上游 npm，同版本号不能证明能力。影响：CI、兼容说明和可复现交付；不发布上游 npm 包。
+
+- 2026-10-14 用户追加未选身份自动提示、明确“选择”操作和主页身份入口；人员分组只显示项目，其他模式仅在行首显示人员头像，姓名用于提示和可访问文本。原因：降低入口深度与列表噪声。影响：插件 UI 和最小通用列表 SDK 扩展；采用二十个普通可选头像与独立管理员头像。
+
+## 用户待办
+
+无。
