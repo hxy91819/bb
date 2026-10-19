@@ -40,6 +40,7 @@ bb pool account add --provider claude --login
 printf '%s\n' "$CLAUDE_AUTH_CODE" | bb pool account login-complete --session <id> --code-stdin
 bb pool account add --provider claude --import
 bb pool account add --provider codex --import
+bb pool account add --provider codex --import --auth-file '~/.codexl/auth.json' --label codexl
 printf '%s\n' "$ANTHROPIC_API_KEY" | bb pool account add --provider claude --api-key-stdin [--label <text>] [--priority <n>]
 bb pool account add --provider claude --api-key <key> [--label <text>] [--priority <n>]
 bb pool account list [--json]
@@ -65,7 +66,11 @@ process arguments. Codex `--login` prints a device verification URL, one-time
 code, session ID, and an `account login-poll` command that waits for
 authorization. Both flows are available in the plugin settings page through
 the **Sign in to Claude** and **Sign in to Codex** buttons. The CLI Codex import
-path continues to read the bb server host's `~/.codex/auth.json`.
+path defaults to the bb server host's `~/.codex/auth.json`. Codex `--import`
+accepts `--auth-file <path>` to read another server-side auth file, including
+a symlink. Use an absolute path or a quoted `~/` path, which expands to the
+server user's home. The pool stores its own credentials and refreshes them
+independently; it does not modify or keep syncing the source file.
 
 The hub starts immediately, even before an account is configured, so newly
 added or enabled accounts are available without a plugin reload. With an
