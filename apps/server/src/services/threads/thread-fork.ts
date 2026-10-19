@@ -7,6 +7,10 @@ import { ApiError } from "../../errors.js";
 import { resolveExistingThreadPermissionMode } from "./thread-execution-plan.js";
 import { getLastExecutionOptions } from "./thread-events.js";
 import { createThreadFromRequest } from "./thread-create.js";
+import {
+  readForkExecutionOptions,
+  resolveThreadForkPoint,
+} from "./thread-fork-history.js";
 
 type ThreadForkDeps = LoggedPendingInteractionWorkSessionDeps;
 
@@ -66,7 +70,20 @@ export async function createThreadForkFromRequest(
   const sourceThread = requireForkSourceThread(deps, request.sourceThreadId);
   requireForkCapableProvider(deps, sourceThread);
   const sourceEnvironment = requireSourceEnvironment(deps, sourceThread);
-  const sourceExecution = getLastExecutionOptions(deps, sourceThread.id);
+  const forkPoint =
+    request.sourceSeqEnd === undefined
+      ? null
+      : resolveThreadForkPoint(deps, {
+          sourceSeqEnd: request.sourceSeqEnd,
+          sourceThread,
+        });
+  const sourceExecution =
+    forkPoint?.historyEndSequence != null
+      ? readForkExecutionOptions(deps, {
+          sourceThreadId: sourceThread.id,
+          historyEndSequence: forkPoint.historyEndSequence,
+        })
+      : getLastExecutionOptions(deps, sourceThread.id);
   const visibleInput = request.input ?? [];
   const agentContextSeed = request.agentContextSeed ?? [];
   const input: PromptInput[] = [...agentContextSeed, ...visibleInput];
