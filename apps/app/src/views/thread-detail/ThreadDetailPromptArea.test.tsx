@@ -1946,4 +1946,3 @@ describe("side-chat composer command", () => {
   });
 
 });
-
