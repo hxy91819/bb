@@ -62,11 +62,14 @@ type AcpModelSelection =
       serviceTier?: ServiceTier;
     };
 
+export type AcpSteeringMode = "auto" | "interrupt" | "prompt";
+
 export interface AcpSessionParams {
   threadId: string;
   cwd: string;
   agent: { command: string; args: string[] };
   dialectId?: string | undefined;
+  steeringMode?: AcpSteeringMode | undefined;
   modelSelection?: AcpModelSelection | undefined;
   launchReasoningLevel?: ReasoningLevel | undefined;
   reasoningCli?: AcpBridgeReasoningCli;
@@ -281,6 +284,7 @@ interface BuildAcpSessionParamsArgs {
   additionalWorkspaceWriteRoots: readonly string[];
   cwd: string;
   dialectId?: string | undefined;
+  steeringMode?: AcpSteeringMode | undefined;
   dynamicTools?: readonly DynamicTool[] | undefined;
   launchSpec: AcpLaunchSpec;
   options: AcpSessionExecutionOptions;
@@ -312,6 +316,9 @@ export function buildAcpSessionParams(
       args: [...launchSpec.args],
     },
     ...(args.dialectId === undefined ? {} : { dialectId: args.dialectId }),
+    ...(args.steeringMode === undefined
+      ? {}
+      : { steeringMode: args.steeringMode }),
     ...buildAcpModelSelectionParams(
       launchSpec,
       options,
