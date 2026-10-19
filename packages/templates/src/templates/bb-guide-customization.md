@@ -208,7 +208,10 @@ service is never swapped for another. A service is identified by its plugin
 and its id, so two plugins may use the same id; pass `--plugin <plugin-id>`
 when they do. `test` runs a sample title or commit message through the current
 choice. Settings → AI services has the same controls. Each plugin chooses its
-own model.
+own model. Account Pooler registers `codex-pool` for titles and commit messages
+when Codex routing has an available account. It uses pool credentials without
+a local Codex login; Automatic tries it after bb cloud and before local Codex.
+Use `bb settings ai-services set thread-title codex-pool` to select it alone.
 
 `bb settings general` accepts any key from `generalSettings` in
 `bb settings show`. Boolean preferences take `true`, `false`, `on`, or `off`,
