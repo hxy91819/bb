@@ -1,0 +1,240 @@
+# Fork 维护
+
+这个 fork 只服务于三件事：
+
+1. 每个功能/修复保持为一个独立、聚焦、可以直接向上游提交的分支；
+2. 本机能方便地把这些分支聚合打包；
+3. 能随时纳入上游的稳定版更新。
+
+除此之外不引入额外结构：没有领域分支、没有补丁登记表、没有冻结清单。
+分支本身就是状态，`.fork/branches` 是唯一的清单。
+
+## 仓库角色
+
+| 引用                 | 作用                                                                     |
+| -------------------- | ------------------------------------------------------------------------ |
+| `origin`             | 上游 get-bb/bb，只读                                                     |
+| `fork`               | 个人 fork hxy91819/bb，所有推送都去这里                                  |
+| `desktop-v*` tag     | 上游稳定版，聚合和新分支的基线                                           |
+| `feature/*`、`fix/*` | 每个改动一个分支，基于基线 tag                                           |
+| `fork-tooling`       | 维护规则、`.fork/branches`、聚合脚本、部署 skill；和其他分支一样被 merge |
+| `main`               | 个人 fork 默认分支，保存最新聚合产物，根目录永远检出它                   |
+
+当前基线是 `.fork/branches` 里 `base` 行的 tag。`origin/main` 上还没进 tag 的提交不追，除非用户明确要求。
+
+个人 fork 的 `main` 是最新聚合入口，`origin/main` 是上游开发主干，两者用途不同。GitHub 默认分支设为 `main`，访客打开仓库或普通 clone 即可拿到最新聚合代码。聚合仍基于稳定 tag，因此 GitHub 与上游主干比较时可能显示落后；是否纳入新代码以基线 tag 和分支清单为准。
+
+日常检出、clone、部署和对外分享统一使用 `main` / `fork/main`。脚本中的 `aggregate/next` 仅是本地临时验证候选，验证后提升到 `main`；它不作为日常使用或对外发布的分支。
+
+### 旧 checkout 的入口
+
+维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `main` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
+
+## 1. 开发新功能或修复
+
+修改功能前先读 [功能维护与插件更新索引](feature-index.md)，业务定制优先使用公开插件扩展点；旧安装来源迁移见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
+
+从当前基线 tag 拉分支，在独立 worktree 里开发：
+
+```bash
+base=$(git show fork-tooling:.fork/branches | awk '$1=="base"{print $2}')
+git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<name>
+```
+
+- 不要从 `main` 拉分支，否则分支会带上全部聚合内容，无法单独提给上游。
+- 只有真正依赖另一个 fork 分支时，才从那个分支拉出（叠放），并在清单说明里写"叠在 X 上"。
+- 修改已有功能：直接在它的分支上继续提交。分支落后于基线也没关系，merge 会处理；只有冲突时才 rebase。
+- 完成后：相关测试通过 → 提交 → `git push fork <branch>` 并核对远端 SHA。
+- 在 `fork-tooling` 分支的 `.fork/branches` 加一行（分支、上游状态、说明），提交并推送 `fork-tooling`。
+- 整项任务进入最终交付时，按第 3 节完成适用的聚合与发布收尾；不要以分支已推送或已登记清单代替安装包交付。
+
+修改 daemon wire 或 SDK 导出时，在功能分支提交/审查前运行已有契约测试，不等到聚合阶段才检查：
+
+```bash
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
+```
+
+旧基线没有 resource runner 时，使用已发布 fork 中的 runner 显式执行该 worktree 的命令。已有 fixture 设置自己的 Git 签名开关和模拟用户身份；不修改宿主全局 Git 配置或生产 systemd 来让测试通过。
+
+## 2. 聚合打包
+
+```bash
+scripts/fork-package                       # 聚合 → 验证 → 提升 → 构建 → 发布 tag → 打印 cutover 提示
+scripts/fork-package --no-release          # 只验证、提升、构建，不打 tag
+scripts/fork-package --test-filter <pkg>   # 覆盖默认的测试范围，可重复
+```
+
+`fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
+Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
+
+1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
+2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
+3. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 main>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
+4. `scripts/fork-aggregate --promote-only`：把根目录 `main` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
+5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
+6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
+7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `main` 的那些。
+8. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
+
+修一次分支再重跑 `fork-package` 是常态：聚合 SHA 变了就换新检出，没变就复用旧检出和它的依赖。
+
+Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-runtime.mjs` 都默认设置 `TURBO_CACHE_DIR`），
+所以每次只有被改动分支触及的包及其下游会真正重新 typecheck 和构建，其余命中缓存。缓存目录可以随时删除，只影响速度。
+
+手工分步时等价于：
+
+```bash
+scripts/fork-aggregate                      # 只生成本地临时验证候选 aggregate/next
+scripts/run-resource-isolated --profile package -- pnpm install --frozen-lockfile
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
+scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --continue --output-logs=errors-only --filter=<涉及的包>
+scripts/fork-aggregate --promote-only       # 把已验证候选提升到 main 并推送 fork/main
+scripts/fork-aggregate --promote            # 重新聚合并提升到 main；已验证的候选用 --promote-only
+```
+
+全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住。
+`run-resource-isolated` 启动前会释放上一次遗留的空 scope；scope 里仍有进程时它会拒绝并列出 pid，说明另一个验证还在跑。
+提升、推送到 fork 和打包后的 tag 发布不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
+
+### 冲突怎么解决
+
+脚本遇到冲突会停下，并判断是哪一类：
+
+| 类型           | 判断                          | 处理                                                                                                                                                            |
+| -------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 分支与上游冲突 | 该分支单独合入基线 tag 就冲突 | 在该分支 worktree 里 `git rebase --no-autostash <tag>`，修复、测试、`git push --force-with-lease fork <branch>`，重跑脚本。修好的分支同时也保持了对上游可合并。 |
+| 分支之间冲突   | 单独都能合入，一起才冲突      | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。               |
+
+- 产品修复永远回到对应分支，不写在聚合的 merge 提交里。
+- 同一对分支反复出现非平凡冲突时，把后者 rebase 到前者上（叠放），更新清单顺序和说明。
+- 叠放分支 rebase 时从栈底开始，用 `git rebase --update-refs` 让上层分支一起移动。
+
+### 纳入上游新版本
+
+1. 把 `.fork/branches` 的 `base` 改成新的 `desktop-v*` tag（或先用 `scripts/fork-aggregate --base <tag>` 试跑）。
+2. 运行脚本，按上表逐个处理冲突。没有冲突的分支不用动。
+3. 某个分支 rebase 后变空，说明上游已经包含它：从清单删除这一行，删除分支（fork 上的也删），在提交说明里写明被上游哪个版本吸收。
+4. 验证、`--promote`，提交并推送 `fork-tooling` 上的新 `base`。
+
+## 3. 发布预编译聚合包
+
+`.github/workflows/fork-release.yml` 只在 `hxy91819/bb` 的 `fork-v*` tag 推送时运行。它直接构建 tag 对应的聚合代码，不在 CI 里重新聚合或 rebase，也不发布到 npm。
+
+### 发布
+
+功能、修复及影响安装产物的依赖改动完成必要验证和适用的 review 后，聚合与发布是默认收尾，已有持续授权，无需另问是否打包。先完成本任务分支的提交、推送与清单登记，再在整项任务最后统一运行 `scripts/fork-package`，跟踪它触发的 Release 流水线至结束；同一任务的中间检查点提交不反复发版。
+
+用户或其他 Agent 已完成本任务的发布时，先核对产品内容、聚合 SHA、远端 tag 和成功的 Release 结果并复用。纯规则或文档改动只提交、推送并完成必要检查，不为相同产品重新打运行包；BB 维护规则提交到 `fork-tooling`，随下一次产品聚合进入 `main`。用户明确要求仅验证、不推送或不发布时按其要求执行。构建或必要验证失败时先修复，不给失败结果打发布 tag；推送或发布实际受阻时明确交付尚未完成的步骤。
+
+维护入口需要立即在默认 `main` 可用时，以最新已发布的聚合为基础，在 `aggregate/next` 仅合并 `fork-tooling` 的规则与文档增量；确认差异全部属于本任务的维护文件、产品文件逐字节不变后，用 `scripts/fork-aggregate --promote-only` 提升并复用原产品 Release。其他尚未发布的产品分支留待正常产品聚合，不为同步索引而合入。
+
+发布完成的凭据是本任务产品改动已进入已验证聚合、远端 tag 指向该聚合，以及对应流水线成功且 Release 资产齐全。只打 tag、推送分支、登记清单或看到流水线开始都不是发布完成。此授权覆盖个人 fork 的代码与 Release 发布；上游反馈和运行服务替换仍按各自的授权规则执行。
+
+1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `main` 被其他任务移动，也使用这个已验证的 SHA。
+2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
+3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
+4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开且四个平台的包和校验文件齐全。
+5. 交付 tag、聚合 SHA 和 Release 链接。tag 推送成功只代表已触发构建；流水线失败、无法查询或资产不全时，明确报告发布未完成。
+
+以下是新发布的命令示例，版本、日期、序号和聚合 SHA 以本次打包结果为准：
+
+```bash
+git status --short
+aggregate_sha='<本次打包时记录的聚合SHA>'
+git show "${aggregate_sha}:.github/workflows/fork-release.yml"
+git tag -a fork-v0.44.0-20261001.1 "$aggregate_sha" -m "BB fork aggregate 2026-10-01"
+git push fork refs/tags/fork-v0.44.0-20261001.1
+git ls-remote fork 'refs/tags/fork-v0.44.0-20261001.1^{}'
+```
+
+workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
+
+在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。四个平台使用 GitHub 托管 runner 分别构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有四个平台与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
+
+| 包名后缀              | 目标机器                                              |
+| --------------------- | ----------------------------------------------------- |
+| `linux-x64.tar.gz`    | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
+| `linux-arm64.tar.gz`  | Linux aarch64，glibc ≥ 2.35                           |
+| `darwin-x64.tar.gz`   | Intel Mac，macOS 15 或更新                            |
+| `darwin-arm64.tar.gz` | Apple Silicon Mac，macOS 15 或更新                    |
+
+这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
+
+流程仅使用 GitHub 自带的 `GITHUB_TOKEN`，发布 job 获得 `contents: write`；无需 npm token、Apple 签名证书或上游的 Blacksmith runner。Fork 的 Actions 需已启用。
+
+### 独立插件开发使用 SDK
+
+SDK 是通用 npm tarball，不是第五种平台服务包。每次新 Release 额外包含：
+
+- `bb-plugin-sdk-<fork-tag>.tgz`：完整的 `@get-bb/plugin-sdk`，保留源码中的包名与版本。
+- 同名 `.tgz.sha256`：`sha256sum --check` 可读的校验文件。
+- `bb-plugin-sdk-<fork-tag>.json`：`tag`、40 位聚合 `source` SHA、原 `package` / `version`、`filename`、`sha256`。记录不含构建路径。
+
+不需要 npm token，也不向上游 `@get-bb` 发布包。同一个 SDK 版本号不表示 stock npm 包包含 fork API；插件应固定 Release 资产 URL，并提交 lockfile 中的 integrity。示例（将 tag 与 SHA 换成实际已验收的 Release）：
+
+```bash
+tag=fork-v0.46.0-20261014.1
+source_sha='替换为该Release的40位聚合SHA'
+stem="bb-plugin-sdk-${tag}"
+url="https://github.com/hxy91819/bb/releases/download/${tag}"
+curl -fLO "${url}/${stem}.tgz"
+curl -fLO "${url}/${stem}.tgz.sha256"
+curl -fLO "${url}/${stem}.json"
+sha256sum --check "${stem}.tgz.sha256"
+node /path/to/bb/scripts/fork-release/verify-sdk.mjs . "$tag" "$source_sha" /path/to/matching-bb-checkout
+npm install --save-exact "@get-bb/plugin-sdk@${url}/${stem}.tgz"
+git add package.json package-lock.json
+```
+
+`verify-sdk.mjs` 交叉核对来源记录、SHA、tag、实际 tgz 内的包名/版本以及匹配 BB checkout 的 SDK manifest；来源 SHA 还应与已解析的 Release tag commit 和平台包 `release.json` 的 `source` 一致。来源 JSON 与 checksum 用于一致性验证，信任根是固定的仓库和不可变 Release 资产，不是单独下载的 JSON。macOS 可用 `shasum -a 256 --check`。
+
+构建循环中，先在已固定且干净的聚合候选上安装 frozen 依赖，再用同一脚本产出候选 SDK；输出目录必须在源码树外（或已被忽略），正常 gitignored 生成文件不算脏源码。无需先打 tag：若同名 tag 已存在，脚本要求它指向同一 SHA。
+
+```bash
+node /path/to/fork-tooling/scripts/fork-release/package-sdk.mjs /path/to/clean-candidate /tmp/sdk-candidate "$tag" "$source_sha"
+node /path/to/fork-tooling/scripts/fork-release/smoke-sdk.mjs /tmp/sdk-candidate "$tag" "$source_sha" /path/to/clean-candidate
+```
+
+本机安装、构建和冷消费检查应放在既有资源隔离流程内串行执行。正式 Release 从同一聚合 SHA 使用相同脚本构建；候选包的字节 hash 不必与正式构建相同，正式 URL/integrity 以正式资产为准。插件 owner 联合验收后固定该 URL 和 lockfile；兼容声明写明实际验收的 BB fork tag 与聚合 SHA，不能仅写 SDK 原版本。BB 发布不依赖尚未发布的插件。
+
+### 在其他机器安装
+
+新装或升级目标实例时，同时按 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件) 检查集合与升级续跑插件。BB 安装包不会自动更新外置 Git/path 插件；兼容的新版本默认在同一项环境更新任务里完成安装和验收，保留目标机的配置与启停状态。
+
+从 Release 下载匹配平台的 `.tar.gz` 和同名 `.sha256`。例如 Linux x64：
+
+```bash
+tag=fork-v0.44.0-20261001.1
+asset="bb-${tag}-linux-x64.tar.gz"
+curl -fLO "https://github.com/hxy91819/bb/releases/download/${tag}/${asset}"
+curl -fLO "https://github.com/hxy91819/bb/releases/download/${tag}/${asset}.sha256"
+sha256sum --check "${asset}.sha256"
+mkdir -p "$HOME/.local/opt/bb"
+tar -xzf "$asset" -C "$HOME/.local/opt/bb"
+"$HOME/.local/opt/bb/bb-${tag}-linux-x64/bin/bb-app"
+```
+
+macOS 对应换成 `darwin-x64` 或 `darwin-arm64`，校验命令用 `shasum -a 256 --check "${asset}.sha256"`。保持解压目录完整，直接调用其中的 `bin/bb-app`、`bin/bb-server`、`bin/bb-host-daemon`、`bin/bb`；可以把该目录的 `bin` 加入 `PATH`，不要把启动脚本软链接到别处。脚本始终用包内的 Node，因此不受系统 Node 版本影响。
+
+升级时下载并解压新包，停下旧实例，再让现有 service 的启动命令指向新包的 `bin/bb-app`（或原先使用的单独 server/host-daemon 启动入口）。默认仍使用 `~/.bb`；原有启动参数、数据目录和 service 环境变量应保留。包不会安装或重启服务。数据库 schema 变化时沿用部署流程的备份与迁移规则，同一个数据目录只运行一个实例。本机现有服务的切换仍按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 执行。
+
+### 失败后重跑
+
+构建或验证失败时修复所属分支，重新聚合后使用新 tag 发布。纯网络或 runner 故障可在 Actions 重跑原 tag。
+
+上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和完整资产清单（四个平台的八件资产与 SDK 的三件资产），不覆盖已发布包。需要修订已发布版本时使用新 tag。新 workflow 缺 SDK 资产会失败，不降级；历史已公开且不含 SDK 的 Release 不回填、不修改，仍使用其原 workflow。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
+
+## 4. 向上游反馈
+
+分支本身就是上游 PR 的材料，这也是分支必须保持独立、基于 tag 的原因。
+
+1. 先在 get-bb/bb 搜索是否已有相关 issue/PR；按 [docs/filing-issues.md](filing-issues.md) 准备内容。
+2. **向 get-bb/bb 提 issue、评论或 PR 之前，必须把拟提交的内容给用户逐项确认。** 用户可以决定把它标为 `fork-only` 保留在本地。
+3. 提 PR 时：从该分支 rebase 到 `origin/main` 得到一个新分支（如 `upstream/<name>`）推送到 fork，再开 PR；叠放分支要先把依赖部分一并处理或拆开。
+4. 在 `.fork/branches` 更新该行的状态和链接（`reported` / `pr-open` / `fork-only`）。
+5. 上游合并后，等它进入一个 `desktop-v*` tag 再从清单移除（见上一节第 3 步）。issue 关闭本身不是移除理由。
+
+## 已废弃的做法
+
+2026-09-23 之前使用过“一级来源 + 二级领域 + 冻结列车 + 登记表”的维护模型（`config/local-aggregate-features.json`、`config/local-aggregate-trains/`、`integration/*` 分支、`fork-candidate/*` tag）。它们已被本流程取代，不要恢复；历史内容保留在 tag `archive/two-tier-maintenance` 上。
