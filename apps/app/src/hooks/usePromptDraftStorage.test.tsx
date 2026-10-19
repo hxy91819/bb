@@ -314,7 +314,9 @@ describe("composer quote persistence", () => {
       if (draftActions) addQuote(draftActions, "selected text");
     });
 
-    expect(composer.result.current.text).toBe("typed reply\n> selected text\n");
+    expect(composer.result.current.text).toBe(
+      "typed reply\n> selected text\n\n",
+    );
     expect(consumerRenders).toBe(rendersBeforeTyping);
   });
 
@@ -325,7 +327,7 @@ describe("composer quote persistence", () => {
     act(() => addQuote(result.current, "first"));
     act(() => addQuote(result.current, "second"));
 
-    expect(result.current.text).toBe("> first\n\n> second\n");
+    expect(result.current.text).toBe("> first\n\n> second\n\n");
   });
 
   it("adds quote attachments to the draft and persists them", () => {
@@ -343,7 +345,7 @@ describe("composer quote persistence", () => {
       ]),
     );
 
-    expect(result.current.text).toBe("> review this\n");
+    expect(result.current.text).toBe("> review this\n\n");
     expect(result.current.attachments).toEqual([
       {
         type: "localFile",
@@ -364,7 +366,7 @@ describe("composer quote persistence", () => {
 
     act(() => addQuote(first.result.current, "shared selection"));
 
-    expect(second.result.current.text).toBe("> shared selection\n");
+    expect(second.result.current.text).toBe("> shared selection\n\n");
   });
 });
 
