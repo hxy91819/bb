@@ -12,7 +12,7 @@ import {
   migrate,
   type DbConnection,
 } from "@bb/db";
-import { PERSONAL_PROJECT_ID } from "@bb/domain";
+import { turnScope, PERSONAL_PROJECT_ID } from "@bb/domain";
 import type { Logger } from "@bb/logger";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
 import {
@@ -22,6 +22,7 @@ import {
 } from "../../../src/services/plugins/plugin-service.js";
 import type { BbPluginApi } from "../../../src/services/plugins/plugin-api.js";
 import {
+  seedEvent,
   seedHostSession,
   seedEnvironment,
   seedPrimaryHost,
@@ -641,6 +642,36 @@ describe("plugin bb.sdk against a running server", () => {
           set: { a: 1, nested: { old: true } },
         }),
       ).resolves.toEqual({ a: 1, nested: { old: true } });
+      seedEvent(server.deps, {
+        threadId: thread.id,
+        sequence: 1,
+        type: "item/completed",
+        scope: turnScope("activity-turn"),
+        providerThreadId: "activity-provider",
+        data: {
+          providerThreadId: "activity-provider",
+          item: {
+            type: "agentMessage",
+            id: "activity-message",
+            text: "statement",
+          },
+        },
+      });
+      const activityInput = {
+        mode: "details" as const,
+        threadId: thread.id,
+        metadata: { key: "a", equals: 1 },
+        from: 0,
+        to: Date.now() + 1000,
+      };
+      const ownActivity =
+        await api.sdk.threads.experimental_activity(activityInput);
+      expect(ownActivity.items).toHaveLength(1);
+      const otherActivity = await api.sdk.threads.experimental_activity({
+        ...activityInput,
+        metadata: { ...activityInput.metadata, pluginId: "other" },
+      });
+      expect(otherActivity.items).toEqual([]);
       await expect(
         api.sdk.threads.getPluginMetadata({
           threadId: thread.id,
