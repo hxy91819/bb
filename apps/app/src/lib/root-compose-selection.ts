@@ -37,7 +37,14 @@ const rootComposeStoredProjectIdAtom = atomWithStorage<string | null>(
 const rememberedProjectIdAtom = atomWithStorage<string>(
   "bb.last-selected-project-id",
   PERSONAL_PROJECT_ID,
-  rootComposeProjectIdStorage,
+  createTabScopedStorage<string>(
+    {
+      parse: (storedValue, initialValue) =>
+        parseStoredProjectId(storedValue, initialValue) ?? initialValue,
+      serialize: (value) => value,
+    },
+    { persistInitialValue: true },
+  ),
   { getOnInit: true },
 );
 
