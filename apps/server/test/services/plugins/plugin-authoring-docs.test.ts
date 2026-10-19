@@ -38,6 +38,7 @@ import {
   type PluginThreadActionItemInput,
   type ExperimentalPluginBrowserToolbarActionProps,
   type PluginThreadListProps,
+  type experimental_ThreadListItemInput,
   type PluginSidebarFooterActionRegistration,
   type PluginThreadEventPayloads,
   type PluginThreadPanelProps,
@@ -274,6 +275,8 @@ type SlotPropsByName = {
   pendingInteraction: PluginPendingInteractionProps;
   sidebarFooterAction: PluginSidebarFooterActionProps;
   experimental_threadList: PluginThreadListProps;
+  experimental_threadListGrouping: experimental_ThreadListItemInput<unknown>;
+  experimental_threadRowDecoration: experimental_ThreadListItemInput<unknown>;
   experimental_threadHeaderAction: PluginThreadHeaderActionProps;
   experimental_threadAction: PluginThreadActionItemInput<unknown>;
   experimental_browserToolbarAction: ExperimentalPluginBrowserToolbarActionProps;
@@ -295,6 +298,7 @@ const _assertAllSlotsListed: MissingSlot extends never ? true : never = true;
 void _assertAllSlotsListed;
 
 const APP_BUILDER_FIELDS = [
+  "experimental_threadListContributionVersion",
   "commands",
   "experimental_icons",
   "slots",
@@ -359,6 +363,8 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "onNavigate",
     "searchQuery",
   ],
+  experimental_threadListGrouping: ["thread", "data", "groupingKey"],
+  experimental_threadRowDecoration: ["thread", "data", "groupingKey"],
   experimental_threadHeaderAction: [
     "threadId",
     "projectId",
