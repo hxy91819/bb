@@ -14,7 +14,7 @@
 
 - 团队、书签、图标保留已有插件 ID 和存储格式，迁入同一仓库；旧仓库保留历史并指向新维护位置。
 - 侧栏与 ACP 定制使用独立 ID，避免占用内置插件保留 ID；迁移复制既有偏好和 customAgents，保留 acp-* provider ID。
-- 原生侧聊保留，退出 `/side` 专用 typeahead；移动排队保留原生长按菜单，退出第二按钮及附带 ghost 样式；未配置的 Codex home bindings 退出聚合。
+- 原生侧聊保留，退出 `/side` 专用 typeahead；移动排队保留原生长按菜单，退出第二按钮及附带 ghost 样式；Codex home bindings 当时退出聚合，后于 2026-10-19 恢复，见文末恢复记录。
 - DSH 注册和自定义 fork 策略归 ACP 插件；resume/config、steer 投递及 checkpoint/history/probe 属于共享协议，保留独立核心分支。
 - 账号池 fallback 保留在现有账号池插件。其 hub、凭据和配置由该插件持有，普通附加插件没有等价调用契约，复制账号池将增加维护。
 - 头像宽度修复回到列表贡献功能分支。过时缓解与独立设计分支结束活跃维护；纯设计项不再作为产品输入聚合。
@@ -36,7 +36,7 @@
 | `fix/leading-thread-avatar-layout`                                                                                     | 收回基础分支     | `feature/plugin-thread-list-contributions`；通用行装饰布局属于贡献 API         |
 | `feature/side-chat-command`、`fix/side-chat-main-composer`                                                             | 淘汰             | 移除 `/side` 专用补全，保留原生侧聊入口与聚焦修复                              |
 | `feature/mobile-queue-action`                                                                                          | 淘汰             | 移除常驻第二按钮，保留原生长按 Queue/Steer                                     |
-| `feature/codex-home-bindings`                                                                                          | 淘汰             | 未配置的额外 home 映射与整条 wire/UI 维护链退出                                |
+| `feature/codex-home-bindings`                                                                                          | 当时退出，已恢复 | 2026-10-19 恢复原生双入口，保留要求见 `.fork/branches`                                |
 | `feature/child-report-delivery`、`fix/acp-mid-turn-steering-design`                                                    | 结束活跃维护     | 纯设计资料留在归档历史，不参与产品聚合；其他尚未登记的通知候选不在本次删除范围 |
 | `fix/empty-long-timeline`、`fix/mobile-display-options`                                                                | 结束活跃维护     | 过时历史分支只留归档，不重新加入聚合                                           |
 | `fix/pool-ai-fallback`                                                                                                 | 保留现有插件实现 | `plugins/account-pool`；另起插件会复制池 hub、凭据和配置                       |

@@ -24,7 +24,9 @@
 | Mermaid、Markdown、依赖漏洞、server/daemon、wire 协议、环境切换后继续   | 本仓库对应 `apps/`、`packages/` 与 `.fork/branches` 分支                                                                                                                         | “切换环境后继续”属于核心，与上面的“升级重启后续跑”分开维护                                                                                         |
 | fork 分支、聚合、SDK 供应、打包发布、部署规则、本索引                   | 本仓库 `fork-tooling` 的 [`docs/fork-maintenance.md`](fork-maintenance.md)、[`scripts`](../scripts)、[部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md)                   | 根目录 `main` 是聚合入口，维护分支是规则与索引的源；其他机器读取远端 `fork-tooling`，避免使用旧聚合里的旧规则                                      |
 
-已淘汰的 `/side` 专用补全、移动端第二排队按钮和未配置的 Codex home bindings 不作为新实现入口；原生侧聊与长按 Queue/Steer 仍保留。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
+原生 Codex 多 home 入口（`Codex`、`Codex · L`）由内置 `provider-codex` 与核心参数传递共同实现，聚合输入为 `feature/codex-home-bindings`；保留要求见 `.fork/branches`。
+
+已淘汰的 `/side` 专用补全、移动端第二排队按钮不作为新实现入口；原生侧聊与长按 Queue/Steer 仍保留。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
 
 ## 升级时同步外置插件
 
