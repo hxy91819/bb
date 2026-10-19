@@ -42,6 +42,7 @@ import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadT
 import { ThreadContextWindowIndicator } from "@/components/thread/timeline/ThreadContextWindowIndicator";
 import {
   EMPTY_ORDERED_MENTION_SUGGESTIONS,
+  appendQuoteToDraftText,
   emptyPromptDraftState,
 } from "@bb/client-core";
 import {
@@ -1661,7 +1662,10 @@ describe("PromptBoxInternal controlled value sync", () => {
         view.rerender(
           <PromptBoxInternal
             {...baseProps}
-            value={"> selected text\n"}
+            value={
+              appendQuoteToDraftText(emptyPromptDraftState(), "selected text")
+                .text
+            }
             focusEndKey={1}
           />,
         );
