@@ -66,7 +66,11 @@ import {
   type PromptDraftController,
   type PromptDraftScope,
 } from "@/hooks/usePromptDraftStorage";
-import { emptyPromptDraftState, isPromptDraftEmpty } from "@bb/client-core";
+import {
+  emptyPromptDraftState,
+  isPromptDraftEmpty,
+  resolveSidebarNewThreadProjectId,
+} from "@bb/client-core";
 import {
   AUTOMATIONS_PLUGIN_ID,
   getPluginPanelRoutePath,
@@ -80,7 +84,11 @@ import { useStore } from "jotai";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { lookupCachedThread } from "@/lib/plugin-sidebar-hooks";
-import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
+import {
+  useLastSelectedProjectId,
+  useSetRootComposeProjectId,
+} from "@/lib/root-compose-selection";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
 import { useServerConnectionState } from "@/hooks/useServerConnectionState";
 import { wsManager } from "@/lib/ws";
@@ -346,6 +354,9 @@ export function useBbNavigate(): BbNavigate {
   const queryClient = useQueryClient();
   const isCompact = useIsCompactViewport();
   const setRootComposeProjectId = useSetRootComposeProjectId();
+  const rememberedProjectId = useLastSelectedProjectId();
+  const { projectId: routeProjectId } = useRouteState();
+  const { data: navigation } = useSidebarNavigation();
   const toThread = useCallback<BbNavigate["toThread"]>(
     (threadId, options) => {
       const open = (projectId: string) => {
@@ -396,9 +407,21 @@ export function useBbNavigate(): BbNavigate {
       const replacesAutomationEditRoute =
         pluginId === AUTOMATIONS_PLUGIN_ID &&
         isAutomationEditRoutePath(location.pathname);
-      if (options?.projectId !== undefined) {
-        setRootComposeProjectId(options.projectId);
-      }
+      setRootComposeProjectId(
+        options?.projectId ??
+          resolveSidebarNewThreadProjectId({
+            availableProjectIds: navigation?.projects.map(
+              (project) => project.id,
+            ),
+            recentThreads: navigation
+              ? [...navigation.projects, navigation.personalProject].flatMap(
+                  (project) => project.threads,
+                )
+              : [],
+            rememberedProjectId,
+            routeProjectId,
+          }),
+      );
       const hostId = options?.hostId?.trim() ?? "";
       void navigate(getRootComposeRoutePath(), {
         ...(replacesAutomationEditRoute ? { replace: true } : {}),
@@ -418,7 +441,15 @@ export function useBbNavigate(): BbNavigate {
         },
       });
     },
-    [location.pathname, navigate, pluginId, setRootComposeProjectId],
+    [
+      location.pathname,
+      navigate,
+      navigation,
+      pluginId,
+      rememberedProjectId,
+      routeProjectId,
+      setRootComposeProjectId,
+    ],
   );
   const openThreadPanel = useCallback<BbNavigate["openThreadPanel"]>(
     (options) => openThreadPanelHandler?.({ ...options, pluginId }) ?? false,
