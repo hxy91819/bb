@@ -163,6 +163,7 @@ export function queueChildSetupFailureNotification(
 ): void {
   if (!isParentNotifiableChildThread(thread)) return;
   void queueChildThreadTurnNotificationBestEffort(deps, {
+    author: null,
     childThread: thread,
     parentThreadId: thread.parentThreadId,
     turnStatus: "failed",
