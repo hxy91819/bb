@@ -34,6 +34,10 @@ vi.mock("./PluginThreadList", () => ({
   PluginThreadList: () => <div data-testid="thread-list" />,
 }));
 
+vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
+  useSidebarNavigation: () => ({ data: undefined }),
+}));
+
 vi.mock("@/components/plugin/PluginSidebarFooterItems", () => ({
   PluginSidebarFooterDisclosure: () => null,
   PluginSidebarFooterItems: ({
