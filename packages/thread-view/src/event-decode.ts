@@ -13,6 +13,7 @@ export function getEventProviderThreadId(
     case "thread/identity":
     case "turn/started":
     case "turn/input/accepted":
+    case "turn/input/delivery":
     case "thread/name/updated":
     case "thread/compacted":
     case "thread/context/cleared":
@@ -92,6 +93,7 @@ export function getEventParentToolCallId(
     case "thread/identity":
     case "turn/completed":
     case "turn/input/accepted":
+    case "turn/input/delivery":
     case "thread/name/updated":
     case "thread/compacted":
     case "thread/context/cleared":
