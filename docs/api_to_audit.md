@@ -629,7 +629,7 @@ plugin re-exports. It launches the agent named by
 `providerOptions.acpLaunchSpec` with a dialect (`generic`, `cursor`, `grok`)
 from bridge options. `experimental_probeAcpAgent` asks an installed agent for
 its `agentCapabilities`, and `experimental_acpAgentProbeSchema` validates the
-answer across a host RPC boundary. `experimental_acpLaunchSpecSchema` /
+answer across a host RPC boundary. Successful replies include optional `checkpointFork` for the `cursor-acp/checkpoint` extension. An absent field remains tip-only for automatic discovery; explicit checkpoint declarations are verified by the bridge at execution. Older servers ignore the extra field. `experimental_acpLaunchSpecSchema` /
 `AcpLaunchSpec` is the launch spec the bridge parses.
 
 Docs: `providers.md` (ACP agents). No doc covers the probe or launch-spec
