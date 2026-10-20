@@ -5,7 +5,8 @@
     "npm_config_store_dir",
     "pnpm_config_store_dir",
     "npm_config_cache",
-    "WRANGLER_HOME"
+    "WRANGLER_HOME",
+    "XDG_CONFIG_HOME"
   ],
   "tasks": {
     "@bb/db#db:generate": { "cache": false },
