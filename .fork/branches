@@ -19,6 +19,7 @@ fix/acp-steering-delivery             needs-feedback                            
 feature/acp-checkpoint-fork           needs-feedback                                             # 共享 checkpoint fork、探测与历史执行设置；自定义 agent 配置迁至外部插件
 fix/acp-model-config-error             needs-feedback                                             # 保留 ACP 模型配置拒绝错误，仅 -32601 回退 set_model
 fix/sidebar-touch-navigation           needs-feedback                                             # 触屏点击导航而非重命名，补上游 #5042 未覆盖的 ≥768px 触屏
+feature/sidebar-navigation-provider-slot fork-only                                              # 回移已合并的上游 #5584（含 #5529/#5609 依赖）：Rail/Top list 成为 Navigation provider，Top list 可取代最左侧图标栏；稳定 tag 纳入后移除
 fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
 fix/provider-icon-hitbox               needs-feedback                                             # WebKit SVG 图标透明区域覆盖相邻 provider 点击区；含移动端模型选择器 story
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
