@@ -3182,3 +3182,16 @@ shared machine/external adapter invariants for parent trees and environment isol
 regressions for all three original modes and CLI/RPC preferences; and live desktop
 and compact Safari checks for navigation, reveal, dragging and actions. No member,
 creation or activity query semantics are supplied by these list contributions.
+
+## Thread activity evidence
+
+`PluginBbSdk.threads.experimental_activity`, `ExperimentalPluginThreadActivityArgs`,
+`ExperimentalThreadActivityArgs`, `ExperimentalThreadActivityResult` and
+`ExperimentalActivityEvidence` expose bounded retained event facts through the
+public `POST /threads/experimental-activity` route. Core `bb thread
+experimental-activity` and the SDK use this same route and query service; the plugin
+binding only supplies its default metadata namespace. Stabilization requires
+scalar/type and public access filtering, binary/sequence keyset continuation,
+wire budgets, real fork startup boundary tests, retained/live coverage, and
+independent consumers exercising per-item cursors. The Plugin Guide's thread
+plugin metadata card owns the API reference. No daemon protocol change.
