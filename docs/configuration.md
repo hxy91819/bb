@@ -1163,3 +1163,5 @@ provider child. Recordings can contain secrets; redact them with
 App production builds cache React Compiler output at
 `<git-common-dir>/bb-cache/react-compiler`; it has no configuration and can be
 deleted while no build runs.
+
+Thread-list plugins may contribute grouping and row decoration through `experimental_useThreadListContributions` and `experimental_useThreadRowDecorations`. Select contribution groups in the sidebar display options; core grouping remains available. The Plugin Guide owns the API reference.

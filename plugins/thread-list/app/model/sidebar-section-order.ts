@@ -5,7 +5,11 @@ import {
 import type { SidebarSectionId } from "./sidebar-section-id.js";
 import { reorderStoredOrder } from "./stored-order.js";
 
-type SidebarEntitySectionKind = "project" | "section" | "machine";
+type SidebarEntitySectionKind =
+  | "project"
+  | "section"
+  | "machine"
+  | "contribution";
 export type LegacySidebarEntityAnchor = "projects" | "sections" | "machines";
 
 export function buildSidebarEntitySectionId(
@@ -21,7 +25,8 @@ function isSidebarSectionId(value: string): value is SidebarSectionId {
     value === "threads" ||
     value.startsWith("project:") ||
     value.startsWith("section:") ||
-    value.startsWith("machine:")
+    value.startsWith("machine:") ||
+    value.startsWith("contribution:")
   );
 }
 
