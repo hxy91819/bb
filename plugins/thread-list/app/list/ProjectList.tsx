@@ -1366,8 +1366,8 @@ function ProjectListComponent({
     [openRootComposeForProject],
   );
   const handleCreateProjectlessThread = useCallback(() => {
-    openRootComposeForProject(personalProjectId);
-  }, [openRootComposeForProject, personalProjectId]);
+    openRootComposeForProject(null);
+  }, [openRootComposeForProject]);
   const handleCreateThreadInSection = useCallback(
     (sectionId: string) => {
       openRootComposeForProject(null, sectionId);
@@ -1503,11 +1503,10 @@ function ProjectListComponent({
         sectionId={sectionId}
         onNewThread={
           hostId
-            ? () =>
-                openRootComposeForProject(personalProjectId, undefined, hostId)
+            ? () => openRootComposeForProject(null, undefined, hostId)
             : () =>
                 openRootComposeForProject(
-                  sectionId === "pinned" ? null : personalProjectId,
+                  null,
                   undefined,
                   undefined,
                   sectionId === "pinned",
