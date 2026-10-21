@@ -239,6 +239,7 @@ This index lists every command path that the core CLI registers, including alias
 ## file
 
 - `bb file`
+- `bb file vscode-url`
 - `bb file read`
 - `bb file write`
 - `bb file list`
