@@ -30,7 +30,7 @@ import type {
   ExperimentalPluginFixedTabReference,
   JsonValue,
 } from "@get-bb/plugin-sdk";
-import { jsonValueSchema } from "@bb/domain";
+import { jsonValueSchema, PERSONAL_PROJECT_ID } from "@bb/domain";
 import {
   PluginSlotOwnershipContext,
   usePluginId,
@@ -76,20 +76,18 @@ import {
   getPluginPanelRoutePath,
   getProjectComposeRoutePath,
   getRootComposeRoutePath,
-  getThreadRoutePath,
   AUTOMATION_EDIT_ROUTE_PATH,
 } from "@/lib/route-paths";
 import { useRouteState } from "@/hooks/useRouteState";
 import { useStore } from "jotai";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
-import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { lookupCachedThread } from "@/lib/plugin-sidebar-hooks";
 import {
   useLastSelectedProjectId,
   useSetRootComposeProjectId,
 } from "@/lib/root-compose-selection";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
-import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
+import { openThread } from "@/lib/thread-navigation";
 import { useServerConnectionState } from "@/hooks/useServerConnectionState";
 import { wsManager } from "@/lib/ws";
 import { pluginSdkSettingsQueryKey } from "@/hooks/queries/query-keys";
@@ -359,19 +357,20 @@ export function useBbNavigate(): BbNavigate {
   const { data: navigation } = useSidebarNavigation();
   const toThread = useCallback<BbNavigate["toThread"]>(
     (threadId, options) => {
+      const target =
+        options?.experimental_messageSeq !== undefined
+          ? { match: "message" as const, seq: options.experimental_messageSeq }
+          : undefined;
       const open = (projectId: string) => {
-        store.set(getThreadConversationCollapsedAtom(threadId), false);
-        if (options?.split) {
-          openThreadInSplit({
-            store,
-            navigate,
-            projectId,
-            threadId,
-            isCompact,
-          });
-          return;
-        }
-        void navigate(getThreadRoutePath({ projectId, threadId }));
+        openThread({
+          store,
+          navigate,
+          projectId,
+          threadId,
+          isCompact,
+          split: options?.split,
+          target,
+        });
       };
       const cached = lookupCachedThread(queryClient, threadId);
       if (cached !== null) {
@@ -381,7 +380,7 @@ export function useBbNavigate(): BbNavigate {
       void sdk.threads
         .get({ threadId })
         .then((thread) => open(thread.projectId))
-        .catch(() => navigate(`/threads/${threadId}`));
+        .catch(() => open(PERSONAL_PROJECT_ID));
     },
     [isCompact, navigate, queryClient, store],
   );
