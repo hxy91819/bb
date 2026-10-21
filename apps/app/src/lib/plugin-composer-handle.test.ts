@@ -576,7 +576,7 @@ describe.each(["core", "plugin"] as const)(
       expect(observations).toEqual([
         {
           ...initial,
-          text: `${initial.text}\n> first\n> second\n`,
+          text: `${initial.text}\n> first\n> second\n\n`,
           attachments: [attachment, image],
         },
       ]);
