@@ -48,7 +48,7 @@ import {
 import { LazyQueuedMessagesList } from "@/components/promptbox/banner/LazyQueuedMessagesList";
 import { workflowRow } from "@/test/fixtures/thread-timeline-rows";
 import type { PromptDraftAttachment } from "@bb/client-core";
-import { BbHttpError } from "@/lib/sdk";
+import { BbHttpError, sdk } from "@/lib/sdk";
 import type { ExperimentalComposerSelection } from "@get-bb/plugin-sdk";
 import { setComposerTextEffect } from "@/lib/composer-text-effects";
 import {
@@ -225,6 +225,14 @@ function renderPromptArea(options: RenderPromptAreaOptions = {}) {
 beforeAll(() => LazyQueuedMessagesList.preload());
 
 beforeEach(() => {
+  vi.spyOn(
+    sdk.threads.queuedMessages,
+    "experimental_holdForEdit",
+  ).mockResolvedValue({ leaseMs: 60_000 });
+  vi.spyOn(
+    sdk.threads.queuedMessages,
+    "experimental_releaseEditHold",
+  ).mockResolvedValue({ ok: true } as const);
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
