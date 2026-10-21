@@ -562,6 +562,36 @@ describe("loadPluginApp", () => {
     ).rejects.toThrow('slots.experimental_appOverlay: duplicate id "office"');
   });
 
+  it("validates the thread-panel pin opt-in and defaults it off", async () => {
+    for (const experimental_pinned of [undefined, false, true]) {
+      const collected = await loadPluginApp(
+        definePluginApp((builder) => {
+          builder.slots.threadPanelAction({
+            id: "saved",
+            title: "Saved items",
+            component: () => null,
+            experimental_pinned,
+          });
+        }),
+      );
+      expect(collected.threadPanelActions[0]?.experimental_pinned).toBe(
+        experimental_pinned ?? false,
+      );
+    }
+    await expect(
+      loadPluginApp(
+        definePluginApp((builder) => {
+          builder.slots.threadPanelAction({
+            id: "saved",
+            title: "Saved items",
+            component: () => null,
+            experimental_pinned: "true" as never,
+          });
+        }),
+      ),
+    ).rejects.toThrow('"experimental_pinned" must be a boolean');
+  });
+
   it("captures and validates New thread panel action registrations", async () => {
     const run = () => {};
     const captured = await loadPluginApp(
@@ -685,9 +715,9 @@ describe("loadPluginApp", () => {
     expect(mounted.inspection.experimental_clipboardWrites).toEqual([
       { text: "plain", html: "<b>rich</b>" },
     ]);
-    await expect(
-      experimental_copyToClipboard({ text: "later" }),
-    ).resolves.toBe(false);
+    await expect(experimental_copyToClipboard({ text: "later" })).resolves.toBe(
+      false,
+    );
 
     const slot = renderSlot(captured.navPanels[0]!, { subPath: "" });
     await expect(

@@ -659,6 +659,7 @@ function ThreadDetailViewInternal(
     openTab,
     openPluginPanel,
     orderedSecondaryFileTabs,
+    pinnedPluginPanelTabIds,
     reopenClosedTab,
     reorderTab,
     selectFileSearchResult,
@@ -1493,10 +1494,9 @@ function ThreadDetailViewInternal(
     ) {
       if (activeFixedSecondaryTab.kind === "terminal") {
         terminals.close(activeFixedSecondaryTab.terminalId);
-      } else {
-        closeTab(activeFixedSecondaryTab.id);
+        return true;
       }
-      return true;
+      if (closeTab(activeFixedSecondaryTab.id)) return true;
     }
     closeSecondaryPanel();
     return true;
@@ -2733,7 +2733,10 @@ function ThreadDetailViewInternal(
         case "plugin-panel":
           return {
             ...shared,
-            label: tab.title,
+            isPinned: pinnedPluginPanelTabIds.has(tab.id),
+            label: pinnedPluginPanelTabIds.has(tab.id)
+              ? (pluginAction?.title ?? tab.title)
+              : tab.title,
             leadingVisual: (
               <PluginItemIcon
                 pluginId={tab.pluginId}

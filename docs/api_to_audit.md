@@ -2976,3 +2976,9 @@ directories, linked worktrees, and submodules. Core callers: the setup guide
 Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
+
+## `PluginThreadPanelActionRegistration.experimental_pinned`
+
+Declares the action's null-params tab as always present and non-closable on existing thread surfaces while the registration is active. The app uses the ordinary plugin-panel tab identity, persisted selection, rendering, navigation and open/close paths. It preserves panel visibility and the selected tab; parameterized tabs remain closable. Disabling or removing the registration releases the pin, leaving the persisted tab under the ordinary unavailable-plugin behavior. The New thread surface is unaffected; older hosts ignore the opt-in.
+
+Stabilization requires live verification of initial and hydrated thread state, language/title updates, reload/disable/re-enable, close shortcuts, parameterized siblings and mobile tab navigation. Core callers are `useThreadFileTabs`, `ThreadDetailView` and the shared secondary-panel tab strip; native controls, SDK `openThreadPanel` and CLI thread tab operations use the same persisted tab model. Bookmarks is an external consumer; no bookmark-specific core policy is added.

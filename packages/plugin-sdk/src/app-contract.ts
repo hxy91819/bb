@@ -726,6 +726,15 @@ export interface PluginThreadPanelActionContext {
 }
 
 export interface PluginThreadPanelActionRegistration {
+  /**
+   * Keep the action's default (null-params) tab present in every existing
+   * thread. The host preserves the active tab and panel visibility; the
+   * pinned tab cannot be closed while this registration is available.
+   * Parameterized tabs remain ordinary, closable tabs. Older hosts ignore
+   * this field and continue to offer the action in the new-tab launcher.
+   * @experimental Audit lifecycle, persistence and cross-client behavior.
+   */
+  experimental_pinned?: boolean;
   /** Unique within the plugin; letters, digits, `-`, `_`. */
   id: string;
   /** Label of the action row in the panel's new-tab launcher. */
