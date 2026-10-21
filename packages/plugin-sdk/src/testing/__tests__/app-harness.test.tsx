@@ -570,6 +570,38 @@ describe("loadPluginApp", () => {
     ).rejects.toThrow('slots.experimental_appOverlay: duplicate id "office"');
   });
 
+  it("validates the thread-panel pin opt-in and defaults it off", async () => {
+    for (const experimental_pinned of [undefined, false, true]) {
+      const collected = await loadPluginApp(
+        definePluginApp((builder) => {
+          builder.slots.experimental_tab({
+            context: { kind: "thread" }, availability: "action", icon: "Columns",
+            id: "saved",
+            title: "Saved items",
+            component: () => null,
+            experimental_pinned: experimental_pinned ?? false,
+          });
+        }),
+      );
+      expect(collected.threadPanelActions[0]?.experimental_pinned).toBe(
+        experimental_pinned ?? false,
+      );
+    }
+    await expect(
+      loadPluginApp(
+        definePluginApp((builder) => {
+          builder.slots.experimental_tab({
+            context: { kind: "thread" }, availability: "action", icon: "Columns",
+            id: "saved",
+            title: "Saved items",
+            component: () => null,
+            experimental_pinned: "true" as never,
+          });
+        }),
+      ),
+    ).rejects.toThrow('"experimental_pinned" must be a boolean');
+  });
+
   it("captures and validates New thread panel action registrations", async () => {
     const run = () => {};
     const captured = await loadPluginApp(

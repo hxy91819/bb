@@ -1044,6 +1044,8 @@ type ExperimentalTabLifecycle<Props, Context> =
     }
   | {
       availability: "action";
+      /** Keep the default thread action tab present and non-closable; parameterized instances remain closable. */
+      experimental_pinned?: boolean;
       component: ComponentType<Props & { params: JsonValue | null }>;
       /** Default persisted params when opened without explicit params. */
       params?: JsonValue;
@@ -1082,6 +1084,8 @@ type ExperimentalTabInput<
         : never;
     }
   : {
+      /** Keep the default thread action tab present and non-closable. */
+      experimental_pinned?: boolean;
       component: ComponentType<
         ExperimentalTabContextProps<C> & { params: JsonValue | null }
       >;
