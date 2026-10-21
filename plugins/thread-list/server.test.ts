@@ -287,3 +287,77 @@ it("validates lifecycle selection through CLI and RPC and broadcasts it", async 
     channel: "preferences", payload: { key: "threadLifecycles", value: ["archived"] },
   });
 });
+
+it("persists namespaced organization and canonical group state through CLI and RPC without collisions", async () => {
+  const { bb, harness } = setup();
+  await plugin(bb);
+  const key = `contribution:${encodeURIComponent(JSON.stringify(["alpha/owners", "group", "a:/雪"]))}`;
+  const other = `contribution:${encodeURIComponent(JSON.stringify(["beta/owners", "group", "a:/雪"]))}`;
+  for (const value of [
+    "project",
+    "machine",
+    "chronological",
+    "alpha/owners",
+    "beta/owners",
+  ]) {
+    const result = await harness.behavior.runCli([
+      "prefs",
+      "set",
+      "organizationMode",
+      value,
+    ]);
+    expect(result.exitCode).toBe(0);
+    await expect(
+      harness.behavior.callRpc("listPreferences", null),
+    ).resolves.toMatchObject({ preferences: { organizationMode: value } });
+  }
+  for (const [preference, value] of [
+    ["collapsedContributionGroups", [key, other]],
+    ["contributionGroupOrder", [other, "pinned", key]],
+    ["hiddenGroups", [key]],
+  ] as const) {
+    const result = await harness.behavior.runCli([
+      "prefs",
+      "set",
+      preference,
+      JSON.stringify(value),
+    ]);
+    expect(result.exitCode).toBe(0);
+    await expect(
+      bb.storage.kv.get(`preference:${preference}`),
+    ).resolves.toEqual(value);
+    expect(harness.realtimeSignals).toContainEqual({
+      channel: "preferences",
+      payload: { key: preference, value },
+    });
+  }
+  for (const value of [
+    "alpha/owners/extra",
+    "alpha owners/x",
+    "/owners",
+    "alpha/",
+    "alpha/%2F",
+  ]) {
+    await expect(
+      harness.behavior.callRpc("setPreference", {
+        key: "organizationMode",
+        value,
+      }),
+    ).rejects.toThrow(/Invalid value/);
+  }
+  for (const value of [
+    "contribution:alpha/owners/a",
+    key.toLowerCase(),
+    `contribution:${encodeURIComponent(JSON.stringify(["alpha/owners", "loading", "a"]))}`,
+  ]) {
+    await expect(
+      harness.behavior.callRpc("setPreference", {
+        key: "hiddenGroups",
+        value: [value],
+      }),
+    ).rejects.toThrow(/Invalid value/);
+  }
+  await expect(bb.storage.kv.get("preference:organizationMode")).resolves.toBe(
+    "beta/owners",
+  );
+});

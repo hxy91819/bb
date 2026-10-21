@@ -8,10 +8,10 @@ description: "Inspect or change the sidebar thread list's layout preferences: or
 The Thread list plugin owns the sidebar's layout state. Read it with
 `bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`, `organizationMode`,
 `environmentGrouping`, `groupByReadStatus`, `chronologicalSort`, `sortDirection`, `sectionOrder`,
-`manualSectionOrder`, `machineSectionOrder`, `hiddenGroups` (including the
+`manualSectionOrder`, `machineSectionOrder`, `contributionGroupOrder`, `hiddenGroups` (including the
 built-in `threads` group), `rowActions`,
 `collapsedSections`, `collapsedProjects`, `collapsedThreads`,
-`collapsedEnvironments`, `collapsedThreadSections`, and `collapsedMachines`.
+`collapsedEnvironments`, `collapsedThreadSections`, `collapsedMachines`, and `collapsedContributionGroups`.
 
 ```sh
 bb thread-list prefs list [--json]
@@ -89,3 +89,22 @@ and general thread groups start unsectioned and unpinned. Environment rows
 reuse their environment and the containing group's placement. In Pinned,
 they retain the group's common underlying section for unpinning; mixed-section
 groups use no underlying section.
+
+Organization defaults to `chronological`. Organize → Sections also lists registered
+plugin grouping providers. Select one with
+`bb thread-list prefs set organizationMode <pluginId>/<registrationId>`.
+Only the selected provider reads all candidate root IDs, before folding and
+windowing. Installing a provider does not change the selection. If it is absent
+or fails, the list uses chronological temporarily and preserves the preference
+for recovery. Row additions from enabled plugins compose in stable owner/key
+order in every mode; they do not replace titles, status, navigation or actions.
+
+Contributed groups keep complete parent trees; a child can show different row
+information. Environment groups stay inside the root group. Their headers are
+read-only metadata projections: dropping across groups does not change metadata.
+`hiddenGroups`, `collapsedContributionGroups` and `contributionGroupOrder` use
+canonical keys: `contribution:` followed by
+`encodeURIComponent(JSON.stringify([providerKey, kind, groupKey]))`. `kind` is
+`group`, `ungrouped` or `loading`; the latter two use an empty `groupKey`.
+Use IDs returned by preferences rather than constructing keys by joining
+delimiters. Renaming a label keeps its state; other providers retain their state.
