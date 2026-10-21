@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
 import { useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  collectPluginAppRegistrations,
+  definePluginApp,
+} from "@/lib/plugin-app-definition";
 import { Provider } from "jotai";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -146,6 +150,7 @@ vi.mock("@/components/promptbox/NewThreadPromptBox", () => ({
       <div data-testid="new-thread-prompt-box">
         {props.modeConfig?.banner ?? null}
         {props.modeConfig?.environmentProviderInputsSlot ?? null}
+        {props.attachments?.error ? <div>{props.attachments.error}</div> : null}
       </div>
     );
   },
@@ -659,6 +664,7 @@ function registerCheckoutInputsControl(): void {
 }
 
 const STORED_REQUEST: NewThreadRequest = {
+  experimental_pluginContext: {},
   projectId: "proj_1",
   providerId: "claude-code",
   model: "gpt-5.6-sol",
@@ -2026,6 +2032,83 @@ describe("PluginNewThreadComposer seeding", () => {
     });
   });
 
+  it("preserves a draft on capture failure and captures the next submission", async () => {
+    let fail = true;
+    setPluginSlotRegistrations(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({
+            capture: () => {
+              if (fail) throw new Error("identity unavailable");
+              return { memberId: "B" };
+            },
+          });
+        }),
+      ),
+    );
+    const onSubmit = vi.fn();
+    renderComposer(STORED_REQUEST, onSubmit, "capture-failure");
+    await waitFor(() => expect(latestPromptBoxProps().disabled).toBe(false));
+    const draft = getPromptDraftAccessor({
+      kind: "plugin-new-thread",
+      key: "capture-failure",
+    });
+    const text = "review @thread:thr_source";
+    const submittedDraft = {
+      text,
+      mentions: [
+        {
+          start: 7,
+          end: text.length,
+          resource: {
+            kind: "thread" as const,
+            threadId: "thr_source",
+            projectId: "proj_1",
+            label: "Source",
+          },
+        },
+      ],
+      attachments: [
+        {
+          type: "localFile" as const,
+          name: "notes.txt",
+          path: ".bb/attachments/notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+        },
+      ],
+    };
+    act(() => draft.setDraft(submittedDraft));
+    await submit();
+    await waitFor(() =>
+      expect(latestPromptBoxProps().isSubmitting).toBe(false),
+    );
+    expect(screen.getByText("identity unavailable").textContent).toBe(
+      "identity unavailable",
+    );
+    expect(draft.getCurrent()).toEqual(submittedDraft);
+    expect(onSubmit).not.toHaveBeenCalled();
+    await act(async () => {
+      await expect(
+        latestPromptBoxProps().pluginComposerHost.submit(
+          { experimental_data: null },
+          undefined,
+        ),
+      ).rejects.toThrow("identity unavailable");
+    });
+    expect(draft.getCurrent()).toEqual(submittedDraft);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(latestPromptBoxProps().isSubmitting).toBe(false);
+    fail = false;
+    await submit();
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      experimental_pluginContext: { team: { memberId: "B" } },
+    });
+    expect(latestPromptBoxProps().value).toBe("");
+    expect(screen.queryByText("identity unavailable")).toBeNull();
+  });
+
   it("restores the optimistically cleared draft when submission fails", async () => {
     let failSubmit: (() => void) | null = null;
     const onSubmit = vi.fn(
@@ -2049,6 +2132,7 @@ describe("PluginNewThreadComposer seeding", () => {
       expect(latestPromptBoxProps().isSubmitting).toBe(false);
     });
     expect(latestPromptBoxProps().value).toBe("review every PR for slop");
+    expect(latestPromptBoxProps().attachments.error).toBeNull();
   });
 
   it("does not replace a new draft when submission fails", async () => {
