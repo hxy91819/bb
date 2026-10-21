@@ -1409,6 +1409,26 @@ function validateAppliedMigrationHistory(
   );
 }
 
+function applyMarketplaceMigrationAfterForkActivityIndexes(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) return;
+  const legacy = db.$client.prepare<[string, number], { hash: string }>(
+    "SELECT hash FROM __drizzle_migrations WHERE hash = ? AND created_at = ?",
+  ).get("6122ee20e6fe0c0fcabcbd106956b5188b68e6e94ac8397e7fdfa425cb6b79c3", 1791953791435);
+  if (!legacy) return;
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0142_burly_baron_strucker",
+  );
+  if (columnExists(db, "plugin_marketplaces", "source_git_subdirectory")) {
+    markMigrationApplied(db, migration);
+  } else {
+    applyMigrationStatements(db, migration);
+  }
+}
+
 export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   const migrationsFolder = resolveMigrationsFolder();
   const sqlite = db.$client;
@@ -1443,6 +1463,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   }
   sqlite.pragma("foreign_keys = OFF");
   try {
+    applyMarketplaceMigrationAfterForkActivityIndexes(db, migrationsFolder);
     assertNoDuplicatePendingInteractionProviderRequests(db);
     applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
     skipEventLargeValuesRoundTripForInlineEvents(db, migrationsFolder);
