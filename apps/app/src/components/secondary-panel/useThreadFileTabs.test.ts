@@ -5,10 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getActiveSecondaryPanelTab } from "@bb/client-core";
+import type { ThreadTabsResponse } from "@bb/server-contract";
 import { useFixedPanelTabsState } from "@/lib/fixed-panel-tabs";
 import {
   createEmptyFixedPanelTabsState,
   createHostFilePreviewFixedPanelTab,
+  createPluginPanelFixedPanelTab,
   createTerminalFixedPanelTab,
   createThreadStorageFilePreviewFixedPanelTab,
   getFixedPanelTabsStateStorageKey,
@@ -37,9 +39,12 @@ import {
 } from "@/test/bb-desktop-test-utils";
 
 const syncMocks = vi.hoisted(() => ({
+  hasPendingThreadTabsWrite: vi.fn(() => false),
   scheduleLocalThreadTabsMigration: vi.fn(),
   scheduleThreadTabsPersistence: vi.fn(),
-  useThreadTabs: vi.fn(() => ({ data: undefined })),
+  useThreadTabs: vi.fn((): { data: ThreadTabsResponse | undefined } => ({
+    data: undefined,
+  })),
 }));
 
 vi.mock("@/hooks/queries/thread-tabs-query", () => ({
@@ -51,7 +56,7 @@ vi.mock("@/lib/thread-tabs-sync", async (importOriginal) => {
     await importOriginal<typeof import("@/lib/thread-tabs-sync")>();
   return {
     ...actual,
-    hasPendingThreadTabsWrite: () => false,
+    hasPendingThreadTabsWrite: syncMocks.hasPendingThreadTabsWrite,
     scheduleLocalThreadTabsMigration:
       syncMocks.scheduleLocalThreadTabsMigration,
     scheduleThreadTabsPersistence: syncMocks.scheduleThreadTabsPersistence,
@@ -99,9 +104,12 @@ afterEach(() => {
   resetRecentlyClosedPanelTabsForTest();
   resetBrowserViewPersistence();
   resetPluginSlotStoreForTest();
-  syncMocks.scheduleLocalThreadTabsMigration.mockClear();
-  syncMocks.scheduleThreadTabsPersistence.mockClear();
-  syncMocks.useThreadTabs.mockClear();
+  syncMocks.hasPendingThreadTabsWrite.mockReset();
+  syncMocks.hasPendingThreadTabsWrite.mockReturnValue(false);
+  syncMocks.scheduleLocalThreadTabsMigration.mockReset();
+  syncMocks.scheduleThreadTabsPersistence.mockReset();
+  syncMocks.useThreadTabs.mockReset();
+  syncMocks.useThreadTabs.mockReturnValue({ data: undefined });
   delete window.bbDesktop;
 });
 
@@ -1582,5 +1590,201 @@ describe("useThreadFileTabs file opener diversion", () => {
       actionId: "file-opener:editor",
       title: "other.md",
     });
+  });
+});
+
+describe("pinned plugin thread panels", () => {
+  const register = (title = "Saved items") => {
+    syncMocks.scheduleThreadTabsPersistence.mockImplementation(() => {
+      syncMocks.hasPendingThreadTabsWrite.mockReturnValue(true);
+    });
+    setPluginSlotRegistrations(
+      "saved-items",
+      makePluginRegistrationSet({
+        threadPanelActions: [
+          {
+            id: "saved",
+            title,
+            component: () => null,
+            experimental_pinned: true,
+          },
+        ],
+      }),
+    );
+  };
+
+  it.each([true, false])(
+    "keeps the default tab without changing panel visibility (%s) or selection",
+    (isOpen) => {
+      const threadId = `pinned-${isOpen}`;
+      const info = {
+        id: "thread-info:thread-info:none",
+        kind: "thread-info" as const,
+      };
+      window.localStorage.setItem(
+        getFixedPanelTabsStateStorageKey({ threadId }),
+        serializeFixedPanelTabsState({
+          state: createEmptyFixedPanelTabsState({
+            secondary: { tabs: [info], activeTabId: info.id, isOpen },
+            lastUsedAt: Date.now(),
+          }),
+        }),
+      );
+      syncMocks.useThreadTabs.mockReturnValue({
+        data: { revision: 1, tabs: [info] },
+      });
+      register();
+      const { result, rerender, unmount } = renderThreadHook(() => ({
+        ...useThreadFileTabsWithActiveTab({
+          panelStateId: threadId,
+          syncThreadId: threadId,
+          environmentId: "env_1",
+          storageFiles: undefined,
+          terminalSessions: undefined,
+        }),
+        state: useFixedPanelTabsState(threadId, threadId),
+      }));
+      const saved = result.current.orderedSecondaryFileTabs.find(
+        (tab) => tab.kind === "plugin-panel",
+      );
+      expect(saved).toMatchObject({
+        pluginId: "saved-items",
+        actionId: "saved",
+        paramsJson: null,
+      });
+      expect(result.current.state.secondary.isOpen).toBe(isOpen);
+      expect(result.current.activeTab?.id).toBe(info.id);
+      const id = saved!.id;
+      expect(result.current.pinnedPluginPanelTabIds.has(id)).toBe(true);
+      act(() => expect(result.current.closeTab(id)).toBe(false));
+      expect(
+        result.current.orderedSecondaryFileTabs.some((tab) => tab.id === id),
+      ).toBe(true);
+      act(() =>
+        result.current.openPluginPanel({
+          pluginId: "saved-items",
+          actionId: "saved",
+          title: "Saved items",
+          paramsJson: null,
+        }),
+      );
+      expect(result.current.activeTab?.id).toBe(id);
+      expect(
+        result.current.orderedSecondaryFileTabs.filter((tab) => tab.id === id),
+      ).toHaveLength(1);
+      act(() => register("Localized saved items"));
+      expect(
+        result.current.orderedSecondaryFileTabs.find((tab) => tab.id === id),
+      ).toMatchObject({ title: "Saved items" });
+      act(() =>
+        result.current.openPluginPanel({
+          pluginId: "saved-items",
+          actionId: "saved",
+          title: "A saved item",
+          paramsJson: '{"id":"one"}',
+        }),
+      );
+      const siblingId = result.current.activeTab!.id;
+      expect(siblingId).not.toBe(id);
+      expect(result.current.pinnedPluginPanelTabIds.has(siblingId)).toBe(false);
+      act(() => result.current.closeTab(siblingId));
+      expect(
+        result.current.orderedSecondaryFileTabs.some(
+          (tab) => tab.id === siblingId,
+        ),
+      ).toBe(false);
+      act(() =>
+        result.current.openPluginPanel({
+          pluginId: "saved-items",
+          actionId: "saved",
+          title: "Localized saved items",
+          paramsJson: null,
+        }),
+      );
+      act(() => resetPluginSlotStoreForTest());
+      rerender();
+      expect(result.current.pinnedPluginPanelTabIds.size).toBe(0);
+      act(() => result.current.closeTab(id));
+      expect(
+        result.current.orderedSecondaryFileTabs.some((tab) => tab.id === id),
+      ).toBe(false);
+      unmount();
+    },
+  );
+
+  it("waits for local-tab migration before persisting a new pin", () => {
+    const threadId = "legacy-pinned-thread";
+    const legacy = createPluginPanelFixedPanelTab({
+      pluginId: "legacy",
+      actionId: "notes",
+      title: "Local notes",
+      paramsJson: null,
+    });
+    window.localStorage.setItem(
+      getFixedPanelTabsStateStorageKey({ threadId }),
+      serializeFixedPanelTabsState({
+        state: createEmptyFixedPanelTabsState({
+          secondary: { tabs: [legacy], activeTabId: legacy.id, isOpen: true },
+          lastUsedAt: Date.now(),
+        }),
+      }),
+    );
+    register();
+    const { result, rerender } = renderThreadHook(() =>
+      useThreadFileTabsWithActiveTab({
+        panelStateId: threadId,
+        syncThreadId: threadId,
+        environmentId: "env_1",
+        storageFiles: undefined,
+        terminalSessions: undefined,
+      }),
+    );
+    expect(syncMocks.scheduleThreadTabsPersistence).not.toHaveBeenCalled();
+    expect(
+      result.current.orderedSecondaryFileTabs.map((tab) => tab.id),
+    ).toEqual([legacy.id]);
+    syncMocks.useThreadTabs.mockReturnValue({
+      data: { revision: 0, tabs: [] },
+    });
+    rerender();
+    expect(syncMocks.scheduleLocalThreadTabsMigration).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId, tabs: [legacy] }),
+    );
+    expect(syncMocks.scheduleThreadTabsPersistence).not.toHaveBeenCalled();
+    syncMocks.useThreadTabs.mockReturnValue({
+      data: { revision: 1, tabs: [legacy] },
+    });
+    rerender();
+    expect(result.current.orderedSecondaryFileTabs).toHaveLength(2);
+    expect(result.current.orderedSecondaryFileTabs).toContainEqual(legacy);
+    expect(result.current.activeTab?.id).toBe(legacy.id);
+    expect(syncMocks.scheduleThreadTabsPersistence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId,
+        previousTabs: [legacy],
+        tabs: expect.arrayContaining([
+          legacy,
+          expect.objectContaining({
+            pluginId: "saved-items",
+            paramsJson: null,
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("does not add thread-only tabs on New thread", () => {
+    register();
+    const { result } = renderThreadHook(() =>
+      useThreadFileTabs({
+        panelStateId: "compose",
+        syncThreadId: null,
+        environmentId: null,
+        storageFiles: undefined,
+        terminalSessions: undefined,
+      }),
+    );
+    expect(result.current.orderedSecondaryFileTabs).toEqual([]);
+    expect(result.current.pinnedPluginPanelTabIds.size).toBe(0);
   });
 });

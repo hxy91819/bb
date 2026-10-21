@@ -627,6 +627,7 @@ describe("collectPluginAppRegistrations", () => {
     ]);
     expect(registrations.threadPanelActions).toEqual([
       {
+        experimental_pinned: false,
         id: "issue",
         title: "Issue",
         icon: "Columns",

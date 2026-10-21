@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { useThreadTabs } from "@/hooks/queries/thread-tabs-query";
 import type {
   TerminalSession,
   ThreadStorageFileListResponse,
@@ -446,7 +447,63 @@ export function useThreadFileTabs({
     );
   }, [isPanelStateResolved, terminalSessions, updateFixedPanelTabsState]);
 
-  const { fileOpeners } = usePluginSlots();
+  const { fileOpeners, threadPanelActions } = usePluginSlots();
+  const threadTabsQuery = useThreadTabs(syncThreadId ?? "", {
+    enabled: Boolean(syncThreadId),
+  });
+  const pinnedPluginPanelTabs = useMemo(
+    () =>
+      syncThreadId
+        ? threadPanelActions
+            .filter((action) => action.experimental_pinned)
+            .map((action) =>
+              createPluginPanelFixedPanelTab({
+                pluginId: action.pluginId,
+                actionId: action.id,
+                title: action.title,
+                paramsJson: null,
+              }),
+            )
+        : [],
+    [syncThreadId, threadPanelActions],
+  );
+  const pinnedPluginPanelTabIds = useMemo(
+    () => new Set(pinnedPluginPanelTabs.map((tab) => tab.id)),
+    [pinnedPluginPanelTabs],
+  );
+  useEffect(() => {
+    if (
+      !isPanelStateResolved ||
+      pinnedPluginPanelTabs.length === 0 ||
+      threadTabsQuery.data === undefined
+    )
+      return;
+    if (
+      threadTabsQuery.data.revision === 0 &&
+      fixedPanelTabsState.secondary.tabs.length > 0
+    )
+      return;
+    updateFixedPanelTabsState((state) => {
+      const existingIds = new Set(state.secondary.tabs.map((tab) => tab.id));
+      const missing = pinnedPluginPanelTabs.filter(
+        (tab) => !existingIds.has(tab.id),
+      );
+      if (missing.length === 0) return state;
+      const tabs = [...missing, ...state.secondary.tabs];
+      return setSecondaryPanelTabsInState({
+        state,
+        tabs,
+        activeTabId: state.secondary.activeTabId,
+        isOpen: state.secondary.isOpen,
+      });
+    });
+  }, [
+    isPanelStateResolved,
+    pinnedPluginPanelTabs,
+    threadTabsQuery.data,
+    fixedPanelTabsState.secondary.tabs,
+    updateFixedPanelTabsState,
+  ]);
   const fileOpenerPreference = useFileOpenerPreferenceValue();
 
   const openResolvedTab = useCallback(
@@ -535,13 +592,16 @@ export function useThreadFileTabs({
 
   const closeTab = useCallback(
     (tabId: string, options?: { remember: boolean }) => {
+      if (pinnedPluginPanelTabIds.has(tabId)) return false;
       let didCloseLastTab = false;
+      let didCloseTab = false;
       updateFixedPanelTabsState((state) => {
         const tabIndex = state.secondary.tabs.findIndex(
           (tab) => tab.id === tabId,
         );
         const tab = state.secondary.tabs[tabIndex];
         const next = closeSecondaryPanelTabInState(state, tabId);
+        didCloseTab = next !== state;
         didCloseLastTab = next !== state && next.secondary.tabs.length === 0;
         if (
           next !== state &&
@@ -559,8 +619,14 @@ export function useThreadFileTabs({
         return next;
       });
       if (didCloseLastTab) onCloseLastTab?.();
+      return didCloseTab;
     },
-    [onCloseLastTab, recentlyClosedPanelContextKey, updateFixedPanelTabsState],
+    [
+      onCloseLastTab,
+      pinnedPluginPanelTabIds,
+      recentlyClosedPanelContextKey,
+      updateFixedPanelTabsState,
+    ],
   );
 
   const reopenClosedTab = useCallback(
@@ -762,6 +828,7 @@ export function useThreadFileTabs({
     openPluginPanel,
     openTab,
     orderedSecondaryFileTabs,
+    pinnedPluginPanelTabIds,
     reopenClosedTab,
     reorderTab,
     selectFileSearchResult,
