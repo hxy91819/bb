@@ -46,8 +46,8 @@ function ActionButton({
   const ignoreNextClickRef = useRef(false);
   const activate = () => {
     flushSync(() => {
-      action.onSelect(selection);
       window.getSelection()?.removeAllRanges();
+      action.onSelect(selection);
       onDismiss();
     });
   };

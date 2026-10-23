@@ -128,6 +128,44 @@ describe("TimelineSelectionMenu", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves the reply caret placed synchronously by a touch selection action", () => {
+    const composer = document.createElement("div");
+    composer.contentEditable = "true";
+    composer.tabIndex = 0;
+    composer.textContent = "quoted text\n\nreply here";
+    document.body.append(composer);
+    try {
+      render(
+        <TimelineSelectionMenu
+          selection={makeSelection()}
+          onAddToChat={() => {
+            composer.focus();
+            const range = document.createRange();
+            range.selectNodeContents(composer);
+            range.collapse(false);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const action = screen.getByRole("button", { name: "Add to chat" });
+      fireEvent.pointerDown(action, { pointerType: "touch" });
+      fireEvent.pointerUp(action, { pointerType: "touch" });
+
+      const selection = window.getSelection();
+      expect(document.activeElement).toBe(composer);
+      expect(selection?.rangeCount).toBe(1);
+      expect(selection?.isCollapsed).toBe(true);
+      expect(selection?.anchorNode).toBe(composer);
+      expect(selection?.anchorOffset).toBe(composer.childNodes.length);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      composer.remove();
+    }
+  });
+
   it("focuses the composer before a touch add-to-chat action returns", () => {
     function ComposerFocusHandoff() {
       const [selection, setSelection] = useState<MessageProseSelection | null>(
