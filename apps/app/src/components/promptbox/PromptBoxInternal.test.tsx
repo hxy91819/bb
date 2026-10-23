@@ -42,6 +42,7 @@ import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadT
 import { ThreadContextWindowIndicator } from "@/components/thread/timeline/ThreadContextWindowIndicator";
 import {
   EMPTY_ORDERED_MENTION_SUGGESTIONS,
+  appendQuoteToDraftText,
   emptyPromptDraftState,
 } from "@bb/client-core";
 import {
@@ -1685,17 +1686,15 @@ describe("PromptBoxInternal controlled value sync", () => {
     try {
       const promptBoxRef = createRef<PromptBoxHandle>();
       const baseProps = createPromptBoxProps({
-        focusEndKey: 0,
         promptBoxRef,
       });
-      const view = render(<PromptBoxInternal {...baseProps} />);
+      render(<PromptBoxInternal {...baseProps} />);
 
       await waitFor(() => expect(promptBoxRef.current).not.toBeNull());
       const outsideTarget = document.createElement("button");
       document.body.append(outsideTarget);
       outsideTarget.focus();
 
-      view.rerender(<PromptBoxInternal {...baseProps} focusEndKey={1} />);
       promptBoxRef.current?.focusEnd();
 
       expect(document.activeElement).toBe(outsideTarget);
@@ -1850,32 +1849,47 @@ describe("PromptBoxInternal controlled value sync", () => {
     expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
   });
 
-  it("places focus-end insertion below an added quote", async () => {
-    const onChange = vi.fn();
-    const promptBoxRef = createRef<PromptBoxHandle>();
-    const baseProps = createPromptBoxProps({
-      onChange,
-      promptBoxRef,
-      value: "",
-      focusEndKey: 0,
-    });
-    const view = render(<PromptBoxInternal {...baseProps} />);
+  it.each([false, true])(
+    "focuses below an added quote (coarse pointer: %s)",
+    async (isPointerCoarse) => {
+      const restoreMatchMedia = mockPointerCoarse(isPointerCoarse);
+      try {
+        const onChange = vi.fn();
+        const promptBoxRef = createRef<PromptBoxHandle>();
+        const baseProps = createPromptBoxProps({
+          onChange,
+          promptBoxRef,
+          value: "",
+          autoFocus: false,
+          focusEndKey: 0,
+        });
+        const view = render(<PromptBoxInternal {...baseProps} />);
 
-    view.rerender(
-      <PromptBoxInternal
-        {...baseProps}
-        value={"> selected text\n"}
-        focusEndKey={1}
-      />,
-    );
+        view.rerender(
+          <PromptBoxInternal
+            {...baseProps}
+            value={
+              appendQuoteToDraftText(emptyPromptDraftState(), "selected text")
+                .text
+            }
+            focusEndKey={1}
+          />,
+        );
 
-    await waitForPromptFocus();
-    await act(async () => {
-      promptBoxRef.current?.insertTextAtCursor("reply");
-    });
+        await waitForPromptFocus();
+        await act(async () => {
+          promptBoxRef.current?.insertTextAtCursor("reply");
+        });
 
-    expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
-  });
+        expect(onChange).toHaveBeenLastCalledWith(
+          "> selected text\n\nreply",
+          [],
+        );
+      } finally {
+        restoreMatchMedia();
+      }
+    },
+  );
 });
 
 describe("PromptBoxInternal submit shortcuts", () => {

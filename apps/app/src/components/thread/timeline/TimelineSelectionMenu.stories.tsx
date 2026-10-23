@@ -4,7 +4,14 @@ import {
   TimelineSelectionMenu,
   type TimelineSelectionMenuProps,
 } from "./TimelineSelectionMenu";
-import type { MessageProseSelection } from "./SelectableMessageProse";
+import {
+  SelectableMessageProse,
+  type MessageProseSelection,
+} from "./SelectableMessageProse";
+import {
+  StoryDraftPromptBox,
+  useStoryPromptDraft,
+} from "./StoryDraftPromptBox";
 
 export default {
   title: "thread/timeline/SelectionMenu",
@@ -142,5 +149,28 @@ export function Interactive() {
         </div>
       </StoryRow>
     </StoryCard>
+  );
+}
+
+export function ComposerHandoff() {
+  const draft = useStoryPromptDraft();
+  const [selection, setSelection] = useState<MessageProseSelection | null>(
+    null,
+  );
+  return (
+    <div
+      className="mx-auto flex w-full max-w-xl flex-col gap-6 p-4"
+      data-thread-window
+    >
+      <SelectableMessageProse onSelect={setSelection}>
+        <p data-quote-source>Review this selected message before replying.</p>
+      </SelectableMessageProse>
+      <TimelineSelectionMenu
+        selection={selection}
+        onAddToChat={draft.addQuote}
+        onDismiss={() => setSelection(null)}
+      />
+      <StoryDraftPromptBox draft={draft} />
+    </div>
   );
 }
