@@ -1,8 +1,5 @@
-import { useMemo } from "react";
 import { matchPath, useLocation } from "react-router-dom";
-import { useHostDaemon, useLocalHostDaemonAccess } from "@/hooks/useHostDaemon";
-import type { LocalHostDaemonAccessState } from "@/lib/local-host-daemon-access";
-import { usePluginSlots, type PluginFileOpenerSlot } from "@/lib/plugin-slots";
+import { usePluginSlots } from "@/lib/plugin-slots";
 import { usePluginList } from "@/hooks/queries/plugin-settings-queries";
 import {
   SETTINGS_MACHINE_ROUTE_PATH,
@@ -27,24 +24,6 @@ export interface SettingsNavState {
   activePluginId: string | null;
   pluginEntries: readonly PluginSettingsEntry[];
   sections: readonly SettingsNavSection[];
-}
-
-export function filterSettingsNavSections({
-  hasDaemon,
-  accessState,
-  fileOpenerCount,
-}: {
-  hasDaemon: boolean;
-  accessState: LocalHostDaemonAccessState;
-  fileOpenerCount: number;
-}): readonly SettingsNavSection[] {
-  return SETTINGS_NAV_SECTIONS.filter(
-    (section) =>
-      section.id !== "files" ||
-      hasDaemon ||
-      accessState !== "unavailable" ||
-      fileOpenerCount > 0,
-  );
 }
 
 export function resolveSettingsRoute({
@@ -86,27 +65,14 @@ export function resolveSettingsRoute({
   return { activePluginId, activeSection, hasUnknownSection };
 }
 
-export function useSettingsNavSections(
-  fileOpeners: readonly PluginFileOpenerSlot[],
-): readonly SettingsNavSection[] {
-  const { hasDaemon } = useHostDaemon();
-  const { accessState } = useLocalHostDaemonAccess();
-
-  return useMemo(
-    () =>
-      filterSettingsNavSections({
-        hasDaemon,
-        accessState,
-        fileOpenerCount: fileOpeners.length,
-      }),
-    [accessState, fileOpeners.length, hasDaemon],
-  );
+export function useSettingsNavSections(): readonly SettingsNavSection[] {
+  return SETTINGS_NAV_SECTIONS;
 }
 
 export function useSettingsNavState(): SettingsNavState {
   const location = useLocation();
-  const { fileOpeners, settingsSections } = usePluginSlots();
-  const sections = useSettingsNavSections(fileOpeners);
+  const { settingsSections } = usePluginSlots();
+  const sections = useSettingsNavSections();
   const pluginListQuery = usePluginList({ enabled: true });
 
   const { activePluginId, activeSection, hasUnknownSection } =
