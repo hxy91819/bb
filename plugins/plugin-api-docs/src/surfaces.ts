@@ -408,6 +408,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Show plugin content alongside the conversation",
           "Know which thread it was opened from",
           "Open from a [message action](message-actions), the side panel's + button, or plugin code",
+          "Keep a default tab always available beside the conversation",
         ],
         apiSymbols: [
           "PluginThreadPanelActionRegistration",
