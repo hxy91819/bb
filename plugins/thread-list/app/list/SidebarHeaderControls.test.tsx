@@ -4,7 +4,6 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -12,7 +11,11 @@ import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CompactViewportOverrideProvider } from "@/components/ui/hooks/use-compact-viewport";
-import { installTestPluginRuntime } from "@get-bb/plugin-sdk/testing/app";
+import type { ReactNode } from "react";
+import {
+  installTestPluginRuntime,
+  renderSlot,
+} from "@get-bb/plugin-sdk/testing/app";
 import { SIDEBAR_CONTROL_STATE_CLASS } from "@/components/ui/sidebar-row-classes";
 import {
   sidebarThreadLifecyclesAtom,
@@ -35,6 +38,10 @@ afterEach(() => {
   cleanup();
 });
 
+function renderInApp(ui: ReactNode) {
+  return renderSlot({ component: () => <>{ui}</> }, {});
+}
+
 function setup(
   label = "Pinned",
   section = false,
@@ -50,7 +57,7 @@ function setup(
   store.set(sidebarShowProviderIconsAtom, false);
   const newThread = vi.fn();
   const newSection = vi.fn();
-  render(
+  renderInApp(
     <Provider store={store}>
       <CompactViewportOverrideProvider isCompactViewport={compact}>
         <TooltipProvider>
@@ -171,7 +178,14 @@ describe("sidebar header controls", () => {
     await openMenu("Review");
     expect(
       screen.getAllByRole("menuitem").map((item) => item.textContent),
-    ).toEqual(["New section", "Organize", "Sort by", "Filter", "Rename", "Remove"]);
+    ).toEqual([
+      "New section",
+      "Organize",
+      "Sort by",
+      "Filter",
+      "Rename",
+      "Remove",
+    ]);
     expect(screen.getAllByRole("separator")).toHaveLength(3);
     fireEvent.click(screen.getByRole("menuitem", { name: "New section" }));
     expect(newSection).toHaveBeenCalledOnce();
@@ -184,7 +198,7 @@ describe("sidebar header controls", () => {
 
   it("disables New section without a creation handler", async () => {
     const store = createStore();
-    render(
+    renderInApp(
       <Provider store={store}>
         <TooltipProvider>
           <SidebarHeaderControls label="Pinned" onNewThread={vi.fn()} />
@@ -353,7 +367,9 @@ it.each([false, true])(
   async (compact) => {
     const { store } = setup("Pinned", false, "project", compact);
     if (compact) {
-      fireEvent.click(screen.getByRole("button", { name: /^Pinned actions(?:;|$)/ }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /^Pinned actions(?:;|$)/ }),
+      );
       fireEvent.click(await screen.findByRole("menuitem", { name: "Filter" }));
     } else {
       await openMenu();

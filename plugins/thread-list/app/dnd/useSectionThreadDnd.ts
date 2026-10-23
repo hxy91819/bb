@@ -157,7 +157,7 @@ export type SectionThreadDropDecision =
       kind: "rejected";
       activeId: string;
       overThreadId: string;
-      reason: "own-subtree" | "already-child";
+      reason: "own-subtree" | "already-child" | "read-only-group";
     }
   | { kind: "unchanged"; activeId: string; toParentKey: string };
 
@@ -207,7 +207,8 @@ function parseGroupSectionId(key: string): SidebarSectionId {
   if (
     key.startsWith("project:") ||
     key.startsWith("section:") ||
-    key.startsWith("machine:")
+    key.startsWith("machine:") ||
+    key.startsWith("contribution:")
   ) {
     return key as SidebarSectionId;
   }
@@ -643,6 +644,26 @@ export function resolveSectionThreadDropDecision(
   const toParentKey =
     directParentKey ?? (isSelfCollision ? projectedParentKey : null);
   if (!toParentKey) return null;
+  if (
+    toParentKey.startsWith("contribution:") &&
+    fromParentKey !== toParentKey &&
+    fromParentKey !== PINNED_THREAD_PARENT_KEY
+  ) {
+    return {
+      kind: "rejected",
+      activeId,
+      overThreadId: overId ?? toParentKey,
+      reason: "read-only-group",
+    };
+  }
+  if (toParentKey.startsWith("contribution:") && overId === toParentKey) {
+    return {
+      kind: "rejected",
+      activeId,
+      overThreadId: toParentKey,
+      reason: "read-only-group",
+    };
+  }
   const projectId = lookup.projectIdByParentKey.get(toParentKey);
   if (
     projectId !== undefined &&
@@ -778,7 +799,7 @@ function resolveRowDropState(
   if (decision?.kind === "rejected") {
     return {
       threadId: decision.overThreadId,
-      state: decision.reason === "own-subtree" ? "blocked" : "unchanged",
+      state: decision.reason === "already-child" ? "unchanged" : "blocked",
     };
   }
   return null;
@@ -1081,9 +1102,7 @@ export function useSectionThreadDnd({
       const nestedCollisions = allowedCollisions.filter(({ id }) =>
         typeof id === "string" ? !topLevelSectionIds.has(id) : true,
       );
-      return nestedCollisions.length > 0
-        ? nestedCollisions
-        : allowedCollisions;
+      return nestedCollisions.length > 0 ? nestedCollisions : allowedCollisions;
     },
     [
       getNestBandFraction,
@@ -1114,9 +1133,7 @@ export function useSectionThreadDnd({
     useState<SectionThreadReorderTarget | null>(null);
   const [pendingDropDecision, setPendingDropDecision] =
     useState<SectionThreadDropDecision | null>(null);
-  const pendingDropDecisionRef = useRef<SectionThreadDropDecision | null>(
-    null,
-  );
+  const pendingDropDecisionRef = useRef<SectionThreadDropDecision | null>(null);
   const draggingThreadRef = useRef(false);
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dwellTargetKeyRef = useRef<string | null>(null);
