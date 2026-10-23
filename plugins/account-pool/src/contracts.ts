@@ -278,7 +278,12 @@ export const accountAddInputSchema = z
   .object({
     provider: providerSchema,
     source: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("import") }).strict(),
+      z
+        .object({
+          kind: z.literal("import"),
+          authFile: z.string().trim().min(1).nullable().default(null),
+        })
+        .strict(),
       z
         .object({ kind: z.literal("api-key"), apiKey: z.string().min(1) })
         .strict(),
@@ -286,7 +291,17 @@ export const accountAddInputSchema = z
     label: z.string().min(1).nullable(),
     priority: z.number().int(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (input) =>
+      input.provider === "codex" ||
+      input.source.kind !== "import" ||
+      input.source.authFile === null,
+    {
+      message: "--auth-file requires --provider codex.",
+      path: ["source", "authFile"],
+    },
+  );
 
 export type AccountAddInput = z.infer<typeof accountAddInputSchema>;
 
