@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  type MouseEvent,
-  type PointerEvent,
-} from "react";
+import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
@@ -139,7 +133,6 @@ function ActionButton({
   onDismiss: () => void;
   selection: MessageProseSelection;
 }) {
-  const ignoreNextClickRef = useRef(false);
   const activate = () => {
     flushSync(() => {
       window.getSelection()?.removeAllRanges();
@@ -147,32 +140,15 @@ function ActionButton({
       onDismiss();
     });
   };
-  const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType === "mouse") return;
-    event.preventDefault();
-    ignoreNextClickRef.current = true;
-  };
-  const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType === "mouse" || !ignoreNextClickRef.current) return;
-    activate();
-  };
   return (
     <button
       type="button"
       className={SELECTION_ACTION_BUTTON_CLASS}
       onMouseDown={(event: MouseEvent) => preventOverlayTriggerSelection(event)}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
-        ignoreNextClickRef.current = false;
+      onPointerDown={(event) => {
+        if (event.pointerType !== "mouse") event.preventDefault();
       }}
-      onClick={() => {
-        if (ignoreNextClickRef.current) {
-          ignoreNextClickRef.current = false;
-          return;
-        }
-        activate();
-      }}
+      onClick={activate}
     >
       {action.plugin ? (
         action.plugin.pluginId === null ? (
