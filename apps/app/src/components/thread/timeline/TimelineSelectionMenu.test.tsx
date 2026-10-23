@@ -107,7 +107,7 @@ describe("TimelineSelectionMenu", () => {
     expect(document.body.querySelector('[data-side="top"]')).toBeTruthy();
   });
 
-  it("activates a touch action on pointer-up without waiting for click", () => {
+  it("keeps the touch action mounted until click to avoid a retargeted Safari tap", () => {
     const onAddToChat = vi.fn();
     const onDismiss = vi.fn();
     render(
@@ -121,6 +121,8 @@ describe("TimelineSelectionMenu", () => {
     const button = screen.getByRole("button", { name: "Add to chat" });
     fireEvent.pointerDown(button, { pointerType: "touch" });
     fireEvent.pointerUp(button, { pointerType: "touch" });
+    expect(onAddToChat).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
     fireEvent.click(button);
 
     expect(onAddToChat).toHaveBeenCalledTimes(1);
@@ -153,6 +155,7 @@ describe("TimelineSelectionMenu", () => {
       const action = screen.getByRole("button", { name: "Add to chat" });
       fireEvent.pointerDown(action, { pointerType: "touch" });
       fireEvent.pointerUp(action, { pointerType: "touch" });
+      fireEvent.click(action);
 
       const selection = window.getSelection();
       expect(document.activeElement).toBe(composer);
@@ -197,10 +200,11 @@ describe("TimelineSelectionMenu", () => {
     const recordFocus = () => {
       focusedWhenGestureEnded = document.activeElement;
     };
-    document.addEventListener("pointerup", recordFocus);
+    document.addEventListener("click", recordFocus);
     fireEvent.pointerDown(action, { pointerType: "touch" });
     fireEvent.pointerUp(action, { pointerType: "touch" });
-    document.removeEventListener("pointerup", recordFocus);
+    fireEvent.click(action);
+    document.removeEventListener("click", recordFocus);
 
     expect(focusedWhenGestureEnded).toBe(
       screen.getByRole("textbox", { name: "Chat composer" }),
