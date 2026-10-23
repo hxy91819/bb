@@ -1,3 +1,5 @@
+import type { ExperimentalPluginThreadActivityArgs } from "./backend-contract.js";
+import type { ExperimentalThreadActivityResult } from "@bb/sdk";
 import type {
   ComponentPropsWithRef,
   ComponentPropsWithoutRef,
@@ -1516,7 +1518,11 @@ export type PluginBoundThreadsArea = Omit<
   | "getPluginMetadata"
   | "updatePluginMetadata"
   | "experimental_listPluginMetadata"
+  | "experimental_activity"
 > & {
+  experimental_activity(
+    args: ExperimentalPluginThreadActivityArgs,
+  ): Promise<ExperimentalThreadActivityResult>;
   getPluginMetadata(
     args: Omit<ThreadPluginMetadataArgs, "pluginId"> & { pluginId?: string },
   ): Promise<ThreadPluginMetadataResult>;
