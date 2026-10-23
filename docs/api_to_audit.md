@@ -3094,3 +3094,47 @@ directories, linked worktrees, and submodules. Core callers: the setup guide
 Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
+
+`@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
+CIM on Windows) or null. bb's launcher uses the same probe to confirm a
+recorded PID before stopping it. Storage & retention checks a development
+instance's recorded launcher entry path and start time before signalling
+it, so a reused PID is never killed. Confirm start-time precision per
+platform and whether a combined verified-stop helper should replace it.
+
+## Thread creation context
+
+`PluginAppBuilder.experimental_threadCreationContext` and
+`experimental_AppThreadCreationContext` / `experimental_AppThreadCreationContextRegistration`
+capture one synchronous client-local JSON contribution per plugin generation.
+`BbPluginApi.experimental_threadCreationContext`, `experimental_ThreadCreationContext`,
+`experimental_ThreadCreationDescriptor` and `experimental_ThreadCreationPrepareArgs`
+validate and asynchronously prepare only that plugin's initial metadata, including
+absent-context inheritance chosen by the plugin. Create/fork SDK requests and
+`NewThreadRequest.experimental_pluginContext` carry a namespace map independent of
+origin. Explicit maps, including `{}`, suppress frontend capture, not backend handlers.
+Legacy seed keys may not overlap prepared keys. All namespaces commit with the
+thread, and disposed generations cannot commit late results. Preparation must not
+perform persistent side effects. This does not change daemon wire or core tables.
+
+Core uses the same request preparation for NewThreadComposer, useCreateThread,
+message forks before their first await, provider handoff, and plugin-bound browser
+spawn/fork. PluginNewThreadComposer forwards the captured request. Server create,
+fork and backend SDK creation share the same preparation and immediate DB transaction.
+Existing-thread start, delayed dispatch and retries do not recapture or prepare.
+CLI spawn/fork accept `--experimental-plugin-context`; no browser identity is inferred.
+Unknown creation responses are not replayed or deduplicated.
+
+The frontend test surface adds `experimental_createThreadCreationContextHost`,
+`experimental_ThreadCreationContextHost` and
+`RenderSlotOptions.experimental_threadCreationContextHost` for independent clients
+and managed registration lifetimes; backend fake hosts expose the same registration
+contract and preparation driver.
+
+Before stabilization, verify independent-client snapshots, all native/plugin
+entrances and RPC forwarding, strict JSON and UTF-8 limits, legacy compatibility,
+parent/source separation, concurrent preparation, timeout/disposal fences, second
+namespace rollback and postcommit notification visibility. Exercise delayed dispatch,
+provider retry and unknown response recovery, and validate web, desktop and mobile
+WebView behavior with independent third-party consumers. No list or activity surface
+is introduced by this creation-only interface.

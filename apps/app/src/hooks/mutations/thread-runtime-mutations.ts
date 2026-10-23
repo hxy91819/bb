@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+import { withThreadCreationContext } from "@/lib/thread-creation-context";
 import { notifyComposerSubmitted } from "@/lib/composer-submissions";
 import {
   mutationOptions,
@@ -167,8 +169,23 @@ export function createThreadMutationOptions(queryClient: QueryClient) {
 
 export function useCreateThread() {
   const queryClient = useQueryClient();
-  return useMutation(createThreadMutationOptions(queryClient));
+  const mutation = useMutation(createThreadMutationOptions(queryClient));
+  const { mutate: submit, mutateAsync: submitAsync } = mutation;
+  const mutate = useCallback(
+    (request: AppCreateThreadRequest, options?: Parameters<typeof submit>[1]) =>
+      submit(withThreadCreationContext(request), options),
+    [submit],
+  );
+  const mutateAsync = useCallback(
+    async (
+      request: AppCreateThreadRequest,
+      options?: Parameters<typeof submitAsync>[1],
+    ) => submitAsync(withThreadCreationContext(request), options),
+    [submitAsync],
+  );
+  return { ...mutation, mutate, mutateAsync };
 }
+
 
 export function sendThreadMessageMutationOptions(queryClient: QueryClient) {
   return mutationOptions({

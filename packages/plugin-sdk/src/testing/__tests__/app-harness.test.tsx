@@ -14,10 +14,192 @@ import type {
 import {
   installTestPluginRuntime,
   loadPluginApp,
+  experimental_createThreadCreationContextHost,
   mountPluginContentScripts,
   renderSlot,
 } from "../app.js";
 import { defineRpcContract } from "../../rpc-contract.js";
+import { makeThreadResponse } from "../index.js";
+
+describe("thread creation context clients", () => {
+  it("passes a composer snapshot through a plugin SDK spawn without recapturing", async () => {
+    const host = experimental_createThreadCreationContextHost();
+    let selected = "A";
+    const capture = vi.fn(() => ({ memberId: selected }));
+    const { experimental_NewThreadComposer: Composer } =
+      await import("../../app.js");
+    function Panel() {
+      const sdk = useSdk();
+      const [created, setCreated] = useState("");
+      return (
+        <>
+          <Composer
+            initialPrompt="work"
+            onSubmit={async (request) => {
+              selected = "B";
+              const thread = await sdk.threads.spawn(request);
+              setCreated(thread.id);
+            }}
+          />
+          <output>{created}</output>
+        </>
+      );
+    }
+    const app = await loadPluginApp(
+      definePluginApp((builder) => {
+        builder.experimental_threadCreationContext.register({ capture });
+        builder.slots.navPanel({
+          id: "create",
+          title: "Create",
+          icon: "Plus",
+          path: "create",
+          component: Panel,
+        });
+      }),
+    );
+    host.mount("team", app);
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      {
+        experimental_threadCreationContextHost: host,
+        sdk: {
+          threads: {
+            spawn: async (request) =>
+              makeThreadResponse({
+                id: JSON.stringify(request.experimental_pluginContext),
+              }),
+          },
+        },
+      },
+    );
+    fireEvent.click(slot.getByRole("button", { name: "Start thread" }));
+    await slot.findByText('{"team":{"memberId":"A"}}');
+    expect(capture).toHaveBeenCalledTimes(1);
+    fireEvent.click(slot.getByRole("button", { name: "Start thread" }));
+    await slot.findByText('{"team":{"memberId":"B"}}');
+    expect(capture).toHaveBeenCalledTimes(2);
+    slot.lifecycle.unmount();
+    host.dispose();
+  });
+
+  it("isolates windows, snapshots selection, and honors explicit requests and lifecycle", async () => {
+    const first = experimental_createThreadCreationContextHost();
+    const second = experimental_createThreadCreationContextHost();
+    let selected = "A";
+    let unregister = () => {};
+    const app = await loadPluginApp({
+      __bbPluginApp: true,
+      setup(builder) {
+        unregister = builder.experimental_threadCreationContext.register({
+          capture: () => ({ memberId: selected }),
+        });
+      },
+    });
+    const stop = first.mount("team", app);
+    second.mount(
+      "team",
+      await loadPluginApp({
+        __bbPluginApp: true,
+        setup(builder) {
+          builder.experimental_threadCreationContext.register({
+            capture: () => ({ memberId: "B" }),
+          });
+        },
+      }),
+    );
+    const request = first.prepare({ prompt: "work" });
+    selected = "C";
+    expect(request.experimental_pluginContext).toEqual({
+      team: { memberId: "A" },
+    });
+    expect(
+      first.prepare({
+        experimental_pluginContext: request.experimental_pluginContext,
+      }).experimental_pluginContext,
+    ).toEqual({ team: { memberId: "A" } });
+    expect(first.capture()).toEqual({ team: { memberId: "C" } });
+    expect(second.capture()).toEqual({ team: { memberId: "B" } });
+    expect(
+      first.prepare({ experimental_pluginContext: {} })
+        .experimental_pluginContext,
+    ).toEqual({});
+    unregister();
+    expect(first.capture()).toEqual({});
+    const replacement = await loadPluginApp({
+      __bbPluginApp: true,
+      setup(builder) {
+        builder.experimental_threadCreationContext.register({
+          capture: () => "replacement",
+        });
+      },
+    });
+    const stopReplacement = first.mount("team", replacement);
+    stop();
+    expect(first.capture()).toEqual({ team: "replacement" });
+    stopReplacement();
+    expect(first.capture()).toEqual({});
+    second.dispose();
+    expect(second.capture()).toEqual({});
+  });
+
+  it("rejects duplicate collectors and invalid or oversized captures", async () => {
+    await expect(
+      loadPluginApp({
+        __bbPluginApp: true,
+        setup(builder) {
+          builder.experimental_threadCreationContext.register({
+            capture: () => null,
+          });
+          builder.experimental_threadCreationContext.register({
+            capture: () => null,
+          });
+        },
+      }),
+    ).rejects.toThrow("duplicate registration");
+    const host = experimental_createThreadCreationContextHost();
+    for (const value of [
+      NaN,
+      { invalid: undefined },
+      new Date(),
+      Promise.resolve("identity"),
+      "x".repeat(256 * 1024),
+    ]) {
+      host.mount(
+        "team",
+        await loadPluginApp({
+          __bbPluginApp: true,
+          setup(builder) {
+            builder.experimental_threadCreationContext.register({
+              capture: () => value as never,
+            });
+          },
+        }),
+      );
+      expect(() => host.capture()).toThrow();
+    }
+    host.dispose();
+  });
+
+  it("fails a capture when its plugin generation is removed during capture", async () => {
+    const host = experimental_createThreadCreationContextHost();
+    let stop = () => {};
+    const app = await loadPluginApp({
+      __bbPluginApp: true,
+      setup(builder) {
+        builder.experimental_threadCreationContext.register({
+          capture: () => {
+            stop();
+            return "A";
+          },
+        });
+      },
+    });
+    stop = host.mount("team", app);
+    expect(() => host.capture()).toThrow("plugin_context_changed");
+    expect(host.capture()).toEqual({});
+  });
+});
 
 installTestPluginRuntime();
 const {
