@@ -24,6 +24,7 @@ export interface ThreadCreateServiceRequestInput {
   sendAt?: CreateThreadRequest["sendAt"];
   input: PromptInput[];
   pluginMetadata?: CreateThreadRequest["pluginMetadata"];
+  experimental_pluginContext?: CreateThreadRequest["experimental_pluginContext"];
   pluginSubmission?: CreateThreadRequest["pluginSubmission"];
   sectionId?: CreateThreadRequest["sectionId"];
   pinned?: CreateThreadRequest["pinned"];
@@ -51,7 +52,7 @@ export interface ThreadCreateServiceRequest extends Omit<
   "environment" | "pluginMetadata" | "providerId"
 > {
   environment: EnvironmentArgs | ProviderEnvironmentArgs;
-  pluginMetadata: { pluginId: string; metadata: JsonObject } | null;
+  pluginMetadata: Array<{ pluginId: string; metadata: JsonObject }>;
   providerId: string;
   titleFallback: string | null;
   visibility: ThreadVisibility;

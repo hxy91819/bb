@@ -1930,6 +1930,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
   ): Promise<void> {
     disposingPluginIds.add(id);
     try {
+      plugin.handle.abortThreadCreationContext();
       plugin.handle.closeWebSockets();
       const hostArtifact = hostArtifacts.get(id);
       if (hostArtifact !== undefined && deps.disposePluginHost) {
