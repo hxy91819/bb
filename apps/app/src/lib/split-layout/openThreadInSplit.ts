@@ -17,7 +17,7 @@ interface SplitLayoutStore {
   set(atom: typeof splitLayoutAtom, value: SplitLayout): void;
 }
 
-interface OpenThreadInSplitArgs {
+export interface OpenThreadInSplitArgs {
   store: SplitLayoutStore;
   navigate: (
     route: string,
@@ -27,6 +27,7 @@ interface OpenThreadInSplitArgs {
   threadId: string;
   isCompact: boolean;
   state?: Record<string, unknown>;
+  hash?: string;
 }
 
 export function openThreadInSplit({
@@ -36,8 +37,12 @@ export function openThreadInSplit({
   threadId,
   isCompact,
   state,
+  hash,
 }: OpenThreadInSplitArgs): void {
-  const route = getThreadRoutePath({ projectId, threadId });
+  const basePath = getThreadRoutePath({ projectId, threadId });
+  const route = hash
+    ? `${basePath}${hash.startsWith("#") ? "" : "#"}${hash}`
+    : basePath;
   const layout = store.get(splitLayoutAtom);
   if (isCompact || layout === null) {
     navigate(route, state === undefined ? undefined : { state });
