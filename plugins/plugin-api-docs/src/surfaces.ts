@@ -133,7 +133,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Group, sort, and draw every row your own way",
           "Read live threads, sections, projects, run status, and pull-request checks",
           "Use optimistic SDK writes and bb's actions to move, pin, rename, restore, archive, and split threads",
-          "Keep bb's New thread button, search, and footer around it",
+          "Keep bb's New thread, search, and footer; new threads inherit the current, last, or recent project",
         ],
         apiSymbols: [
           "PluginThreadListRegistration",
