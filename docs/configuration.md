@@ -1165,3 +1165,5 @@ App production builds cache React Compiler output at
 deleted while no build runs.
 
 Thread-list plugins may contribute grouping and row decoration through `experimental_useThreadListContributions` and `experimental_useThreadRowDecorations`. Select contribution groups in the sidebar display options; core grouping remains available. The Plugin Guide owns the API reference.
+
+Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.

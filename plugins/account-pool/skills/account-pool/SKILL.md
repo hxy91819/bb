@@ -21,3 +21,12 @@ Pooled rate-limit failures can be retried by Provider Retry using the pool’s
 earliest usable account, even if the provider omits structured quota events.
 Inspect `bb provider-retry explain <thread-id> --json` for the last decision
 and `bb provider-retry status <thread-id> --json` for pending retries.
+
+For titles and commit messages without a local Codex login, Codex routing also
+provides the `codex-pool` AI service. Inspect it with
+`bb settings ai-services show --json` and test with
+`bb settings ai-services test thread-title --json`. Automatic tries bb cloud,
+then Account Pooler (Codex), then local Codex. To pin a task, use
+`bb settings ai-services set <thread-title|commit-message> codex-pool`.
+Turning Codex routing off makes the pool service unavailable. It does not
+provide voice transcription.
