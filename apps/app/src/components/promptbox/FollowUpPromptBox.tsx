@@ -561,6 +561,21 @@ function FollowUpPromptBoxWithComposer({
       setInteractionExpanded,
     ],
   );
+  const lastFocusEndKeyRef = useRef(focusEndKey);
+  useLayoutEffect(() => {
+    if (focusEndKey === undefined) return;
+    if (focusEndKey === lastFocusEndKeyRef.current) return;
+    lastFocusEndKeyRef.current = focusEndKey;
+    cancelPendingFocusExpansion();
+    cancelPendingFocusLoss();
+    setWidePromptBoxCollapsedFor(null);
+    setInteractionExpanded(true);
+  }, [
+    cancelPendingFocusExpansion,
+    cancelPendingFocusLoss,
+    focusEndKey,
+    setInteractionExpanded,
+  ]);
   const collapseWidePromptBox = useCallback(() => {
     cancelPendingFocusExpansion();
     cancelPendingFocusLoss();
