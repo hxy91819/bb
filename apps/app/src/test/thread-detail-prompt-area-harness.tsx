@@ -567,16 +567,18 @@ vi.mock("@/hooks/useCommandSuggestions", () => ({
   useCommandSuggestions: ({
     providerId,
     commandScope,
+    panelCommands,
   }: {
     providerId: string;
     commandScope: string;
+    panelCommands?: readonly { name: string }[];
   }) => ({
     hasMore: false,
     isError: false,
     isLoading: false,
     isLoadingMore: false,
     loadMore: vi.fn(),
-    suggestions: [{ name: `${providerId}:${commandScope}` }],
+    suggestions: [{ name: `${providerId}:${commandScope}` }, ...(panelCommands ?? []).map(({ name }) => ({ name }))],
     triggers: [],
   }),
 }));
