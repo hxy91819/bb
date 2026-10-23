@@ -43,3 +43,4 @@ feature/codex-home-bindings                   needs-feedback                    
 fix/dependency-security-refresh               internal                                                   # 依赖漏洞 overrides/lockfile 刷新；无 major 升级；已按稳定基线重建为独立分支
 fix/test-edit-hold-isolation                  internal                                                   # 测试隔离与负载余量：队列编辑保持请求打桩、npm/wrangler 缓存目录透传、文档编译超时放宽
 feature/plugin-pinned-thread-panels           needs-feedback                                             # 插件可声明常驻会话右侧标签，复用原有打开、持久化与关闭路径
+fix/child-question-notifications             needs-feedback                                             # 插件异步提问接入父线程求助通知，提供表单回答入口与 Codex 回传格式
