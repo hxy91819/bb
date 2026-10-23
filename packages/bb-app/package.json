@@ -68,7 +68,7 @@
     "smoke:boot": "node scripts/smoke-boot.mjs",
     "smoke:tarball": "node scripts/smoke-tarball.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "node --test ../../scripts/repair-npm-bundled-dependencies.test.mjs && vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@parcel/watcher": "2.5.6",
