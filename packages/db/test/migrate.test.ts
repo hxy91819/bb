@@ -1787,6 +1787,7 @@ describe("migrate", () => {
         showDiagnosticEvents: true,
         keepHistoryAfterContextClear: false,
         providerOrder: [],
+        hiddenProviders: [],
         defaultProviderId: null,
         providerCompletedTurnDisplay: {},
         machineServerUrl: null,
