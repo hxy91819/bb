@@ -16,6 +16,7 @@ import {
   seedProjectWithSource,
   seedSession,
   seedThread,
+  seedThreadRuntimeState,
   seedTurnStarted,
 } from "../helpers/seed.js";
 import {
@@ -31,6 +32,7 @@ import {
 } from "../helpers/pending-interactions.js";
 import { advanceUntilSettled } from "../helpers/fake-timers.js";
 import { withTestHarness } from "../helpers/test-app.js";
+import { waitForQueuedCommand } from "../helpers/commands.js";
 import {
   SERVER_MOVE_FROZEN_RETRY_MS,
   setServerMoveFrozen,
@@ -132,6 +134,62 @@ describe("pending interaction lifecycle", () => {
       }
     });
   });
+
+  it.each(["fork", "answered", "cancelled"] as const)(
+    "does not wake the parent for a %s plugin form",
+    async (caseName) => {
+      await withTestHarness(async (harness) => {
+        const parent = seedPluginInteractionThread(harness.deps, caseName);
+        if (!parent.environmentId) throw new Error("Expected environment");
+        seedThreadRuntimeState(harness.deps, {
+          environmentId: parent.environmentId,
+          inputText: "Coordinate the task",
+          providerThreadId: `provider-parent-${caseName}`,
+          threadId: parent.id,
+        });
+        const child = seedThread(harness.deps, {
+          environmentId: parent.environmentId,
+          projectId: parent.projectId,
+          parentThreadId: parent.id,
+          originKind: caseName === "fork" ? "fork" : null,
+        });
+        const controller = new AbortController();
+        try {
+          const pending = requestPluginInteraction(harness.deps, {
+            threadId: child.id,
+            signal: controller.signal,
+          });
+          const [interaction] =
+            harness.deps.pendingInteractions.listPendingThreadInteractions(
+              child.id,
+            );
+          if (!interaction) throw new Error("Expected form");
+          if (caseName === "answered") {
+            await harness.deps.pendingInteractions.respondToInteraction({
+              threadId: child.id,
+              interactionId: interaction.id,
+              value: { values: { API_KEY: "test-value" } },
+            });
+          } else if (caseName === "cancelled") {
+            controller.abort();
+          }
+          await expect(
+            waitForQueuedCommand(
+              harness,
+              ({ command }) =>
+                command.type === "turn.submit" &&
+                command.threadId === parent.id,
+              100,
+            ),
+          ).rejects.toThrow("Timed out waiting for queued command");
+          controller.abort();
+          await pending;
+        } finally {
+          controller.abort();
+        }
+      });
+    },
+  );
 
   it("holds a plugin interaction timeout while the server is moving", async () => {
     await withTestHarness(async (harness) => {
