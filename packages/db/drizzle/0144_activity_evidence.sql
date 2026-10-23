@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS `events_thread_created_sequence_idx` ON `events` (`thread_id`,`created_at`,`sequence`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `thread_plugin_metadata_plugin_thread_idx` ON `thread_plugin_metadata` (`plugin_id`,`thread_id`);
