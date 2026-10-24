@@ -338,6 +338,10 @@ Host files and voice transcription
 bb file read|write|list|paths|mkdir|move|remove ...
 bb voice transcribe <audio-file> [--type <mime>] [--prompt <context>]
 --type defaults to audio/webm
+  bb file read|write|list|paths|mkdir|move|remove ...
+  bb file vscode-url /absolute/remote/path --ssh-host devbox [--file --line 12 --column 3]
+  bb voice transcribe <audio-file> [--type <mime>] [--prompt <context>]
+                                   --type defaults to audio/webm
 
 `bb file` supports `--host` for remote machines and `--root` on mutating
 commands to confine access beneath an absolute directory. `bb file write`
@@ -416,3 +420,4 @@ metadata is preserved. This is a desktop-local preference, with no server
 settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
+Settings → Files maps BB machines to local SSH config Host aliases for VS Code Remote-SSH. These mappings belong to this browser and BB origin; no local helper is required.
