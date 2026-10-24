@@ -1617,7 +1617,7 @@ async function getModelListConnection(
   })();
   entry.promise = connectionPromise;
   try {
-    return await pending.promise;
+    return await connectionPromise;
   } finally {
     if (entry.promise === connectionPromise) {
       entry.promise = null;
