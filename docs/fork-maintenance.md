@@ -110,6 +110,12 @@ scripts/fork-aggregate --promote            # 重新聚合并提升到 main；�
 - 同一对分支反复出现非平凡冲突时，把后者 rebase 到前者上（叠放），更新清单顺序和说明。
 - 叠放分支 rebase 时从栈底开始，用 `git rebase --update-refs` 让上层分支一起移动。
 
+### 每日自动检查与汇报
+
+`scripts/daily-fork-sync.sh <project-id> <checkout-path>` 供本机 cron 调用，调度信息保留在本机，不写进脚本。脚本检查稳定 tag 后创建 BB 线程：有更新时沿用聚合、验证、发布与已授权的本机部署流程，并在遇到冲突时继续解决；无更新时仅汇报。
+
+每日线程最终用简体中文报告相对更新前版本的新增功能、修复问题、测试结果、Release 与本机安装状态。上游变化核对稳定 tag 范围，fork 变化核对更新前实际运行包的 source；切换服务前保存比较起点和汇报上下文，恢复后继续交付。没有变化、未测试、未生效或失败均明确说明。
+
 ### 纳入上游新版本
 
 1. 把 `.fork/branches` 的 `base` 改成新的 `desktop-v*` tag（或先用 `scripts/fork-aggregate --base <tag>` 试跑）。
