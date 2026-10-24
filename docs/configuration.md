@@ -201,6 +201,8 @@ configuration.
 
 ## General settings
 
+`hiddenProviders` is a global list of provider IDs hidden from new-thread pickers. Set it with `bb settings general hiddenProviders '["provider-id"]'`. Existing threads keep their provider and may still select hidden providers; new-thread defaults fall back to a visible provider.
+
 Server-wide preferences, stored in the bb database and applied live to every
 client. Set them in Settings, with `bb settings general <key> <value>`, or with
 SDK `system.updateGeneralSettings`, which takes the full settings object (read
