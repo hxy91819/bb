@@ -549,6 +549,7 @@ describe("createAgentRuntime command contracts", () => {
         params: {
           threadId: "t-archived-resume",
           providerThreadId: "prov-archived-resume",
+          providerOptions: { scripted: { archivedSession: true } },
         },
       });
       expect(
@@ -581,6 +582,7 @@ describe("createAgentRuntime command contracts", () => {
         params: {
           threadId: "t-unarchive-fails",
           providerThreadId: "prov-unarchive-fails",
+          providerOptions: { scripted: { archivedSession: true } },
         },
       });
       expect(
