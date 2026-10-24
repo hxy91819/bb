@@ -1234,12 +1234,7 @@ App production builds cache React Compiler output at
 `<git-common-dir>/bb-cache/react-compiler`; it has no configuration and can be
 deleted while no build runs.
 
-Desktop Settings → Server → **Show This Mac** (or **Show This Computer** off macOS)
-defaults to checked and is disabled while This Mac/Computer is selected.
-Unchecking hides the built-in server from server choices
-while another server is active and alternatives exist. It stays listed when
-active or when it is the only choice. This setting does not stop the local
-runtime or change the active server.
+### Named Codex homes
 
 The desktop stores `showBuiltinServer: false` in `<userData>/server-target.json`;
 missing means shown, and saving the default omits the field. Other top-level
@@ -1248,3 +1243,12 @@ settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
 Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.
+The Codex provider plugin's `homeBindings` setting is a JSON list, default `[]`:
+
+```sh
+bb plugin config provider-codex set homeBindings '[{"id":"work","displayName":"Work","codexHome":"~/.codex-work"}]'
+```
+
+Each entry adds `codex-<id>` to the provider picker, CLI and SDK. The local Codex CLI uses that home for sessions, models, login state, usage and native skills. Paths resolve on each execution machine and must be absolute or start with `~/`. File authentication is required for BB's account and quota inspection; existing `auth.json` symlinks work without importing tokens.
+
+Display names may change. A binding ID retains its directory expression after deletion and restart; use a new ID for a different directory. Removal preserves history and Codex data; restoring the same binding permits continuation. Fork and Side chat use the source binding. Fixed bindings bypass Account Pooler, including inherited pool variables. Default `codex` and the Codex AI service keep their existing behavior. See the [Codex plugin overview](../plugins/provider-codex/PLUGIN_OVERVIEW.md) for preparation and examples.

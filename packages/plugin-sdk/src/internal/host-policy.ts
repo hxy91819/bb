@@ -1262,6 +1262,7 @@ export type NormalizedPluginProviderDeclaration = Omit<
     readonly installation: boolean;
   };
   readonly models: {
+    readonly experimental_cache: boolean;
     readonly fallback?: readonly PluginProviderFallbackModel[];
     readonly scope: PluginProviderModelCatalogScope;
   };
@@ -1301,6 +1302,7 @@ const MOVED_PROVIDER_CAPABILITY_FIELDS: Readonly<Record<string, string>> =
 const READ_EXPERIMENTAL_PROVIDER_DECLARATION_FIELDS: ReadonlySet<string> =
   new Set([
     "experimental_bridgeOptions",
+    "experimental_deriveHostOptions",
     "experimental_visibility",
     "experimental_nativeSkillRoots",
     "experimental_nativeCommandRoots",
@@ -1554,6 +1556,14 @@ export function validatePluginProviderDeclaration(
     id,
     declaration.models?.scope,
   );
+  const cacheModels =
+    declaration.models?.experimental_cache === undefined
+      ? true
+      : declaration.models.experimental_cache;
+  if (typeof cacheModels !== "boolean")
+    throw new Error(
+      `provider "${id}" models.experimental_cache must be a boolean`,
+    );
   const envPassthrough =
     declaration.env === undefined
       ? undefined
@@ -1581,6 +1591,15 @@ export function validatePluginProviderDeclaration(
   ) {
     throw new Error(
       `provider "${id}" experimental_resolvesNativeRoots must be a boolean`,
+    );
+  }
+  const deriveHostOptions = declaration.experimental_deriveHostOptions;
+  if (
+    deriveHostOptions !== undefined &&
+    typeof deriveHostOptions !== "function"
+  ) {
+    throw new Error(
+      `provider "${id}" experimental_deriveHostOptions must be a function`,
     );
   }
   const deriveProviderOptions = declaration.deriveProviderOptions;
@@ -1614,6 +1633,7 @@ export function validatePluginProviderDeclaration(
     models: Object.freeze({
       ...(fallbackModels === undefined ? {} : { fallback: fallbackModels }),
       scope: modelCatalogScope,
+      experimental_cache: cacheModels,
     }),
     ...(envPassthrough === undefined
       ? {}
@@ -1625,6 +1645,9 @@ export function validatePluginProviderDeclaration(
       ? {}
       : { experimental_nativeCommandRoots: nativeCommandRoots }),
     experimental_resolvesNativeRoots: resolvesNativeRoots ?? false,
+    ...(deriveHostOptions === undefined
+      ? {}
+      : { experimental_deriveHostOptions: deriveHostOptions }),
     ...(deriveProviderOptions === undefined
       ? {}
       : { deriveProviderOptions: deriveProviderOptions }),
@@ -3725,4 +3748,25 @@ export function normalizeRpcJsonResult(
   }
 
   return visit(value, "$result");
+}
+
+export function deriveValidatedHostOptions(args: {
+  declaration: PluginProviderDeclaration;
+  context: Parameters<
+    NonNullable<PluginProviderDeclaration["experimental_deriveHostOptions"]>
+  >[0];
+}): Readonly<Record<string, JsonValue>> {
+  const hook = args.declaration.experimental_deriveHostOptions;
+  if (hook === undefined) return Object.freeze({});
+  try {
+    return normalizeProviderBridgeOptions(
+      args.declaration.id,
+      hook(args.context),
+      "experimental_deriveHostOptions result",
+    );
+  } catch (error) {
+    throw new Error(
+      `provider "${args.declaration.id}" experimental_deriveHostOptions failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
