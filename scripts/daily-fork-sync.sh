@@ -54,6 +54,7 @@ cat > "$prompt_file" <<'EOF'
 - 证据不足时明确写无法确认，不猜测新增功能或修复。不把未运行的测试写成通过。
 EOF
 printf '\n本次固定上游目标：%s\n检查时基线：%s\n' "$latest_tag" "$current_base" >> "$prompt_file"
+printf '本次维护脚本目录：%s\n预检入口：%s/fork-aggregate --preflight --base %s\n打包入口：%s/fork-package --base %s\n优先使用上述 fork-tooling 入口，根目录聚合中的脚本可能仍是旧版。根目录有未提交或未跟踪工作时保留现场，使用独立干净 clone 打包。\n' "$here" "$here" "$latest_tag" "$here" "$latest_tag" >> "$prompt_file"
 
 if bb thread spawn \
   --prompt-file "$prompt_file" \
