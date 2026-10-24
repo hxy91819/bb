@@ -1,4 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { appendQuoteAndAttachmentsToDraft } from "@bb/client-core";
+import { FollowUpPromptBox } from "@/components/promptbox/FollowUpPromptBox";
+import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
+import {
+  makeAttachmentsConfig,
+  makeExecutionControlsProps,
+  makeTypeaheadConfig,
+} from "../../../../.ladle/story-fixtures";
 import { StoryCard, StoryRow } from "../../../../.ladle/story-card";
 import {
   TimelineSelectionMenu,
@@ -8,10 +16,6 @@ import {
   SelectableMessageProse,
   type MessageProseSelection,
 } from "./SelectableMessageProse";
-import {
-  StoryDraftPromptBox,
-  useStoryPromptDraft,
-} from "./StoryDraftPromptBox";
 
 export default {
   title: "thread/timeline/SelectionMenu",
@@ -153,7 +157,11 @@ export function Interactive() {
 }
 
 export function ComposerHandoff() {
-  const draft = useStoryPromptDraft();
+  const draft = usePromptDraftStorage({
+    kind: "plugin-new-thread",
+    key: "selection-handoff",
+  });
+  const [focusEndKey, setFocusEndKey] = useState(0);
   const [selection, setSelection] = useState<MessageProseSelection | null>(
     null,
   );
@@ -163,14 +171,55 @@ export function ComposerHandoff() {
       data-thread-window
     >
       <SelectableMessageProse onSelect={setSelection}>
-        <p data-quote-source>Review this selected message before replying.</p>
+        <p data-quote-source>{AGENT_TEXT}</p>
       </SelectableMessageProse>
       <TimelineSelectionMenu
         selection={selection}
-        onAddToChat={draft.addQuote}
         onDismiss={() => setSelection(null)}
+        onAddToChat={(text) => {
+          if (document.activeElement instanceof HTMLElement)
+            document.activeElement.blur();
+          draft.setDraft(
+            appendQuoteAndAttachmentsToDraft(draft.getCurrent(), text, []),
+          );
+          setFocusEndKey((current) => current + 1);
+        }}
       />
-      <StoryDraftPromptBox draft={draft} />
+      <FollowUpPromptBox
+        attachments={makeAttachmentsConfig()}
+        stack={null}
+        environmentSummary={null}
+        contextWindowUsage={null}
+        composer={{
+          history: {
+            currentDraft: draft.getCurrent(),
+            entries: [],
+            onSelectEntry: () => {},
+          },
+          message: draft.text,
+          mentionRanges: draft.mentions,
+          onChangeMessage: draft.setTextAndMentions,
+          onSubmit: () => {},
+          onModifierSubmit: () => {},
+          isFollowUpSubmitting: false,
+          canModifierSubmit: false,
+          steerActiveThreadOnEnter: false,
+          threadRuntimeDisplayStatus: "idle",
+          submitMode: { kind: "ready" },
+          compactPromptPlaceholder: "Reply",
+          promptPlaceholder: "Reply",
+        }}
+        execution={makeExecutionControlsProps()}
+        permission={{
+          value: "auto",
+          options: [],
+          onChange: () => {},
+          supported: false,
+        }}
+        typeahead={makeTypeaheadConfig()}
+        collapseResetKey="selection-handoff"
+        focusEndKey={focusEndKey}
+      />
     </div>
   );
 }

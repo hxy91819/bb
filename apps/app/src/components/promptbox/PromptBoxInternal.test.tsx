@@ -1647,6 +1647,49 @@ describe("ComposerBox controlled value sync", () => {
     expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
   });
 
+  it("defers focus-end until the compact composer expands", async () => {
+    const restoreMatchMedia = mockPointerCoarse(true);
+    try {
+      const onChange = vi.fn();
+      const promptBoxRef = createRef<PromptBoxHandle>();
+      const baseProps = createPromptBoxProps({
+        onChange,
+        promptBoxRef,
+        value: "",
+        autoFocus: false,
+        focusEndKey: 0,
+        compact: { isCompact: true },
+      });
+      const renderComposer = (props: PromptBoxProps) => (
+        <>
+          <button>Selection action</button>
+          <PromptBoxInternal {...props} />
+        </>
+      );
+      const view = render(renderComposer(baseProps));
+      const action = screen.getByRole("button", { name: "Selection action" });
+      action.focus();
+      const quoteProps = {
+        ...baseProps,
+        value: "> selected text\n\n",
+        focusEndKey: 1,
+      };
+      view.rerender(renderComposer(quoteProps));
+      expect(document.activeElement).toBe(action);
+
+      view.rerender(
+        renderComposer({ ...quoteProps, compact: { isCompact: false } }),
+      );
+      await waitForPromptFocus();
+      await act(async () => {
+        promptBoxRef.current?.insertTextAtCursor("reply");
+      });
+      expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
   it.each([false, true])(
     "focuses below an added quote (coarse pointer: %s)",
     async (isPointerCoarse) => {
