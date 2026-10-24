@@ -495,7 +495,7 @@ export function createProviderModelCatalogStore(options: {
     deps: WorkSessionDeps,
     entry: CatalogEntry,
     fingerprint: string,
-    bridgeLaunch: HostDaemonBridgeLaunch,
+    launch: CatalogLaunch,
     discardCachedCatalog: boolean,
   ): Promise<void> {
     const { hostId, providerId, scopeKey } = entry.key;
@@ -538,7 +538,7 @@ export function createProviderModelCatalogStore(options: {
     deps: WorkSessionDeps,
     entry: CatalogEntry,
     fingerprint: string,
-    bridgeLaunch: HostDaemonBridgeLaunch,
+    launch: CatalogLaunch,
     discardCachedCatalog = false,
   ): Promise<void> {
     if (entry.refresh?.fingerprint === fingerprint) {
@@ -552,7 +552,7 @@ export function createProviderModelCatalogStore(options: {
       deps,
       entry,
       fingerprint,
-      bridgeLaunch,
+      launch,
       discardCachedCatalog,
     );
   }
@@ -564,7 +564,12 @@ export function createProviderModelCatalogStore(options: {
         args.provider.id,
         args.hostId,
       );
-      const fingerprint = catalogFingerprint(args.provider.id, bridgeLaunch);
+      const launch = await resolveCatalogLaunch({
+        hostId: args.hostId,
+        providerId: args.provider.id,
+        bridgeLaunch,
+      });
+      const { fingerprint } = launch;
       const entry = loadEntry(deps, {
         hostId: args.hostId,
         providerId: args.provider.id,
@@ -577,7 +582,7 @@ export function createProviderModelCatalogStore(options: {
             : "",
       });
       if (deps.providerRegistry.get(args.provider.id)?.cacheModels === false) {
-        await joinOrStartRefresh(deps, entry, fingerprint, bridgeLaunch, true);
+        await joinOrStartRefresh(deps, entry, fingerprint, launch, true);
         const decision = evaluate(
           entry,
           fingerprint,
@@ -597,11 +602,11 @@ export function createProviderModelCatalogStore(options: {
         );
         if (decision.kind === "serve") {
           if (decision.backgroundRefresh) {
-            void joinOrStartRefresh(deps, entry, launch);
+            void joinOrStartRefresh(deps, entry, fingerprint, launch);
           }
           return decision.result;
         }
-        await joinOrStartRefresh(deps, entry, launch);
+        await joinOrStartRefresh(deps, entry, fingerprint, launch);
       }
     },
 
@@ -636,7 +641,14 @@ export function createProviderModelCatalogStore(options: {
       if (options.now() - lastAttemptAt < PREWARM_MIN_AGE_MS) {
         return;
       }
-      await startRefresh(deps, entry, fingerprint, bridgeLaunch, false);
+      await startRefresh(deps, entry, fingerprint, {
+        bridgeLaunch,
+        contributedEnv: await resolvePluginProviderEnv({
+          providerId: args.provider.id,
+          context: { threadId: null, projectId: null, hostId: args.hostId },
+        }),
+        fingerprint,
+      }, false);
     },
 
     clearFailure(hostId, providerId) {
