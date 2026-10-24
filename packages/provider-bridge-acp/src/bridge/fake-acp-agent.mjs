@@ -162,7 +162,6 @@ const sessionNewDelayMs = Number(
 const updatesWithSessionResponse =
   process.env.FAKE_ACP_UPDATES_WITH_SESSION_RESPONSE === "1";
 const ignoreCancel = process.env.FAKE_ACP_IGNORE_CANCEL === "1";
-const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1";
 let sessionBusyPromptsLeft = Number(
   process.env.FAKE_ACP_SESSION_BUSY_PROMPTS ?? "0",
 );

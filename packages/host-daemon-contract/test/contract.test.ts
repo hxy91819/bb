@@ -1244,7 +1244,7 @@ describe("host-daemon command schemas", () => {
     expect(contract.isCompatibleHostDaemonProtocolVersion(249)).toBe(false);
     expect(contract.isCompatibleHostDaemonProtocolVersion(250)).toBe(true);
     expect(contract.isCompatibleHostDaemonProtocolVersion(251)).toBe(true);
-    expect(contract.isCompatibleHostDaemonProtocolVersion(252)).toBe(false);
+    expect(contract.isCompatibleHostDaemonProtocolVersion(252)).toBe(true);
     expect(contract.hostDaemonSupportsConnectNext(246)).toBe(false);
     expect(contract.hostDaemonSupportsConnectNext(247)).toBe(true);
     expect(contract.hostDaemonSupportsDesktopBrokerProof(247)).toBe(false);
