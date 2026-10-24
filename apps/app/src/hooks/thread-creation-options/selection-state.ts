@@ -41,6 +41,7 @@ export interface UsePromptModelReasoningOptions {
   resetKey?: string | number | null;
   initialProviderId?: string;
   preferReadyProviderWhenUnset?: boolean;
+  newThreadSelection?: boolean;
   initialModel?: string;
   initialServiceTier?: ServiceTier;
   initialReasoningLevel?: ReasoningLevel;

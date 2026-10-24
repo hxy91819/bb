@@ -871,6 +871,7 @@ export function NewThreadComposer({
       seed?.permissionMode === undefined);
   const creationOptions = useThreadCreationOptions({
     scope: selectionScope,
+    newThreadSelection: true,
     preferenceProjectId: projectId,
     catalogProjectId: isProjectless ? undefined : projectId,
     resetKey: `${projectId}\0${seedSignature}`,
