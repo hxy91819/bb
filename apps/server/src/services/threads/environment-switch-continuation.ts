@@ -11,7 +11,7 @@ export function cancelEnvironmentSwitchContinuationInTransaction(
   return (
     deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction(db, {
       threadId,
-      kind: "environment-switched",
+      kind: "environment-directory-updated",
     }) > 0
   );
 }

@@ -161,7 +161,7 @@ describe("queued message dispatch hook", () => {
         threadId: thread.id,
         content: textInput("continue after switching"),
         waitingOn: { kind: "thread-busy" },
-        systemNotice: { kind: "environment-switched", subject: null },
+        systemNotice: { kind: "environment-directory-updated", subject: null },
       });
 
       await expect(

@@ -121,7 +121,7 @@ describe("generatedConversationTitle — system source", () => {
 
   it("renders an environment switch as a workspace update", () => {
     const title = systemTitle({
-      systemMessageKind: "environment-switched",
+      systemMessageKind: "environment-directory-updated",
       systemMessageSubject: null,
     });
 

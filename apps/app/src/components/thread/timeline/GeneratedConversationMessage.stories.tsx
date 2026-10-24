@@ -146,9 +146,9 @@ const SYSTEM_ROWS: readonly SystemRowFixture[] = [
     text: "Worker 1 completed: migration landed.\nWorker 2 was interrupted: stopped before review.\nWorker 3 completed: docs updated.",
   },
   {
-    label: "environment-switched",
+    label: "environment-directory-updated",
     hint: "automatic continuation after moving the thread to another workspace",
-    systemMessageKind: "environment-switched",
+    systemMessageKind: "environment-directory-updated",
     systemMessageSubject: null,
     text: "Continue the unfinished task in the new workspace.",
   },
