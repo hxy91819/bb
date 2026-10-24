@@ -107,7 +107,7 @@ describe("TimelineSelectionMenu", () => {
     expect(document.body.querySelector('[data-side="top"]')).toBeTruthy();
   });
 
-  it("activates a touch action on pointer-up without waiting for click", () => {
+  it("keeps the touch action mounted until click to avoid a retargeted Safari tap", () => {
     const onAddToChat = vi.fn();
     const onDismiss = vi.fn();
     render(
@@ -121,11 +121,52 @@ describe("TimelineSelectionMenu", () => {
     const button = screen.getByRole("button", { name: "Add to chat" });
     fireEvent.pointerDown(button, { pointerType: "touch" });
     fireEvent.pointerUp(button, { pointerType: "touch" });
+    expect(onAddToChat).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
     fireEvent.click(button);
 
     expect(onAddToChat).toHaveBeenCalledTimes(1);
     expect(onAddToChat).toHaveBeenCalledWith("selected text");
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the reply caret placed synchronously by a touch selection action", () => {
+    const composer = document.createElement("div");
+    composer.contentEditable = "true";
+    composer.tabIndex = 0;
+    composer.textContent = "quoted text\n\nreply here";
+    document.body.append(composer);
+    try {
+      render(
+        <TimelineSelectionMenu
+          selection={makeSelection()}
+          onAddToChat={() => {
+            composer.focus();
+            const range = document.createRange();
+            range.selectNodeContents(composer);
+            range.collapse(false);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const action = screen.getByRole("button", { name: "Add to chat" });
+      fireEvent.pointerDown(action, { pointerType: "touch" });
+      fireEvent.pointerUp(action, { pointerType: "touch" });
+      fireEvent.click(action);
+
+      const selection = window.getSelection();
+      expect(document.activeElement).toBe(composer);
+      expect(selection?.rangeCount).toBe(1);
+      expect(selection?.isCollapsed).toBe(true);
+      expect(selection?.anchorNode).toBe(composer);
+      expect(selection?.anchorOffset).toBe(composer.childNodes.length);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      composer.remove();
+    }
   });
 
   it("focuses the composer before a touch add-to-chat action returns", () => {
@@ -159,10 +200,11 @@ describe("TimelineSelectionMenu", () => {
     const recordFocus = () => {
       focusedWhenGestureEnded = document.activeElement;
     };
-    document.addEventListener("pointerup", recordFocus);
+    document.addEventListener("click", recordFocus);
     fireEvent.pointerDown(action, { pointerType: "touch" });
     fireEvent.pointerUp(action, { pointerType: "touch" });
-    document.removeEventListener("pointerup", recordFocus);
+    fireEvent.click(action);
+    document.removeEventListener("click", recordFocus);
 
     expect(focusedWhenGestureEnded).toBe(
       screen.getByRole("textbox", { name: "Chat composer" }),
