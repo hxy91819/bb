@@ -5,11 +5,6 @@ const REACT_FIBER_PREFIXES = [
   "__reactInternalInstance$",
 ] as const;
 
-const REACT_CONTAINER_PREFIXES = [
-  "__reactContainer$",
-  "_reactListening",
-] as const;
-
 type RemoveChild = <T extends Node>(child: T) => T;
 type InsertBefore = <T extends Node>(node: T, child: Node | null) => T;
 type ReplaceChild = <T extends Node>(node: Node, child: T) => T;
