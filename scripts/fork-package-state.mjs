@@ -36,10 +36,8 @@ export async function runStage(path, name, cwd, command) {
         node: process.version,
         executable: process.execPath,
         env: Object.fromEntries(
-          Object.entries(process.env).filter(
-            ([key]) =>
-              ["PATH", "NODE_OPTIONS", "CI", "PNPM_HOME"].includes(key) ||
-              key.startsWith("TURBO_"),
+          Object.entries(process.env).sort(([left], [right]) =>
+            left.localeCompare(right),
           ),
         ),
       }),

@@ -23,7 +23,7 @@ fi
 echo "当前基线: $current_base"
 
 if [[ "$latest_tag" == "$current_base" ]]; then
-  echo "上游版本无变化，创建每日结果汇报线程"
+  echo "上游基线无变化，创建安装进度检查与每日结果汇报线程"
 fi
 
 echo "创建每日检查、更新及结果汇报线程: $current_base -> $latest_tag"
@@ -31,7 +31,7 @@ echo "创建每日检查、更新及结果汇报线程: $current_base -> $latest
 prompt_file=$(mktemp)
 trap 'rm -f "$prompt_file"' EXIT
 cat > "$prompt_file" <<'EOF'
-检查上游稳定版本，每次结束都在本线程向用户输出简体中文日报。先记录更新前的上游基线，以及本机实际运行包 release.json 的 tag/source，作为本次变化的比较起点。没有上游新稳定版时无需打包或安装，直接报告“今日无新增功能或修复”，并注明未执行测试或部署。
+检查上游稳定版本，每次结束都在本线程向用户输出简体中文日报。先记录更新前的上游基线，以及本机实际运行包 release.json 的 tag/source，作为本次变化的比较起点。上游基线已是本次目标时，仍须核对上次聚合、Release 和本机安装是否完成：有未完成交付时按其记录接续，不能因 base 已提交就宣称无需升级；确认没有待交付变化后才报告“今日无新增功能或修复”，并注明未执行测试或部署。
 
 如果有新版本则执行以下操作：
 

@@ -120,6 +120,60 @@ test("package stages reuse success, retry failure and invalidate changed command
   }
 });
 
+test("resuming after a test shard or toolchain change executes the required validation", () => {
+  const root = mkdtempSync(join(tmpdir(), "bb-package-env-"));
+  const path = join(root, "state.json");
+  const counter = join(root, "executed");
+  const script = new URL("./fork-package-state.mjs", import.meta.url).pathname;
+  const command = [
+    process.execPath,
+    "-e",
+    "require('node:fs').appendFileSync(process.argv[1], JSON.stringify([process.env.BB_CI_TEST_SHARD ?? 'full', process.env.BB_BUILD_TOOLCHAIN]) + '\\n')",
+    counter,
+  ];
+  const env = { ...process.env, BB_BUILD_TOOLCHAIN: "before" };
+  delete env.BB_CI_TEST_SHARD;
+  const run = (runtimeEnv) =>
+    spawnSync(
+      process.execPath,
+      [script, "run", path, "tests", root, ...command],
+      { env: runtimeEnv, encoding: "utf8" },
+    );
+  try {
+    writeFileSync(
+      path,
+      JSON.stringify({
+        source: "a".repeat(40),
+        base: "desktop-v1.0.0",
+        previous: "b".repeat(40),
+        completed: {},
+      }),
+    );
+    for (const runtimeEnv of [
+      { ...env, BB_CI_TEST_SHARD: "1/2" },
+      env,
+      { ...env, BB_BUILD_TOOLCHAIN: "after" },
+      { ...env, BB_BUILD_TOOLCHAIN: "after" },
+    ]) {
+      const result = run(runtimeEnv);
+      assert.equal(result.status, 0, result.stderr);
+    }
+    assert.deepEqual(
+      readFileSync(counter, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line)),
+      [
+        ["1/2", "before"],
+        ["full", "before"],
+        ["full", "after"],
+      ],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("installed cutover changes both pointers and retains data, flags and other directives", () => {
   const oldDirectory = "/opt/old";
   const dropIn =
