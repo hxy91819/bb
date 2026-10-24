@@ -116,15 +116,16 @@ interface RunPluginPanelActionArgs {
   context: import("./PluginTabs").PluginTabContext;
 }
 
-export function invokePluginThreadPanelAction({
+export function runPluginPanelAction({
   action,
-  openPanel,
-  threadId,
-}: {
-  action: PluginThreadPanelActionSlot;
-  openPanel: (options?: PluginPanelActionOpenOptions) => boolean;
-  threadId: string;
-}): void {
+  openPluginPanel,
+  context,
+}: RunPluginPanelActionArgs): void {
+  const openPanel = createPanelActionOpenPanel({
+    action,
+    slot: "threadPanelAction",
+    openPluginPanel,
+  });
   const warn = (error: unknown) => {
     console.warn(
       `[plugin:${action.pluginId}] threadPanelAction "${action.id}" failed: ${describeError(error)}`,
@@ -145,22 +146,6 @@ export function invokePluginThreadPanelAction({
   } catch (error) {
     warn(error);
   }
-}
-
-function runPluginPanelAction({
-  action,
-  openPluginPanel,
-  threadId,
-}: RunPluginPanelActionArgs): void {
-  invokePluginThreadPanelAction({
-    action,
-    openPanel: createPanelActionOpenPanel({
-      action,
-      slot: "threadPanelAction",
-      openPluginPanel,
-    }),
-    threadId,
-  });
 }
 
 interface RunPluginNewThreadPanelActionArgs {
