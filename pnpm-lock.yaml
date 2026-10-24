@@ -221,7 +221,7 @@ importers:
         version: link:../../packages/plugin-sdk
       '@mermaid-js/layout-elk':
         specifier: ^0.2.3
-        version: 0.2.3(mermaid@11.15.0)
+        version: 0.2.3(mermaid@11.15.0(patch_hash=azn7m6vm5duxopmv73vhtxokh4))
       '@pierre/diffs':
         specifier: ^1.2.9
         version: 1.2.9(patch_hash=wdjikkl65wfpocm6wrflymrtdq)(@shikijs/themes@3.23.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -7748,7 +7748,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {node: '>=0.10.0'}
+    engines: {'0': node >=0.10.0}
 
   '@expo/cli@57.0.16':
     resolution: {integrity: sha512-+HyMY2nAS6QBJb0nSeMz92p11bZ1AtWSRnhWnklznN07IRoQirisnKq2vr18Ayjb/fnb5F/um+n6FRhF0fZm1Q==}
@@ -20897,11 +20897,11 @@ snapshots:
       '@types/react': 19.2.13
       react: 19.2.4
 
-  '@mermaid-js/layout-elk@0.2.3(mermaid@11.15.0)':
+  '@mermaid-js/layout-elk@0.2.3(mermaid@11.15.0(patch_hash=azn7m6vm5duxopmv73vhtxokh4))':
     dependencies:
       d3: 7.9.0
       elkjs: 0.9.3
-      mermaid: 11.15.0
+      mermaid: 11.15.0(patch_hash=azn7m6vm5duxopmv73vhtxokh4)
 
   '@mermaid-js/parser@1.1.1':
     dependencies:
@@ -22131,9 +22131,7 @@ snapshots:
       metro-runtime: 0.84.5
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.79.6': {}
 
