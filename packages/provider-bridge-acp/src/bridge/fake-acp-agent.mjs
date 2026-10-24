@@ -427,6 +427,7 @@ function sessionCapabilities() {
   const capabilities = {
     ...(forkSession ? { fork: {} } : {}),
     ...(resumeSession ? { resume: {} } : {}),
+    ...(deleteSession ? { delete: {} } : {}),
   };
   return Object.keys(capabilities).length > 0
     ? { sessionCapabilities: capabilities }
