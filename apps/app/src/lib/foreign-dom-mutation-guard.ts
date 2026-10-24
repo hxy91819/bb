@@ -69,12 +69,6 @@ function isReactHostNode(node: Node): boolean {
   return hasOwnKeyWithPrefix(node, REACT_FIBER_PREFIXES);
 }
 
-function isReactParent(node: Node): boolean {
-  return (
-    isReactHostNode(node) || hasOwnKeyWithPrefix(node, REACT_CONTAINER_PREFIXES)
-  );
-}
-
 function recordSuppression(
   operation: "removeChild" | "insertBefore" | "replaceChild",
   node: Node,
