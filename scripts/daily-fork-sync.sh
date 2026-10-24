@@ -5,13 +5,14 @@ export PATH="$HOME/.local/bin:$PATH"
 
 project_id=${1:?Usage: daily-fork-sync.sh <project-id> <checkout-path>}
 checkout_path=${2:?Usage: daily-fork-sync.sh <project-id> <checkout-path>}
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$checkout_path"
 
 echo "=== $(date -Iseconds) 开始检查上游版本 ==="
 
-/usr/bin/git fetch origin --force --tags 'refs/tags/desktop-v*:refs/tags/desktop-v*'
+/usr/bin/git fetch --no-tags origin 'refs/tags/desktop-v*:refs/tags/desktop-v*'
 
-latest_tag=$(/usr/bin/git tag -l 'desktop-v*' --sort=-version:refname | head -1)
+latest_tag=$(node "$here/fork-inputs.mjs" latest "$PWD")
 echo "上游最新稳定版本: $latest_tag"
 
 current_base=$(/usr/bin/git show fork-tooling:.fork/branches 2>/dev/null | awk '$1=="base"{print $2}')
@@ -34,14 +35,15 @@ cat > "$prompt_file" <<'EOF'
 
 如果有新版本则执行以下操作：
 
-1. 保持根目录 main，在 fork-tooling 的独立 worktree 中更新 .fork/branches 中的 base 为最新上游稳定版本
+1. 保持根目录 main，在 fork-tooling 的独立 worktree 中把 .fork/branches 的 base 更新为本次固定目标；后续出现的新稳定版留到下一轮
 2. 提交并推送 fork-tooling
-3. 执行 scripts/fork-package 完成聚合、验证、构建和发布
+3. 先执行 scripts/fork-aggregate --preflight --base <本次固定目标>，集中处理冲突，再执行 scripts/fork-package --base <本次固定目标>；中断后按脚本输出的 --resume <sha> 接续，不手工跳过阶段
 4. 聚合成功后，使用 local-aggregate-deploy skill 将新版本安装到本机服务
 
 遇到冲突时自动解决：
 - 分支与上游冲突：在该分支 worktree 里 rebase --no-autostash 到基线 tag，修复、测试、push --force-with-lease 到 fork
 - 分支之间冲突：在聚合 worktree 里只做两边合并（不加新行为），git add 后 git commit --no-edit，rerere 会记住解决
+- 修复回到所属分支；用重置到基线或其他分支消除冲突不等于保留功能。移除分支前核对升级前 tip 和目标上游的实际行为。
 
 结果汇报要求：
 - 先说本次成功、失败或无更新，以及更新前后版本。
@@ -51,6 +53,7 @@ cat > "$prompt_file" <<'EOF'
 - 服务切换前把比较起点、已核实的功能/修复清单和未完成的汇报要求写入恢复上下文；恢复后继续验收并交付日报。
 - 证据不足时明确写无法确认，不猜测新增功能或修复。不把未运行的测试写成通过。
 EOF
+printf '\n本次固定上游目标：%s\n检查时基线：%s\n' "$latest_tag" "$current_base" >> "$prompt_file"
 
 if bb thread spawn \
   --prompt-file "$prompt_file" \

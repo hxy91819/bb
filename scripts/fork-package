@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-用法：scripts/fork-package [--base <tag>] [--test-filter <turbo filter>]... [--verify-only] [--no-release] [--no-build]
+用法：scripts/fork-package [--base <tag>] [--resume <sha>] [--test-filter <turbo filter>]... [--verify-only] [--no-release] [--no-build]
 
 一条命令完成聚合打包：聚合 → 在 .worktrees/aggregate-deploy-<sha> 里安装、typecheck、测试 →
 提升 main → 运行时构建与原生模块检查 → 打 fork-v* tag 并推送 → 清理被取代的候选 →
@@ -13,6 +13,7 @@ usage() {
 
 --test-filter  传给 turbo run test 的 --filter，可重复；默认 "[<上一次 main>]"，
                即只测相对上次聚合有文件改动的包。
+--resume       从该 SHA 的已记录检出接续；保留原基线、比较起点和测试范围。
 --verify-only  测试通过后停止：不提升、不构建、不打 tag，保留 .worktrees/aggregate-deploy-<sha> 供检查。
 --no-release   不打发布 tag。
 --no-build     提升后停止，不做运行时构建。
@@ -23,11 +24,14 @@ base_override=""
 release=1
 build=1
 verify_only=0
+resume=""
 test_filters=()
+filters_explicit=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base_override="${2:?--base 需要 tag}"; shift 2 ;;
-    --test-filter) test_filters+=("${2:?--test-filter 需要值}"); shift 2 ;;
+    --resume) resume="${2:?--resume 需要 SHA}"; shift 2 ;;
+    --test-filter) test_filters+=("${2:?--test-filter 需要值}"); filters_explicit=1; shift 2 ;;
     --verify-only) verify_only=1; shift ;;
     --no-release) release=0; shift ;;
     --no-build) build=0; shift ;;
@@ -35,63 +39,92 @@ while [ $# -gt 0 ]; do
     *) usage >&2; exit 2 ;;
   esac
 done
+if [ -n "$resume" ]; then
+  [[ "$resume" =~ ^[a-f0-9]{40}$ ]] && [ -z "$base_override" ] && [ "${#test_filters[@]}" = 0 ] || { usage >&2; exit 2; }
+fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --path-format=absolute --git-common-dir)"
 root="$(dirname "$root")"
 cd "$root"
 
+if [ "$verify_only" = 0 ]; then
+  [ "$(git branch --show-current)" = main ] && [ -z "$(git status --porcelain)" ] || {
+    echo "提升需要干净的 main 根目录；请保留原现场并使用独立干净 clone，或先 --verify-only" >&2
+    exit 1
+  }
+fi
+
 step() { printf '\n==> %s\n' "$*"; }
 config_value() { node -p "require('$config').service.$1"; }
+state_tool="$here/fork-package-state.mjs"
+state_root="$(git rev-parse --path-format=absolute --git-common-dir)/fork-package"
+run_stage() {
+  [ "$(git -C "$wt" rev-parse HEAD)" = "$result" ] && [ -z "$(git -C "$wt" status --porcelain)" ] || { echo "聚合检出已改变，停止接续" >&2; exit 1; }
+  node "$state_tool" run "$state" "$1" "$wt" "${@:2}"
+}
 
-previous="$(git ls-remote fork refs/heads/main | cut -f1)"
-[ -n "$previous" ] || { echo "fork 上没有 main" >&2; exit 1; }
+if [ -z "$resume" ]; then
+  previous="$(git ls-remote fork refs/heads/main | cut -f1)"
+  [ -n "$previous" ] || { echo "fork 上没有 main" >&2; exit 1; }
 
-aggregate_args=()
-[ -n "$base_override" ] && aggregate_args+=(--base "$base_override")
+  if [ -n "$base_override" ]; then
+    base="$base_override"
+  else
+    list_ref=refs/heads/fork-tooling
+    git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/fork/fork-tooling
+    base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
+  fi
 
-step "聚合"
-"$here/fork-aggregate" "${aggregate_args[@]}"
-result="$(git rev-parse --verify refs/heads/aggregate/next)"
-short="$(git rev-parse --short "$result")"
-if [ -n "$base_override" ]; then
-  base="$base_override"
+  step "聚合"
+  "$here/fork-aggregate" --base "$base"
+  result="$(git rev-parse --verify refs/heads/aggregate/next)"
+  short="$(git rev-parse --short "$result")"
+  wt="$root/.worktrees/aggregate-deploy-$short"
+  step "工作区 $wt"
+  if [ -d "$wt" ]; then
+    [ "$(git -C "$wt" rev-parse HEAD)" = "$result" ] || { echo "$wt 已存在但不是 $result" >&2; exit 1; }
+    [ -z "$(git -C "$wt" status --porcelain --untracked-files=no)" ] || { echo "$wt 有未提交改动" >&2; exit 1; }
+    git worktree remove "$root/.worktrees/aggregate-next"
+  else
+    git worktree move "$root/.worktrees/aggregate-next" "$wt"
+    git -C "$wt" checkout --quiet --detach "$result"
+  fi
+  if [ "${#test_filters[@]}" -eq 0 ]; then
+    test_filters=("[$previous]")
+  fi
+  state="$state_root/$result.json"
+  node "$state_tool" init "$state" "$result" "$base" "$previous" "$wt" "$filters_explicit" "${test_filters[@]}"
 else
-  list_ref=refs/heads/fork-tooling
-  git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/fork/fork-tooling
-  base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
+  state="$state_root/$resume.json"
+  [ -f "$state" ] || { echo "没有该 SHA 的接续记录：$resume" >&2; exit 1; }
 fi
-
-wt="$root/.worktrees/aggregate-deploy-$short"
-step "工作区 $wt"
-if [ -d "$wt" ]; then
-  [ "$(git -C "$wt" rev-parse HEAD)" = "$result" ] || { echo "$wt 已存在但不是 $result" >&2; exit 1; }
-  [ -z "$(git -C "$wt" status --porcelain --untracked-files=no)" ] || { echo "$wt 有未提交改动" >&2; exit 1; }
-  git worktree remove --force "$root/.worktrees/aggregate-next"
-else
-  git worktree move "$root/.worktrees/aggregate-next" "$wt"
-  git -C "$wt" checkout --quiet --detach "$result"
-fi
+result="$(node "$state_tool" field "$state" source)"
+base="$(node "$state_tool" field "$state" base)"
+previous="$(node "$state_tool" field "$state" previous)"
+wt="$(node "$state_tool" field "$state" worktree)"
+test_filters=()
+while IFS= read -r filter; do
+  [ -z "$filter" ] || test_filters+=("$filter")
+done < <(node "$state_tool" field "$state" filters)
 iso="$wt/scripts/run-resource-isolated"
+printf '固定输入：base=%s source=%s previous=%s\n接续命令：%s --resume %s\n' "$base" "$result" "$previous" "$0" "$result"
 
 step "安装依赖"
-"$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
+run_stage install "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
 
 step "维护脚本与边界契约"
-"$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs"
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
+run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs"
+run_stage protocol "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
+run_stage plugin-contract "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
 
 step "全仓 typecheck"
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
+run_stage typecheck "$iso" --profile package -- pnpm -C "$wt" exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
 
 step "测试"
-if [ "${#test_filters[@]}" -eq 0 ]; then
-  test_filters=("[$previous]")
-fi
 filter_args=()
 for f in "${test_filters[@]}"; do filter_args+=("--filter=$f"); done
-"$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --continue --output-logs=errors-only "${filter_args[@]}"
+run_stage tests "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --continue --output-logs=errors-only "${filter_args[@]}"
 
 if [ "$verify_only" = 1 ]; then
   step "仅验证，停止"
@@ -103,7 +136,7 @@ step "提升 main"
 if [ "$result" = "$previous" ]; then
   echo "fork/main 已经是 $result"
 else
-  "$here/fork-aggregate" --promote-only
+  "$here/fork-aggregate" --base "$base" --promote-only --result "$result"
 fi
 [ "$(git ls-remote fork refs/heads/main | cut -f1)" = "$result" ]
 
@@ -156,7 +189,7 @@ for dir in "$root"/.worktrees/aggregate-deploy-*; do
     echo "保留 $dir：有未提交改动"
     continue
   fi
-  git worktree remove --force "$dir" && echo "已删除 $dir"
+  git worktree remove "$dir" && echo "已删除 $dir"
 done
 
 step "完成"

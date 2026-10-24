@@ -11,6 +11,114 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replacementDropIn } from "./fork-cutover.mjs";
+import { latestStable, preflight, readInputs } from "./fork-inputs.mjs";
+import { runStage } from "./fork-package-state.mjs";
+
+test("stable selection ignores prereleases and compares version components", () => {
+  assert.equal(
+    latestStable(
+      "desktop-v0.9.8\ndesktop-v0.10.1\ndesktop-v0.10.2-beta.1\ndesktop-v0.10.1^{}\ndesktop-v0.10.0",
+    ),
+    "desktop-v0.10.1",
+  );
+  assert.throws(() => latestStable("desktop-v0.11.0-rc.1"), /稳定/);
+});
+
+test("preflight reports every upstream conflict without touching worktrees or refs", () => {
+  const root = mkdtempSync(join(tmpdir(), "bb-preflight-"));
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("config", "commit.gpgsign", "false");
+    mkdirSync(join(root, ".fork"));
+    writeFileSync(
+      join(root, ".fork/branches"),
+      "base desktop-v1.1.0\nfix/a needs-feedback\nfix/b needs-feedback\nfix/c needs-feedback\n",
+    );
+    writeFileSync(join(root, "file"), "base\n");
+    git("add", ".");
+    git("commit", "-qm", "initial");
+    const initial = git("rev-parse", "HEAD");
+    for (const name of ["a", "b", "c"]) {
+      git("checkout", "-qb", `fix/${name}`, initial);
+      writeFileSync(
+        join(root, name === "c" ? "independent" : "file"),
+        `${name}\n`,
+      );
+      git("add", ".");
+      git("commit", "-qm", name);
+    }
+    git("checkout", "-q", "main");
+    writeFileSync(join(root, "file"), "upstream\n");
+    git("add", ".");
+    git("commit", "-qm", "upstream");
+    git("tag", "desktop-v1.1.0");
+    git("branch", "fork-tooling");
+    const refs = git("show-ref");
+    const worktrees = git("worktree", "list", "--porcelain");
+    const conflicts = preflight(root, readInputs(root));
+    assert.deepEqual(
+      conflicts.map(({ name }) => name),
+      ["fix/a", "fix/b"],
+    );
+    assert.equal(git("show-ref"), refs);
+    assert.equal(git("worktree", "list", "--porcelain"), worktrees);
+    assert.equal(git("status", "--porcelain"), "");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("package stages reuse success, retry failure and invalidate changed commands and sources", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bb-package-state-"));
+  const path = join(root, "state.json");
+  const counter = join(root, "counter");
+  const marker = join(root, "ready");
+  const command = [
+    process.execPath,
+    "-e",
+    "const fs=require('node:fs'); if(!fs.existsSync(process.argv[2])) process.exit(23); fs.appendFileSync(process.argv[1], 'x');",
+    counter,
+    marker,
+  ];
+  try {
+    writeFileSync(
+      path,
+      JSON.stringify({
+        source: "a".repeat(40),
+        base: "desktop-v1.0.0",
+        previous: "b".repeat(40),
+        completed: {},
+      }),
+    );
+    await assert.rejects(runStage(path, "tests", root, command), /exit 23/);
+    assert.equal(
+      JSON.parse(readFileSync(path, "utf8")).completed.tests,
+      undefined,
+    );
+    writeFileSync(marker, "ready");
+    await runStage(path, "tests", root, command);
+    await runStage(path, "tests", root, command);
+    assert.equal(readFileSync(counter, "utf8"), "x");
+    await runStage(path, "tests", root, [...command, "changed-filter"]);
+    assert.equal(readFileSync(counter, "utf8"), "xx");
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    state.source = "c".repeat(40);
+    writeFileSync(path, JSON.stringify(state));
+    await runStage(path, "tests", root, [...command, "changed-filter"]);
+    assert.equal(readFileSync(counter, "utf8"), "xxx");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("installed cutover changes both pointers and retains data, flags and other directives", () => {
   const oldDirectory = "/opt/old";
@@ -151,75 +259,84 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
   });
 }
 
-test("a clean main root promotes the verified SHA to fork/main", () => {
-  const root = mkdtempSync(join(tmpdir(), "bb-promote-clean-"));
-  try {
-    const env = {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-    };
-    const git = (...args) =>
-      execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
-    git("init", "-q", "-b", "main");
-    git("config", "user.name", "Test");
-    git("config", "user.email", "test@example.com");
-    mkdirSync(join(root, ".fork"));
-    writeFileSync(join(root, ".fork/branches"), "base desktop-v1.0.0\n");
-    writeFileSync(join(root, "AGENTS.md"), "<!-- fork-maintenance:start -->\n");
-    git("add", ".");
-    git("commit", "-qm", "base");
-    git("tag", "desktop-v1.0.0");
-    git("branch", "fork-tooling");
-    git("branch", "local/aggregate");
-    const previous = git("rev-parse", "HEAD");
-    const remote = join(root, ".git", "remote.git");
-    git("init", "--bare", "-q", "-b", "main", remote);
-    git("remote", "add", "origin", remote);
-    git("remote", "add", "fork", remote);
-    git(
-      "push",
-      "-q",
-      "fork",
-      "main",
-      "fork-tooling",
-      "local/aggregate",
-      "refs/tags/desktop-v1.0.0",
-    );
-    const next = git(
-      "commit-tree",
-      "HEAD^{tree}",
-      "-p",
-      "HEAD",
-      "-m",
-      "verified candidate",
-    );
-    git("branch", "aggregate/next", next);
-    const result = spawnSync(
-      "bash",
-      [new URL("./fork-aggregate", import.meta.url).pathname, "--promote-only"],
-      { cwd: root, env, encoding: "utf8" },
-    );
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(git("branch", "--show-current"), "main");
-    assert.equal(git("rev-parse", "HEAD"), next);
-    assert.equal(
-      git("ls-remote", "fork", "refs/heads/main").split("\t")[0],
-      next,
-    );
-    assert.equal(
-      git("ls-remote", "fork", "refs/heads/local/aggregate").split("\t")[0],
-      previous,
-    );
-    const clone = join(root, ".git", "clone");
-    git("clone", "-q", remote, clone);
-    assert.equal(git("-C", clone, "branch", "--show-current"), "main");
-    assert.equal(git("-C", clone, "rev-parse", "HEAD"), next);
-    assert.equal(git("status", "--porcelain"), "");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+for (const pinned of [false, true]) {
+  test(`a clean main root promotes the ${pinned ? "explicit" : "staged"} verified SHA to fork/main`, () => {
+    const root = mkdtempSync(join(tmpdir(), "bb-promote-clean-"));
+    try {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      };
+      const git = (...args) =>
+        execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "Test");
+      git("config", "user.email", "test@example.com");
+      mkdirSync(join(root, ".fork"));
+      writeFileSync(join(root, ".fork/branches"), "base desktop-v1.0.0\n");
+      writeFileSync(
+        join(root, "AGENTS.md"),
+        "<!-- fork-maintenance:start -->\n",
+      );
+      git("add", ".");
+      git("commit", "-qm", "base");
+      git("tag", "desktop-v1.0.0");
+      git("branch", "fork-tooling");
+      git("branch", "local/aggregate");
+      const previous = git("rev-parse", "HEAD");
+      const remote = join(root, ".git", "remote.git");
+      git("init", "--bare", "-q", "-b", "main", remote);
+      git("remote", "add", "origin", remote);
+      git("remote", "add", "fork", remote);
+      git(
+        "push",
+        "-q",
+        "fork",
+        "main",
+        "fork-tooling",
+        "local/aggregate",
+        "refs/tags/desktop-v1.0.0",
+      );
+      const next = git(
+        "commit-tree",
+        "HEAD^{tree}",
+        "-p",
+        "HEAD",
+        "-m",
+        "verified candidate",
+      );
+      git("branch", "aggregate/next", pinned ? previous : next);
+      const result = spawnSync(
+        "bash",
+        [
+          new URL("./fork-aggregate", import.meta.url).pathname,
+          "--promote-only",
+          ...(pinned ? ["--result", next] : []),
+        ],
+        { cwd: root, env, encoding: "utf8" },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(git("branch", "--show-current"), "main");
+      assert.equal(git("rev-parse", "HEAD"), next);
+      assert.equal(
+        git("ls-remote", "fork", "refs/heads/main").split("\t")[0],
+        next,
+      );
+      assert.equal(
+        git("ls-remote", "fork", "refs/heads/local/aggregate").split("\t")[0],
+        previous,
+      );
+      const clone = join(root, ".git", "clone");
+      git("clone", "-q", remote, clone);
+      assert.equal(git("-C", clone, "branch", "--show-current"), "main");
+      assert.equal(git("-C", clone, "rev-parse", "HEAD"), next);
+      assert.equal(git("status", "--porcelain"), "");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test("SDK source identity rejects wrong SHA, tag and dirty input while allowing ignored build outputs", async () => {
   const { checkSource } = await import("./fork-release/sdk-artifact.mjs");
@@ -307,7 +424,10 @@ test("release publication requires SDK identity and completes drafts without ove
     const runtimeName = `bb-${tag}-linux-x64.tar.gz`;
     const runtimePath = join(root, "release", runtimeName);
     writeFileSync(runtimePath, "runtime fixture");
-    writeFileSync(`${runtimePath}.sha256`, `${digest(runtimePath)}  ${runtimeName}\n`);
+    writeFileSync(
+      `${runtimePath}.sha256`,
+      `${digest(runtimePath)}  ${runtimeName}\n`,
+    );
     const assets = readdirSync(join(root, "release")).map((name) => ({
       name,
       size: 1,

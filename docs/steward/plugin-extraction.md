@@ -34,9 +34,9 @@
 | `feature/acp-custom-agent-icon`                                                                                        | 迁出             | 集合 `acp-profile-icons`；provider 图标插槽已足够                              |
 | `fix/acp-mid-turn-steering`                                                                                            | 替换             | 独立 `fix/acp-steering-delivery`；共享协议投递和时间线必须一致                 |
 | `fix/leading-thread-avatar-layout`                                                                                     | 收回基础分支     | `feature/plugin-thread-list-contributions`；通用行装饰布局属于贡献 API         |
-| `feature/side-chat-command`、`fix/side-chat-main-composer`                                                             | 当时退出，已恢复 | 用户要求保留 `/side` 快捷入口，恢复主输入框补全与原生面板调用                              |
+| `feature/side-chat-command`、`fix/side-chat-main-composer`                                                             | 当时退出，已恢复 | 用户要求保留 `/side` 快捷入口，恢复主输入框补全与原生面板调用                  |
 | `feature/mobile-queue-action`                                                                                          | 淘汰             | 移除常驻第二按钮，保留原生长按 Queue/Steer                                     |
-| `feature/codex-home-bindings`                                                                                          | 当时退出，已恢复 | 2026-10-19 恢复原生双入口，保留要求见 `.fork/branches`                                |
+| `feature/codex-home-bindings`                                                                                          | 当时退出，已恢复 | 2026-10-19 恢复原生双入口，保留要求见 `.fork/branches`                         |
 | `feature/child-report-delivery`、`fix/acp-mid-turn-steering-design`                                                    | 结束活跃维护     | 纯设计资料留在归档历史，不参与产品聚合；其他尚未登记的通知候选不在本次删除范围 |
 | `fix/empty-long-timeline`、`fix/mobile-display-options`                                                                | 结束活跃维护     | 过时历史分支只留归档，不重新加入聚合                                           |
 | `fix/pool-ai-fallback`                                                                                                 | 保留现有插件实现 | `plugins/account-pool`；另起插件会复制池 hub、凭据和配置                       |
@@ -100,3 +100,22 @@
 ## 2026-10-19 快捷入口保留
 
 用户确认恢复 `/side` 快捷入口，重新纳入 `feature/side-chat-command` 与叠放的 `fix/side-chat-main-composer`。移动端已有原生长按 Queue/Steer，继续不纳入常驻第二按钮。长时间线与移动端显示选项旧修复、两份独立设计分支保持现状。
+
+## 2026-10-24 分支收敛与升级执行复盘
+
+本节是一次审计记录，后续活跃输入仍只以 `.fork/branches` 为准。迁出时清单有 30 条（含 `fork-tooling`），之后恢复或新增 10 条，本次审计从 40 条收敛到 37 条。
+
+| 审计对象                                                                           | 处理及依据                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feature/side-chat-command` + `fix/side-chat-main-composer`                        | 同属 `/side` 快捷入口。前者统一保留最后成功安装版本中的完整主输入框实现 `7da541b164`，后者退出聚合；上游 #4807 的原分支链接继续有效。不是把本次删掉主输入框实现后的相同 tip 当作已完成合并。                               |
+| `fix/git-fixture-isolation` + `fix/test-edit-hold-isolation`                       | 收敛为 `fix/test-isolation`，合并双方历史，`turbo.json` 的临时目录和缓存环境取并集；原有 fixture、队列编辑保持与文档测试修改全部保留。                                                                                     |
+| `feature/sidebar-navigation-provider-slot`                                         | 稳定版 `desktop-v0.47.0` 已含上游 #5529（`c91f77e9c6`）、#5609（`a0da6e9b9f`）、#5584（`3e7e490621`）及后续导航改动，退出临时回移分支。旧 AppSidebar query mock 属于旧测试结构，稳定版已改用 `sidebarNavigationProvider`。 |
+| `fix/dependency-security` + `fix/dependency-security-refresh`                      | 暂不合并：前者是基础依赖修复，后者另有依赖升级、旧 patch 删除及 SDK URL 测试适配；本次相同 tip 来自重置，并不代表内容已合并。恢复刷新分支 `955d82abfa`；登记 PR #5741 已因贡献者准入关闭、未合并。                         |
+| ACP resume/config、steering、checkpoint、模型配置错误、模型发现错误、skills prompt | 是可独立反馈上游的协议行为，保留独立分支与真实依赖。恢复被重置的 steering `9be76caf0c`、checkpoint `47142b2199`、模型发现 `350c31cfea`，不按共同目录合成大分支。                                                           |
+| 插件上下文、列表贡献、活动查询、消息定位、常驻标签                                 | 是不同公共契约，保留独立。分别恢复 `55cb8db7f1`、`0719073255`、`a04c3bab7f`、`d4b370193b`、`09bc4d7824`，避免把重置到基线误认作上游吸收。                                                                                  |
+| 新线程项目继承、移动端 Add to chat                                                 | 恢复 `e3566e717d`、`067a0bfac4`；同为原生 UI 但触发行为不同，保留独立。                                                                                                                                                    |
+| 其余维护、渲染、安全、原生交互、provider 与账号池分支                              | 保留各自职责；目录或编辑文件重合不代表适合同一个上游 PR。Codex home 与 `/side` 的用户保留要求继续有效。                                                                                                                    |
+
+恢复依据是最后成功安装的 `fork-v0.46.1-20261024.1`（`4391759671`）中每条分支 merge 的第二父提交，不依赖可能过期的 reflog。恢复 ref 只保全已发布功能，不代表已经适配 `0.47.x`；后续先运行集中预检，再在所属分支迁移和验证。失败候选 `cba9cb7b9a` 顶部的锁文件、协议与测试修复也不能直接作为下次聚合输入，须分别核实并归回所属分支；该候选未完成发布或本机安装。
+
+旧 ref 继续保留供回溯和上游链接使用，不参与聚合。此次是维护流程与输入整理，不触发产品包或服务替换。

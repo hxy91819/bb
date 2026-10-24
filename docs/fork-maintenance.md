@@ -63,21 +63,25 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --fi
 scripts/fork-package                       # 聚合 → 验证 → 提升 → 构建 → 发布 tag → 打印 cutover 提示
 scripts/fork-package --no-release          # 只验证、提升、构建，不打 tag
 scripts/fork-package --test-filter <pkg>   # 覆盖默认的测试范围，可重复
+scripts/fork-package --resume <sha>        # 从失败阶段接续同一个聚合 SHA
+scripts/fork-aggregate --preflight         # 不改聚合 worktree，一次列出与上游的全部冲突
 ```
 
 `fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
 Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
 
-1. `scripts/fork-aggregate`：从基线 tag 开始依次 `merge --no-ff` 清单中的分支，生成 `.worktrees/aggregate-next`。每次从头生成，没有中间状态。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
+1. `scripts/fork-aggregate`：先只读预检所有输入与基线的冲突，集中报告；通过后从基线 tag 开始依次 `merge --no-ff`，生成 `.worktrees/aggregate-next`。merge 提交的时间固定取基线与各分支 tip 中最新的提交时间，所以分支没变时重跑得到同一个 SHA。
 2. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
 3. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 main>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
-4. `scripts/fork-aggregate --promote-only`：把根目录 `main` 移到已验证的那个提交并推送 fork。不重新聚合，所以提升的 SHA 就是验证过的 SHA。
+4. `scripts/fork-aggregate --base <固定tag> --promote-only --result <已验证sha>`：把根目录 `main` 移到已验证的那个提交并推送 fork，不依赖可能已被其他任务移动的 `aggregate/next`。
 5. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 6. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
 7. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `main` 的那些。
 8. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
 
-修一次分支再重跑 `fork-package` 是常态：聚合 SHA 变了就换新检出，没变就复用旧检出和它的依赖。
+修改分支后重新运行 `fork-package`，生成新 SHA；输入未变、只因进程中断或外部故障失败时，按输出的 `--resume <sha>` 接续。接续固定原来的基线、上次 main、测试范围和部署检出，逐阶段保存成功结果、耗时与日志到 Git common directory 的 `fork-package/`，不写入产品 Git。失败阶段不会记为成功；SHA、执行命令、流水线实现或相关运行环境变化时重跑对应检查。安装目录丢失时重新安装并清除旧检查结果；运行时构建和原生模块检查每次执行并使用 Turbo 缓存恢复产物。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。
+
+普通发布在安装前检查根目录是否为干净的 `main`；根目录有并行工作时保留现场，使用独立干净 clone，或先用 `--verify-only` 验证。不要移动用户文件来绕过提升检查。
 
 Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-runtime.mjs` 都默认设置 `TURBO_CACHE_DIR`），
 所以每次只有被改动分支触及的包及其下游会真正重新 typecheck 和构建，其余命中缓存。缓存目录可以随时删除，只影响速度。
@@ -107,12 +111,14 @@ scripts/fork-aggregate --promote            # 重新聚合并提升到 main；�
 | 分支之间冲突   | 单独都能合入，一起才冲突      | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。               |
 
 - 产品修复永远回到对应分支，不写在聚合的 merge 提交里。
+- 独立的正确性修复继续保留独立分支；同一功能的补充分支、共享测试隔离设置可以在保留双方内容后收敛。减少清单行数不能代替减少实际改动和冲突。
+- 分支与基线相同或多个分支 tip 相同，只是核对线索。先与升级前成功安装的聚合中对应 merge 的第二父提交比较，确认功能实际保留；不能通过重置到基线或另一个分支来解决功能迁移。
 - 同一对分支反复出现非平凡冲突时，把后者 rebase 到前者上（叠放），更新清单顺序和说明。
 - 叠放分支 rebase 时从栈底开始，用 `git rebase --update-refs` 让上层分支一起移动。
 
 ### 每日自动检查与汇报
 
-`scripts/daily-fork-sync.sh <project-id> <checkout-path>` 供本机 cron 调用，调度信息保留在本机，不写进脚本。脚本检查稳定 tag 后创建 BB 线程：有更新时沿用聚合、验证、发布与已授权的本机部署流程，并在遇到冲突时继续解决；无更新时仅汇报。
+`scripts/daily-fork-sync.sh <project-id> <checkout-path>` 供本机 cron 调用，调度信息保留在本机，不写进脚本。脚本从上游远端选择严格匹配 `desktop-vX.Y.Z` 的最新 tag，并将检查时的目标写入线程任务；这一轮始终使用该目标，后来出现的新版本留到下一轮。有更新时沿用聚合、验证、发布与已授权的本机部署流程，并在遇到冲突时继续解决；无更新时仅汇报。
 
 每日线程最终用简体中文报告相对更新前版本的新增功能、修复问题、测试结果、Release 与本机安装状态。上游变化核对稳定 tag 范围，fork 变化核对更新前实际运行包的 source；切换服务前保存比较起点和汇报上下文，恢复后继续交付。没有变化、未测试、未生效或失败均明确说明。
 
@@ -120,7 +126,7 @@ scripts/fork-aggregate --promote            # 重新聚合并提升到 main；�
 
 1. 把 `.fork/branches` 的 `base` 改成新的 `desktop-v*` tag（或先用 `scripts/fork-aggregate --base <tag>` 试跑）。
 2. 运行脚本，按上表逐个处理冲突。没有冲突的分支不用动。
-3. 某个分支 rebase 后变空，说明上游已经包含它：从清单删除这一行，删除分支（fork 上的也删），在提交说明里写明被上游哪个版本吸收。
+3. 某个分支 rebase 后变空时，对照升级前 tip、对应上游提交和实际行为确认已吸收，再从清单移除，提交说明写明稳定版本与上游提交。仍被 worktree 使用或上游反馈链接引用的旧 ref 先保留；完成检查后再清理。
 4. 验证、`--promote`，提交并推送 `fork-tooling` 上的新 `base`。
 
 ## 3. 发布预编译聚合包
@@ -158,9 +164,9 @@ workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点�
 
 在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。默认只为本机自部署构建 Linux x64，不等待 macOS、ARM 或桌面客户端。Linux x64 使用 GitHub 托管 runner 构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有 Linux x64 与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
 
-| 包名后缀              | 目标机器                                              |
-| --------------------- | ----------------------------------------------------- |
-| `linux-x64.tar.gz`    | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
+| 包名后缀           | 目标机器                                              |
+| ------------------ | ----------------------------------------------------- |
+| `linux-x64.tar.gz` | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
 
 这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
 
