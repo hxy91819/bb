@@ -36,6 +36,9 @@ import { suppliedWorkspacePathRefusal } from "./workspace-path-claims.js";
 export const UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME =
   "update_environment_directory";
 
+export const ENVIRONMENT_DIRECTORY_UPDATE_OPERATION =
+  "environment_directory_update";
+
 const UPDATE_ENVIRONMENT_DIRECTORY_TIMEOUT_MS = 5 * 60 * 1000;
 
 const updateEnvironmentDirectoryInputSchema = z
@@ -124,7 +127,7 @@ function validateDirectoryPath(path: string): string | null {
   return null;
 }
 
-function threadWritableFailure(thread: Thread): string | null {
+export function threadWritableFailure(thread: Thread): string | null {
   if (thread.deletedAt !== null) {
     return "Cannot update the environment directory for a deleted thread.";
   }
@@ -228,7 +231,7 @@ function attachReadyEnvironment(
         type: "system/operation",
         scope: turnScope(args.turnId),
         data: {
-          operation: "environment_directory_update",
+          operation: ENVIRONMENT_DIRECTORY_UPDATE_OPERATION,
           operationId: createEventId(),
           status: "completed",
           message: `Updated environment directory to ${args.targetEnvironment.path}`,
