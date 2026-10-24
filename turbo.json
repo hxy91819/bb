@@ -4,7 +4,10 @@
   "globalPassThroughEnv": [
     "npm_config_store_dir",
     "pnpm_config_store_dir",
-    "TMPDIR"
+    "TMPDIR",
+    "npm_config_cache",
+    "WRANGLER_HOME",
+    "XDG_CONFIG_HOME"
   ],
   "tasks": {
     "@bb/db#db:generate": { "cache": false },
