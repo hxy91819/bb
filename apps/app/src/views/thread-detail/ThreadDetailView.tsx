@@ -2372,7 +2372,6 @@ function ThreadDetailViewInternal(
           : null
       }
       composerFocusRequestNonce={composerFocusRequestNonce}
-      isForkAvailable={isForkAvailable}
       sendMessage={sendMessage}
       sentMessageEdit={sentMessageEdit}
       steerActiveThreadOnEnter={
