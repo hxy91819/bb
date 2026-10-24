@@ -2398,14 +2398,10 @@ async function startAgentSession(
       env: childEnv,
       capabilities,
     });
-    session.supportsImageInput =
-      initializeResult.agentCapabilities?.promptCapabilities?.image ?? false;
-    const supportsLoadSession =
-      initializeResult.agentCapabilities?.loadSession ?? false;
-    const supportsResume =
-      initializeResult.agentCapabilities?.sessionCapabilities?.resume != null;
-    const supportsFork =
-      initializeResult.agentCapabilities?.sessionCapabilities?.fork != null;
+    session.supportsImageInput = capabilities.prompt.image;
+    const supportsLoadSession = capabilities.session.load;
+    const supportsResume = capabilities.session.resume;
+    const supportsFork = capabilities.session.fork;
     if (request.kind === "fork" && !supportsFork) {
       throw new Error(
         `ACP agent "${agentLabel}" does not advertise session/fork support.`,
