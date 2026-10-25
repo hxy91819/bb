@@ -1267,3 +1267,15 @@ is `group`, `ungrouped` or `loading` (the latter two have an empty key).
 Labels can change without resetting state; keys from other providers remain stored.
 Read and change these through `bb thread-list prefs list/get/set/reset` or the
 plugin preferences RPC. Open windows receive changes through the existing sync.
+
+### Named Codex homes
+
+The Codex provider plugin's `homeBindings` setting is a JSON list, default `[]`:
+
+```sh
+bb plugin config provider-codex set homeBindings '[{"id":"work","displayName":"Work","codexHome":"~/.codex-work"}]'
+```
+
+Each entry adds `codex-<id>` to the provider picker, CLI and SDK. The local Codex CLI uses that home for sessions, models, login state, usage and native skills. Paths resolve on each execution machine and must be absolute or start with `~/`. File authentication is required for BB's account and quota inspection; existing `auth.json` symlinks work without importing tokens.
+
+Display names may change. A binding ID retains its directory expression after deletion and restart; use a new ID for a different directory. Removal preserves history and Codex data; restoring the same binding permits continuation. Fork and Side chat use the source binding. Fixed bindings bypass Account Pooler, including inherited pool variables. Default `codex` and the Codex AI service keep their existing behavior. See the [Codex plugin overview](../plugins/provider-codex/PLUGIN_OVERVIEW.md) for preparation and examples.
