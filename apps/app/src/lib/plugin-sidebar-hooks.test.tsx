@@ -117,7 +117,10 @@ vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
   useUpdateThread: () => ({ mutateAsync: mutations.updateThreadAsync }),
 }));
 
-vi.mock("@/components/ui/app-route-anchor", () => ({
+vi.mock("@/components/ui/app-route-anchor", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/components/ui/app-route-anchor")
+  >()),
   useRouteNavigate: () => actions.navigate,
 }));
 
