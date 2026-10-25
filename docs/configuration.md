@@ -1248,6 +1248,8 @@ settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
 
+Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.
+
 ### Plugin thread grouping preferences
 
 The bundled Thread list accepts `organizationMode` values `chronological`

@@ -441,3 +441,5 @@ is `group`, `ungrouped` or `loading` (the latter two have an empty key).
 Labels can change without resetting state; keys from other providers remain stored.
 Read and change these through `bb thread-list prefs list/get/set/reset` or the
 plugin preferences RPC. Open windows receive changes through the existing sync.
+
+Account Pooler registers `codex-pool` for titles and commit messages when Codex routing has an available account. Automatic tries it after bb cloud and before local Codex; it needs no local Codex login and does not transcribe voice. Select it with `bb settings ai-services set thread-title codex-pool`.
