@@ -2011,11 +2011,7 @@ function ThreadDetailViewInternal(
         path,
       });
     };
-  }, [
-    activeHostFileLineRange,
-    canOpenHostFileTarget,
-    openHostFileInTarget,
-  ]);
+  }, [activeHostFileLineRange, canOpenHostFileTarget, openHostFileInTarget]);
   const workspaceOpenPath = executionUnavailable
     ? null
     : resolveThreadWorkspaceOpenPath({
