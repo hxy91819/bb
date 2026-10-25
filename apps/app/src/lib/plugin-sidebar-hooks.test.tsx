@@ -33,11 +33,17 @@ import { SidebarThreadShortcutKeysContext } from "@/components/sidebar/sidebarTh
 import { PluginContext } from "@/components/plugin/plugin-context";
 import { SidebarThreadEntriesTestProvider } from "@/test/sidebarThreadEntriesTestProvider";
 
-const renderHook: typeof renderHookBase = (callback, options) =>
-  renderHookBase(callback, {
-    wrapper: SidebarThreadEntriesTestProvider,
+const renderHook: typeof renderHookBase = (callback, options) => {
+  const Wrapper = options?.wrapper;
+  return renderHookBase(callback, {
     ...options,
+    wrapper: ({ children }) => (
+      <SidebarThreadEntriesTestProvider>
+        {Wrapper ? <Wrapper>{children}</Wrapper> : children}
+      </SidebarThreadEntriesTestProvider>
+    ),
   });
+};
 
 const actions = vi.hoisted(() => ({
   navigate: vi.fn(),
