@@ -23,7 +23,14 @@
  * it sweeps the output for every pattern again and exits 3 if anything
  * survived, so a new secret shape fails loudly instead of landing in git.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  copyFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 
@@ -51,8 +58,10 @@ const TOKEN_PATTERNS = [
 /** `"Authorization": "<value>"` in JSON, with or without JSON escaping. */
 const AUTHORIZATION_PATTERN =
   /("|\\")[Aa]uthorization\1\s*:\s*("|\\")(?:(?!\2)[^\\]|\\.)*\2/g;
-const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
-const SECRET_ENV_KEY = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|COOKIE|AUTH)/i;
+const EMAIL_PATTERN =
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const SECRET_ENV_KEY =
+  /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|COOKIE|AUTH)/i;
 const RECORD_DIR_ENV = "BB_PROVIDER_BRIDGE_RECORD_DIR";
 
 function parseArgs(argv) {
@@ -94,7 +103,9 @@ function trimString(value) {
 function namesOnly(list) {
   if (!Array.isArray(list)) return list;
   return list.map((entry) =>
-    entry !== null && typeof entry === "object" && typeof entry.name === "string"
+    entry !== null &&
+    typeof entry === "object" &&
+    typeof entry.name === "string"
       ? entry.name
       : entry,
   );
@@ -123,9 +134,10 @@ function redactEnvMap(map) {
   const out = {};
   for (const [key, value] of Object.entries(map)) {
     if (key === RECORD_DIR_ENV) continue;
-    out[key] = SECRET_ENV_KEY.test(key) && typeof value === "string" && value !== ""
-      ? "REDACTED"
-      : value;
+    out[key] =
+      SECRET_ENV_KEY.test(key) && typeof value === "string" && value !== ""
+        ? "REDACTED"
+        : value;
   }
   return out;
 }
@@ -140,7 +152,8 @@ function redactValue(value, key, catalogContext) {
     return trimString(value);
   }
   if (Array.isArray(value)) {
-    const list = catalogContext && CATALOG_KEYS.has(key) ? namesOnly(value) : value;
+    const list =
+      catalogContext && CATALOG_KEYS.has(key) ? namesOnly(value) : value;
     return list.map((entry) => redactValue(entry, key, catalogContext));
   }
   if (value !== null && typeof value === "object") {
@@ -174,7 +187,8 @@ function redactLine(line) {
   if (parsed === null || typeof parsed !== "object") {
     return line;
   }
-  const catalogContext = !Array.isArray(parsed) && isClaudeCatalogMessage(parsed);
+  const catalogContext =
+    !Array.isArray(parsed) && isClaudeCatalogMessage(parsed);
   return JSON.stringify(redactValue(parsed, "", catalogContext));
 }
 
@@ -182,19 +196,26 @@ function redactLine(line) {
 // Textual pass
 // ---------------------------------------------------------------------------
 
+function encodedHomePattern(home) {
+  const encoded = escapeRegExp(home.replace(/\//g, "-"));
+  return new RegExp(`(?<![A-Za-z0-9_-])${encoded}(?![A-Za-z0-9_])`, "g");
+}
+
 function createTextRedactor(home) {
   const homePattern = new RegExp(escapeRegExp(home), "g");
   // Claude Code names its per-project transcript directories and task output
   // paths after the cwd with every `/` turned into `-` (`-home-user-…`).
-  const dashedHome = home.replace(/\//g, "-");
-  const dashedHomePattern = new RegExp(escapeRegExp(dashedHome), "g");
+  const dashedHomePattern = encodedHomePattern(home);
   const dashedRedactedHome = REDACTED_HOME.replace(/\//g, "-");
   // `ls -l` owner/group columns name the account even when no path does.
   const userName = home.split("/").filter(Boolean).at(-1) ?? "";
   const ownerPattern =
     userName === ""
       ? null
-      : new RegExp(`(\\s)${escapeRegExp(userName)} ${escapeRegExp(userName)}(\\s)`, "g");
+      : new RegExp(
+          `(\\s)${escapeRegExp(userName)} ${escapeRegExp(userName)}(\\s)`,
+          "g",
+        );
   return (text) => {
     let out = text
       .replace(homePattern, REDACTED_HOME)
@@ -222,14 +243,25 @@ function createTextRedactor(home) {
 
 function createSurvivorSweep(home) {
   const homePattern = new RegExp(escapeRegExp(home), "g");
-  const dashedHomePattern = new RegExp(escapeRegExp(home.replace(/\//g, "-")), "g");
+  const dashedHomePattern = encodedHomePattern(home);
   return (text) => {
     const survivors = [];
-    for (const pattern of [homePattern, dashedHomePattern, EMAIL_PATTERN, AUTHORIZATION_PATTERN, ...TOKEN_PATTERNS]) {
+    for (const pattern of [
+      homePattern,
+      dashedHomePattern,
+      EMAIL_PATTERN,
+      AUTHORIZATION_PATTERN,
+      ...TOKEN_PATTERNS,
+    ]) {
       pattern.lastIndex = 0;
       for (const match of text.matchAll(pattern)) {
         const hit = match[0];
-        if (hit.includes("REDACTED") || hit === REDACTED_EMAIL || hit === REDACTED_HOME) continue;
+        if (
+          hit.includes("REDACTED") ||
+          hit === REDACTED_EMAIL ||
+          hit === REDACTED_HOME
+        )
+          continue;
         survivors.push(hit.slice(0, 24));
       }
     }
@@ -263,7 +295,11 @@ function redactNdjson(text, redactText) {
   const out = [];
   for (const raw of lines) {
     const entry = JSON.parse(raw);
-    if (entry !== null && typeof entry === "object" && typeof entry.line === "string") {
+    if (
+      entry !== null &&
+      typeof entry === "object" &&
+      typeof entry.line === "string"
+    ) {
       const structural = redactLine(entry.line);
       out.push(JSON.stringify({ ...entry, line: redactText(structural) }));
     } else {
@@ -303,13 +339,17 @@ function main() {
     for (const hit of sweep(redacted)) survivors.push({ file: rel, hit });
   }
   if (survivors.length > 0) {
-    console.error("SECRETS STILL PRESENT after redaction — refusing to continue:");
+    console.error(
+      "SECRETS STILL PRESENT after redaction — refusing to continue:",
+    );
     for (const { file, hit } of survivors.slice(0, 20)) {
       console.error(`  ${file}: ${hit}`);
     }
     process.exit(3);
   }
-  console.log(`redacted ${rewritten} recording files into ${outDir} (home=${home} → ${REDACTED_HOME}); 0 survivors`);
+  console.log(
+    `redacted ${rewritten} recording files into ${outDir} (home=${home} → ${REDACTED_HOME}); 0 survivors`,
+  );
 }
 
 main();
