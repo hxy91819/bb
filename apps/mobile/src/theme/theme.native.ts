@@ -1362,6 +1362,10 @@ export const nativeTypography = {
     fontSize: 15,
     lineHeight: 20,
   },
+  editable: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
   base: {
     fontSize: 17,
     lineHeight: 22,
