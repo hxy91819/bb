@@ -2085,10 +2085,9 @@ describe("PluginNewThreadComposer seeding", () => {
     expect(onSubmit).not.toHaveBeenCalled();
     await act(async () => {
       await expect(
-        latestPromptBoxProps().pluginComposerHost.submit(
-          { experimental_data: null },
-          undefined,
-        ),
+        latestPromptBoxProps().onSubmit({
+          pluginSubmission: { experimental_data: null },
+        }),
       ).rejects.toThrow("identity unavailable");
     });
     expect(draft.getCurrent()).toEqual(submittedDraft);

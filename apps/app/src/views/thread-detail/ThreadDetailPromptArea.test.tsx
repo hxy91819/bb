@@ -1727,7 +1727,12 @@ describe("ThreadDetailPromptArea", () => {
     });
     renderPromptArea();
     fireEvent.click(screen.getByRole("button", { name: "Start handoff" }));
-    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Capture plugin host" }));
+    await act(async () => {
+      await expect(mocks.composerSubmit?.()).rejects.toThrow(
+        "identity unavailable",
+      );
+    });
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
     expect(mocks.promptDraft.clearIfCurrentMatches).not.toHaveBeenCalled();
     expect(mocks.createThreadMutateAsync).not.toHaveBeenCalled();
