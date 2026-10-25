@@ -255,7 +255,6 @@ interface ParentTurnNotificationFollowUp {
   parentThreadId: string;
   title: string | null;
   turnStatus: ThreadEventTurnStatus;
-
 }
 
 interface QueuedMessageDispatchFollowUp {
