@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, renderHook as renderHookBase } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  renderHook as renderHookBase,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createStore, getDefaultStore, Provider } from "jotai";
 import { useCallback, type ReactNode } from "react";

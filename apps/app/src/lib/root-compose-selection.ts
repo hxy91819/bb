@@ -52,7 +52,7 @@ const lastSelectedProjectIdAtom = atom((get) => {
   const rememberedProjectId = get(rememberedProjectIdAtom);
   return rememberedProjectId !== PERSONAL_PROJECT_ID
     ? rememberedProjectId
-    : get(rootComposeStoredProjectIdAtom) ?? PERSONAL_PROJECT_ID;
+    : (get(rootComposeStoredProjectIdAtom) ?? PERSONAL_PROJECT_ID);
 });
 
 export function useLastSelectedProjectId() {
@@ -63,9 +63,10 @@ const rootComposeProjectChosenAtom = atom(false);
 const rootComposeProjectIdAtom = atom(
   (get) => get(rootComposeStoredProjectIdAtom) ?? PERSONAL_PROJECT_ID,
   (get, set, projectId: string) => {
-    const remembered = projectId !== PERSONAL_PROJECT_ID
-      ? projectId
-      : get(rootComposeStoredProjectIdAtom);
+    const remembered =
+      projectId !== PERSONAL_PROJECT_ID
+        ? projectId
+        : get(rootComposeStoredProjectIdAtom);
     if (remembered && remembered !== PERSONAL_PROJECT_ID) {
       set(rememberedProjectIdAtom, remembered);
     }
