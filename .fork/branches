@@ -1,0 +1,47 @@
+# Fork 分支清单：scripts/fork-aggregate 从 base 开始，按顺序 merge 下列分支生成 main。
+# 格式：<分支>  <上游状态>  [上游链接]  # 一句话说明
+# 上游状态：needs-feedback（未反馈）| reported（已提 issue）| pr-open（已提 PR）| fork-only（个人偏好，不回流）| internal（fork 维护/部署）
+# 叠放分支（基于另一 fork 分支）必须排在其基础分支之后，说明里写 "叠在 <分支> 上"。
+
+base desktop-v0.47.0
+
+fork-tooling                           internal                                                   # fork 维护规则、聚合脚本、部署 skill
+fix/local-aggregate-server-startup     internal                                                   # 服务先监听再做启动恢复
+fix/vite-cve-2026-39363                reported        https://github.com/get-bb/bb/issues/1780   # Vite 6.4.1 CVE 覆盖到 6.4.3
+feature/mermaid-elk-layout             reported        https://github.com/get-bb/bb/issues/3382   # Mermaid 使用 ELK 布局
+fix/official-catalog-date-utc          needs-feedback                                             # 官方插件目录日期按 UTC 解析
+fix/environment-switch-auto-continue   reported        https://github.com/get-bb/bb/issues/4778                   # 切换环境后自动继续一次；上游已有同题 issue，以评论链接实现
+fix/markdown-table-breakout            reported        https://github.com/get-bb/bb/issues/1705   # Markdown 表格列内滚动/展开
+feature/side-chat-command              reported        https://github.com/get-bb/bb/issues/4807                   # /side 快捷入口及主输入框补全合并维护；已恢复最后成功安装的完整实现，升级冲突须迁移
+fix/acp-resume-config-options          needs-feedback                                             # 共享 ACP resume、分组配置与 reasoning 兼容；DSH 注册迁至外部插件
+fix/acp-steering-delivery             needs-feedback                                             # 共享 ACP steer 投递与时间线；叠在 fix/acp-resume-config-options 上
+feature/acp-checkpoint-fork           needs-feedback                                             # 共享 checkpoint fork、探测与历史执行设置；叠在 fix/acp-steering-delivery 上；自定义 agent 配置迁至外部插件
+fix/acp-model-config-error             needs-feedback                                             # 保留 ACP 模型配置拒绝错误，仅 -32601 回退 set_model；叠在 fix/acp-resume-config-options 上
+fix/sidebar-touch-navigation           needs-feedback                                             # 触屏点击导航而非重命名，补上游 #5042 未覆盖的 ≥768px 触屏
+fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
+fix/provider-icon-hitbox               needs-feedback                                             # WebKit SVG 图标透明区域覆盖相邻 provider 点击区；含移动端模型选择器 story
+fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
+fix/side-chat-input-zoom               needs-feedback                                             # 触屏输入至少 16px，抵挡 Side Chat 插件样式覆盖并锁定回归
+fix/side-chat-task-boundary            needs-feedback                                             # 侧聊首次实际消息与会话指令声明独立任务边界，回答后不自动恢复主线程工作
+feature/hidden-providers               reported        https://github.com/get-bb/bb/issues/4811                   # hiddenProviders 隐藏选择器中的 provider，新线程回退到可见项，既有线程仍可切换
+fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
+feature/child-turn-author              reported        https://github.com/get-bb/bb/issues/4424   # 子线程完成通知标注回合是否由用户直接发起；已从 upstream/child-turn-author 移植到含 #4356 的基线；已在 #4424 评论链接实现
+feature/browser-remote-editor          reported        https://github.com/get-bb/bb/issues/4808                   # 按浏览器配置工作机 SSH 别名，直接唤起 VS Code，无需本地 helper
+fix/acp-skills-prompt-paths            reported        https://github.com/get-bb/bb/issues/4481   # ACP 会话指令按 skill root 分组，根目录只声明一次，不再每行重复绝对路径；已在 #4481 评论链接实现
+fix/dependency-security                 needs-feedback                                             # 稳定基线依赖漏洞修复（含 TanStack XSS、MCP OAuth issuer 绑定），保留主版本
+fix/test-isolation                     internal                                                   # 合并 Git/host fixture 隔离、队列编辑测试稳定性、构建缓存与临时目录透传
+fix/provider-recording-redaction             needs-feedback                                             # 录像脱敏仅匹配独立的编码 home 路径，避免改写 multi-root 等普通文案
+feature/plugin-thread-context                   needs-feedback                                             # 通用提交上下文快照与多namespace插件metadata原子创建，SDK/CLI/Guide共用。
+feature/plugin-thread-list-contributions        needs-feedback                                             # 通用可选成员等分组与行装饰贡献，复用原生thread-list树/偏好/交互。
+feature/thread-activity-query                  needs-feedback                                             # 通用有界线程活动事实查询，SQL namespace/metadata/date过滤与SDK/CLI分页
+fix/plugin-overlay-recovery                    needs-feedback                                             # 插件内容脚本隔离期间放行 React root 挂载，避免全局 overlay 节点被拒
+fix/mobile-add-to-chat                        needs-feedback                                             # 移动端 Add to chat 展开聚焦并在引用外回复；Safari 浮动菜单等 click 后关闭，避免点击穿透抢光标
+feature/thread-message-navigation            needs-feedback                                             # 插件 toThread 支持 experimental_messageSeq 定位消息，与命令面板会话搜索共用实现
+fix/codex-compaction-warning                  fork-only                                                  # 屏蔽 Codex 长会话多次压缩准确率提示（按第一句前缀过滤 warning）
+fix/pool-ai-fallback                         needs-feedback                                             # Account Pool 提供标题与提交消息 AI 服务，无本地 Codex 登录时参与自动回退
+feature/pool-auth-file                       needs-feedback                                             # Account Pooler 支持 --auth-file 导入指定 Codex 凭证文件，保留软链与默认路径
+feature/codex-home-bindings                   needs-feedback                                             # 原生 Codex 命名 home：独立登录、模型、额度与技能，复用软链并绕过账号池；用户要求持续保留，移除须经用户明确同意
+feature/codex-home-launchers                   needs-feedback                                             # 原生 Codex home 支持独立凭据启动器与结构化健康探测；叠在 feature/codex-home-bindings 上
+fix/dependency-security-refresh               reported        https://github.com/get-bb/bb/pull/5741             # 依赖升级与 SDK 测试适配；叠在 fix/dependency-security 上；PR 因贡献者准入自动关闭、未合并
+feature/plugin-pinned-thread-panels           needs-feedback                                             # 插件可声明常驻会话右侧标签，复用原有打开、持久化与关闭路径
+fix/child-question-notifications             needs-feedback                                             # 插件异步提问接入父线程求助通知，提供表单回答入口与 Codex 回传格式
