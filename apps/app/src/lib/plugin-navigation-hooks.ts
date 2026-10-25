@@ -50,9 +50,20 @@ export function useBbNavigate(): BbNavigate {
   const toThread = useCallback<BbNavigate["toThread"]>(
     (threadId, options) => {
       onNavigate?.();
-      const target = options?.experimental_messageSeq !== undefined ? { match: "message" as const, seq: options.experimental_messageSeq } : undefined;
+      const target =
+        options?.experimental_messageSeq !== undefined
+          ? { match: "message" as const, seq: options.experimental_messageSeq }
+          : undefined;
       const open = (projectId: string) => {
-        openThread({ store, navigate, projectId, threadId, isCompact, split: options?.split, target });
+        openThread({
+          store,
+          navigate,
+          projectId,
+          threadId,
+          isCompact,
+          split: options?.split,
+          target,
+        });
       };
       const cached = lookupCachedThread(queryClient, threadId);
       if (cached !== null) {

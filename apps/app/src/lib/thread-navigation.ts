@@ -47,9 +47,7 @@ export function openThread({
       ? getMessageLinkPath({ projectId, threadId, seq: target.seq })
       : getThreadRoutePath({ projectId, threadId });
   const hash =
-    target?.match === "message"
-      ? route.slice(route.indexOf("#"))
-      : undefined;
+    target?.match === "message" ? route.slice(route.indexOf("#")) : undefined;
   const state =
     target?.match === "sequence"
       ? { searchMessageSeq: target.seq, searchThreadId: threadId }
