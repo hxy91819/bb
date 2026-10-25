@@ -136,6 +136,9 @@ interface TypeaheadMentionConfig {
 }
 interface TypeaheadCommandConfig {
   source: CommandSuggestionSource;
+  onPanelAction?: (
+    target: import("@bb/client-core").ProviderCommandPanelAction,
+  ) => boolean;
 }
 export interface TypeaheadConfig {
   mention: TypeaheadMentionConfig;

@@ -1,10 +1,22 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { TypeaheadConfig } from "@/components/promptbox/ComposerBox";
 import type { PromptMentionLinkResolver } from "@bb/client-core";
 import type { PromptBoxAction } from "@/components/promptbox/ComposerBox";
 import type { ProviderComposerAction } from "@bb/domain";
 import type { ProviderCommand } from "@bb/server-contract";
-import { buildProviderPromptActionProps } from "@bb/client-core";
+import {
+  buildProviderPromptActionProps,
+  type ProviderCommandPanelAction,
+} from "@bb/client-core";
+import type { CommandSuggestionPanelCommand } from "@/hooks/useCommandSuggestions";
+import { usePluginSlots, isThreadTab } from "@/lib/plugin-slots";
+import { invokePluginPanelAction } from "@/components/plugin/PluginPanelActions";
+import { usePluginThreadPanelOpenHandler } from "@/components/plugin/plugin-thread-panel-navigation";
+import {
+  SIDE_CHAT_COMMAND_NAME,
+  SIDE_CHAT_PLUGIN_ID,
+  SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
+} from "@/lib/side-chat-plugin";
 import { usePromptMentionTriggers } from "@/hooks/usePromptMentions";
 
 interface UseComposerTypeaheadArgs {
@@ -19,6 +31,7 @@ interface UseComposerTypeaheadArgs {
     | undefined;
   threadProviderCommands?: readonly ProviderCommand[] | null;
   resolveMentionLink: PromptMentionLinkResolver;
+  sideChatCommand?: { enabled: boolean };
 }
 
 interface UseComposerTypeaheadResult {
@@ -36,6 +49,7 @@ export function useComposerTypeahead({
   selectedProviderComposerActions,
   threadProviderCommands,
   resolveMentionLink,
+  sideChatCommand,
 }: UseComposerTypeaheadArgs): UseComposerTypeaheadResult {
   const mentionTriggers = usePromptMentionTriggers();
   const providerPromptActions = useMemo(
@@ -44,6 +58,58 @@ export function useComposerTypeahead({
   );
   const { promptActions, skillsTriggers } = providerPromptActions;
   const mentionSourceProjectId = mentionsProjectId ?? projectId;
+  const openThreadPanel = usePluginThreadPanelOpenHandler();
+  const { tabs } = usePluginSlots();
+  const threadPanelActions = useMemo(
+    () =>
+      tabs.filter(isThreadTab).filter((tab) => tab.availability === "action"),
+    [tabs],
+  );
+  const panelCommands = useMemo<
+    readonly CommandSuggestionPanelCommand[] | undefined
+  >(() => {
+    if (sideChatCommand?.enabled !== true || openThreadPanel === null)
+      return undefined;
+    const action = threadPanelActions.find(
+      (candidate) =>
+        candidate.pluginId === SIDE_CHAT_PLUGIN_ID &&
+        candidate.id === SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
+    );
+    return action
+      ? [
+          {
+            name: SIDE_CHAT_COMMAND_NAME,
+            pluginId: action.pluginId,
+            actionId: action.id,
+            description: action.title,
+          },
+        ]
+      : undefined;
+  }, [openThreadPanel, sideChatCommand?.enabled, threadPanelActions]);
+  const handlePanelAction = useCallback(
+    (target: ProviderCommandPanelAction): boolean => {
+      if (openThreadPanel === null) return false;
+      const action = threadPanelActions.find(
+        (candidate) =>
+          candidate.pluginId === target.pluginId &&
+          candidate.id === target.actionId,
+      );
+      if (!action) return false;
+      invokePluginPanelAction({
+        action,
+        context: { kind: "thread", threadId: currentThreadId },
+        openPanel: (options) =>
+          openThreadPanel({
+            pluginId: action.pluginId,
+            actionId: action.id,
+            title: options?.title,
+            params: options?.params,
+          }),
+      });
+      return true;
+    },
+    [currentThreadId, openThreadPanel, threadPanelActions],
+  );
 
   const typeaheadConfig = useMemo<TypeaheadConfig>(
     () => ({
@@ -58,12 +124,14 @@ export function useComposerTypeahead({
         resolveLink: resolveMentionLink,
       },
       command: {
+        onPanelAction: handlePanelAction,
         source: {
           projectId,
           providerId,
           commandScope,
           skillsTriggers,
           promptActions,
+          panelCommands,
           threadProviderCommands: threadProviderCommands ?? null,
           environmentId,
         },
@@ -71,6 +139,8 @@ export function useComposerTypeahead({
     }),
     [
       commandScope,
+      handlePanelAction,
+      panelCommands,
       currentThreadId,
       environmentId,
       mentionSourceProjectId,
