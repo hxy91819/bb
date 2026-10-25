@@ -3,7 +3,6 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { compile } from "tailwindcss";
 import {
@@ -33,7 +32,7 @@ const { ComposerEditorSlot } = await composerPluginModule<{
   }>;
 }>("ComposerEditorSlot.tsx");
 
-const appRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const appRoot = resolve(__dirname, "../../../");
 const require = createRequire(resolve(appRoot, "package.json"));
 const themePath = resolve(appRoot, "src/components/ui/theme.css");
 
