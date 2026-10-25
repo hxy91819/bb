@@ -4397,7 +4397,6 @@ describe("acp bridge", () => {
       sourceProviderCheckpointId: "old-checkpoint",
     });
     const providerThreadId = providerThreadIdOf(await waitForResponse(id));
-    startedProviderThreadIds.push(providerThreadId);
     bbThreadIdByProviderThreadId.set(providerThreadId, threadId);
     expect(JSON.parse(readFileSync(forkLog, "utf8"))).toMatchObject({
       sessionId: "source-session",
