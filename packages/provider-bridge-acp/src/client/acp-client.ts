@@ -63,6 +63,7 @@ export interface AcpClientOptions {
 }
 
 export interface AcpRequestOptions {
+  onSubmitted?: () => void;
   timeoutMs?: number | null;
 }
 
@@ -147,7 +148,18 @@ export function connectAcpClient(options: AcpClientOptions): AcpClient {
   const { handlers } = options;
   const discarded = handlers.discarded ?? (() => {});
 
+  const submissions: {
+    method: string;
+    params: unknown;
+    submitted: () => void;
+  }[] = [];
   const stream = createAcpMessageStream({
+    onRequestSubmitted(method, params) {
+      const index = submissions.findIndex(
+        (entry) => entry.method === method && entry.params === params,
+      );
+      if (index !== -1) submissions.splice(index, 1)[0]?.submitted();
+    },
     input: options.input,
     output: options.output,
     closeOnInputEnd: options.closeOnInputEnd,
@@ -192,14 +204,26 @@ export function connectAcpClient(options: AcpClientOptions): AcpClient {
   async function withDeadline<Result>(
     method: string,
     requestOptions: AcpRequestOptions | undefined,
+    requestParams: unknown,
     send: (cancellationSignal: AbortSignal | undefined) => Promise<Result>,
   ): Promise<Result> {
+    const submission = {
+      method,
+      params: requestParams,
+      submitted: requestOptions?.onSubmitted ?? (() => {}),
+    };
+    submissions.push(submission);
     const timeoutMs =
       requestOptions?.timeoutMs === undefined
         ? options.requestTimeoutMs
         : requestOptions.timeoutMs;
     if (timeoutMs === null) {
-      return send(undefined);
+      try {
+        return await send(undefined);
+      } finally {
+        const index = submissions.indexOf(submission);
+        if (index !== -1) submissions.splice(index, 1);
+      }
     }
     const controller = new AbortController();
     let timer: NodeJS.Timeout | undefined;
@@ -213,27 +237,37 @@ export function connectAcpClient(options: AcpClientOptions): AcpClient {
       return await Promise.race([send(controller.signal), deadline]);
     } finally {
       clearTimeout(timer);
+      const index = submissions.indexOf(submission);
+      if (index !== -1) submissions.splice(index, 1);
     }
   }
 
   return {
     request(method, params, requestOptions) {
-      return withDeadline(method, requestOptions, (cancellationSignal) =>
-        connection.agent.request(
-          method,
-          params,
-          cancellationSignal ? { cancellationSignal } : undefined,
-        ),
+      return withDeadline(
+        method,
+        requestOptions,
+        params,
+        (cancellationSignal) =>
+          connection.agent.request(
+            method,
+            params,
+            cancellationSignal ? { cancellationSignal } : undefined,
+          ),
       );
     },
 
     extensionRequest(method, params, requestOptions) {
-      return withDeadline(method, requestOptions, (cancellationSignal) =>
-        connection.agent.request<unknown, unknown>(
-          method,
-          params,
-          cancellationSignal ? { cancellationSignal } : undefined,
-        ),
+      return withDeadline(
+        method,
+        requestOptions,
+        params,
+        (cancellationSignal) =>
+          connection.agent.request<unknown, unknown>(
+            method,
+            params,
+            cancellationSignal ? { cancellationSignal } : undefined,
+          ),
       );
     },
 

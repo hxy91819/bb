@@ -246,8 +246,7 @@ describe("acpSessionNewResultSchema", () => {
                   name: "DeepSeek-V4-Pro",
                 },
                 {
-                  value:
-                    '["deepseek-official","deepseek-v4-flash-vision-exp"]',
+                  value: '["deepseek-official","deepseek-v4-flash-vision-exp"]',
                   name: "DeepSeek-V4-Flash-Vision-Exp",
                 },
               ],
@@ -270,18 +269,18 @@ describe("acpSessionNewResultSchema", () => {
       ],
     });
 
-    expect(parsed.configOptions?.[0]?.options?.map((option) => option.value)).toEqual(
-      [
-        '["deepseek-official","deepseek-flash"]',
-        '["deepseek-official","deepseek-v4-flash"]',
-        '["deepseek-official","deepseek-v4-pro"]',
-        '["deepseek-official","deepseek-v4-flash-vision-exp"]',
-      ],
-    );
+    expect(
+      parsed.configOptions?.[0]?.options?.map((option) => option.value),
+    ).toEqual([
+      '["deepseek-official","deepseek-flash"]',
+      '["deepseek-official","deepseek-v4-flash"]',
+      '["deepseek-official","deepseek-v4-pro"]',
+      '["deepseek-official","deepseek-v4-flash-vision-exp"]',
+    ]);
     expect(parsed.configOptions?.[1]?.currentValue).toBe("high");
-    expect(parsed.configOptions?.[1]?.options?.map((option) => option.value)).toEqual(
-      ["off", "low", "high", "max"],
-    );
+    expect(
+      parsed.configOptions?.[1]?.options?.map((option) => option.value),
+    ).toEqual(["off", "low", "high", "max"]);
   });
 });
 
