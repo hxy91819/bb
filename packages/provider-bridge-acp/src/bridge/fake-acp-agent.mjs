@@ -155,7 +155,7 @@ const sessionOptionRejectedValue =
   process.env.FAKE_ACP_SESSION_OPTION_REJECTED_VALUE;
 let selectedApproach = "build";
 let webSearchEnabled = false;
-const setConfigModelError = process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR === "1";
+const setConfigModelError = process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR;
 const setConfigModelErrorValue =
   process.env.FAKE_ACP_SET_CONFIG_MODEL_ERROR_VALUE;
 const setConfigFastError = process.env.FAKE_ACP_SET_CONFIG_FAST_ERROR === "1";
@@ -1228,7 +1228,15 @@ async function handleMessage(message) {
           send({
             jsonrpc: "2.0",
             id: message.id,
-            error: { code: -32603, message: "model config probe failed" },
+            error:
+              setConfigModelError === "method-not-found"
+                ? { code: -32601, message: "Method not found" }
+                : setConfigModelError === "fixed"
+                  ? {
+                      code: -32602,
+                      message: "Amp mode is fixed after the first prompt",
+                    }
+                  : { code: -32603, message: "model config probe failed" },
           });
           return;
         }
