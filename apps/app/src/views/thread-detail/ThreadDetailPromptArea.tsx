@@ -129,6 +129,7 @@ import {
 import { useThreadDefaultExecutionOptions } from "@/hooks/queries/thread-default-execution-options-query";
 import {
   getMutationErrorMessage,
+  showMutationErrorToast,
   reportMutationError,
 } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
