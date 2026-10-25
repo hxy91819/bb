@@ -119,6 +119,7 @@ describe("Family B emit-site discriminator stamping", () => {
         });
 
         await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+          author: null,
           childThread: child,
           parentThreadId: fixture.parentThreadId,
           turnStatus,
@@ -138,6 +139,43 @@ describe("Family B emit-site discriminator stamping", () => {
       });
     });
   }
+
+  it("stamps directUserInput on the outcome of a turn the user steered", async () => {
+    await withChildThreadNotificationClock(async (harness) => {
+      const fixture = seedParentFixture(harness, "host-child-user-input");
+      const child = seedThread(harness.deps, {
+        projectId: fixture.projectId,
+        title: "Worker child",
+        parentThreadId: fixture.parentThreadId,
+      });
+
+      await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+        author: {
+          hasDirectUserInput: true,
+          hasParentInput: true,
+          hasOtherAgentInput: false,
+          userInputExcerpt: "You may delete the old files.",
+        },
+        childThread: child,
+        parentThreadId: fixture.parentThreadId,
+        turnStatus: "completed",
+      });
+
+      const stamped = await waitForStampedSystemMessage(
+        harness,
+        fixture.parentThreadId,
+      );
+      expect(stamped.systemMessageKind).toBe("child-completed");
+      expect(stamped.systemMessageSubject).toEqual({
+        kind: "thread",
+        threadId: child.id,
+        threadName: "Worker child",
+        outcomes: [
+          { threadId: child.id, status: "completed", directUserInput: true },
+        ],
+      });
+    });
+  });
 
   it("stamps a needs-attention notification as child-needs-attention", async () => {
     await withChildThreadNotificationClock(async (harness) => {
