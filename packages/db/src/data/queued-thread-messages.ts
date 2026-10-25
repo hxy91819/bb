@@ -994,27 +994,6 @@ export function hasClaimedQueuedThreadMessages(
   );
 }
 
-export function hasUnclaimedOrdinaryQueuedThreadMessages(
-  db: DbQueryConnection,
-  threadId: string,
-): boolean {
-  return (
-    db
-      .select({ id: queuedThreadMessages.id })
-      .from(queuedThreadMessages)
-      .where(
-        and(
-          eq(queuedThreadMessages.threadId, threadId),
-          isNull(queuedThreadMessages.systemNotice),
-          liveQueuedThreadMessage(),
-          isNull(queuedThreadMessages.editHeldUntil),
-        ),
-      )
-      .limit(1)
-      .get() !== undefined
-  );
-}
-
 export function deleteQueuedRetriesForThreadEventSuffixInTransaction(
   db: DbTransaction,
   args: {

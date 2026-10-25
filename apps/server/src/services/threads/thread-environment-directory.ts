@@ -5,12 +5,9 @@ import {
   createEnvironment,
   type EnvironmentRow,
   createEventId,
-  createQueuedThreadMessageInTransaction,
   findProjectEnvironmentByHostPath,
   getEnvironment,
   getThread,
-  hasUnclaimedOrdinaryQueuedThreadMessages,
-  isThreadQueueAutoSendPaused,
   updateThread,
 } from "@bb/db";
 import {
@@ -19,16 +16,10 @@ import {
   isHostPathRoot,
   turnScope,
 } from "@bb/domain";
-import type {
-  DynamicTool,
-  ResolvedThreadExecutionOptions,
-  Thread,
-  ToolCallResponse,
-} from "@bb/domain";
+import type { DynamicTool, Thread, ToolCallResponse } from "@bb/domain";
 import type { AppDeps } from "../../types.js";
-import { runLiveHostCommand } from "../hosts/live-command.js";
+import { runTrackedEnvironmentAttach } from "../environments/environment-engine.js";
 import { appendThreadEventInTransaction } from "./thread-events.js";
-import { buildExecutionOptions } from "./thread-commands.js";
 import { buildEnvironmentProvisionCommand } from "./thread-create-helpers.js";
 import { findHostDataDir } from "../lib/entity-lookup.js";
 import { suppliedWorkspacePathRefusal } from "./workspace-path-claims.js";
@@ -167,7 +158,7 @@ function attachReadyEnvironment(
   deps: Pick<AppDeps, "db" | "hub">,
   args: {
     currentEnvironment: EnvironmentRow;
-    continuationExecution: ResolvedThreadExecutionOptions | null;
+    continueCurrentTask: boolean;
     createdEnvironment: boolean;
     targetEnvironment: ReadyEnvironment;
     thread: Thread;
@@ -200,31 +191,6 @@ function attachReadyEnvironment(
       updateThread(tx, deps.hub, latestThread.id, {
         environmentId: args.targetEnvironment.id,
       });
-      if (
-        args.continuationExecution !== null &&
-        !hasUnclaimedOrdinaryQueuedThreadMessages(tx, latestThread.id) &&
-        !isThreadQueueAutoSendPaused(tx, latestThread.id)
-      ) {
-        createQueuedThreadMessageInTransaction(tx, {
-          threadId: latestThread.id,
-          content: [
-            {
-              type: "text",
-              text: `The thread is now running in ${args.targetEnvironment.path}. Continue the unfinished task from the previous turn. Re-read relevant files before editing because this directory may contain a different checkout.`,
-              mentions: [],
-            },
-          ],
-          senderThreadId: null,
-          model: args.continuationExecution.model,
-          reasoningLevel: args.continuationExecution.reasoningLevel,
-          permissionMode: args.continuationExecution.permissionMode,
-          serviceTier: args.continuationExecution.serviceTier,
-          waitingOn: { kind: "thread-busy" },
-          sendAt: null,
-          payload: { kind: "inline" },
-          systemNotice: { kind: "environment-directory-updated", subject: null },
-        });
-      }
       appendThreadEventInTransaction(tx, {
         threadId: latestThread.id,
         environmentId: args.targetEnvironment.id,
@@ -237,6 +203,7 @@ function attachReadyEnvironment(
           message: `Updated environment directory to ${args.targetEnvironment.path}`,
           metadata: {
             createdEnvironment: args.createdEnvironment,
+            continueCurrentTask: args.continueCurrentTask,
             previousEnvironmentId: args.currentEnvironment.id,
             previousPath: args.currentEnvironment.path,
             nextEnvironmentId: args.targetEnvironment.id,
@@ -289,7 +256,7 @@ async function provisionUnmanagedEnvironmentForPath(
   });
 
   try {
-    await runLiveHostCommand(deps, {
+    await runTrackedEnvironmentAttach(deps, {
       hostId: args.currentEnvironment.hostId,
       command,
       timeoutMs: UPDATE_ENVIRONMENT_DIRECTORY_TIMEOUT_MS,
@@ -398,16 +365,13 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
 
   let attachResult: AttachEnvironmentResult;
   try {
-    const continuationExecution = input.data.continueCurrentTask
-      ? await buildExecutionOptions(deps, {}, { threadId: args.thread.id })
-      : null;
     assertEnvironmentPathAvailable(deps, {
       ...targetEnvironment,
       threadId: args.thread.id,
     });
     attachResult = attachReadyEnvironment(deps, {
       currentEnvironment: args.currentEnvironment,
-      continuationExecution,
+      continueCurrentTask: input.data.continueCurrentTask,
       createdEnvironment,
       targetEnvironment,
       thread: args.thread,

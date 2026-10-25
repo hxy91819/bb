@@ -1,3 +1,4 @@
+import { appendClientTurnEvent } from "../../src/services/threads/thread-events.js";
 import { Buffer } from "node:buffer";
 import { once } from "node:events";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -123,6 +124,7 @@ async function runDirectorySwitchTurn(
     beforeTurnCompleted: (fixture: DirectorySwitchFixture) => void;
     status: "completed" | "interrupted";
     withParent: boolean;
+    continueCurrentTask?: boolean;
   },
 ): Promise<DirectorySwitchFixture> {
   const { host, session } = seedHostSession(harness.deps);
@@ -185,7 +187,10 @@ async function runDirectorySwitchTurn(
     threadId: thread.id,
     turnId,
     tool: "update_environment_directory",
-    arguments: { path: "/tmp/continue-worktree" },
+    arguments: {
+      path: "/tmp/continue-worktree",
+      continueCurrentTask: args.continueCurrentTask ?? true,
+    },
   });
   expect(toolCallResponse.status).toBe(200);
   expect(getThread(harness.db, thread.id)?.environmentId).toBe(
@@ -1188,7 +1193,10 @@ describe("internal event and tool-call routes", () => {
         threadId: thread.id,
         turnId: "turn-existing-environment",
         tool: "update_environment_directory",
-        arguments: { path: "/tmp/existing-managed-worktree/" },
+        arguments: {
+          path: "/tmp/existing-managed-worktree/",
+          continueCurrentTask: false,
+        },
       });
 
       expect(response.status).toBe(200);
@@ -1236,6 +1244,24 @@ describe("internal event and tool-call routes", () => {
       submits: 1,
     },
     {
+      name: "explicitly not continuing",
+      status: "completed" as const,
+      manualStop: false,
+      queuedMessage: false,
+      continueCurrentTask: false,
+      continues: false,
+      submits: 0,
+    },
+    {
+      name: "continuation cancelled by newer input",
+      status: "completed" as const,
+      manualStop: false,
+      queuedMessage: false,
+      cancelContinuation: true,
+      continues: false,
+      submits: 0,
+    },
+    {
       name: "interrupted",
       status: "interrupted" as const,
       manualStop: false,
@@ -1261,12 +1287,19 @@ describe("internal event and tool-call routes", () => {
     },
   ])(
     "starts the follow-up turn in the new directory only when the directory-switch turn completes on its own ($name)",
-    async ({ status, manualStop, queuedMessage, continues, submits }) => {
+    async (testCase) => {
+      const { status, manualStop, queuedMessage, continues, submits } =
+        testCase;
       await withChildThreadNotificationClock(async (harness) => {
-        const { threadId, targetEnvironmentId } =
-          await runDirectorySwitchTurn(harness, {
+        const { threadId, targetEnvironmentId } = await runDirectorySwitchTurn(
+          harness,
+          {
             withParent: false,
             status,
+            continueCurrentTask:
+              "continueCurrentTask" in testCase
+                ? testCase.continueCurrentTask
+                : true,
             beforeTurnCompleted: (fixture) => {
               if (manualStop) {
                 seedEvent(harness.deps, {
@@ -1282,6 +1315,29 @@ describe("internal event and tool-call routes", () => {
                   data: { reason: "manual-stop" },
                 });
               }
+              if ("cancelContinuation" in testCase) {
+                appendClientTurnEvent(harness.deps, {
+                  type: "client/turn/requested",
+                  threadId: fixture.threadId,
+                  environmentId: fixture.targetEnvironmentId,
+                  input: textInput("Replace the remaining task"),
+                  initiator: "user",
+                  senderThreadId: null,
+                  source: "tell",
+                  requestMethod: "turn/start",
+                  target: {
+                    kind: "steer",
+                    expectedTurnId: "turn-switch-directory",
+                  },
+                  execution: {
+                    model: "fake-model",
+                    serviceTier: "default",
+                    reasoningLevel: "medium",
+                    permissionMode: "full",
+                    source: "client/turn/requested",
+                  },
+                });
+              }
               if (queuedMessage) {
                 seedQueuedMessage(harness.deps, {
                   content: textInput("Check the README before continuing"),
@@ -1289,7 +1345,8 @@ describe("internal event and tool-call routes", () => {
                 });
               }
             },
-          });
+          },
+        );
 
         const continuationRequests = harness.db
           .select()
@@ -1401,7 +1458,10 @@ describe("internal event and tool-call routes", () => {
           threadId: thread.id,
           turnId: "turn-new-environment",
           tool: "update_environment_directory",
-          arguments: { path: "/tmp/new-unmanaged-worktree" },
+          arguments: {
+            path: "/tmp/new-unmanaged-worktree",
+            continueCurrentTask: false,
+          },
         });
         const provisionCommand = await waitForQueuedCommand(
           harness,
@@ -1528,7 +1588,7 @@ describe("internal event and tool-call routes", () => {
         threadId: thread.id,
         turnId: "turn-shared-directory",
         tool: "update_environment_directory",
-        arguments: { path: sharedPath },
+        arguments: { path: sharedPath, continueCurrentTask: false },
       });
       const provisionCommand = await waitForQueuedCommand(
         harness,
@@ -1606,7 +1666,7 @@ describe("internal event and tool-call routes", () => {
         threadId: thread.id,
         turnId: "turn-managed-alias",
         tool: "update_environment_directory",
-        arguments: { path: worktreePath },
+        arguments: { path: worktreePath, continueCurrentTask: false },
       });
 
       expect(response.status).toBe(200);
@@ -1650,7 +1710,7 @@ describe("internal event and tool-call routes", () => {
         sessionId: session.id,
         threadId: thread.id,
         tool: "update_environment_directory",
-        arguments: { path: "../other-checkout" },
+        arguments: { path: "../other-checkout", continueCurrentTask: false },
       });
 
       expect(response.status).toBe(200);
