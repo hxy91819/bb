@@ -1982,9 +1982,7 @@ describe("side-chat composer command", () => {
     );
 
     expect(
-      screen
-        .getByTestId("command-suggestions")
-        .textContent?.split(",") ?? [],
+      screen.getByTestId("command-suggestions").textContent?.split(",") ?? [],
     ).toContain("side");
   });
 
@@ -2008,9 +2006,8 @@ describe("side-chat composer command", () => {
       </PluginThreadPanelNavigationProvider>,
     );
 
-    expect(
-      screen.getByTestId("command-suggestions").textContent,
-    ).not.toContain("side");
+    expect(screen.getByTestId("command-suggestions").textContent).not.toContain(
+      "side",
+    );
   });
-
 });

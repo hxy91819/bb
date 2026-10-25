@@ -67,21 +67,19 @@ export function panelCommandSuggestions({
   query: string;
 }): ProviderCommandSuggestion[] {
   return filterCommandSuggestions(
-    (panelCommands ?? []).map(
-      (command): ProviderCommandSuggestion => ({
-        kind: "command",
-        name: command.name,
-        source: "command",
-        origin: "user",
-        description: command.description,
-        argumentHint: null,
+    (panelCommands ?? []).map((command): ProviderCommandSuggestion => ({
+      kind: "command",
+      name: command.name,
+      source: "command",
+      origin: "user",
+      description: command.description,
+      argumentHint: null,
+      pluginId: command.pluginId,
+      panelAction: {
         pluginId: command.pluginId,
-        panelAction: {
-          pluginId: command.pluginId,
-          actionId: command.actionId,
-        },
-      }),
-    ),
+        actionId: command.actionId,
+      },
+    })),
     query,
   );
 }
