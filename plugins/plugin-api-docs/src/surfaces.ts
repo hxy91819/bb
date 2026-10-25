@@ -411,11 +411,10 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         summary:
           "Add a tab to the side panel next to a thread. With this, a plugin can:",
         bullets: [
-          "Show closable or pinned plugin tabs alongside the conversation",
+          "Keep default pinned tabs available and show closable tabs beside the conversation",
           "Know which thread the tab belongs to and hide pinned tabs when they do not apply",
           "Use one tab registration for thread and navigation-page contexts; core Info and Diff use it too",
           "Open from a [message action](message-actions), the side panel's + button, or plugin code",
-          "Keep a default tab always available beside the conversation",
         ],
         reference: [
           "Register tabs with app.slots.experimental_tab({ id, title, icon, tooltip?, layout?, context, availability, useVisible?, component }). context is { kind: 'thread' } or { kind: 'nav-panel', panelId }; the component receives threadId or subPath. Core Info and Diff use thread + fixed registrations. tooltip defaults to title; layout is padded (default) or flush.",
