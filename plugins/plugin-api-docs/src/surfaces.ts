@@ -429,7 +429,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         summary:
           "Add a tab to the side panel next to a thread. With this, a plugin can:",
         bullets: [
-          "Show closable or pinned plugin tabs alongside the conversation",
+          "Keep default pinned tabs available and show closable tabs beside the conversation",
           "Know which thread the tab belongs to and hide pinned tabs when they do not apply",
           "Use one tab registration for thread and navigation-page contexts; core Info and Diff use it too",
           "Open from a [message action](message-actions), the side panel's + button, or plugin code",
