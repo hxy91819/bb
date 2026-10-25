@@ -3564,7 +3564,6 @@ Stabilize after exercising producer cancellation, reload, reconnect and byte lim
 - **Known coupling:** `environment` folds in the "Show Git changes and Commit button" setting so the pull request segment hides with core's changed files, as before; that setting should become the git plugin's own when changed files move out of core.
 - **Stabilization:** audit per-component mounts and crash recovery across reloads and plugin disable, `segments` stability while visibility settles, focus handoff between a plugin's summary and details, independent panes, and compact widths with several plugin segments. Then rename project-wide and remove this entry.
 
-
 ## Composable thread list contributions
 
 `app.slots.experimental_threadListGrouping<Data>` registers

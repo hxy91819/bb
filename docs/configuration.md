@@ -1245,7 +1245,6 @@ settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
 
-
 ### Plugin thread grouping preferences
 
 The bundled Thread list accepts `organizationMode` values `chronological`
