@@ -25,8 +25,9 @@ describe("probeAcpAgent", () => {
       command: process.execPath,
       args: [
         "-e",
-        `process.stdin.on("data", () => {
-        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1,
+        `require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
+        const request = JSON.parse(line);
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id,
           result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: {
             fork: { _meta: { "cursor-acp/checkpoint": true } }
           } } }
