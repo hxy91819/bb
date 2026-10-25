@@ -3580,9 +3580,9 @@ same core navigation implementation (`openThread`), passing sequence match
 semantics (`searchMessageSeq`).
 
 Before stabilization, verify:
+
 - Scroll-to-message reliability across lazy/paginated timeline loading and
   deferred message details.
 - Alignment with `ThreadChatMessageReference.experimental_messageSeq` and
   whether the option stabilizes as `messageSeq` or retains parity with message references.
 - Multi-pane split layouts when navigating between messages across different panes.
-
