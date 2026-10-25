@@ -13,6 +13,7 @@ const PACKAGE_EXTERNALS = ["zod", "zod/*", "cross-spawn"];
 
 const EXTRA_EXTERNALS = {
   "./internal/rpc-query-host": ["react", "react/*", "@tanstack/react-query"],
+  "./internal/thread-contribution-runtime": ["react", "react/*"],
   "./testing": ["better-sqlite3", "cron-parser", "hono", "hono/*"],
   "./testing/app": [
     "@testing-library/react",

@@ -56,6 +56,7 @@ import { useRouteNavigate } from "@/components/ui/app-route-anchor";
 import { resolveThread } from "@/lib/cached-thread";
 import { CORE_THREAD_ACTIONS } from "@/lib/thread-actions/core-thread-actions";
 import { ThreadActionCollectors } from "@/lib/thread-actions/thread-action-registry";
+import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
 
 export interface ThreadActionsContextValue {
   archiveEnvironmentThreads: (environmentId: string) => Promise<void>;
@@ -613,7 +614,7 @@ export function ThreadActionsProvider({
         coreRegistrations={CORE_THREAD_ACTIONS}
         requestRename={requestRenameById}
       />
-      {children}
+      <ThreadListContributions>{children}</ThreadListContributions>
       <ThreadRenameDialog
         target={renameDialog.target}
         pending={updateThread.isPending}
