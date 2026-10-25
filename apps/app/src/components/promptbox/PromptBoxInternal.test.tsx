@@ -1479,21 +1479,19 @@ describe("ComposerBox controlled value sync", () => {
     try {
       const view = render(
         <div hidden>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
       await waitFor(() =>
         expect(getPromptEditorElement()).toBeInstanceOf(HTMLElement),
       );
-      await waitFor(() =>
-        expect(deferred.observers.length).toBeGreaterThan(0),
-      );
+      await waitFor(() => expect(deferred.observers.length).toBeGreaterThan(0));
       expect(document.activeElement).not.toBe(getPromptEditorElement());
 
       view.rerender(
         <div>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
       act(() => deferred.fire());
@@ -1517,7 +1515,7 @@ describe("ComposerBox controlled value sync", () => {
     try {
       render(
         <div style={{ visibility: "hidden" }}>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
@@ -1536,7 +1534,7 @@ describe("ComposerBox controlled value sync", () => {
     try {
       render(
         <div hidden>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
@@ -1555,7 +1553,7 @@ describe("ComposerBox controlled value sync", () => {
     try {
       render(
         <div hidden>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
@@ -1576,18 +1574,16 @@ describe("ComposerBox controlled value sync", () => {
       first.focus();
       const view = render(
         <div hidden>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
-      await waitFor(() =>
-        expect(deferred.observers.length).toBeGreaterThan(0),
-      );
+      await waitFor(() => expect(deferred.observers.length).toBeGreaterThan(0));
 
       second.focus();
       view.rerender(
         <div>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
       act(() => deferred.fire());
@@ -1607,20 +1603,18 @@ describe("ComposerBox controlled value sync", () => {
     try {
       const view = render(
         <div hidden>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
 
-      await waitFor(() =>
-        expect(deferred.observers.length).toBeGreaterThan(0),
-      );
+      await waitFor(() => expect(deferred.observers.length).toBeGreaterThan(0));
 
       act(() => {
         getPromptEditorElement().focus();
       });
       view.rerender(
         <div>
-          <PromptBoxInternal {...createPromptBoxProps()} />
+          <ComposerBox {...createPromptBoxProps()} />
         </div>,
       );
       act(() => deferred.fire());
