@@ -134,8 +134,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
 const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
-const resumeSession =
-  process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
+const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const deleteSession = process.env.FAKE_ACP_DELETE_SESSION === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
@@ -462,6 +461,7 @@ function sessionCapabilities() {
   const capabilities = {
     ...(forkSession ? { fork: {} } : {}),
     ...(resumeSession ? { resume: {} } : {}),
+    ...(deleteSession ? { delete: {} } : {}),
   };
   return Object.keys(capabilities).length > 0
     ? { sessionCapabilities: capabilities }

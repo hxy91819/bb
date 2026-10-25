@@ -2422,7 +2422,7 @@ async function startAgentSession(
     session.capabilities = capabilities;
     const steering = resolveAcpSteering({
       configured: params.steeringMode,
-      declared: capabilities.meta["midTurnSteering"],
+      declared: capabilities.initializeMeta["midTurnSteering"],
       dialect,
     });
     session.steeringNative = steering.native;
@@ -3119,20 +3119,39 @@ function submitTurnPrompt(
   ctx.inFlight += 1;
   let request: Promise<z.infer<typeof acpPromptResultSchema>>;
   try {
-    request = session.connection.request({
-      method: "session/prompt",
-      params: {
-        sessionId: session.providerThreadId,
-        prompt,
-      },
-      resultSchema: acpPromptResultSchema,
-      onSubmitted: () => {
-        acceptTurnInput(session, pending);
-        if (delivery !== undefined) {
-          emitInputDelivery(session, pending, delivery);
+    session.turnStartedAtMs ??= Date.now();
+    request = (async () => {
+      let busyRetries = 0;
+      for (;;) {
+        try {
+          return await session.connection.request({
+            method: "session/prompt",
+            params: {
+              sessionId: session.providerThreadId,
+              prompt,
+            },
+            resultSchema: acpPromptResultSchema,
+            onSubmitted: () => {
+              acceptTurnInput(session, pending);
+              if (delivery !== undefined) {
+                emitInputDelivery(session, pending, delivery);
+              }
+            },
+          });
+        } catch (error) {
+          if (
+            delivery === "steer" ||
+            !isSessionBusyError(error) ||
+            busyRetries >= SESSION_BUSY_MAX_RETRIES ||
+            session.stopping ||
+            session.cancelRequested
+          )
+            throw error;
+          busyRetries += 1;
+          if (!(await waitForAgentQuiet(session))) throw error;
         }
-      },
-    });
+      }
+    })();
   } catch (error) {
     noteInFlightSettled(ctx);
     throw error;

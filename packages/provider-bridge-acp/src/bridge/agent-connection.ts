@@ -310,7 +310,10 @@ export function createAcpAgentConnection(
         return Promise.reject(notRunningError());
       }
       return client
-        .extensionRequest(method, params, { timeoutMs: timeoutMs ?? null, onSubmitted })
+        .extensionRequest(method, params, {
+          timeoutMs: timeoutMs ?? null,
+          onSubmitted,
+        })
         .then(
           (value) => {
             options.onResponse?.(method, value);
