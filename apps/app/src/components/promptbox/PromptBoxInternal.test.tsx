@@ -1440,7 +1440,7 @@ describe("ComposerBox controlled value sync", () => {
       const baseProps = createPromptBoxProps({
         promptBoxRef,
       });
-      const view = render(<ComposerBox {...baseProps} />);
+      render(<ComposerBox {...baseProps} />);
 
       await waitFor(() => expect(promptBoxRef.current).not.toBeNull());
       const outsideTarget = document.createElement("button");
