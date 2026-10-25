@@ -95,7 +95,10 @@ export function requestChildThreadNeedsAttentionNotification(
   interaction: PendingInteraction,
 ): void {
   const childThread = getThread(deps.db, interaction.threadId);
-  if (!childThread || !isParentNotifiableChildThread(childThread, "needs-attention")) {
+  if (
+    !childThread ||
+    !isParentNotifiableChildThread(childThread, "needs-attention")
+  ) {
     return;
   }
   const parentThreadId = childThread.parentThreadId;
