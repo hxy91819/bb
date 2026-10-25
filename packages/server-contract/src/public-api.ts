@@ -3,7 +3,7 @@ import {
   updateUiPreferenceRoute,
   resetUiPreferenceRoute,
 } from "./client-route-descriptors.js";
-export {
+import {
   experimentalThreadActivityRequestSchema,
   type ExperimentalThreadActivityInput,
   type ExperimentalThreadActivityResponse,
