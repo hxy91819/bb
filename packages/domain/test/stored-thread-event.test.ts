@@ -136,8 +136,6 @@ describe("parseStoredThreadEvent", () => {
         data: { ...base, ...marker },
       });
 
-    // The marker is one fact in two keys: an attempt number without the
-    // request it re-runs (or vice versa) misstates retry ancestry.
     expect(() => parse({ retryAttempt: 2 })).toThrow();
     expect(() => parse({ retryOfRequestId: "creq_23456789cd" })).toThrow();
     expect(
