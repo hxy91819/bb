@@ -19,7 +19,7 @@ import {
   seedThread,
   seedThreadRuntimeState,
 } from "../helpers/seed.js";
-import { createTestAppHarness } from "../helpers/test-app.js";
+import { createTestAppHarness, withTestHarness } from "../helpers/test-app.js";
 import {
   withChildThreadNotificationClock,
   flushChildThreadNotifications,
