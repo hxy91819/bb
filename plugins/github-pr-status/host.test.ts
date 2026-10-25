@@ -405,7 +405,7 @@ describe("pull request lookup for differently named upstream branches", () => {
       harness.experimental_call("view", {
         path: workspacePath,
         url: null,
-        refresh: false,
+        refresh: true,
       }),
     ).resolves.toEqual({
       outcome: "unavailable",
