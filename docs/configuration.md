@@ -1250,5 +1250,6 @@ Codex process needs credentials from a local credential store; the wrapper must
 preserve stdio and forward arguments. Store only its path in BB settings, never
 keys or tokens. Bindings without `command` keep the normal Codex launch path.
 Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
-recognized without a local subscription login. A failed probe preserves the
-structured authentication state and waits for its child process to exit.
+recognized without a local subscription login. A failed probe returns structured health and waits for its child process to exit.
+Startup and authentication share a ten-second health probe deadline. Successful
+launcher-managed authentication clears unrelated local account and login hints.

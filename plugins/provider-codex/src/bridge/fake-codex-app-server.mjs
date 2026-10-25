@@ -427,6 +427,10 @@ async function handleRequest(message) {
   }
   switch (method) {
     case "initialize":
+      if (script?.initializeDelayMs)
+        await new Promise((resolve) =>
+          setTimeout(resolve, script.initializeDelayMs),
+        );
       respond(id, {});
       return;
     case "account/rateLimits/read":
@@ -470,6 +474,10 @@ async function handleRequest(message) {
       });
       return;
     case "account/read":
+      if (script?.accountReadDelayMs)
+        await new Promise((resolve) =>
+          setTimeout(resolve, script.accountReadDelayMs),
+        );
       respond(
         id,
         script?.accountRead ?? { account: null, requiresOpenaiAuth: true },

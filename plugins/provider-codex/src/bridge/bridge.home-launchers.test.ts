@@ -179,7 +179,14 @@ it("keeps a launcher-scoped process separate from discovery without a launcher",
   expect(records.map((record) => record.launcher)).toEqual(["work", null]);
 });
 
-it.each(["unauthenticated", "expired"] as const)(
+it.each([
+  "unauthenticated",
+  "expired",
+  "not_installed",
+  "unsupported_version",
+  "unknown",
+  "ready",
+] as const)(
   "recognizes launcher-managed auth from %s and reaps its probe",
   async (status) => {
     vi.mocked(maintenance.getCodexProviderHealth).mockResolvedValueOnce({
@@ -238,3 +245,138 @@ it.each(["missing", "malformed", "login-required"])(
       expect(await readFile(processLog, "utf8")).toContain("exit:");
   },
 );
+
+it("uses a launcher even when Codex is absent from PATH", async () => {
+  vi.mocked(maintenance.getCodexProviderHealth).mockRestore();
+  vi.stubEnv("PATH", "");
+  harness.sendRequest(1, "provider/health", {
+    providerId: "codex-work",
+    providerOptions: options(),
+  });
+  const result = await harness.waitForResponse(1);
+  expect(result.error).toBeUndefined();
+  expect(result.result).toMatchObject({
+    supported: true,
+    health: { status: "ready" },
+  });
+});
+
+it("clears subscription identity, version and login hints for launcher-managed auth", async () => {
+  vi.mocked(maintenance.getCodexProviderHealth).mockResolvedValueOnce({
+    supported: true,
+    health: {
+      status: "expired",
+      statusMessage: null,
+      accountEmail: "previous@example.invalid",
+      planLabel: "Old plan",
+      installedVersion: "1.0.0",
+      minimumSupportedVersion: "0.136.0",
+      canInstall: true,
+      canUpdate: true,
+      loginCommand: "codex login",
+      localLoginCommand: "codex login",
+    },
+  });
+  harness.sendRequest(1, "provider/health", {
+    providerId: "codex-work",
+    providerOptions: options(),
+  });
+  const result = await harness.waitForResponse(1);
+  expect(result.error).toBeUndefined();
+  expect(result.result).toMatchObject({
+    supported: true,
+    health: {
+      status: "ready",
+      accountEmail: null,
+      planLabel: null,
+      loginCommand: null,
+      localLoginCommand: null,
+      installedVersion: null,
+      canInstall: false,
+      canUpdate: false,
+    },
+  });
+});
+
+it("shares one health deadline across startup and authentication and waits for cleanup", async () => {
+  await writeFile(
+    scriptPath,
+    JSON.stringify({
+      processLogPath: processLog,
+      executionLogPath: executionLog,
+      initializeDelayMs: 100,
+      accountReadDelayMs: 100,
+      accountRead: { requiresOpenaiAuth: false },
+    }),
+  );
+  harness.sendRequest(1, "provider/health", {
+    providerId: "codex-work",
+    providerOptions: options(),
+  });
+  await vi.waitFor(async () =>
+    expect(await readFile(processLog, "utf8")).toContain("spawn:"),
+  );
+  const now = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() => now() + 11_000);
+  const result = await harness.waitForResponse(1);
+  expect(result.error).toBeUndefined();
+  expect(result.result).toMatchObject({
+    supported: true,
+    health: { status: "unauthenticated" },
+  });
+  expect(await readFile(processLog, "utf8")).toContain("exit:");
+});
+
+it("reaps obsolete pool catalog processes before reusing the same execution on another route", async () => {
+  stubFakeCodexAppServer(scriptPath);
+  for (const token of ["before", "after", "third"]) {
+    const id = token === "before" ? 1 : token === "after" ? 2 : 3;
+    harness.sendRequest(id, "model/list", {
+      envVars: {
+        CODEX_OPENAI_BASE_URL: "https://pool.invalid/v1",
+        CODEX_POOL_AUTH_TOKEN: token,
+      },
+    });
+    expect((await harness.waitForResponse(id)).error).toBeUndefined();
+    const log = await readFile(processLog, "utf8");
+    expect(
+      log.split("\n").filter((line) => line.startsWith("spawn:")),
+    ).toHaveLength(id);
+    expect(
+      log.split("\n").filter((line) => line.startsWith("exit:")),
+    ).toHaveLength(id - 1);
+  }
+});
+
+it("cancels an initializing old route without leaving a stale cached process", async () => {
+  await writeFile(
+    scriptPath,
+    JSON.stringify({
+      executionLogPath: executionLog,
+      processLogPath: processLog,
+      initializeDelayMs: 100,
+    }),
+  );
+  stubFakeCodexAppServer(scriptPath);
+  harness.sendRequest(1, "model/list", {
+    envVars: {
+      CODEX_OPENAI_BASE_URL: "https://pool.invalid/v1",
+      CODEX_POOL_AUTH_TOKEN: "old",
+    },
+  });
+  await vi.waitFor(async () =>
+    expect(await readFile(processLog, "utf8")).toContain("spawn:"),
+  );
+  harness.sendRequest(2, "model/list", {
+    envVars: {
+      CODEX_OPENAI_BASE_URL: "https://pool.invalid/v1",
+      CODEX_POOL_AUTH_TOKEN: "new",
+    },
+  });
+  expect((await harness.waitForResponse(1)).error).toBeDefined();
+  expect((await harness.waitForResponse(2)).error).toBeUndefined();
+  const log = await readFile(processLog, "utf8");
+  expect(
+    log.split("\n").filter((line) => line.startsWith("exit:")),
+  ).toHaveLength(1);
+});
