@@ -167,7 +167,9 @@ export function buildAcpNativeReasoningSupport(
         : undefined;
     supportedReasoningEfforts.push({
       reasoningEffort,
-      ...(name !== undefined && name !== reasoningEffort ? { label: name } : {}),
+      ...(name !== undefined && name !== reasoningEffort
+        ? { label: name }
+        : {}),
       description: readOptionDescription(option) ?? name ?? option.value,
     });
   }

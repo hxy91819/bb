@@ -128,6 +128,10 @@ interface ThreadAssemblyState {
   currentTurnId: string | undefined;
   lastTurnId: string | undefined;
   pendingAccepted: ClientTurnRequestId[];
+  pendingDeliveries: {
+    clientRequestId: ClientTurnRequestId;
+    delivery: "steer" | "interrupted" | "queued";
+  }[];
   openItemsByKey: Map<string, OpenItemState>;
   commandSnapshotsByKey: Map<string, string>;
   bbItemIdByProviderItemId: Map<string, string>;
@@ -237,6 +241,7 @@ export function createDeltaAssembler(
       currentTurnId: undefined,
       lastTurnId: undefined,
       pendingAccepted: [],
+      pendingDeliveries: [],
       openItemsByKey: new Map(),
       commandSnapshotsByKey: new Map(),
       bbItemIdByProviderItemId: new Map(),
@@ -262,6 +267,7 @@ export function createDeltaAssembler(
           state.currentTurnId !== undefined ||
           state.openItemsByKey.size > 0 ||
           state.pendingAccepted.length > 0 ||
+          state.pendingDeliveries.length > 0 ||
           state.pendingTextByStream.size > 0
         ) {
           continue;
@@ -470,6 +476,20 @@ export function createDeltaAssembler(
         providerThreadId: "",
         scope: turnScope(turnId),
         clientRequestId,
+      });
+    }
+    while (state.pendingDeliveries.length > 0) {
+      const pending = state.pendingDeliveries.shift();
+      if (pending === undefined) {
+        break;
+      }
+      events.push({
+        type: "turn/input/delivery",
+        threadId: UNSTAMPED_THREAD_ID,
+        providerThreadId: "",
+        scope: turnScope(turnId),
+        clientRequestId: pending.clientRequestId,
+        delivery: pending.delivery,
       });
     }
     return turnId;
@@ -1278,6 +1298,36 @@ export function createDeltaAssembler(
           return;
         }
         state.pendingAccepted.push(delta.clientRequestId);
+        return;
+      }
+
+      case "input.delivery": {
+        if (delta.providerTurnId !== undefined) {
+          events.push({
+            type: "turn/input/delivery",
+            threadId: UNSTAMPED_THREAD_ID,
+            providerThreadId: "",
+            scope: turnScope(resolveVouchedTurnId(state, delta.providerTurnId)),
+            clientRequestId: delta.clientRequestId,
+            delivery: delta.delivery,
+          });
+          return;
+        }
+        if (state.currentTurnId !== undefined) {
+          events.push({
+            type: "turn/input/delivery",
+            threadId: UNSTAMPED_THREAD_ID,
+            providerThreadId: "",
+            scope: turnScope(state.currentTurnId),
+            clientRequestId: delta.clientRequestId,
+            delivery: delta.delivery,
+          });
+          return;
+        }
+        state.pendingDeliveries.push({
+          clientRequestId: delta.clientRequestId,
+          delivery: delta.delivery,
+        });
         return;
       }
 

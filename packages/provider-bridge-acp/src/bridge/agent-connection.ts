@@ -47,6 +47,7 @@ interface AcpAgentRequestArgs<TResult> {
   params: unknown;
   resultSchema: z.ZodType<TResult>;
   timeoutMs?: number;
+  onSubmitted?: () => void;
 }
 
 export const ACP_CORE_CLIENT_REQUEST_METHODS = [
@@ -300,7 +301,7 @@ export function createAcpAgentConnection(
       return stopping || exited;
     },
 
-    request({ method, params, resultSchema, timeoutMs }) {
+    request({ method, params, resultSchema, timeoutMs, onSubmitted }) {
       if (stopping || exited || !client) {
         return Promise.reject(notRunningError());
       }
@@ -309,7 +310,10 @@ export function createAcpAgentConnection(
         return Promise.reject(notRunningError());
       }
       return client
-        .extensionRequest(method, params, { timeoutMs: timeoutMs ?? null })
+        .extensionRequest(method, params, {
+          timeoutMs: timeoutMs ?? null,
+          onSubmitted,
+        })
         .then(
           (value) => {
             options.onResponse?.(method, value);
