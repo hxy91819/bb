@@ -21,6 +21,7 @@ fix/sidebar-touch-navigation           needs-feedback                           
 fix/sidebar-new-thread-project         needs-feedback                                             # 新线程继承当前/最近项目
 fix/provider-icon-hitbox               needs-feedback                                             # WebKit SVG 图标透明区域覆盖相邻 provider 点击区；含移动端模型选择器 story
 fix/side-chat-open-focus               needs-feedback                                             # composer 在隐藏容器中延迟 autofocus 至可见（/side 侧聊聚焦）
+fix/side-chat-input-zoom               needs-feedback                                             # 触屏输入至少 16px，抵挡 Side Chat 插件样式覆盖并锁定回归
 fix/side-chat-task-boundary            needs-feedback                                             # 侧聊首次实际消息与会话指令声明独立任务边界，回答后不自动恢复主线程工作
 feature/hidden-providers               reported        https://github.com/get-bb/bb/issues/4811                   # hiddenProviders 隐藏选择器中的 provider，新线程回退到可见项，既有线程仍可切换
 fix/acp-model-discovery-errors         needs-feedback                                             # ACP 原生模型发现失败保留错误，避免覆盖上次成功目录
