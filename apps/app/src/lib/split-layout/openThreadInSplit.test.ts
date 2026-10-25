@@ -125,4 +125,45 @@ describe("openThreadInSplit", () => {
       undefined,
     );
   });
+  it("preserves message link hash when creating a split", () => {
+    let current = layout();
+    const navigate = vi.fn();
+    openThreadInSplit({
+      store: {
+        get: () => current,
+        set: (_atom, value) => {
+          current = value;
+        },
+      },
+      navigate,
+      projectId: "project-1",
+      threadId: "thread-2",
+      isCompact: false,
+      hash: "#msg=42",
+    });
+
+    expect(current.root.type).toBe("split");
+    expect(navigate).toHaveBeenCalledWith(
+      "/projects/project-1/threads/thread-2#msg=42",
+      undefined,
+    );
+  });
+
+  it("keeps replace semantics and hash when the result is already open", () => {
+    const current = layout("thread-2");
+    const navigate = vi.fn();
+    openThreadInSplit({
+      store: { get: () => current, set: vi.fn() },
+      navigate,
+      projectId: "project-1",
+      threadId: "thread-2",
+      isCompact: false,
+      hash: "#msg=42",
+    });
+
+    expect(navigate).toHaveBeenCalledWith(
+      "/projects/project-1/threads/thread-2#msg=42",
+      { replace: true },
+    );
+  });
 });
