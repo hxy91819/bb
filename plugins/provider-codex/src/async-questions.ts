@@ -82,7 +82,11 @@ export function registerAsyncQuestions(
         state.questions.length === 1
           ? state.questions[0].title
           : `${state.questions.length} questions`,
-      payload: { questions: state.questions },
+      payload: {
+        questions: state.questions,
+        responseInstructions:
+          'Response JSON example: {"answers":{"question-1":{"selected":["option-1"]}}}. Replace the example selection with your answer. Number questions and options from 1 in their listed order. Include an answer for each question. For a typed answer use {"selected":[],"freeText":"your answer"}. Submit the interaction to close the question card and deliver the answer to the thread.',
+      },
       timeoutMs: QUESTION_TIMEOUT_MS,
       presentation: {
         label: { pending: "Asking a question", completed: "Asked a question" },
