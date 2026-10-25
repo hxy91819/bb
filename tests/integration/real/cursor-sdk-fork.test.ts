@@ -24,281 +24,292 @@ const execution = {
   permissionMode: "accept-edits" as const,
 };
 
-describe.skipIf(!adapterEntry || !extensionsPath)("Cursor SDK native BB Fork", () => {
-  it.each(["tip", "checkpoint"] as const)(
-    "forks at %s through the BB API and preserves isolated context after daemon restarts",
-    async (fork) => {
-      if (!adapterEntry || !extensionsPath)
-        throw new Error("BB_CURSOR_SDK_ACP_ENTRY and BB_ACP_EXTENSIONS_PLUGIN_PATH are required");
-      const directory = await mkdtemp(path.join(tmpdir(), "bb-cursor-fork-"));
-      const childCwd = path.join(directory, "child");
-      await mkdir(childCwd);
-      const harness = await createIntegrationHarness();
-      const inheritedToken = randomBytes(12).toString("hex");
-      const laterToken = randomBytes(12).toString("hex");
-      const parentToken = randomBytes(12).toString("hex");
-      const childToken = randomBytes(12).toString("hex");
-      const sourceCwd = harness.repoDir;
-      const send = async (threadId: string, text: string) => {
-        const baseline =
-          (await getThreadEvents(harness.api, threadId)).at(-1)?.seq ?? 0;
-        await sendTextMessage(harness.api, threadId, { execution, text });
-        const deadline = Date.now() + 90_000;
-        while (Date.now() < deadline) {
-          const events = (await getThreadEvents(harness.api, threadId)).filter(
-            (event) => event.seq > baseline,
+describe.skipIf(!adapterEntry || !extensionsPath)(
+  "Cursor SDK native BB Fork",
+  () => {
+    it.each(["tip", "checkpoint"] as const)(
+      "forks at %s through the BB API and preserves isolated context after daemon restarts",
+      async (fork) => {
+        if (!adapterEntry || !extensionsPath)
+          throw new Error(
+            "BB_CURSOR_SDK_ACP_ENTRY and BB_ACP_EXTENSIONS_PLUGIN_PATH are required",
           );
-          const completion = events.find(
-            (event) => event.type === "turn/completed",
-          );
-          if (completion?.type === "turn/completed") {
-            expect(completion.data.status).toBe("completed");
-            expect(
-              events.filter(
-                (event) =>
-                  event.type === "item/completed" &&
-                  event.data.item.type === "toolCall",
-              ),
-            ).toEqual([]);
-            const replies = events.flatMap((event) =>
-              event.type === "item/completed" &&
-              event.data.item.type === "agentMessage"
-                ? [event.data.item.text]
-                : [],
+        const directory = await mkdtemp(path.join(tmpdir(), "bb-cursor-fork-"));
+        const childCwd = path.join(directory, "child");
+        await mkdir(childCwd);
+        const harness = await createIntegrationHarness();
+        const inheritedToken = randomBytes(12).toString("hex");
+        const laterToken = randomBytes(12).toString("hex");
+        const parentToken = randomBytes(12).toString("hex");
+        const childToken = randomBytes(12).toString("hex");
+        const sourceCwd = harness.repoDir;
+        const send = async (threadId: string, text: string) => {
+          const baseline =
+            (await getThreadEvents(harness.api, threadId)).at(-1)?.seq ?? 0;
+          await sendTextMessage(harness.api, threadId, { execution, text });
+          const deadline = Date.now() + 90_000;
+          while (Date.now() < deadline) {
+            const events = (
+              await getThreadEvents(harness.api, threadId)
+            ).filter((event) => event.seq > baseline);
+            const completion = events.find(
+              (event) => event.type === "turn/completed",
             );
-            expect(
-              replies,
-              JSON.stringify({ threadId, baseline, events }),
-            ).toHaveLength(1);
-            await waitForThreadStatus(harness.api, threadId, "idle", 10_000);
-            return replies[0]?.trim();
+            if (completion?.type === "turn/completed") {
+              expect(completion.data.status).toBe("completed");
+              expect(
+                events.filter(
+                  (event) =>
+                    event.type === "item/completed" &&
+                    event.data.item.type === "toolCall",
+                ),
+              ).toEqual([]);
+              const replies = events.flatMap((event) =>
+                event.type === "item/completed" &&
+                event.data.item.type === "agentMessage"
+                  ? [event.data.item.text]
+                  : [],
+              );
+              expect(
+                replies,
+                JSON.stringify({ threadId, baseline, events }),
+              ).toHaveLength(1);
+              await waitForThreadStatus(harness.api, threadId, "idle", 10_000);
+              return replies[0]?.trim();
+            }
+            const error = events.find(
+              (event) =>
+                event.type === "provider/error" ||
+                event.type === "system/error",
+            );
+            if (error) throw new Error(JSON.stringify(error));
+            await new Promise((resolve) => setTimeout(resolve, 200));
           }
-          const error = events.find(
-            (event) =>
-              event.type === "provider/error" || event.type === "system/error",
+          throw new Error(
+            `Timed out waiting for thread ${threadId}: ${JSON.stringify((await getThreadEvents(harness.api, threadId)).slice(-8))}`,
           );
-          if (error) throw new Error(JSON.stringify(error));
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-        throw new Error(
-          `Timed out waiting for thread ${threadId}: ${JSON.stringify((await getThreadEvents(harness.api, threadId)).slice(-8))}`,
-        );
-      };
-      try {
-        const install = await fetch(`${harness.serverUrl}/api/v1/plugins/install`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: `path:${path.resolve(extensionsPath)}` }),
-        });
-        expect(install.status, await install.clone().text()).toBe(200);
-        const entry = {
-          id: "cursor-sdk-fork-test",
-          displayName: "Cursor SDK Fork Test",
-          command: process.execPath,
-          args: [path.resolve(adapterEntry)],
-          env: { CURSOR_ACP_CONFIG_DIR: path.join(directory, "acp-config") },
         };
-        const settingsResponse = await fetch(
-          `${harness.serverUrl}/api/v1/plugins/acp-extensions/settings`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              values: { customAgents: JSON.stringify([entry]) },
-            }),
-          },
-        );
-        expect(
-          settingsResponse.status,
-          await settingsResponse.clone().text(),
-        ).toBe(200);
-        await vi.waitFor(
-          () => {
-            expect(
-              harness.server.providerRegistry.get("acp-cursor-sdk-fork-test")
-                ?.serverCapabilities.fork,
-            ).toBe("checkpoint");
-          },
-          { timeout: 90_000 },
-        );
-        const project = await createProjectFixture(harness, {
-          name: "Cursor Fork Isolation",
-        });
-        const { thread: parent } = await createReadyHostThread(harness, {
-          execution,
-          projectId: project.id,
-          providerId: "acp-cursor-sdk-fork-test",
-          workspace: { type: "unmanaged", path: sourceCwd },
-          timeoutMs: 90_000,
-          input: [
+        try {
+          const install = await fetch(
+            `${harness.serverUrl}/api/v1/plugins/install`,
             {
-              type: "text",
-              text: "Reply only READY. Do not use any tools.",
-              mentions: [],
-            },
-          ],
-        });
-        expect(await send(parent.id, "/mode ask")).toBe("Mode set to Ask");
-        expect(
-          await send(
-            parent.id,
-            `The current conversation token is ${inheritedToken}. Remember it. Reply only ACK. Do not use any tools.`,
-          ),
-        ).toBe("ACK");
-        const checkpointTurn = listEvents(harness.db, { threadId: parent.id })
-          .reverse()
-          .find((event) => event.type === "turn/completed");
-        if (!checkpointTurn)
-          throw new Error("Missing completed checkpoint turn");
-        expect(
-          z
-            .object({ providerCheckpointId: z.string().min(1) })
-            .parse(JSON.parse(checkpointTurn.data)).providerCheckpointId,
-        ).toBeTruthy();
-        expect(
-          await send(
-            parent.id,
-            `Replace the current conversation token with ${laterToken}. Reply only ACK. Do not use any tools.`,
-          ),
-        ).toBe("ACK");
-        await harness.restartDaemon("cursor-fork-before-fork");
-        const forkResponse = await harness.api.threads.fork.$post({
-          json: {
-            sourceThreadId: parent.id,
-            ...(fork === "checkpoint"
-              ? { sourceSeqEnd: checkpointTurn.sequence }
-              : {}),
-            visibility: "visible",
-            origin: "sdk",
-            environment: {
-              type: "host",
-              hostId: harness.hostId,
-              workspace: { type: "unmanaged", path: childCwd },
-            },
-          },
-        });
-        expect(forkResponse.status, await forkResponse.clone().text()).toBe(
-          201,
-        );
-        const child = threadResponseSchema.parse(await forkResponse.json());
-        await waitForThreadStatus(harness.api, child.id, "idle", 90_000);
-        expect(child.id).not.toBe(parent.id);
-        const childHistory = JSON.stringify(
-          await getThreadEvents(harness.api, child.id),
-        );
-        expect(childHistory).toContain(inheritedToken);
-        if (fork === "checkpoint")
-          expect(childHistory).not.toContain(laterToken);
-        else expect(childHistory).toContain(laterToken);
-        const parentIdentity = listEvents(harness.db, {
-          threadId: parent.id,
-        })
-          .reverse()
-          .find((event) => event.providerThreadId !== null)?.providerThreadId;
-        const childIdentity = listEvents(harness.db, {
-          threadId: child.id,
-        })
-          .reverse()
-          .find((event) => event.providerThreadId !== null)?.providerThreadId;
-        expect(parentIdentity).toBeTruthy();
-        expect(childIdentity).toBeTruthy();
-        expect(childIdentity).not.toBe(parentIdentity);
-        const sdkSessionIds: string[] = [];
-        for (const [cwd, sessionId] of [
-          [sourceCwd, parentIdentity],
-          [childCwd, childIdentity],
-        ] as const) {
-          const encodedCwd = cwd
-            .replace(/^\//, "")
-            .replace(/\//g, "-")
-            .replace(/:/g, "-");
-          const contents = await readFile(
-            path.join(
-              directory,
-              "acp-config",
-              "sessions",
-              encodedCwd,
-              `${sessionId}.jsonl`,
-            ),
-            "utf8",
-          );
-          const records = z
-            .array(
-              z.object({
-                type: z.string(),
-                modelId: z.string().optional(),
-                modeId: z.string().optional(),
-                sdkSessionId: z.string().optional(),
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                source: `path:${path.resolve(extensionsPath)}`,
               }),
-            )
-            .parse(
-              contents
-                .trim()
-                .split("\n")
-                .map((line) => JSON.parse(line)),
+            },
+          );
+          expect(install.status, await install.clone().text()).toBe(200);
+          const entry = {
+            id: "cursor-sdk-fork-test",
+            displayName: "Cursor SDK Fork Test",
+            command: process.execPath,
+            args: [path.resolve(adapterEntry)],
+            env: { CURSOR_ACP_CONFIG_DIR: path.join(directory, "acp-config") },
+          };
+          const settingsResponse = await fetch(
+            `${harness.serverUrl}/api/v1/plugins/acp-extensions/settings`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                values: { customAgents: JSON.stringify([entry]) },
+              }),
+            },
+          );
+          expect(
+            settingsResponse.status,
+            await settingsResponse.clone().text(),
+          ).toBe(200);
+          await vi.waitFor(
+            () => {
+              expect(
+                harness.server.providerRegistry.get("acp-cursor-sdk-fork-test")
+                  ?.serverCapabilities.fork,
+              ).toBe("checkpoint");
+            },
+            { timeout: 90_000 },
+          );
+          const project = await createProjectFixture(harness, {
+            name: "Cursor Fork Isolation",
+          });
+          const { thread: parent } = await createReadyHostThread(harness, {
+            execution,
+            projectId: project.id,
+            providerId: "acp-cursor-sdk-fork-test",
+            workspace: { type: "unmanaged", path: sourceCwd },
+            timeoutMs: 90_000,
+            input: [
+              {
+                type: "text",
+                text: "Reply only READY. Do not use any tools.",
+                mentions: [],
+              },
+            ],
+          });
+          expect(await send(parent.id, "/mode ask")).toBe("Mode set to Ask");
+          expect(
+            await send(
+              parent.id,
+              `The current conversation token is ${inheritedToken}. Remember it. Reply only ACK. Do not use any tools.`,
+            ),
+          ).toBe("ACK");
+          const checkpointTurn = listEvents(harness.db, { threadId: parent.id })
+            .reverse()
+            .find((event) => event.type === "turn/completed");
+          if (!checkpointTurn)
+            throw new Error("Missing completed checkpoint turn");
+          expect(
+            z
+              .object({ providerCheckpointId: z.string().min(1) })
+              .parse(JSON.parse(checkpointTurn.data)).providerCheckpointId,
+          ).toBeTruthy();
+          expect(
+            await send(
+              parent.id,
+              `Replace the current conversation token with ${laterToken}. Reply only ACK. Do not use any tools.`,
+            ),
+          ).toBe("ACK");
+          await harness.restartDaemon("cursor-fork-before-fork");
+          const forkResponse = await harness.api.threads.fork.$post({
+            json: {
+              sourceThreadId: parent.id,
+              ...(fork === "checkpoint"
+                ? { sourceSeqEnd: checkpointTurn.sequence }
+                : {}),
+              visibility: "visible",
+              origin: "sdk",
+              environment: {
+                type: "host",
+                hostId: harness.hostId,
+                workspace: { type: "unmanaged", path: childCwd },
+              },
+            },
+          });
+          expect(forkResponse.status, await forkResponse.clone().text()).toBe(
+            201,
+          );
+          const child = threadResponseSchema.parse(await forkResponse.json());
+          await waitForThreadStatus(harness.api, child.id, "idle", 90_000);
+          expect(child.id).not.toBe(parent.id);
+          const childHistory = JSON.stringify(
+            await getThreadEvents(harness.api, child.id),
+          );
+          expect(childHistory).toContain(inheritedToken);
+          if (fork === "checkpoint")
+            expect(childHistory).not.toContain(laterToken);
+          else expect(childHistory).toContain(laterToken);
+          const parentIdentity = listEvents(harness.db, {
+            threadId: parent.id,
+          })
+            .reverse()
+            .find((event) => event.providerThreadId !== null)?.providerThreadId;
+          const childIdentity = listEvents(harness.db, {
+            threadId: child.id,
+          })
+            .reverse()
+            .find((event) => event.providerThreadId !== null)?.providerThreadId;
+          expect(parentIdentity).toBeTruthy();
+          expect(childIdentity).toBeTruthy();
+          expect(childIdentity).not.toBe(parentIdentity);
+          const sdkSessionIds: string[] = [];
+          for (const [cwd, sessionId] of [
+            [sourceCwd, parentIdentity],
+            [childCwd, childIdentity],
+          ] as const) {
+            const encodedCwd = cwd
+              .replace(/^\//, "")
+              .replace(/\//g, "-")
+              .replace(/:/g, "-");
+            const contents = await readFile(
+              path.join(
+                directory,
+                "acp-config",
+                "sessions",
+                encodedCwd,
+                `${sessionId}.jsonl`,
+              ),
+              "utf8",
             );
-          const metadata = records
-            .filter((record) => record.type === "session_meta")
-            .reverse();
+            const records = z
+              .array(
+                z.object({
+                  type: z.string(),
+                  modelId: z.string().optional(),
+                  modeId: z.string().optional(),
+                  sdkSessionId: z.string().optional(),
+                }),
+              )
+              .parse(
+                contents
+                  .trim()
+                  .split("\n")
+                  .map((line) => JSON.parse(line)),
+              );
+            const metadata = records
+              .filter((record) => record.type === "session_meta")
+              .reverse();
+            expect(
+              metadata.find((record) => record.modelId !== undefined)?.modelId,
+            ).toBe("composer-2.5");
+            expect(
+              metadata.find((record) => record.modeId !== undefined)?.modeId,
+            ).toBe("ask");
+            const sdkSessionId = metadata.find(
+              (record) => record.sdkSessionId !== undefined,
+            )?.sdkSessionId;
+            expect(sdkSessionId).toMatch(/^agent-/);
+            if (!sdkSessionId)
+              throw new Error("SDK session ID was not persisted");
+            sdkSessionIds.push(sdkSessionId);
+          }
+          expect(sdkSessionIds[0]).not.toBe(sdkSessionIds[1]);
+          await harness.restartDaemon("cursor-fork-after-fork");
           expect(
-            metadata.find((record) => record.modelId !== undefined)?.modelId,
-          ).toBe("composer-2.5");
+            await send(
+              parent.id,
+              `Replace the current conversation token with ${parentToken}. Reply only ACK. Do not use any tools.`,
+            ),
+          ).toBe("ACK");
           expect(
-            metadata.find((record) => record.modeId !== undefined)?.modeId,
-          ).toBe("ask");
-          const sdkSessionId = metadata.find(
-            (record) => record.sdkSessionId !== undefined,
-          )?.sdkSessionId;
-          expect(sdkSessionId).toMatch(/^agent-/);
-          if (!sdkSessionId)
-            throw new Error("SDK session ID was not persisted");
-          sdkSessionIds.push(sdkSessionId);
+            await send(
+              child.id,
+              "What is the current conversation token? Reply only the token. Do not use any tools.",
+            ),
+          ).toBe(fork === "checkpoint" ? inheritedToken : laterToken);
+          expect(
+            await send(
+              child.id,
+              `Replace the current conversation token with ${childToken}. Reply only ACK. Do not use any tools.`,
+            ),
+          ).toBe("ACK");
+          expect(
+            await send(
+              parent.id,
+              "What is the current conversation token? Reply only the token. Do not use any tools.",
+            ),
+          ).toBe(parentToken);
+          expect(
+            await send(
+              child.id,
+              "What is the current conversation token? Reply only the token. Do not use any tools.",
+            ),
+          ).toBe(childToken);
+          console.log(
+            `PASS: isolated BB server/daemon -> native ACP ${fork} fork -> Composer 2.5; history cutoff, cross-cwd inheritance, two daemon restarts, distinct session IDs and bidirectional isolation.`,
+          );
+        } finally {
+          await harness.cleanup();
+          await execFile(process.execPath, [
+            "--input-type=module",
+            "-e",
+            `import {createRequire} from 'node:module'; import {rm} from 'node:fs/promises'; const {getDefaultSdkStateRoot} = createRequire(${JSON.stringify(path.resolve(adapterEntry))})('@cursor/sdk'); for (const cwd of ${JSON.stringify([sourceCwd, childCwd])}) await rm(getDefaultSdkStateRoot(cwd), {recursive: true, force: true});`,
+          ]);
+          await rm(directory, { recursive: true, force: true });
         }
-        expect(sdkSessionIds[0]).not.toBe(sdkSessionIds[1]);
-        await harness.restartDaemon("cursor-fork-after-fork");
-        expect(
-          await send(
-            parent.id,
-            `Replace the current conversation token with ${parentToken}. Reply only ACK. Do not use any tools.`,
-          ),
-        ).toBe("ACK");
-        expect(
-          await send(
-            child.id,
-            "What is the current conversation token? Reply only the token. Do not use any tools.",
-          ),
-        ).toBe(fork === "checkpoint" ? inheritedToken : laterToken);
-        expect(
-          await send(
-            child.id,
-            `Replace the current conversation token with ${childToken}. Reply only ACK. Do not use any tools.`,
-          ),
-        ).toBe("ACK");
-        expect(
-          await send(
-            parent.id,
-            "What is the current conversation token? Reply only the token. Do not use any tools.",
-          ),
-        ).toBe(parentToken);
-        expect(
-          await send(
-            child.id,
-            "What is the current conversation token? Reply only the token. Do not use any tools.",
-          ),
-        ).toBe(childToken);
-        console.log(
-          `PASS: isolated BB server/daemon -> native ACP ${fork} fork -> Composer 2.5; history cutoff, cross-cwd inheritance, two daemon restarts, distinct session IDs and bidirectional isolation.`,
-        );
-      } finally {
-        await harness.cleanup();
-        await execFile(process.execPath, [
-          "--input-type=module",
-          "-e",
-          `import {createRequire} from 'node:module'; import {rm} from 'node:fs/promises'; const {getDefaultSdkStateRoot} = createRequire(${JSON.stringify(path.resolve(adapterEntry))})('@cursor/sdk'); for (const cwd of ${JSON.stringify([sourceCwd, childCwd])}) await rm(getDefaultSdkStateRoot(cwd), {recursive: true, force: true});`,
-        ]);
-        await rm(directory, { recursive: true, force: true });
-      }
-    },
-    600_000,
-  );
-});
+      },
+      600_000,
+    );
+  },
+);

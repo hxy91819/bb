@@ -159,7 +159,8 @@ export function readAcpAgentCapabilities(
       close: isPresent(session, "close"),
       delete: isPresent(session, "delete"),
       fork: isPresent(session, "fork"),
-      checkpointFork: readMeta(objectAt(session, "fork"))?.["cursor-acp/checkpoint"] === true,
+      checkpointFork:
+        readMeta(objectAt(session, "fork"))?.["cursor-acp/checkpoint"] === true,
       additionalDirectories: isPresent(session, "additionalDirectories"),
     },
     logout: isPresent(auth, "logout"),

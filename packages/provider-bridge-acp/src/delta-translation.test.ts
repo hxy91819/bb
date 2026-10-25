@@ -1313,7 +1313,6 @@ describe("acp delta translation (moved from the legacy adapter suite)", () => {
     },
   );
 
-  it("marks cancelled turns interrupted and refusals failed", () => {
   it("marks cancelled turns interrupted and ends other stop reasons as completed with a notice", () => {
     const harness = startedHarness();
     const firstTurnId = harness.openTurnId();

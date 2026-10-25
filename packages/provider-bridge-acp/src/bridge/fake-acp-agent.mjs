@@ -460,7 +460,13 @@ function configOptions() {
 
 function sessionCapabilities() {
   const capabilities = {
-    ...(forkSession ? { fork: checkpointFork ? { _meta: { "cursor-acp/checkpoint": true } } : {} } : {}),
+    ...(forkSession
+      ? {
+          fork: checkpointFork
+            ? { _meta: { "cursor-acp/checkpoint": true } }
+            : {},
+        }
+      : {}),
     ...(resumeSession ? { resume: {} } : {}),
     ...(deleteSession ? { delete: {} } : {}),
   };
