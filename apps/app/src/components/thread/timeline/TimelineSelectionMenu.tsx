@@ -23,7 +23,7 @@ interface SelectionAction {
   plugin?: { pluginId: string | null; icon: string | null };
   key?: string;
   label: string;
-  onSelect: (selection: MessageProseSelection) => void;
+  onSelect: (text: string) => void;
 }
 
 export interface TimelineSelectionMenuProps {
@@ -134,9 +134,10 @@ function ActionButton({
   selection: MessageProseSelection;
 }) {
   const activate = () => {
+    const text = readSelectedMessageMarkdown() ?? selection.text;
     flushSync(() => {
       window.getSelection()?.removeAllRanges();
-      action.onSelect(selection);
+      action.onSelect(text);
       onDismiss();
     });
   };
@@ -225,10 +226,7 @@ export function TimelineSelectionMenu({
           {
             icon: "MessageSquarePlus" as const,
             label: "Add to chat",
-            onSelect: (currentSelection: MessageProseSelection) =>
-              onAddToChat(
-                readSelectedMessageMarkdown() ?? currentSelection.text,
-              ),
+            onSelect: onAddToChat,
           },
         ]
       : []),
