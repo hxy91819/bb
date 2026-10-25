@@ -644,18 +644,18 @@ describe("hidden sidebar thread list", () => {
                 <SidebarProvider>
                   <Sidebar>
                     <SidebarContent>
-                    <ThreadListContributions>
-                      <ThreadActionCollectors
-                        coreRegistrations={CORE_THREAD_ACTIONS}
-                        requestRename={() => {}}
-                      />
-                      <ThreadActionSurfaceVisibility visible={false}>
-                        <PluginThreadList
-                          replacement={replacement}
-                          onNavigate={() => {}}
+                      <ThreadListContributions>
+                        <ThreadActionCollectors
+                          coreRegistrations={CORE_THREAD_ACTIONS}
+                          requestRename={() => {}}
                         />
-                      </ThreadActionSurfaceVisibility>
-                    </ThreadListContributions>
+                        <ThreadActionSurfaceVisibility visible={false}>
+                          <PluginThreadList
+                            replacement={replacement}
+                            onNavigate={() => {}}
+                          />
+                        </ThreadActionSurfaceVisibility>
+                      </ThreadListContributions>
                     </SidebarContent>
                   </Sidebar>
                 </SidebarProvider>

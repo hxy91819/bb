@@ -1897,11 +1897,6 @@ function ProjectListComponent({
   const content = (
     <ThreadListRowContext.Provider
       value={contributedProjection ? providerKey : null}
-    <SidebarHeaderActionsProvider
-      value={{
-        onNewSection: handleOpenCreateSectionDialog,
-        isCreatingSection: isCreateThreadSectionPending,
-      }}
     >
       <SidebarHeaderActionsProvider
         value={{

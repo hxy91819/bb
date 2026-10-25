@@ -240,7 +240,12 @@ export function resolveThreadRevealExpansion({
     sidebarProjectId: resolveSidebarProjectId(thread, threadById),
     personalProjectId,
   });
-  return { threadIdsToExpand, environmentIdsToExpand, expansion, currentThread };
+  return {
+    threadIdsToExpand,
+    environmentIdsToExpand,
+    expansion,
+    currentThread,
+  };
 }
 
 export interface SidebarThreadRevealInputs {
@@ -304,7 +309,10 @@ export function useSidebarThreadRevealCore({
       preferencesReady,
     });
     revealState.current = step.state;
-    const revealIds = new Set([...step.revealIds, ...pendingGroupingReveal.current]);
+    const revealIds = new Set([
+      ...step.revealIds,
+      ...pendingGroupingReveal.current,
+    ]);
     const navigationRevealId = step.navigationRevealId;
     for (const threadId of revealIds) {
       const thread = threadById.get(threadId);
@@ -314,14 +322,18 @@ export function useSidebarThreadRevealCore({
           pendingNavigation.current = undefined;
         continue;
       }
-      const { threadIdsToExpand, environmentIdsToExpand, expansion, currentThread } =
-        resolveThreadRevealExpansion({
-          thread,
-          threadById,
-          effectivePinnedThreadIds,
-          organizationMode: providerKey ? "chronological" : organizationMode,
-          personalProjectId,
-        });
+      const {
+        threadIdsToExpand,
+        environmentIdsToExpand,
+        expansion,
+        currentThread,
+      } = resolveThreadRevealExpansion({
+        thread,
+        threadById,
+        effectivePinnedThreadIds,
+        organizationMode: providerKey ? "chronological" : organizationMode,
+        personalProjectId,
+      });
 
       expandThreadAncestors(
         threadIdsToExpand,
