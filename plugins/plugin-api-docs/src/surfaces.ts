@@ -534,7 +534,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Replace the prompt box with one your plugin draws, everywhere bb shows a composer. With this, a plugin can:",
         bullets: [
           "Bring its own editor, from a plain textarea to a code editor",
-          "Search bb's @-mentions and commands, and keep bb's pills, attachments, history and voice input",
+          "Search bb's @-mentions and commands, dispatch action commands with ExperimentalComposerCommandSearch.experimental_select, and keep bb's pills, attachments, history and voice input",
           "Place bb's model, mode and handoff controls where it wants them",
           "Keep other plugins' actions, popups and menu entries working inside it",
         ],

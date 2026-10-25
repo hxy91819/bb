@@ -95,9 +95,11 @@ export function fakeCommandSuggestionsModule() {
 export function testTypeaheadConfig({
   mentionTriggers,
   commandTriggers = [],
+  onPanelAction,
 }: {
   mentionTriggers?: readonly PluginMentionTrigger[];
   commandTriggers?: readonly PromptMentionCommandTrigger[];
+  onPanelAction?: TypeaheadConfig["command"]["onPanelAction"];
 } = {}): TypeaheadConfig {
   return {
     mention: {
@@ -105,6 +107,7 @@ export function testTypeaheadConfig({
       source: { projectId: undefined, environmentId: null },
     },
     command: {
+      onPanelAction,
       source: {
         projectId: undefined,
         providerId: undefined,

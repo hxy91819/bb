@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_ORDERED_MENTION_SUGGESTIONS } from "@bb/client-core";
 import type { PluginPanelActionOpenOptions } from "@get-bb/plugin-sdk";
-import type { TypeaheadConfig } from "@/components/promptbox/PromptBoxInternal";
+import type { TypeaheadConfig } from "@/components/promptbox/ComposerBox";
 import {
   PluginThreadPanelNavigationProvider,
   type PluginThreadPanelOpenHandler,
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/usePromptMentions", () => ({
-  usePromptMentions: () => mocks.usePromptMentions(),
+  usePromptMentionTriggers: () => [],
 }));
 
 vi.mock("@/hooks/useCommandSuggestions", async (importOriginal) => {
@@ -31,8 +31,7 @@ vi.mock("@/hooks/useCommandSuggestions", async (importOriginal) => {
     await importOriginal<typeof import("@/hooks/useCommandSuggestions")>();
   return {
     ...original,
-    useCommandSuggestions: (args: unknown) =>
-      mocks.useCommandSuggestions(args),
+    useCommandSuggestions: (args: unknown) => mocks.useCommandSuggestions(args),
   };
 });
 
@@ -80,8 +79,7 @@ function lastCommandSuggestionsArgs(): {
     description: string | null;
   }[];
 } {
-  const calls = mocks.useCommandSuggestions.mock.calls;
-  return calls[calls.length - 1]?.[0] ?? {};
+  return latestTypeahead?.command.source ?? {};
 }
 
 function registerSideChatAction({

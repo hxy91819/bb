@@ -121,11 +121,26 @@ export function runPluginPanelAction({
   openPluginPanel,
   context,
 }: RunPluginPanelActionArgs): void {
-  const openPanel = createPanelActionOpenPanel({
+  invokePluginPanelAction({
     action,
-    slot: "threadPanelAction",
-    openPluginPanel,
+    context,
+    openPanel: createPanelActionOpenPanel({
+      action,
+      slot: "threadPanelAction",
+      openPluginPanel,
+    }),
   });
+}
+
+export function invokePluginPanelAction({
+  action,
+  openPanel,
+  context,
+}: {
+  action: RunPluginPanelActionArgs["action"];
+  context: RunPluginPanelActionArgs["context"];
+  openPanel: (options?: PluginPanelActionOpenOptions) => boolean;
+}): void {
   const warn = (error: unknown) => {
     console.warn(
       `[plugin:${action.pluginId}] threadPanelAction "${action.id}" failed: ${describeError(error)}`,
