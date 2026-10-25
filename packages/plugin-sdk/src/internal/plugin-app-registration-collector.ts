@@ -530,7 +530,10 @@ export function collectPluginAppRegistrations(
     ) {
       throw new Error(`${kind}: run and params require action availability`);
     }
-    if (registration.experimental_pinned !== undefined && typeof registration.experimental_pinned !== "boolean") {
+    if (
+      registration.experimental_pinned !== undefined &&
+      typeof registration.experimental_pinned !== "boolean"
+    ) {
       throw new Error(`${kind}: "experimental_pinned" must be a boolean`);
     }
     const target = registration.experimental_target;

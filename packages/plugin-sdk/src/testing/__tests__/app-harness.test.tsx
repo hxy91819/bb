@@ -575,7 +575,9 @@ describe("loadPluginApp", () => {
       const collected = await loadPluginApp(
         definePluginApp((builder) => {
           builder.slots.experimental_tab({
-            context: { kind: "thread" }, availability: "action", icon: "Columns",
+            context: { kind: "thread" },
+            availability: "action",
+            icon: "Columns",
             id: "saved",
             title: "Saved items",
             component: () => null,
@@ -591,7 +593,9 @@ describe("loadPluginApp", () => {
       loadPluginApp(
         definePluginApp((builder) => {
           builder.slots.experimental_tab({
-            context: { kind: "thread" }, availability: "action", icon: "Columns",
+            context: { kind: "thread" },
+            availability: "action",
+            icon: "Columns",
             id: "saved",
             title: "Saved items",
             component: () => null,
