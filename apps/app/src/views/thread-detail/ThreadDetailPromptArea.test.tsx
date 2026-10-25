@@ -1727,7 +1727,9 @@ describe("ThreadDetailPromptArea", () => {
     });
     renderPromptArea();
     fireEvent.click(screen.getByRole("button", { name: "Start handoff" }));
-    fireEvent.click(screen.getByRole("button", { name: "Capture plugin host" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Capture plugin host" }),
+    );
     await act(async () => {
       await expect(mocks.composerSubmit?.()).rejects.toThrow(
         "identity unavailable",
