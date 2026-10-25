@@ -755,6 +755,7 @@ agent for its `agentCapabilities`, and `experimental_acpAgentProbeSchema`
 validates the answer across a host RPC boundary.
 `experimental_acpLaunchSpecSchema` / `AcpLaunchSpec` is the launch spec the
 bridge parses.
+Successful probe replies include optional `checkpointFork` for the `cursor-acp/checkpoint` extension. Absence remains tip-only; the bridge verifies advertised checkpoint support before executing a checkpoint fork.
 
 `experimental_registerAcpDialect` adds a dialect. A plugin calls it at module
 load in its `bb.host` artifact with an `AcpDialect` and names the id as

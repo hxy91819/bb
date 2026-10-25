@@ -380,6 +380,7 @@ describe("agent capabilities", () => {
         close: true,
         delete: false,
         fork: false,
+        checkpointFork: false,
         additionalDirectories: false,
       },
       logout: false,
