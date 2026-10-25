@@ -11,6 +11,7 @@ import {
   createEmptyFixedPanelTabsState,
   createHostFilePreviewFixedPanelTab,
   createPluginPanelFixedPanelTab,
+  createPluginFixedPanelTab,
   createTerminalFixedPanelTab,
   createThreadStorageFilePreviewFixedPanelTab,
   getFixedPanelTabsStateStorageKey,
@@ -1617,10 +1618,10 @@ describe("pinned plugin thread panels", () => {
     "keeps the default tab without changing panel visibility (%s) or selection",
     (isOpen) => {
       const threadId = `pinned-${isOpen}`;
-      const info = {
-        id: "thread-info:thread-info:none",
-        kind: "thread-info" as const,
-      };
+      const info = createPluginFixedPanelTab({
+        pluginId: "core",
+        tabId: "info",
+      });
       window.localStorage.setItem(
         getFixedPanelTabsStateStorageKey({ threadId }),
         serializeFixedPanelTabsState({
