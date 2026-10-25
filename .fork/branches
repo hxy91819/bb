@@ -11,6 +11,7 @@ fix/vite-cve-2026-39363                reported        https://github.com/get-bb
 feature/mermaid-elk-layout             reported        https://github.com/get-bb/bb/issues/3382   # Mermaid 使用 ELK 布局
 fix/official-catalog-date-utc          needs-feedback                                             # 官方插件目录日期按 UTC 解析
 fix/environment-switch-auto-continue   reported        https://github.com/get-bb/bb/issues/4778                   # 切换环境后自动继续一次；上游已有同题 issue，以评论链接实现
+fix/legacy-environment-notice          needs-feedback                                             # 历史环境切换通知在读取边界兼容为 unlabeled，保留原始事件与新写入严格校验
 fix/markdown-table-breakout            reported        https://github.com/get-bb/bb/issues/1705   # Markdown 表格列内滚动/展开
 feature/side-chat-command              reported        https://github.com/get-bb/bb/issues/4807                   # /side 快捷入口及主输入框补全合并维护；已恢复最后成功安装的完整实现，升级冲突须迁移
 fix/acp-resume-config-options          needs-feedback                                             # 共享 ACP resume、分组配置与 reasoning 兼容；DSH 注册迁至外部插件
