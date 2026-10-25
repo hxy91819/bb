@@ -319,7 +319,7 @@ export function useSidebarThreadRevealCore({
       if (!thread || thread.isHidden) {
         pendingGroupingReveal.current.delete(threadId);
         if (threadId === navigationRevealId)
-          pendingNavigation.current = undefined;
+          revealState.current.pendingNavigation = undefined;
         continue;
       }
       const {

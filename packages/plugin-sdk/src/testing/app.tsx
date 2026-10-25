@@ -3136,7 +3136,7 @@ export function renderSlot<
             </SlotEnvContext.Provider>
           )}
         >
-          {ui}
+          <SlotPageTitle>{ui}</SlotPageTitle>
         </ThreadListContributionProvider>
       </SlotLifecycleGuard>
     </SlotEnvContext.Provider>
