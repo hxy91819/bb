@@ -79,14 +79,14 @@ Do not interpret `agentCapabilities._meta.claudeCode.promptQueueing` as steering
 
 The historical [codex-acp PR #314](https://github.com/zed-industries/codex-acp/pull/314) describes the proposed extension, but was closed unmerged on June 23, 2026. Do not enable all binaries named `codex-acp` from that PR. Enable a running build only when it actually advertises the extension or is explicitly configured. The PR also excludes turn-starting slash commands from its injection path.
 
-| Agent/configuration | Default result |
-| --- | --- |
-| Devin dialect, no contradictory metadata | Concurrent prompt, next-iteration semantics |
-| Live agent advertising `midTurnSteering: true` | Concurrent prompt for supported ordinary inputs |
-| Claude with only `promptQueueing` | Existing cancel-and-reprompt |
-| DSH | Existing cancel-and-reprompt |
-| User's Amp fork | Existing cancel-and-reprompt, preserving its `steerNextPrompt` behavior |
-| Cursor, OpenCode, OMP, Grok, Hermes, unknown/custom agents without affirmative evidence | Existing cancel-and-reprompt |
+| Agent/configuration                                                                     | Default result                                                          |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Devin dialect, no contradictory metadata                                                | Concurrent prompt, next-iteration semantics                             |
+| Live agent advertising `midTurnSteering: true`                                          | Concurrent prompt for supported ordinary inputs                         |
+| Claude with only `promptQueueing`                                                       | Existing cancel-and-reprompt                                            |
+| DSH                                                                                     | Existing cancel-and-reprompt                                            |
+| User's Amp fork                                                                         | Existing cancel-and-reprompt, preserving its `steerNextPrompt` behavior |
+| Cursor, OpenCode, OMP, Grok, Hermes, unknown/custom agents without affirmative evidence | Existing cancel-and-reprompt                                            |
 
 Gate by input as well as agent. Until specifically verified, turn-starting commands such as `/compact`, `/init`, and `/review*` use the existing interrupt path. A text item whose mentions include a `command`-kind resource marks the input command-carrying; such inputs are ineligible for injection. Do not let an agent silently serialize such a request merely because its normal-text steering gate passed. The Devin dialect contract injects text-only inputs until attachment steering is probed; inputs carrying images or files use the interrupt path. An advertised `midTurnSteering` declaration or explicit `prompt` assertion may inject any non-command input.
 
@@ -150,21 +150,21 @@ Leave bridge-wide initialize `steerMode: "queue"` unchanged for this scoped chan
 
 ## Change map and verification
 
-| File/function | Intended work |
-| --- | --- |
-| `packages/provider-bridge-acp/src/wire.ts`, `wire.test.ts` | Parse the actual steering metadata location tolerantly; require literal true; distinguish malformed/absent metadata and explicit false. Preserve unknown vendor metadata. |
-| `packages/provider-bridge-acp/src/dialect.ts`, `dialect.test.ts` | Add the narrow Devin steering contract and input eligibility; preserve existing dialect resolution and defaults. |
-| `packages/provider-bridge-acp/src/session-params.ts`, tests | Carry the normalized mode into session construction and reconstruction. |
-| `packages/provider-bridge-acp/src/bridge/bridge.ts` | Update `AcpThreadSession`, `startAgentSession`, provider-option parsing, `turn/steer`, `runTurn`, `requestSteerCancel`, acceptance/drop handling, `finishTurn`, stop/release, and tier-transition dispatch. |
-| `packages/provider-bridge-acp/src/bridge/agent-connection.ts`, tests | Report local submission separately from terminal response; retain typed error details when needed. |
-| `packages/provider-bridge-acp/src/bridge/fake-acp-agent.mjs`, `bridge.test.ts` | Controllable dissolve, queue-only, reject-busy, response-order, permission, config, and failure modes; assert externally visible behavior. |
-| `packages/provider-bridge-acp/src/delta-translation.test.ts` | Verify one continuous turn/tool stream and no duplicated acceptance or usage from multiple responders. Production translator changes only where needed for delivery metadata. |
-| `packages/provider-bridge-protocol/src/thread-delta.ts` + assembler/grammar tests | Add the `input.delivery` delta kind; keep it inside the negotiated grammar version. |
-| `packages/domain/src/provider-event.ts`, `thread-event-scope.ts` | Add the stored `turn/input/delivery` event type joined by `clientRequestId`. |
-| `packages/agent-runtime` delta assembly, `apps/host-daemon` event forwarding | Map the new delta to the new event; verify the daemon forwards it unchanged. |
-| `apps/server` event persistence + timeline, `apps/app` message label, CLI/SDK event rendering | Persist actual delivery on the input, render Steer / “降级为中断并发送” / queued on the message; no new send actions or settings workflow. |
-| `plugins/provider-acp/src/agents.ts`, `declaration.ts`, `agents.test.ts` | Add `steeringMode` to the strict custom-agent schema and pass it through `experimental_bridgeOptions` as `acpSteeringMode`. |
-| `HOST_DAEMON_PROTOCOL_VERSION` | Increment for the new daemon→server event type; an old pair must not silently lose the delivery fact. `PROVIDER_BRIDGE_PROTOCOL_VERSION` unchanged — bridge and runtime ship in one build. |
+| File/function                                                                                 | Intended work                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/provider-bridge-acp/src/wire.ts`, `wire.test.ts`                                    | Parse the actual steering metadata location tolerantly; require literal true; distinguish malformed/absent metadata and explicit false. Preserve unknown vendor metadata.                                   |
+| `packages/provider-bridge-acp/src/dialect.ts`, `dialect.test.ts`                              | Add the narrow Devin steering contract and input eligibility; preserve existing dialect resolution and defaults.                                                                                            |
+| `packages/provider-bridge-acp/src/session-params.ts`, tests                                   | Carry the normalized mode into session construction and reconstruction.                                                                                                                                     |
+| `packages/provider-bridge-acp/src/bridge/bridge.ts`                                           | Update `AcpThreadSession`, `startAgentSession`, provider-option parsing, `turn/steer`, `runTurn`, `requestSteerCancel`, acceptance/drop handling, `finishTurn`, stop/release, and tier-transition dispatch. |
+| `packages/provider-bridge-acp/src/bridge/agent-connection.ts`, tests                          | Report local submission separately from terminal response; retain typed error details when needed.                                                                                                          |
+| `packages/provider-bridge-acp/src/bridge/fake-acp-agent.mjs`, `bridge.test.ts`                | Controllable dissolve, queue-only, reject-busy, response-order, permission, config, and failure modes; assert externally visible behavior.                                                                  |
+| `packages/provider-bridge-acp/src/delta-translation.test.ts`                                  | Verify one continuous turn/tool stream and no duplicated acceptance or usage from multiple responders. Production translator changes only where needed for delivery metadata.                               |
+| `packages/provider-bridge-protocol/src/thread-delta.ts` + assembler/grammar tests             | Add the `input.delivery` delta kind; keep it inside the negotiated grammar version.                                                                                                                         |
+| `packages/domain/src/provider-event.ts`, `thread-event-scope.ts`                              | Add the stored `turn/input/delivery` event type joined by `clientRequestId`.                                                                                                                                |
+| `packages/agent-runtime` delta assembly, `apps/host-daemon` event forwarding                  | Map the new delta to the new event; verify the daemon forwards it unchanged.                                                                                                                                |
+| `apps/server` event persistence + timeline, `apps/app` message label, CLI/SDK event rendering | Persist actual delivery on the input, render Steer / “降级为中断并发送” / queued on the message; no new send actions or settings workflow.                                                                  |
+| `plugins/provider-acp/src/agents.ts`, `declaration.ts`, `agents.test.ts`                      | Add `steeringMode` to the strict custom-agent schema and pass it through `experimental_bridgeOptions` as `acpSteeringMode`.                                                                                 |
+| `HOST_DAEMON_PROTOCOL_VERSION`                                                                | Increment for the new daemon→server event type; an old pair must not silently lose the delivery fact. `PROVIDER_BRIDGE_PROTOCOL_VERSION` unchanged — bridge and runtime ship in one build.                  |
 
 For user-configurable opt-in, changes cannot stop inside the bridge. `plugins/provider-acp/src/agents.ts` has a strict custom-agent schema, and `declaration.ts` builds the bridge options. Add a `steeringMode` field there and pass it through to `acpSteeringMode`; test real settings-to-session propagation. Update the owning ACP skill, provider guide template, `docs/configuration.md`, and the existing Plugin Guide surface/SDK audit documentation as applicable. Keep the option available through existing plugin config CLI and SDK surfaces. The delivery label rides the existing delta/event pipeline; the only daemon wire change is the new event type, covered by the version bump above.
 
