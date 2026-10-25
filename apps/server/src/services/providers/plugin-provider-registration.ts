@@ -16,7 +16,10 @@ import type {
   PluginProviderOptionDescriptor,
   PluginProviderOptionsContext,
 } from "@get-bb/plugin-sdk";
-import { deriveValidatedProviderOptions } from "@get-bb/plugin-sdk/internal/host-policy";
+import {
+  deriveValidatedProviderOptions,
+  deriveValidatedHostOptions,
+} from "@get-bb/plugin-sdk/internal/host-policy";
 import type {
   ProviderRegistration,
   ProviderServerCapabilities,
@@ -222,6 +225,7 @@ export function buildPluginProviderRegistration(args: {
     extensionKinds: declaration.extensionKinds ?? {},
     visibility: declaration.experimental_visibility ?? "always",
     fallbackModels: projectFallbackModels(declaration),
+    cacheModels: declaration.models.experimental_cache,
     envPassthrough: declaration.env?.passthrough ?? [],
     nativeSkillRoots:
       declaration.experimental_nativeSkillRoots ?? EMPTY_PROVIDER_NATIVE_ROOTS,
@@ -229,6 +233,15 @@ export function buildPluginProviderRegistration(args: {
       declaration.experimental_nativeCommandRoots ??
       EMPTY_PROVIDER_NATIVE_ROOTS,
     resolvesNativeRoots: declaration.experimental_resolvesNativeRoots,
+    ...(declaration.experimental_deriveHostOptions === undefined
+      ? {}
+      : {
+          deriveHostOptions: (hostId: string) =>
+            deriveValidatedHostOptions({
+              declaration,
+              context: { hostId, settings: args.readSettings() },
+            }),
+        }),
     deriveProviderOptions: (context) =>
       deriveValidatedProviderOptions({
         declaration,
