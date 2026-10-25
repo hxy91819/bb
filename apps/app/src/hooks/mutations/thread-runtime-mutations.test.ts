@@ -15,7 +15,10 @@ import {
   collectPluginAppRegistrations,
   definePluginApp,
 } from "@/lib/plugin-app-definition";
-import { withThreadCreationContext, threadCreationContextRegistry } from "@/lib/thread-creation-context";
+import {
+  withThreadCreationContext,
+  threadCreationContextRegistry,
+} from "@/lib/thread-creation-context";
 import { wsManager } from "@/lib/ws";
 import {
   makeThreadResponse as makeThreadResponseFixture,
@@ -187,7 +190,10 @@ describe("thread runtime mutations", () => {
     vi.mocked(sdk.threads.spawn).mockRejectedValueOnce(
       new Error("temporary transport failure"),
     );
-    const mutation = new MutationObserver(queryClient, createThreadMutationOptions(queryClient));
+    const mutation = new MutationObserver(
+      queryClient,
+      createThreadMutationOptions(queryClient),
+    );
     const request = {
       projectId: "project-1",
       environment: { type: "project-default" as const },

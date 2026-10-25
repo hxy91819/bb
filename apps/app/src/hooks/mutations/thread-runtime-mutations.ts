@@ -186,7 +186,6 @@ export function useCreateThread() {
   return { ...mutation, mutate, mutateAsync };
 }
 
-
 export function sendThreadMessageMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     meta: {

@@ -30,7 +30,6 @@ import {
 } from "./plugin-app-definition";
 import { threadCreationContextRegistry } from "./thread-creation-context";
 
-
 function makeSdk() {
   const threads = {
     spawn: vi.fn(async (args: unknown) => args),
