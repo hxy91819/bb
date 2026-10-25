@@ -1307,9 +1307,7 @@ export function createDeltaAssembler(
             type: "turn/input/delivery",
             threadId: UNSTAMPED_THREAD_ID,
             providerThreadId: "",
-            scope: turnScope(
-              resolveVouchedTurnId(state, delta.providerTurnId),
-            ),
+            scope: turnScope(resolveVouchedTurnId(state, delta.providerTurnId)),
             clientRequestId: delta.clientRequestId,
             delivery: delta.delivery,
           });

@@ -121,7 +121,13 @@ export function buildDeliveryByClientRequestId({
     ...events,
   ].flatMap(({ event, meta }) =>
     event.type === "turn/input/delivery"
-      ? [{ delivery: event.delivery, requestId: event.clientRequestId, seq: meta.seq }]
+      ? [
+          {
+            delivery: event.delivery,
+            requestId: event.clientRequestId,
+            seq: meta.seq,
+          },
+        ]
       : [],
   );
   deliveryEvents.sort((a, b) => a.seq - b.seq);

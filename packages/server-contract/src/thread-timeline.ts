@@ -110,9 +110,7 @@ export const timelineConversationTurnRequestDeliveryValues = [
   "queued",
 ] as const;
 export const timelineConversationTurnRequestSchema = z.object({
-  delivery: z
-    .enum(timelineConversationTurnRequestDeliveryValues)
-    .optional(),
+  delivery: z.enum(timelineConversationTurnRequestDeliveryValues).optional(),
   isGrouped: z.boolean(),
   kind: z.enum(timelineConversationTurnRequestKindValues),
   status: z.enum(timelineConversationTurnRequestStatusValues),
