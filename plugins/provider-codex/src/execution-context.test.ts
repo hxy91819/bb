@@ -6,7 +6,7 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import {
@@ -98,4 +98,40 @@ it("discovers skills from the selected home while preserving the process environ
   );
   expect(inherited.CODEX_HOME).toBe(join(directory, "other"));
   expect(inherited.CODEX_POOL_AUTH_TOKEN).toBe("dummy");
+});
+
+it("expands the binding launcher on the host without mutating default or other homes", () => {
+  const inherited = { CODEX_HOME: "/original", CODEX_POOL_AUTH_TOKEN: "dummy" };
+  const execution = resolveCodexExecution({
+    codexExecution: {
+      kind: "home",
+      providerId: "codex-work",
+      codexHome: "~/work",
+      command: "~/bin/launcher with spaces",
+    },
+  });
+  const env = codexExecutionEnv(execution, inherited);
+  expect(env.BB_CODEX_BRIDGE_APP_SERVER_COMMAND).toBe(
+    join(homedir(), "bin/launcher with spaces"),
+  );
+  expect(JSON.parse(env.BB_CODEX_BRIDGE_APP_SERVER_ARGS!)).toEqual([
+    "app-server",
+  ]);
+  expect(env.CODEX_HOME).toBe(join(homedir(), "work"));
+  expect(env.CODEX_POOL_AUTH_TOKEN).toBeUndefined();
+  expect(codexExecutionEnv(resolveCodexExecution({}), inherited)).toEqual(
+    inherited,
+  );
+  expect(
+    codexExecutionEnv(
+      resolveCodexExecution({
+        codexExecution: {
+          kind: "home",
+          providerId: "codex-other",
+          codexHome: "/other",
+        },
+      }),
+      {},
+    ).BB_CODEX_BRIDGE_APP_SERVER_COMMAND,
+  ).toBeUndefined();
 });

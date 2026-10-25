@@ -150,3 +150,14 @@ Absolute paths and `~/` expressions are accepted. File logins and auth symlinks
 are reused; fixed bindings bypass Account Pooler. Renaming a label is supported;
 changing a directory requires a new ID. Restore a removed binding with the same
 ID and home to continue its threads. See the Codex provider skill for preparation.
+
+A binding may also set `command` to an absolute executable path or a `~/` path
+on the execution machine. BB invokes it with `app-server`, without a shell, and
+sets that binding's `CODEX_HOME` and `CODEX_SQLITE_HOME`. Use a wrapper when the
+Codex process needs credentials from a local credential store; the wrapper must
+preserve stdio and forward arguments. Store only its path in BB settings, never
+keys or tokens. Bindings without `command` keep the normal Codex launch path.
+Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
+recognized without a local subscription login. A failed probe returns structured health and waits for its child process to exit.
+Startup and authentication share a ten-second health probe deadline. Successful
+launcher-managed authentication clears unrelated local account and login hints.
