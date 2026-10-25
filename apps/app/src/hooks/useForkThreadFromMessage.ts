@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Thread } from "@bb/domain";
 import { sdk } from "@/lib/sdk";
+import { captureThreadCreationContext } from "@/lib/thread-creation-context";
 import { isThreadForkable, type AppCreateThreadRequest } from "@bb/client-core";
 import type { ThreadRoutePathArgs } from "@/lib/route-paths";
 import { threadDefaultExecutionOptionsQueryKey } from "@/hooks/queries/query-keys";
@@ -71,6 +72,7 @@ export function useForkThreadFromMessage({
 
       forkInFlightRef.current = true;
       try {
+        const experimental_pluginContext = captureThreadCreationContext();
         const executionOptions = await queryClient.fetchQuery({
           queryKey: threadDefaultExecutionOptionsQueryKey(source.id),
           queryFn: ({ signal }) =>
@@ -84,6 +86,7 @@ export function useForkThreadFromMessage({
         }
 
         const fork = await forkThreadRef.current({
+          experimental_pluginContext,
           environment: { type: "reuse", environmentId: source.environmentId },
           input: [],
           model: executionOptions.model,

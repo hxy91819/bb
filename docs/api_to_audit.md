@@ -3568,3 +3568,40 @@ Stabilize after exercising producer cancellation, reload, reconnect and byte lim
 ## Composer action selection
 
 `ExperimentalComposerCommandSearch.experimental_select(suggestion)` dispatches a registered action command through the host's shared panel action path. Returning true lets the editor remove the slash query and close its menu; false or absence preserves normal command mention insertion. Core composer uses this interface. Stabilization requires action and normal-command tests across composer replacements, stale suggestion handling and menu closure.
+
+## Thread creation context
+
+`PluginAppBuilder.experimental_threadCreationContext` and
+`experimental_AppThreadCreationContext` / `experimental_AppThreadCreationContextRegistration`
+capture one synchronous client-local JSON contribution per plugin generation.
+`BbPluginApi.experimental_threadCreationContext`, `experimental_ThreadCreationContext`,
+`experimental_ThreadCreationDescriptor` and `experimental_ThreadCreationPrepareArgs`
+validate and asynchronously prepare only that plugin's initial metadata, including
+absent-context inheritance chosen by the plugin. Create/fork SDK requests and
+`NewThreadRequest.experimental_pluginContext` carry a namespace map independent of
+origin. Explicit maps, including `{}`, suppress frontend capture, not backend handlers.
+Legacy seed keys may not overlap prepared keys. All namespaces commit with the
+thread, and disposed generations cannot commit late results. Preparation must not
+perform persistent side effects. This does not change daemon wire or core tables.
+
+Core uses the same request preparation for NewThreadComposer, useCreateThread,
+message forks before their first await, provider handoff, and plugin-bound browser
+spawn/fork. PluginNewThreadComposer forwards the captured request. Server create,
+fork and backend SDK creation share the same preparation and immediate DB transaction.
+Existing-thread start, delayed dispatch and retries do not recapture or prepare.
+CLI spawn/fork accept `--experimental-plugin-context`; no browser identity is inferred.
+Unknown creation responses are not replayed or deduplicated.
+
+The frontend test surface adds `experimental_createThreadCreationContextHost`,
+`experimental_ThreadCreationContextHost` and
+`RenderSlotOptions.experimental_threadCreationContextHost` for independent clients
+and managed registration lifetimes; backend fake hosts expose the same registration
+contract and preparation driver.
+
+Before stabilization, verify independent-client snapshots, all native/plugin
+entrances and RPC forwarding, strict JSON and UTF-8 limits, legacy compatibility,
+parent/source separation, concurrent preparation, timeout/disposal fences, second
+namespace rollback and postcommit notification visibility. Exercise delayed dispatch,
+provider retry and unknown response recovery, and validate web, desktop and mobile
+WebView behavior with independent third-party consumers. No list or activity surface
+is introduced by this creation-only interface.
