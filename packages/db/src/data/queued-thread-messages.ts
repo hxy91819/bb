@@ -2224,6 +2224,22 @@ export function hasQueuedRetryOfTurnRequest(
   );
 }
 
+export function deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction(
+  db: DbTransaction,
+  args: { threadId: string; kind: QueuedMessageSystemNotice["kind"] },
+): number {
+  return db
+    .delete(queuedThreadMessages)
+    .where(
+      and(
+        eq(queuedThreadMessages.threadId, args.threadId),
+        liveQueuedThreadMessage(),
+        sql`json_extract(${queuedThreadMessages.systemNotice}, '$.kind') = ${args.kind}`,
+      ),
+    )
+    .run().changes;
+}
+
 /**
  * Threads on one host with live rows parked on a `host-offline` wait.
  *

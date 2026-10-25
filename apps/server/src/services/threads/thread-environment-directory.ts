@@ -35,13 +35,14 @@ const UPDATE_ENVIRONMENT_DIRECTORY_TIMEOUT_MS = 5 * 60 * 1000;
 const updateEnvironmentDirectoryInputSchema = z
   .object({
     path: z.string().trim().min(1),
+    continueCurrentTask: z.boolean(),
   })
   .strict();
 
 export const UPDATE_ENVIRONMENT_DIRECTORY_TOOL: DynamicTool = {
   name: UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
   description:
-    "Move this bb thread to a different working directory for subsequent turns. Use this when the user asks to switch to a new checkout, worktree, or local directory. The path must be an absolute existing directory on the current host. The tool reuses this project's existing bb environment for that host/path, otherwise it creates an unmanaged environment after validating the path. Another project may hold its own environment for the same directory; that is allowed, except for a bb-managed worktree owned by another project, which this tool refuses. After a successful switch, end the current turn because the running provider cwd will not change until the next turn; bb then starts the next turn in the new directory automatically so you can continue the task there.",
+    "Move this bb thread to a different working directory for subsequent turns. Use this when the user asks to switch to a new checkout, worktree, or local directory. The path must be an absolute existing directory on the current host. The tool reuses this project's existing bb environment for that host/path, otherwise it creates an unmanaged environment after validating the path. Another project may hold its own environment for the same directory; that is allowed, except for a bb-managed worktree owned by another project, which this tool refuses. Set continueCurrentTask to true when unfinished work should resume automatically in the new directory, or false when switching directories is the whole task. After a successful switch, stop the current turn because the running provider cwd will not change.",
   inputSchema: {
     type: "object",
     properties: {
@@ -50,8 +51,13 @@ export const UPDATE_ENVIRONMENT_DIRECTORY_TOOL: DynamicTool = {
         description:
           "Absolute path to an existing directory on the current host.",
       },
+      continueCurrentTask: {
+        type: "boolean",
+        description:
+          "Whether BB should automatically continue the unfinished task in the new directory after this turn ends.",
+      },
     },
-    required: ["path"],
+    required: ["path", "continueCurrentTask"],
     additionalProperties: false,
   },
   presentation: {
@@ -142,14 +148,17 @@ function resolveReadyEnvironment(
   };
 }
 
-function successMessage(path: string): string {
-  return `Environment directory updated to ${path}. This applies to future turns; end this turn now and bb will start the next turn in the updated directory so you can continue the task there.`;
+function successMessage(path: string, continueCurrentTask: boolean): string {
+  return continueCurrentTask
+    ? `Environment directory updated to ${path}. Stop work in this turn; BB will continue the task there automatically.`
+    : `Environment directory updated to ${path}. Stop work in this turn; future turns will start there.`;
 }
 
 function attachReadyEnvironment(
   deps: Pick<AppDeps, "db" | "hub">,
   args: {
     currentEnvironment: EnvironmentRow;
+    continueCurrentTask: boolean;
     createdEnvironment: boolean;
     targetEnvironment: ReadyEnvironment;
     thread: Thread;
@@ -194,6 +203,7 @@ function attachReadyEnvironment(
           message: `Updated environment directory to ${args.targetEnvironment.path}`,
           metadata: {
             createdEnvironment: args.createdEnvironment,
+            continueCurrentTask: args.continueCurrentTask,
             previousEnvironmentId: args.currentEnvironment.id,
             previousPath: args.currentEnvironment.path,
             nextEnvironmentId: args.targetEnvironment.id,
@@ -207,12 +217,16 @@ function attachReadyEnvironment(
   );
 
   if (result.kind === "attached" && result.changed) {
-    deps.hub.notifyThread(args.thread.id, ["events-appended"], {
-      timelineSequence: getLatestThreadSequence(deps.db, {
-        threadId: args.thread.id,
-      }),
-      eventTypes: ["system/operation"],
-    });
+    deps.hub.notifyThread(
+      args.thread.id,
+      ["events-appended", "queue-changed"],
+      {
+        timelineSequence: getLatestThreadSequence(deps.db, {
+          threadId: args.thread.id,
+        }),
+        eventTypes: ["system/operation"],
+      },
+    );
   }
 
   return result;
@@ -272,7 +286,7 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
   const input = updateEnvironmentDirectoryInputSchema.safeParse(args.input);
   if (!input.success) {
     return toolCallFailure(
-      "Invalid arguments. Provide an object with an absolute path string.",
+      "Invalid arguments. Provide an object with an absolute path string and continueCurrentTask boolean.",
     );
   }
 
@@ -357,6 +371,7 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     });
     attachResult = attachReadyEnvironment(deps, {
       currentEnvironment: args.currentEnvironment,
+      continueCurrentTask: input.data.continueCurrentTask,
       createdEnvironment,
       targetEnvironment,
       thread: args.thread,
@@ -370,7 +385,12 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
 
   switch (attachResult.kind) {
     case "attached":
-      return toolCallSuccess(successMessage(targetEnvironment.path));
+      return toolCallSuccess(
+        successMessage(
+          targetEnvironment.path,
+          input.data.continueCurrentTask && attachResult.changed,
+        ),
+      );
     case "environment_changed":
       return toolCallFailure(
         "Thread environment changed while preparing the new directory. Try again with the desired path.",

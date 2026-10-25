@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { events as storedEvents, getThread } from "@bb/db";
 import { renderTemplate } from "@bb/templates";
 import { z } from "zod";
@@ -17,6 +17,7 @@ const environmentDirectoryUpdateDataSchema = z.object({
   metadata: z.object({
     nextEnvironmentId: z.string(),
     nextPath: z.string(),
+    continueCurrentTask: z.boolean().optional(),
   }),
 });
 
@@ -30,7 +31,7 @@ export function findEnvironmentDirectoryContinuation(
   args: { threadId: string; turnId: string },
 ): EnvironmentDirectoryContinuation | null {
   const row = deps.db
-    .select({ data: storedEvents.data })
+    .select({ data: storedEvents.data, sequence: storedEvents.sequence })
     .from(storedEvents)
     .where(
       and(
@@ -53,6 +54,21 @@ export function findEnvironmentDirectoryContinuation(
   if (!parsed.success) {
     return null;
   }
+  if (parsed.data.metadata.continueCurrentTask === false) return null;
+  const newerInput = deps.db
+    .select({ id: storedEvents.id })
+    .from(storedEvents)
+    .where(
+      and(
+        eq(storedEvents.threadId, args.threadId),
+        eq(storedEvents.type, "client/turn/requested"),
+        gt(storedEvents.sequence, row.sequence),
+        sql`json_extract(${storedEvents.data}, '$.initiator') != 'system'`,
+      ),
+    )
+    .limit(1)
+    .get();
+  if (newerInput) return null;
   return {
     environmentId: parsed.data.metadata.nextEnvironmentId,
     path: parsed.data.metadata.nextPath,
