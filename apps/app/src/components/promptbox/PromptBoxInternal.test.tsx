@@ -1658,12 +1658,12 @@ describe("ComposerBox controlled value sync", () => {
         value: "",
         autoFocus: false,
         focusEndKey: 0,
-        compact: { isCompact: true },
+        compact: { when: "always", placeholder: "Ask a follow-up" },
       });
       const renderComposer = (props: PromptBoxProps) => (
         <>
           <button>Selection action</button>
-          <PromptBoxInternal {...props} />
+          <ComposerBox {...props} />
         </>
       );
       const view = render(renderComposer(baseProps));
@@ -1677,12 +1677,10 @@ describe("ComposerBox controlled value sync", () => {
       view.rerender(renderComposer(quoteProps));
       expect(document.activeElement).toBe(action);
 
-      view.rerender(
-        renderComposer({ ...quoteProps, compact: { isCompact: false } }),
-      );
+      view.rerender(renderComposer({ ...quoteProps, compact: undefined }));
       await waitForPromptFocus();
       await act(async () => {
-        promptBoxRef.current?.insertTextAtCursor("reply");
+        promptBoxRef.current?.voice?.deliverTranscript("reply", "insert");
       });
       expect(onChange).toHaveBeenLastCalledWith("> selected text\n\nreply", []);
     } finally {
@@ -1719,7 +1717,7 @@ describe("ComposerBox controlled value sync", () => {
 
         await waitForPromptFocus();
         await act(async () => {
-          promptBoxRef.current?.insertTextAtCursor("reply");
+          promptBoxRef.current?.voice?.deliverTranscript("reply", "insert");
         });
 
         expect(onChange).toHaveBeenLastCalledWith(
