@@ -1468,8 +1468,8 @@ describe("ThreadRow", () => {
   it("renames inline after a fine-pointer double click on a compact viewport", async () => {
     renderThreadRow({ isCompactViewport: true });
     const link = screen.getByRole("link", { name: "Open Thread" });
-    expect(fireEvent.click(link)).toBe(true);
-    expect(fireEvent.click(link)).toBe(false);
+    expect(fireEvent.click(link, { detail: 1 })).toBe(true);
+    expect(fireEvent.click(link, { detail: 2 })).toBe(false);
     expect(
       await screen.findByRole("textbox", { name: "Thread name" }),
     ).toHaveProperty("value", "Thread");
