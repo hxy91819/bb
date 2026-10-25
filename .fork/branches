@@ -39,6 +39,7 @@ fix/codex-compaction-warning                  fork-only                         
 fix/pool-ai-fallback                         needs-feedback                                             # Account Pool 提供标题与提交消息 AI 服务，无本地 Codex 登录时参与自动回退
 feature/pool-auth-file                       needs-feedback                                             # Account Pooler 支持 --auth-file 导入指定 Codex 凭证文件，保留软链与默认路径
 feature/codex-home-bindings                   needs-feedback                                             # 原生 Codex 命名 home：独立登录、模型、额度与技能，复用软链并绕过账号池；用户要求持续保留，移除须经用户明确同意
+feature/codex-home-launchers                   needs-feedback                                             # 原生 Codex home 支持独立凭据启动器与结构化健康探测；叠在 feature/codex-home-bindings 上
 fix/dependency-security-refresh               reported        https://github.com/get-bb/bb/pull/5741             # 依赖升级与 SDK 测试适配；PR 因贡献者准入自动关闭、未合并；恢复原实现后待基线迁移
 feature/plugin-pinned-thread-panels           needs-feedback                                             # 插件可声明常驻会话右侧标签，复用原有打开、持久化与关闭路径
 fix/child-question-notifications             needs-feedback                                             # 插件异步提问接入父线程求助通知，提供表单回答入口与 Codex 回传格式
