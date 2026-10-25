@@ -398,8 +398,17 @@ describe("pull request lookup for differently named upstream branches", () => {
       vi.stubEnv("PATH", path.dirname(stdout.trim().split(/\r?\n/)[0]!));
     } else {
       await fs.symlink(stdout.trim(), path.join(binPath, "git"));
+      const bash = await execFileAsync("which", ["bash"], { encoding: "utf8" });
+      await fs.symlink(bash.stdout.trim(), path.join(binPath, "bash"));
       vi.stubEnv("PATH", binPath);
     }
+    const branch = await runGit(
+      ["symbolic-ref", "--quiet", "--short", "HEAD"],
+      {
+        cwd: workspacePath,
+      },
+    );
+    expect(branch.stdout.trim()).toBe(localBranch);
 
     await expect(
       harness.experimental_call("view", {
