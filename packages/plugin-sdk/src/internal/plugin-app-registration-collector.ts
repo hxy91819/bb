@@ -530,11 +530,20 @@ export function collectPluginAppRegistrations(
     ) {
       throw new Error(`${kind}: run and params require action availability`);
     }
-    if (
-      registration.experimental_pinned !== undefined &&
-      typeof registration.experimental_pinned !== "boolean"
-    ) {
+    const pinned =
+      "experimental_pinned" in registration
+        ? registration.experimental_pinned
+        : undefined;
+    if (pinned !== undefined && typeof pinned !== "boolean") {
       throw new Error(`${kind}: "experimental_pinned" must be a boolean`);
+    }
+    if (
+      pinned !== undefined &&
+      (availability !== "action" || context.kind !== "thread")
+    ) {
+      throw new Error(
+        `${kind}: experimental_pinned requires a thread action tab`,
+      );
     }
     const target = registration.experimental_target;
     if (
