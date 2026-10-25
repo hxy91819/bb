@@ -313,6 +313,7 @@ export function registerSystemRoutes(
           : settings.idleProviderSessionTimeoutMinutes,
       allowFastServiceTier:
         settings.allowFastServiceTier ?? current.allowFastServiceTier,
+      hiddenProviders: settings.hiddenProviders ?? current.hiddenProviders,
       telemetryEnabled: settings.telemetryEnabled ?? current.telemetryEnabled,
       terminalCopyOnSelect:
         settings.terminalCopyOnSelect ?? current.terminalCopyOnSelect,
