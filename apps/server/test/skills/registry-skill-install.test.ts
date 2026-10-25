@@ -90,7 +90,7 @@ describe("installServerRegistrySkill", () => {
       expect(
         (await stat(join(skillDirectory, REGISTRY_SKILL_PROVENANCE_FILE_NAME)))
           .mode & 0o777,
-      ).toBe(0o444);
+      ).toBe(0o444 & ~process.umask());
       expect(readSkillTreeManifest(skillDirectory).entries).toEqual([
         expect.objectContaining({ path: "SKILL.md" }),
       ]);
