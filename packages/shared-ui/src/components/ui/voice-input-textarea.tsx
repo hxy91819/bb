@@ -4,12 +4,13 @@ import {
   type ComponentPropsWithRef,
   type ComponentType,
 } from "react";
+import { COARSE_POINTER_INPUT_TEXT_CLASS } from "./coarse-pointer-sizing";
+import { cn } from "../../lib/utils";
 
-export interface VoiceInputTextareaProps
-  extends Omit<
-    ComponentPropsWithRef<"textarea">,
-    "value" | "defaultValue" | "onChange" | "children"
-  > {
+export interface VoiceInputTextareaProps extends Omit<
+  ComponentPropsWithRef<"textarea">,
+  "value" | "defaultValue" | "onChange" | "children"
+> {
   value: string;
   onValueChange: (value: string) => void;
   onVoiceInputActiveChange?: (active: boolean) => void;
@@ -38,6 +39,7 @@ export function VoiceInputTextarea({
   return (
     <textarea
       {...props}
+      className={cn(COARSE_POINTER_INPUT_TEXT_CLASS, props.className)}
       onChange={(event) => onValueChange(event.target.value)}
     />
   );

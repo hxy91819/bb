@@ -1,6 +1,9 @@
 export const COARSE_POINTER_TEXT_BASE_CLASS =
   "text-sm max-md:pointer-coarse:text-base";
 
+export const COARSE_POINTER_INPUT_TEXT_CLASS =
+  "text-sm pointer-coarse:text-editable!";
+
 export const COARSE_POINTER_TEXT_SM_CLASS =
   "text-xs max-md:pointer-coarse:text-sm";
 
