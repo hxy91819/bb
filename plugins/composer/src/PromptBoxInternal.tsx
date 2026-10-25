@@ -2580,7 +2580,11 @@ export function PromptBoxInternal({
       pendingFocusEndRef.current = false;
       const currentEditor = editorRef.current;
       if (currentEditor && !currentEditor.isDestroyed) {
-        currentEditor.view.dispatch(currentEditor.state.tr.setSelection(TextSelection.atEnd(currentEditor.state.doc)));
+        currentEditor.view.dispatch(
+          currentEditor.state.tr.setSelection(
+            TextSelection.atEnd(currentEditor.state.doc),
+          ),
+        );
       }
       return;
     }
