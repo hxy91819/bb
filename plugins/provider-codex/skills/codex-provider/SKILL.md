@@ -85,3 +85,13 @@ Bindings use file authentication and preserve existing auth symlinks. They bypas
 Account Pooler. Removing a binding preserves its threads; restore the same ID
 and home to resume. Use a new ID when changing the home. Prepare file login with
 `CODEX_HOME=<home> codex -c 'cli_auth_credentials_store="file"' login`.
+
+A binding may also set `command` to an absolute executable path or a `~/` path
+on the execution machine. BB invokes it with `app-server`, without a shell, and
+sets that binding's `CODEX_HOME` and `CODEX_SQLITE_HOME`. Use a wrapper when the
+Codex process needs credentials from a local credential store; the wrapper must
+preserve stdio and forward arguments. Store only its path in BB settings, never
+keys or tokens. Bindings without `command` keep the normal Codex launch path.
+Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
+recognized without a local subscription login. A failed probe preserves the
+structured authentication state and waits for its child process to exit.

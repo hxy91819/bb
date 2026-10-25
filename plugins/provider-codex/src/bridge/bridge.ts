@@ -117,7 +117,12 @@ const codexBridgeCommandSchema = z.discriminatedUnion("method", [
     method: z.literal("initialize"),
     params: initializeParamsSchema,
   }),
-  z.object({ method: z.literal("model/list"), params: modelListParamsSchema }),
+  z.object({
+    method: z.literal("model/list"),
+    params: modelListParamsSchema.extend({
+      envVars: z.record(z.string(), z.string()).optional(),
+    }),
+  }),
   z.object({
     method: z.literal("provider/health"),
     params: providerMaintenanceParamsSchema,
@@ -1549,8 +1554,14 @@ async function withMaintenanceChild<T>(
 
 async function getModelListConnection(
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<CodexAppServerConnection> {
-  const key = JSON.stringify(execution);
+  const launchEnv = appServerLaunchEnv(envVars, execution);
+  const key = JSON.stringify({
+    execution,
+    poolBaseUrl: launchEnv[CODEX_POOL_BASE_URL_ENV] ?? null,
+    poolAuthToken: launchEnv[CODEX_POOL_AUTH_TOKEN_ENV] ?? null,
+  });
   let credentialFingerprint: string | null = null;
   if (execution.codexHome !== null) {
     try {
@@ -1589,6 +1600,7 @@ async function getModelListConnection(
   const connectionPromise = (async () => {
     const connection = spawnChildConnection({
       execution,
+      envVars,
       recordThreadId: null,
       onNotification: () => {},
       onRequest: (_method, _params, responder) => {
@@ -1677,10 +1689,11 @@ function handleInitialize(id: string | number): void {
 async function handleModelList(
   id: string | number,
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<void> {
   let connection: CodexAppServerConnection | null = null;
   try {
-    connection = await getModelListConnection(execution);
+    connection = await getModelListConnection(execution, envVars);
     const result = await connection.request({
       method: "model/list",
       params: {},
@@ -2506,6 +2519,7 @@ async function handleRequest(
       await handleModelList(
         request.id,
         resolveCodexExecution(request.params.providerOptions),
+        request.params.envVars,
       );
       break;
     case "provider/health":
@@ -2518,6 +2532,33 @@ async function handleRequest(
           result.health.loginCommand = codexHomeLoginCommand(
             execution.codexHome,
           );
+        if (
+          execution.command !== undefined &&
+          result.supported &&
+          (result.health.status === "unauthenticated" ||
+            result.health.status === "expired")
+        ) {
+          try {
+            const account = await withMaintenanceChild(
+              (child) =>
+                child.request({
+                  method: "account/read",
+                  params: {},
+                  timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+                  resultSchema: z.object({ requiresOpenaiAuth: z.boolean() }),
+                }),
+              execution,
+            );
+            if (!account.requiresOpenaiAuth) {
+              result.health.status = "ready";
+              result.health.statusMessage =
+                "Authentication managed by the configured Codex launcher.";
+            }
+          } catch {
+            result.health.statusMessage =
+              "The configured Codex launcher could not be verified.";
+          }
+        }
         sendResult(request.id, result);
       }
       break;
