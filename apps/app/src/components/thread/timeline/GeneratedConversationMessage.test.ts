@@ -122,12 +122,13 @@ describe("generatedConversationTitle — system source", () => {
   it("renders an environment switch as a workspace update", () => {
     const title = systemTitle({
       systemMessageKind: "environment-directory-updated",
-      systemMessageSubject: null,
+      systemMessageSubject: { kind: "directory", path: "/workspace/next" },
     });
 
-    expect(title.plain).toBe("Workspace switched");
+    expect(title.plain).toBe("Continued in /workspace/next");
     expect(title.segments).toEqual([
-      expect.objectContaining({ text: "Workspace switched" }),
+      expect.objectContaining({ text: "Continued in" }),
+      expect.objectContaining({ text: "/workspace/next" }),
     ]);
   });
 
