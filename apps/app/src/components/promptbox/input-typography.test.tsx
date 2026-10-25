@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
@@ -16,7 +18,20 @@ import { Input } from "@bb/shared-ui/input";
 import { Textarea } from "@bb/shared-ui/textarea";
 import { VoiceInputTextarea } from "@bb/shared-ui/voice-input-textarea";
 import { VoiceInputTextarea as HostVoiceInputTextarea } from "./VoiceInputTextarea";
-import { ComposerEditorSlot } from "./ComposerEditorSlot";
+import type { ComponentType } from "react";
+import { composerPluginModule } from "@/test/fixtures/composer-plugin";
+
+const { ComposerEditorSlot } = await composerPluginModule<{
+  ComposerEditorSlot: ComponentType<{
+    editor: null;
+    scrollContainerRef: { current: null };
+    inputLocked: boolean;
+    isCompactLayout: boolean;
+    minHeight: number;
+    layout: "thread";
+    resolveMentionLink: undefined;
+  }>;
+}>("ComposerEditorSlot.tsx");
 
 const appRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const require = createRequire(resolve(appRoot, "package.json"));
