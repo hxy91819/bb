@@ -16,20 +16,20 @@
 
 以下是当前行为，不是拟新增能力。链接相对本设计文件；符号是阅读入口。
 
-| 事实 | 仓库证据及影响 |
-| --- | --- |
-| create/fork 的 pluginMetadata 只接受 origin=plugin，并要求 originPluginId | [threads.ts](../packages/server-contract/src/api/threads.ts)：`createThreadRequestSchema`、`forkThreadRequestSchema`。保留原有校验；不能借改 origin 表示团队身份。 |
-| 浏览器和后端插件 SDK 自动补插件归因 | [plugin-bound-sdk.ts](../apps/app/src/lib/plugin-bound-sdk.ts)、[plugin-api.ts](../apps/server/src/services/plugins/plugin-api.ts)：`withPluginThreadAttribution` 调用；[app-contract.ts](../packages/plugin-sdk/src/app-contract.ts)：`PluginBoundThreadsArea`、`NewThreadRequest`。 |
-| 根编辑器与插件编辑器复用同一提交实现 | [RootComposeView.tsx](../apps/app/src/views/RootComposeView.tsx)：`handleSubmit`；[NewThreadComposer.tsx](../apps/app/src/components/promptbox/NewThreadComposer.tsx)：`submitDraft`；[PluginNewThreadComposer.tsx](../apps/app/src/components/plugin/PluginNewThreadComposer.tsx)：`handleSubmit`。插件组件只回调请求，插件仍决定 filing/attribution。 |
-| 创建服务已经集中，fork 是适配器 | [base.ts](../apps/server/src/routes/threads/base.ts)：create/fork routes；[thread-fork.ts](../apps/server/src/services/threads/thread-fork.ts)：`createThreadForkFromRequest` → [thread-create.ts](../apps/server/src/services/threads/thread-create.ts)：`createThreadFromRequest` → `createPendingThreadAndAttemptFirstDispatch`。 |
-| thread row 与一个 namespace 的初始 metadata 已经原子写入 | [thread-create-helpers.ts](../apps/server/src/services/threads/thread-create-helpers.ts)：`createThreadRecord` → [threads.ts](../packages/db/src/data/threads.ts)：`createThread`，immediate transaction 内调用 `insertThreadPluginMetadata`；通知在事务之后。扩展内部输入为多个 namespace 即可。 |
-| metadata 是现成独立表，不需要成员列 | [schema.ts](../packages/db/src/schema.ts)：`threadPluginMetadata`，主键 `(threadId, pluginId)`，删除线程 cascade；[thread-plugin-metadata.ts](../packages/db/src/data/thread-plugin-metadata.ts)：定向批读、插入、patch。 |
-| 插件已有独立 SQLite、迁移、RPC、实时通知 | [backend-contract.ts](../packages/plugin-sdk/src/backend-contract.ts)：`PluginStorage.database/migrate`、RPC、realtime；数据库 handle 按加载代际管理，WAL、busy_timeout 5000，迁移 append-only。 |
-| thread-list 是 bundled 插件，没有另一份 core 内置完整列表 | [app.tsx](../plugins/thread-list/app.tsx)：`experimental_threadList`；[api_to_audit.md](api_to_audit.md)：同名条目；[preferences.ts](../plugins/thread-list/shared/preferences.ts)：project/chronological/machine 三种组织模式。 |
-| 树、环境聚合、排序、拖拽和触摸已有实现 | [project-thread-groups.ts](../plugins/thread-list/app/model/project-thread-groups.ts)、[machine-thread-groups.ts](../plugins/thread-list/app/model/machine-thread-groups.ts)、[ProjectList.tsx](../plugins/thread-list/app/list/ProjectList.tsx)、[useSectionThreadDnd.ts](../plugins/thread-list/app/dnd/useSectionThreadDnd.ts)、[sidebarTouchSensor.ts](../plugins/thread-list/app/dnd/sidebarTouchSensor.ts)、[ThreadRow.tsx](../plugins/thread-list/app/rows/ThreadRow.tsx)。贡献者不重建这些行为。 |
-| 现有元数据列表只接受已知 threadIds；线程列表没有 metadata/member/date 活动过滤 | [threads.ts](../packages/server-contract/src/api/threads.ts)：`pluginThreadMetadataListRequestSchema`、`threadListQuerySchema`、`threadEventsQuerySchema`；事件查询只有单线程 sequence/types/order/limit。不能靠现有 list API 高效完成成员跨线程日期查询。 |
-| 事件带时间和线程内序号，但会被剪裁/改写 | [schema.ts](../packages/db/src/schema.ts)：`events`；[events.ts](../packages/db/src/data/events.ts)：`listStoredEventRows`；[event-rewrite-generation.ts](../packages/db/src/data/event-rewrite-generation.ts)、[event-output-truncation.ts](../packages/db/src/data/event-output-truncation.ts)。只能证明保留的证据。 |
-| fork 会复制来源的历史事件，保留原 createdAt | [thread-fork-history.ts](../apps/server/src/services/threads/thread-fork-history.ts)：copyForkSourceHistory/selectInheritedForkEventRows；[events.ts](../packages/db/src/data/events.ts)：copyStoredThreadEventsInTransaction。活动统计必须排除继承片段，否则会把 A 的历史重复算到新归属 B。 |
+| 事实                                                                           | 仓库证据及影响                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| create/fork 的 pluginMetadata 只接受 origin=plugin，并要求 originPluginId      | [threads.ts](../packages/server-contract/src/api/threads.ts)：`createThreadRequestSchema`、`forkThreadRequestSchema`。保留原有校验；不能借改 origin 表示团队身份。                                                                                                                                                                                                                                                                                                                                       |
+| 浏览器和后端插件 SDK 自动补插件归因                                            | [plugin-bound-sdk.ts](../apps/app/src/lib/plugin-bound-sdk.ts)、[plugin-api.ts](../apps/server/src/services/plugins/plugin-api.ts)：`withPluginThreadAttribution` 调用；[app-contract.ts](../packages/plugin-sdk/src/app-contract.ts)：`PluginBoundThreadsArea`、`NewThreadRequest`。                                                                                                                                                                                                                    |
+| 根编辑器与插件编辑器复用同一提交实现                                           | [RootComposeView.tsx](../apps/app/src/views/RootComposeView.tsx)：`handleSubmit`；[NewThreadComposer.tsx](../apps/app/src/components/promptbox/NewThreadComposer.tsx)：`submitDraft`；[PluginNewThreadComposer.tsx](../apps/app/src/components/plugin/PluginNewThreadComposer.tsx)：`handleSubmit`。插件组件只回调请求，插件仍决定 filing/attribution。                                                                                                                                                  |
+| 创建服务已经集中，fork 是适配器                                                | [base.ts](../apps/server/src/routes/threads/base.ts)：create/fork routes；[thread-fork.ts](../apps/server/src/services/threads/thread-fork.ts)：`createThreadForkFromRequest` → [thread-create.ts](../apps/server/src/services/threads/thread-create.ts)：`createThreadFromRequest` → `createPendingThreadAndAttemptFirstDispatch`。                                                                                                                                                                     |
+| thread row 与一个 namespace 的初始 metadata 已经原子写入                       | [thread-create-helpers.ts](../apps/server/src/services/threads/thread-create-helpers.ts)：`createThreadRecord` → [threads.ts](../packages/db/src/data/threads.ts)：`createThread`，immediate transaction 内调用 `insertThreadPluginMetadata`；通知在事务之后。扩展内部输入为多个 namespace 即可。                                                                                                                                                                                                        |
+| metadata 是现成独立表，不需要成员列                                            | [schema.ts](../packages/db/src/schema.ts)：`threadPluginMetadata`，主键 `(threadId, pluginId)`，删除线程 cascade；[thread-plugin-metadata.ts](../packages/db/src/data/thread-plugin-metadata.ts)：定向批读、插入、patch。                                                                                                                                                                                                                                                                                |
+| 插件已有独立 SQLite、迁移、RPC、实时通知                                       | [backend-contract.ts](../packages/plugin-sdk/src/backend-contract.ts)：`PluginStorage.database/migrate`、RPC、realtime；数据库 handle 按加载代际管理，WAL、busy_timeout 5000，迁移 append-only。                                                                                                                                                                                                                                                                                                         |
+| thread-list 是 bundled 插件，没有另一份 core 内置完整列表                      | [app.tsx](../plugins/thread-list/app.tsx)：`experimental_threadList`；[api_to_audit.md](api_to_audit.md)：同名条目；[preferences.ts](../plugins/thread-list/shared/preferences.ts)：project/chronological/machine 三种组织模式。                                                                                                                                                                                                                                                                         |
+| 树、环境聚合、排序、拖拽和触摸已有实现                                         | [project-thread-groups.ts](../plugins/thread-list/app/model/project-thread-groups.ts)、[machine-thread-groups.ts](../plugins/thread-list/app/model/machine-thread-groups.ts)、[ProjectList.tsx](../plugins/thread-list/app/list/ProjectList.tsx)、[useSectionThreadDnd.ts](../plugins/thread-list/app/dnd/useSectionThreadDnd.ts)、[sidebarTouchSensor.ts](../plugins/thread-list/app/dnd/sidebarTouchSensor.ts)、[ThreadRow.tsx](../plugins/thread-list/app/rows/ThreadRow.tsx)。贡献者不重建这些行为。 |
+| 现有元数据列表只接受已知 threadIds；线程列表没有 metadata/member/date 活动过滤 | [threads.ts](../packages/server-contract/src/api/threads.ts)：`pluginThreadMetadataListRequestSchema`、`threadListQuerySchema`、`threadEventsQuerySchema`；事件查询只有单线程 sequence/types/order/limit。不能靠现有 list API 高效完成成员跨线程日期查询。                                                                                                                                                                                                                                               |
+| 事件带时间和线程内序号，但会被剪裁/改写                                        | [schema.ts](../packages/db/src/schema.ts)：`events`；[events.ts](../packages/db/src/data/events.ts)：`listStoredEventRows`；[event-rewrite-generation.ts](../packages/db/src/data/event-rewrite-generation.ts)、[event-output-truncation.ts](../packages/db/src/data/event-output-truncation.ts)。只能证明保留的证据。                                                                                                                                                                                   |
+| fork 会复制来源的历史事件，保留原 createdAt                                    | [thread-fork-history.ts](../apps/server/src/services/threads/thread-fork-history.ts)：copyForkSourceHistory/selectInheritedForkEventRows；[events.ts](../packages/db/src/data/events.ts)：copyStoredThreadEventsInTransaction。活动统计必须排除继承片段，否则会把 A 的历史重复算到新归属 B。                                                                                                                                                                                                             |
 
 ## 3. 推荐创建接口
 
@@ -37,11 +37,11 @@
 
 以下名称均为**拟新增**；所有新增 public member、导出类型与 wire 字段以 `experimental_` 起名。复用现有 JsonValue/JsonObject、Standard Schema、ThreadCreateOrigin、ThreadOriginKind 等术语与型别，不另造“团队创建请求”。
 
-| 接口 | 精确职责 |
-| --- | --- |
-| `app.experimental_threadCreationContext.register({ capture })` | 每插件、每前端加载代际一个贡献者，host 绑定 pluginId；`capture()` **同步**返回 `JsonValue \| undefined`，只读取本客户端选择。返回 disposer，卸载也自动注销。同步快照避免跨 await 后身份漂移。 |
-| create/fork/`NewThreadRequest.experimental_pluginContext?: Record<pluginId, JsonValue>` | 只承载提交快照，与 origin 完全独立；省略规范化为 `{}`。可显式传空对象，表示已经收集且没有贡献。普通 SDK/CLI 不推断浏览器身份。 |
-| `bb.experimental_threadCreationContext.register({ input, prepare })` | 每插件一个后端处理器；input 为验证该插件上下文的 Standard Schema。`prepare` 收到 typed `context`（有/无的判别联合）、规范化创建描述、自己的 legacy seed、自己的 parent/source metadata、AbortSignal；异步返回 `JsonObject \| null`，只产生本插件初始 metadata。 |
+| 接口                                                                                    | 精确职责                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.experimental_threadCreationContext.register({ capture })`                          | 每插件、每前端加载代际一个贡献者，host 绑定 pluginId；`capture()` **同步**返回 `JsonValue \| undefined`，只读取本客户端选择。返回 disposer，卸载也自动注销。同步快照避免跨 await 后身份漂移。                                                                   |
+| create/fork/`NewThreadRequest.experimental_pluginContext?: Record<pluginId, JsonValue>` | 只承载提交快照，与 origin 完全独立；省略规范化为 `{}`。可显式传空对象，表示已经收集且没有贡献。普通 SDK/CLI 不推断浏览器身份。                                                                                                                                  |
+| `bb.experimental_threadCreationContext.register({ input, prepare })`                    | 每插件一个后端处理器；input 为验证该插件上下文的 Standard Schema。`prepare` 收到 typed `context`（有/无的判别联合）、规范化创建描述、自己的 legacy seed、自己的 parent/source metadata、AbortSignal；异步返回 `JsonObject \| null`，只产生本插件初始 metadata。 |
 
 规范化描述只包含 `projectId, origin, originPluginId, originKind, parentThreadId, sourceThreadId, startedOnBehalfOf`，缺席的关系用 null；这些字段完成本体现有关系校验后再提供。不把原始完整 prompt、其他插件上下文、其他 namespace 的 metadata 或可写 request 交给处理器。parent/source 读取只限对应线程和当前 pluginId；handler 需要其他资料时可用已有 SDK 定向读取。输出是新增键集合，null 表示不贡献；不允许 handler 修改线程核心字段或给别的 pluginId 写入。
 
@@ -68,19 +68,19 @@
 
 ### 3.4 创建调用与支持表
 
-| 入口 | 源码路径/适配点 | 上下文及团队规则 |
-| --- | --- | --- |
-| 根创建页面 | RootComposeView → NewThreadComposer → useCreateThread → sdk.threads.spawn | 提交采集当前成员。 |
-| 侧栏按钮、快捷键、命令面板 | [SidebarNavigationModel.tsx](../apps/app/src/components/sidebar/SidebarNavigationModel.tsx) 的 new-thread action；[AppLayout.tsx](../apps/app/src/components/layout/AppLayout.tsx) 的 `thread.new` → root compose | 打开入口不采集；最终提交走上行。保持项目/placement 选择逻辑。 |
-| 分屏新建 | SidebarNavigationModel 的 `PLACEHOLDER_SPLIT_CONTENT`，pane 中的 root composer | 每 pane 草稿保持原行为，共用创建 helper；不得在每 pane 注册一个全局 collector。 |
-| 复用 SDK NewThreadComposer 的插件 | PluginNewThreadComposer → onSubmit → 浏览器 SDK 或插件 RPC → 后端 SDK | NewThreadRequest 透传 map；旧插件 origin 仍为自身，团队 metadata 另存。插件主动丢弃字段不在“自动恢复”承诺内，Guide 要求原样转发。 |
-| 插件直接浏览器 spawn/fork | plugin-bound-sdk → 通用 collector helper → 原 SDK | 无显式 map 时采集；显式 map 不补、不覆盖；origin 自动补齐规则不变。 |
-| 人工 fork | [useForkThreadFromMessage.ts](../apps/app/src/hooks/useForkThreadFromMessage.ts) 实际调用 spawn(originKind=fork)，不经过 NewThreadComposer；fork endpoint 经 thread-fork 适配 | 必须单独接入 helper。归属本次成员，sourceThread 不是 parent，不自动继承来源成员。 |
-| provider handoff | [ThreadDetailPromptArea.tsx](../apps/app/src/views/thread-detail/ThreadDetailPromptArea.tsx)：createHandoffThread → useCreateThread；[thread-handoff-request.ts](../packages/client-core/src/prompt/thread-handoff-request.ts)：buildThreadHandoffCreateRequest | 当前是普通新线程，prompt 提及旧线程；没有 sourceThreadId/parentThreadId。取本次选择，不伪造 fork/来源关系。 |
-| Agent 子线程 | [spawn.ts](../apps/cli/src/commands/thread/spawn.ts)：--parent-self/--parent-thread；[workflows service](../plugins/workflows/src/service.ts)：SDK spawn；服务端统一 create | 有显式成员优先，否则团队 handler 继承真实 parentThreadId 的 memberId；无父归属则未归属。CLI origin=cli 不是人工/Agent 的可靠鉴别。 |
-| Agent fork | SDK fork、[CLI fork](../apps/cli/src/commands/thread/fork.ts)、[side-chat](../plugins/side-chat/server.ts) | 现有 fork 使用 source 关系；本期没有 context 就未归属，不能偷当 parent 继承。seed-only fork 的 startedOnBehalfOf 表示 Agent 也不改变此约定。 |
-| CLI/SDK 明确归属 | packages/sdk/src/areas/threads.ts 的 spawnJson/forkJson；CLI spawn/fork | 新增 `--experimental-plugin-context <json>`，与 SDK 同 schema；CLI 不读浏览器选择，插件可提供 team 命令便捷构造。 |
-| 自动化/旧客户端 | [automations run](../plugins/automations/src/run.ts)、任意无浏览器 backend SDK | handler 仍运行；无 map 且无真实 parent 则未归属，不能使用最近一个人的选择。 |
+| 入口                              | 源码路径/适配点                                                                                                                                                                                                                                                 | 上下文及团队规则                                                                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 根创建页面                        | RootComposeView → NewThreadComposer → useCreateThread → sdk.threads.spawn                                                                                                                                                                                       | 提交采集当前成员。                                                                                                                           |
+| 侧栏按钮、快捷键、命令面板        | [SidebarNavigationModel.tsx](../apps/app/src/components/sidebar/SidebarNavigationModel.tsx) 的 new-thread action；[AppLayout.tsx](../apps/app/src/components/layout/AppLayout.tsx) 的 `thread.new` → root compose                                               | 打开入口不采集；最终提交走上行。保持项目/placement 选择逻辑。                                                                                |
+| 分屏新建                          | SidebarNavigationModel 的 `PLACEHOLDER_SPLIT_CONTENT`，pane 中的 root composer                                                                                                                                                                                  | 每 pane 草稿保持原行为，共用创建 helper；不得在每 pane 注册一个全局 collector。                                                              |
+| 复用 SDK NewThreadComposer 的插件 | PluginNewThreadComposer → onSubmit → 浏览器 SDK 或插件 RPC → 后端 SDK                                                                                                                                                                                           | NewThreadRequest 透传 map；旧插件 origin 仍为自身，团队 metadata 另存。插件主动丢弃字段不在“自动恢复”承诺内，Guide 要求原样转发。            |
+| 插件直接浏览器 spawn/fork         | plugin-bound-sdk → 通用 collector helper → 原 SDK                                                                                                                                                                                                               | 无显式 map 时采集；显式 map 不补、不覆盖；origin 自动补齐规则不变。                                                                          |
+| 人工 fork                         | [useForkThreadFromMessage.ts](../apps/app/src/hooks/useForkThreadFromMessage.ts) 实际调用 spawn(originKind=fork)，不经过 NewThreadComposer；fork endpoint 经 thread-fork 适配                                                                                   | 必须单独接入 helper。归属本次成员，sourceThread 不是 parent，不自动继承来源成员。                                                            |
+| provider handoff                  | [ThreadDetailPromptArea.tsx](../apps/app/src/views/thread-detail/ThreadDetailPromptArea.tsx)：createHandoffThread → useCreateThread；[thread-handoff-request.ts](../packages/client-core/src/prompt/thread-handoff-request.ts)：buildThreadHandoffCreateRequest | 当前是普通新线程，prompt 提及旧线程；没有 sourceThreadId/parentThreadId。取本次选择，不伪造 fork/来源关系。                                  |
+| Agent 子线程                      | [spawn.ts](../apps/cli/src/commands/thread/spawn.ts)：--parent-self/--parent-thread；[workflows service](../plugins/workflows/src/service.ts)：SDK spawn；服务端统一 create                                                                                     | 有显式成员优先，否则团队 handler 继承真实 parentThreadId 的 memberId；无父归属则未归属。CLI origin=cli 不是人工/Agent 的可靠鉴别。           |
+| Agent fork                        | SDK fork、[CLI fork](../apps/cli/src/commands/thread/fork.ts)、[side-chat](../plugins/side-chat/server.ts)                                                                                                                                                      | 现有 fork 使用 source 关系；本期没有 context 就未归属，不能偷当 parent 继承。seed-only fork 的 startedOnBehalfOf 表示 Agent 也不改变此约定。 |
+| CLI/SDK 明确归属                  | packages/sdk/src/areas/threads.ts 的 spawnJson/forkJson；CLI spawn/fork                                                                                                                                                                                         | 新增 `--experimental-plugin-context <json>`，与 SDK 同 schema；CLI 不读浏览器选择，插件可提供 team 命令便捷构造。                            |
+| 自动化/旧客户端                   | [automations run](../plugins/automations/src/run.ts)、任意无浏览器 backend SDK                                                                                                                                                                                  | handler 仍运行；无 map 且无真实 parent 则未归属，不能使用最近一个人的选择。                                                                  |
 
 web/desktop 与紧凑浏览器都运行 apps/app，具有相同 collector 与插件列表能力。紧凑布局沿用抽屉、触摸行操作和导航关闭，不强加桌面分屏。**本基线原生 mobile 是 WebView 壳**：[ProfileWebViewScreen.tsx](../apps/mobile/src/screens/webview/ProfileWebViewScreen.tsx) 的 ShellWebView 加载 buildShellUrl；壳里的 Web App 因此支持同一插件 UI/创建流程。原生通知、连接设置、后台 native SDK 不运行前端注册者，按无浏览器请求处理；不新增 native bridge/daemon wire，不声称独立 React Native slot 已存在。
 
@@ -102,15 +102,15 @@ web/desktop 与紧凑浏览器都运行 apps/app，具有相同 collector 与插
 
 ### 4.2 树、排序、拖拽与 preferences
 
-| 行为 | 推荐契约 |
-| --- | --- |
-| 组织选择 | 现有 organizationMode 接受三旧值及插件 `<pluginId>/<id>`；现有 thread-list RPC/CLI preferences 路径读写，新值有校验。默认仍 chronological，安装团队插件不自动改偏好。 |
-| group key | 宿主编码 `(pluginId, registrationId, groupKey)`，不拼接未经转义的分隔符；姓名更改不换 key，团队使用 memberId。 |
-| 嵌套 | 先建立 parent 树，以每棵根的 group 放置整树，子线程保留实际自身标签；跨成员子线程不会被复制或拆散。pinned 的现有置顶投影保持。 |
-| 环境聚合 | 在组内复用现有环境聚合；禁止跨成员组折叠为同一环境行。树中子节点仍服从树，不凭环境重挂父级。 |
-| 排序/隐藏/折叠 | 复用比较器、窗口化、reveal 与 group rollup；增加 namespaced group 状态的 KV preferences（顺序、折叠、隐藏），不新增核心表。不覆盖既有 project/section/machine 偏好。 |
-| 拖拽/移动 | 现有 thread/section 重排、nest、移入分屏、触摸传感器沿用。派生的成员组标题是只读 drop target；跨成员组拖拽不暗改 memberId，也不吞掉原有 move 菜单。组内原先可重排的位置继续按既有 sortKey/父子变更工作；不支持的位置显示与原模式一致的拒绝反馈。 |
-| 停用/重载 | 所选提供者缺席时临时回退 chronological，保存原选择和折叠数据，恢复后重用；其行标签消失，原列表仍可用。贡献失败隔离为缺席，不隐藏整个列表。 |
+| 行为           | 推荐契约                                                                                                                                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 组织选择       | 现有 organizationMode 接受三旧值及插件 `<pluginId>/<id>`；现有 thread-list RPC/CLI preferences 路径读写，新值有校验。默认仍 chronological，安装团队插件不自动改偏好。                                                                            |
+| group key      | 宿主编码 `(pluginId, registrationId, groupKey)`，不拼接未经转义的分隔符；姓名更改不换 key，团队使用 memberId。                                                                                                                                   |
+| 嵌套           | 先建立 parent 树，以每棵根的 group 放置整树，子线程保留实际自身标签；跨成员子线程不会被复制或拆散。pinned 的现有置顶投影保持。                                                                                                                   |
+| 环境聚合       | 在组内复用现有环境聚合；禁止跨成员组折叠为同一环境行。树中子节点仍服从树，不凭环境重挂父级。                                                                                                                                                     |
+| 排序/隐藏/折叠 | 复用比较器、窗口化、reveal 与 group rollup；增加 namespaced group 状态的 KV preferences（顺序、折叠、隐藏），不新增核心表。不覆盖既有 project/section/machine 偏好。                                                                             |
+| 拖拽/移动      | 现有 thread/section 重排、nest、移入分屏、触摸传感器沿用。派生的成员组标题是只读 drop target；跨成员组拖拽不暗改 memberId，也不吞掉原有 move 菜单。组内原先可重排的位置继续按既有 sortKey/父子变更工作；不支持的位置显示与原模式一致的拒绝反馈。 |
+| 停用/重载      | 所选提供者缺席时临时回退 chronological，保存原选择和折叠数据，恢复后重用；其行标签消失，原列表仍可用。贡献失败隔离为缺席，不隐藏整个列表。                                                                                                       |
 
 不选整列表替换：会复制拖拽/移动维护成本；不选 DOM 拦截：无法保证生命周期与可访问性；不选插件间私有协议：外部安装者无法获得稳定版本边界。
 
@@ -180,13 +180,13 @@ fork 的复制历史不是该 fork 新做的工作。现有复制不带统一来
 
 仅打包一个 `skills/team-activity/SKILL.md`。建议短 description：`查询成员归属的 BB 工作进展、日期活动与线程证据；使用 bb team activity。` 正文按需教 Agent 解析歧义、日期、预算和证据，完整正文目标不超过 1500 字符，详细参数留 CLI help。不注册 native tool 集合，不向 agent instructions 注入名单、历史或正文。命令经 `bb.cli` 注册，SDK/RPC/CLI 调用同一 query service。
 
-| 实际链路 | 已核对能力与边界 |
-| --- | --- |
-| server skill catalog → host staging | [injected-skills.ts](../apps/server/src/services/skills/injected-skills.ts)：discoverPluginSkillIds/resolveSkillCatalogEntries；[host injected-skills](../apps/host-daemon/src/injected-skills.ts)：stageInjectedSkillSources，按 treeHash staging。已有 skill transport 可复用，无新 daemon wire。catalog 的 name/description/path 有常驻上下文成本，不能称免费。 |
-| Codex | [bridge.ts](../plugins/provider-codex/src/bridge/bridge.ts)：skills/configure → skills/extraRoots/set，交给 provider 原生发现。代码证明 roots 传递，不证明每个外部版本实际 token 数；验收捕获请求验证未注入完整正文。 |
-| Claude Code | [session-params.ts](../plugins/provider-claude-code/src/session-params.ts)：buildClaudeSkillConfigParams 把 roots 配成 local plugins；使用原生 skill 加载路径，实际正文触发以支持版本运行验证。 |
-| Pi | [bridge.ts](../plugins/provider-pi/src/bridge/bridge.ts)：skills/configure；[rpc-session.ts](../plugins/provider-pi/src/bridge/rpc-session.ts)：--skill；[turn-input.ts](../plugins/provider-pi/src/bridge/turn-input.ts)：显式选择转 /skill。必须验证自动发现与显式选择两条路，不能只凭命令转换声称自动命中。 |
-| ACP | [session-params.ts](../packages/provider-bridge-acp/src/session-params.ts)：buildAcpSkillsInstructions 实际将每个 name/description/绝对路径写入 instructions，要求匹配时读取 SKILL.md。这是文本目录而非原生 lazy registry；正文按需读取依赖目标 agent 的文件读取和 shell/CLI 能力。 |
+| 实际链路                                    | 已核对能力与边界                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| server skill catalog → host staging         | [injected-skills.ts](../apps/server/src/services/skills/injected-skills.ts)：discoverPluginSkillIds/resolveSkillCatalogEntries；[host injected-skills](../apps/host-daemon/src/injected-skills.ts)：stageInjectedSkillSources，按 treeHash staging。已有 skill transport 可复用，无新 daemon wire。catalog 的 name/description/path 有常驻上下文成本，不能称免费。                                      |
+| Codex                                       | [bridge.ts](../plugins/provider-codex/src/bridge/bridge.ts)：skills/configure → skills/extraRoots/set，交给 provider 原生发现。代码证明 roots 传递，不证明每个外部版本实际 token 数；验收捕获请求验证未注入完整正文。                                                                                                                                                                                   |
+| Claude Code                                 | [session-params.ts](../plugins/provider-claude-code/src/session-params.ts)：buildClaudeSkillConfigParams 把 roots 配成 local plugins；使用原生 skill 加载路径，实际正文触发以支持版本运行验证。                                                                                                                                                                                                         |
+| Pi                                          | [bridge.ts](../plugins/provider-pi/src/bridge/bridge.ts)：skills/configure；[rpc-session.ts](../plugins/provider-pi/src/bridge/rpc-session.ts)：--skill；[turn-input.ts](../plugins/provider-pi/src/bridge/turn-input.ts)：显式选择转 /skill。必须验证自动发现与显式选择两条路，不能只凭命令转换声称自动命中。                                                                                          |
+| ACP                                         | [session-params.ts](../packages/provider-bridge-acp/src/session-params.ts)：buildAcpSkillsInstructions 实际将每个 name/description/绝对路径写入 instructions，要求匹配时读取 SKILL.md。这是文本目录而非原生 lazy registry；正文按需读取依赖目标 agent 的文件读取和 shell/CLI 能力。                                                                                                                     |
 | 不支持 skill roots/文件或 shell 的 provider | [runtime-provider-process.ts](../packages/agent-runtime/src/runtime-provider-process.ts) 与 [bridge-protocol-adapter.ts](../packages/agent-runtime/src/bridge-protocol-adapter.ts) 只提供配置传递；bridge-protocol-adapter 在 `handshake.skills.configure` 未声明时返回 noop，不能赋予目标执行能力。最小替代为用户显式附加短查询指令/命令输出，或使用已支持 CLI 的 provider；不为此常驻新增一串 tools。 |
 
 [plugin-commands-skill.ts](../apps/server/src/services/plugins/plugin-commands-skill.ts) 已生成命令发现 skill；其短 catalog 条目也占上下文。团队 skill 专注自然语言触发，不把同一完整说明重复写进自动生成发现正文。启停后新会话/下一次配置刷新移除或加入发现条目；已经进入旧会话上下文的文字不能撤回，命令必须明确返回插件不可用，而不是使用旧资料。运行验收报告 provider/版本与实际发现成本，不承诺所有第三方 ACP agent 同等能力。
@@ -205,74 +205,74 @@ fork 的复制历史不是该 fork 新做的工作。现有复制不带统一来
 
 以下为下一阶段必须执行的行为测试，不是本阶段已通过。相同创建表驱动覆盖所有支持入口；DB 测试用真实内存连接与 migrate，不 mock 数据库。UI 在 web/desktop/紧凑浏览器及原生 WebView 选择代表旅程；新增紧凑抽屉按项目规则验证 iOS Safari、app-root 和延迟实现行为。
 
-| ID | 设置与动作 | 可观察结果 / 测试边界 |
-| --- | --- | --- |
-| C01 | A 成员在每个支持入口人工创建，提交前由 B 切回 A | metadata memberId=A；origin 保持原入口，原生 SDK/服务路由表驱动。 |
-| C02 | 打开页面选 A，发送时选 B；prepare 等待时再选 A | 本次 B、下一次 A；同步 collector/UI 集成。 |
-| C03 | 两窗口分别 A/B，同时提交同项目 | 各自 metadata 正确，无全局选择串扰；两个独立客户端。 |
-| C04 | 两插件同时贡献，包含插件来源 legacy seed | 两 namespace 与线程同时出现；seed 未重叠键保留，originPluginId 不变。 |
-| C05 | 同 namespace seed 重叠、非法 JSON、无效成员、超限 | 明确错误且无线程；直接 SDK/HTTP 也受校验。 |
-| C06 | collector 抛错或后端 prepare 超时/失败 | 原草稿、附件、mention 可恢复，提交后的新输入不被覆盖；没有部分 metadata。 |
-| C07 | 第二 namespace insert 故障 | 同事务线程和首 namespace 都不存在；真实 DB rollback。 |
-| C08 | prepare 期间停用/重载，旧 Promise 迟到 | 本次失败且无迟到写入，下一次不带已停用 context 的创建成功。 |
-| C09 | 停用后新建；再次启用 | 原生流程可用，既有成员/metadata 保留，无重复注册。 |
-| C10 | 已提交后 dispatch 失败、延迟发送、provider retry | 遵循现有 soft-delete/queue 语义；不重跑归属、不因重试身份变化。 |
-| C11 | 网络响应丢失后调用方重试 | 不自动重发；显式重试的重复可能公开说明，复用请求 map 不改变成员。 |
-| C12 | A 父线程的无 context Agent child；A 来源人工 fork 选 B | child=A，fork=B，fork 没有被误挂 parent；source/parent DB 核对。 |
-| C13 | Agent fork 无 context、无父自动化、旧客户端 | 无归属；有 parent 的自动化按插件继承；core 不复制其他插件 metadata。 |
-| C14 | provider handoff 与分屏新建 | 本次成员、草稿恢复正确；handoff 保持现有普通新线程关系。 |
-| C15 | 旧 pluginMetadata API、无插件、插件直调/RPC 转发 | 既有成功/错误契约不变；新 helper 恰好采集一次，不污染 sendMessage/pluginSubmission。 |
-| M01 | 两个初始化事务竞争，包括首事务回滚 | 恰好一 admin、无孤儿成员；失败者可选择已创建身份；回滚者不占管理员。 |
-| M02 | 普通成员创建后续成员、管理员创建、修改他人 | 普通成员创建拒绝；admin 创建成功；updateSelf 只更新请求选择身份，说明自选身份不等于认证。 |
-| M03 | 历史线程 A，A 改名/头像；两个客户端在线与断线重连 | thread metadata 不改，所有旧线程与分组显示新资料；ID/key 不变。 |
-| M04 | 初始化自动读取浏览器时区，确认/修改；无效 timezone、非清单 avatar | 合法值走普通 settings 保存，读取失败预填 UTC；非法值在对应边界拒绝，无需空白时区必填步骤。 |
-| M05 | 非管理员经 settings UI/CLI/SDK 修改时区，已有查询继续分页 | 修改成功，不需要 adminMemberId；事件 UTC 不变；旧 cursor 保留旧时区/范围，新查询使用新值；管理员仍只控制创建成员。 |
-| M06 | 默认 A；刷新、关闭重开、新窗口；窗口 B 选“仅本窗口” | 跨重开恢复持久默认 A，B 刷新保留覆盖但不改默认，其他打开窗口不切身份；按 server/profile 隔离。 |
-| M07 | 窗口显式未归属、恢复默认、忘记默认、无效 ID、禁用存储 | null 覆盖优先；各清除动作符合第 5.1 节，不误删其他窗口；无效 ID 提示重选，存储失败如实提示不能持久。 |
-| M08 | 并发初始化失败方、首成员成功但时区写入失败 | 失败方不改时区；成功成员不回滚/重复创建，可单独重试普通设置写入。 |
-| L01 | 同时启用两分组/三标签提供者 | 组织选择均可发现，标签组合顺序稳定，原状态/标题/行操作保留。 |
-| L02 | A 根下面 B 子线程，同环境另有 B 根 | 树不拆不复制；标签真实；环境不跨根组聚合。 |
-| L03 | 切组织、改名、隐藏/折叠、刷新、多客户端 preference 更新 | namespace 不冲突，组 key 稳定；沿用 thread-list RPC/CLI 同步。 |
-| L04 | 鼠标/触摸拖拽、nest、pin、move、拖入分屏 | 原行为/禁用条件一致；跨成员组不隐式改归属；紧凑导航关闭正常。 |
-| L05 | useData/projection 抛错、停用、重载；两个列表消费同一注册 | 每注册只有一个 app-wide collector；单项隔离、卸载清理；列表回退可操作，恢复原选择。 |
-| L06 | 未装 team 时三种内建模式，排序/未读/section/窗口化 | 原 baseline 行为不回归；三模式与插件共用组投影/行附加边界测试表，私有模式操作保持，不要求改成通用树引擎。 |
-| L07 | 折叠/视口外有不同成员根、 metadata 加载中、滚动显示新行 | 分组 useData 覆盖候选根，标签按可见行批读且每批至多 200 IDs；loading 不计为未归属，无每行 RPC。 |
-| Q01 | 小A 当天有 accepted input、命令成功、Agent 陈述；小B 无活动 | A 返回对应证据且区分陈述/结果；B 返回 0 和覆盖口径，不说 B 没工作。 |
-| Q02 | 昨天创建的 A 线程今天继续，今天只 rename 的线程 | 旧线程被纳入；只改标题不算工作证据；不能用 createdAt/updatedAt 筛进展。 |
-| Q03 | UTC 边界、团队本地零点、DST 的 23/25 小时日 | 半开区间，无相邻日期重复/漏事件；响应回显 UTC 范围与 IANA timezone。 |
-| Q04 | 同名小A、模糊匹配、改名后按固定 ID 查 | 歧义返回有界候选，不能任取一个；改名不丢历史关系。 |
-| Q05 | 多页、单项超长、核心取回多于插件预算、超过一万匹配项 | 核心响应不超过 256 KiB；插件满足用户字符预算；游标从最后实际输出项继续，无全结果门槛/提前物化，未输出项不跳过。 |
-| Q06 | summary 翻页时正常新增、回填早时间、改名、改归属、删除 | 固定 threadId 顺序，正常晚于 asOf 的事件排除；回填/改归属按游标前后规则可见或略过，总数可变且 coverage 明示；新查询反映当前状态。 |
-| Q14 | details 首次后正常追加（含早时间）、删除/改写并重用序号；服务重启 | 正常追加超 throughSequence 不入旧查询；删除不复活，改写按实时分页限制处理；同版本重启可继续，无缓存 TTL 依赖。 |
-| Q15 | cursor 换成员/项目/日期/mode、非法版本/长度；仅换 limit | 过滤不匹配和非法 cursor 明确拒绝；换 limit 可继续；每页重新访问校验，不把 cursor 当授权。 |
-| Q07 | 摘要选择 threadId 请求详情、伪造不属该成员 ID | 前者仅返回当日有界证据和真实定位键，后者无越过过滤结果；无整日志/diff。 |
-| Q08 | 插件停用期间旧归属线程继续、期间新建无归属线程 | 重启查到旧归属线程期间活动；新线程不倒推成员；无事件副本回放。 |
-| Q09 | 剪裁、缺失工具结果、只有 Agent 宣称成功 | coverage/证据级别真实，不能补造结果或声称人工操作已知。 |
-| Q10 | 每个受支持 provider 新会话只问无关问题，再问活动 | 首回合仅短发现项及宿主必要目录开销；按需读取 skill，再 CLI；无常驻工具集合/名单/历史。 |
-| Q11 | ACP 目标无文件读取或 shell；插件停用后旧会话查询 | 明确能力不可用及最小替代，不自动注入完整资料或增加 AI 服务。 |
-| Q13 | A 今天有完成事件，B 今天 fork，随后自己继续；多级 fork | B 只统计 fork 自身 identity 后的工作，来源事件不重复计入；边界缺失显式 incomplete。 |
-| Q12 | 大量其他成员/年份事件，按 A/一天/项目查询 | SQL 定向过滤/聚合，EXPLAIN 使用目标索引；插件无全库 list/filter 和内部 DB 依赖。 |
-| V01 | 老 BB/缺 experimental 方法、匹配版本、禁用再安装 | 不兼容有清楚提示；兼容版可安装；停用保数据，原生列表/创建可用。 |
-| V02 | SDK、CLI、RPC 分别操作成员与查询同一数据 | 共享 service 相同校验/预算/结果；CLI 身份不污染浏览器。 |
+| ID  | 设置与动作                                                        | 可观察结果 / 测试边界                                                                                                             |
+| --- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| C01 | A 成员在每个支持入口人工创建，提交前由 B 切回 A                   | metadata memberId=A；origin 保持原入口，原生 SDK/服务路由表驱动。                                                                 |
+| C02 | 打开页面选 A，发送时选 B；prepare 等待时再选 A                    | 本次 B、下一次 A；同步 collector/UI 集成。                                                                                        |
+| C03 | 两窗口分别 A/B，同时提交同项目                                    | 各自 metadata 正确，无全局选择串扰；两个独立客户端。                                                                              |
+| C04 | 两插件同时贡献，包含插件来源 legacy seed                          | 两 namespace 与线程同时出现；seed 未重叠键保留，originPluginId 不变。                                                             |
+| C05 | 同 namespace seed 重叠、非法 JSON、无效成员、超限                 | 明确错误且无线程；直接 SDK/HTTP 也受校验。                                                                                        |
+| C06 | collector 抛错或后端 prepare 超时/失败                            | 原草稿、附件、mention 可恢复，提交后的新输入不被覆盖；没有部分 metadata。                                                         |
+| C07 | 第二 namespace insert 故障                                        | 同事务线程和首 namespace 都不存在；真实 DB rollback。                                                                             |
+| C08 | prepare 期间停用/重载，旧 Promise 迟到                            | 本次失败且无迟到写入，下一次不带已停用 context 的创建成功。                                                                       |
+| C09 | 停用后新建；再次启用                                              | 原生流程可用，既有成员/metadata 保留，无重复注册。                                                                                |
+| C10 | 已提交后 dispatch 失败、延迟发送、provider retry                  | 遵循现有 soft-delete/queue 语义；不重跑归属、不因重试身份变化。                                                                   |
+| C11 | 网络响应丢失后调用方重试                                          | 不自动重发；显式重试的重复可能公开说明，复用请求 map 不改变成员。                                                                 |
+| C12 | A 父线程的无 context Agent child；A 来源人工 fork 选 B            | child=A，fork=B，fork 没有被误挂 parent；source/parent DB 核对。                                                                  |
+| C13 | Agent fork 无 context、无父自动化、旧客户端                       | 无归属；有 parent 的自动化按插件继承；core 不复制其他插件 metadata。                                                              |
+| C14 | provider handoff 与分屏新建                                       | 本次成员、草稿恢复正确；handoff 保持现有普通新线程关系。                                                                          |
+| C15 | 旧 pluginMetadata API、无插件、插件直调/RPC 转发                  | 既有成功/错误契约不变；新 helper 恰好采集一次，不污染 sendMessage/pluginSubmission。                                              |
+| M01 | 两个初始化事务竞争，包括首事务回滚                                | 恰好一 admin、无孤儿成员；失败者可选择已创建身份；回滚者不占管理员。                                                              |
+| M02 | 普通成员创建后续成员、管理员创建、修改他人                        | 普通成员创建拒绝；admin 创建成功；updateSelf 只更新请求选择身份，说明自选身份不等于认证。                                         |
+| M03 | 历史线程 A，A 改名/头像；两个客户端在线与断线重连                 | thread metadata 不改，所有旧线程与分组显示新资料；ID/key 不变。                                                                   |
+| M04 | 初始化自动读取浏览器时区，确认/修改；无效 timezone、非清单 avatar | 合法值走普通 settings 保存，读取失败预填 UTC；非法值在对应边界拒绝，无需空白时区必填步骤。                                        |
+| M05 | 非管理员经 settings UI/CLI/SDK 修改时区，已有查询继续分页         | 修改成功，不需要 adminMemberId；事件 UTC 不变；旧 cursor 保留旧时区/范围，新查询使用新值；管理员仍只控制创建成员。                |
+| M06 | 默认 A；刷新、关闭重开、新窗口；窗口 B 选“仅本窗口”               | 跨重开恢复持久默认 A，B 刷新保留覆盖但不改默认，其他打开窗口不切身份；按 server/profile 隔离。                                    |
+| M07 | 窗口显式未归属、恢复默认、忘记默认、无效 ID、禁用存储             | null 覆盖优先；各清除动作符合第 5.1 节，不误删其他窗口；无效 ID 提示重选，存储失败如实提示不能持久。                              |
+| M08 | 并发初始化失败方、首成员成功但时区写入失败                        | 失败方不改时区；成功成员不回滚/重复创建，可单独重试普通设置写入。                                                                 |
+| L01 | 同时启用两分组/三标签提供者                                       | 组织选择均可发现，标签组合顺序稳定，原状态/标题/行操作保留。                                                                      |
+| L02 | A 根下面 B 子线程，同环境另有 B 根                                | 树不拆不复制；标签真实；环境不跨根组聚合。                                                                                        |
+| L03 | 切组织、改名、隐藏/折叠、刷新、多客户端 preference 更新           | namespace 不冲突，组 key 稳定；沿用 thread-list RPC/CLI 同步。                                                                    |
+| L04 | 鼠标/触摸拖拽、nest、pin、move、拖入分屏                          | 原行为/禁用条件一致；跨成员组不隐式改归属；紧凑导航关闭正常。                                                                     |
+| L05 | useData/projection 抛错、停用、重载；两个列表消费同一注册         | 每注册只有一个 app-wide collector；单项隔离、卸载清理；列表回退可操作，恢复原选择。                                               |
+| L06 | 未装 team 时三种内建模式，排序/未读/section/窗口化                | 原 baseline 行为不回归；三模式与插件共用组投影/行附加边界测试表，私有模式操作保持，不要求改成通用树引擎。                         |
+| L07 | 折叠/视口外有不同成员根、 metadata 加载中、滚动显示新行           | 分组 useData 覆盖候选根，标签按可见行批读且每批至多 200 IDs；loading 不计为未归属，无每行 RPC。                                   |
+| Q01 | 小A 当天有 accepted input、命令成功、Agent 陈述；小B 无活动       | A 返回对应证据且区分陈述/结果；B 返回 0 和覆盖口径，不说 B 没工作。                                                               |
+| Q02 | 昨天创建的 A 线程今天继续，今天只 rename 的线程                   | 旧线程被纳入；只改标题不算工作证据；不能用 createdAt/updatedAt 筛进展。                                                           |
+| Q03 | UTC 边界、团队本地零点、DST 的 23/25 小时日                       | 半开区间，无相邻日期重复/漏事件；响应回显 UTC 范围与 IANA timezone。                                                              |
+| Q04 | 同名小A、模糊匹配、改名后按固定 ID 查                             | 歧义返回有界候选，不能任取一个；改名不丢历史关系。                                                                                |
+| Q05 | 多页、单项超长、核心取回多于插件预算、超过一万匹配项              | 核心响应不超过 256 KiB；插件满足用户字符预算；游标从最后实际输出项继续，无全结果门槛/提前物化，未输出项不跳过。                   |
+| Q06 | summary 翻页时正常新增、回填早时间、改名、改归属、删除            | 固定 threadId 顺序，正常晚于 asOf 的事件排除；回填/改归属按游标前后规则可见或略过，总数可变且 coverage 明示；新查询反映当前状态。 |
+| Q14 | details 首次后正常追加（含早时间）、删除/改写并重用序号；服务重启 | 正常追加超 throughSequence 不入旧查询；删除不复活，改写按实时分页限制处理；同版本重启可继续，无缓存 TTL 依赖。                    |
+| Q15 | cursor 换成员/项目/日期/mode、非法版本/长度；仅换 limit           | 过滤不匹配和非法 cursor 明确拒绝；换 limit 可继续；每页重新访问校验，不把 cursor 当授权。                                         |
+| Q07 | 摘要选择 threadId 请求详情、伪造不属该成员 ID                     | 前者仅返回当日有界证据和真实定位键，后者无越过过滤结果；无整日志/diff。                                                           |
+| Q08 | 插件停用期间旧归属线程继续、期间新建无归属线程                    | 重启查到旧归属线程期间活动；新线程不倒推成员；无事件副本回放。                                                                    |
+| Q09 | 剪裁、缺失工具结果、只有 Agent 宣称成功                           | coverage/证据级别真实，不能补造结果或声称人工操作已知。                                                                           |
+| Q10 | 每个受支持 provider 新会话只问无关问题，再问活动                  | 首回合仅短发现项及宿主必要目录开销；按需读取 skill，再 CLI；无常驻工具集合/名单/历史。                                            |
+| Q11 | ACP 目标无文件读取或 shell；插件停用后旧会话查询                  | 明确能力不可用及最小替代，不自动注入完整资料或增加 AI 服务。                                                                      |
+| Q13 | A 今天有完成事件，B 今天 fork，随后自己继续；多级 fork            | B 只统计 fork 自身 identity 后的工作，来源事件不重复计入；边界缺失显式 incomplete。                                               |
+| Q12 | 大量其他成员/年份事件，按 A/一天/项目查询                         | SQL 定向过滤/聚合，EXPLAIN 使用目标索引；插件无全库 list/filter 和内部 DB 依赖。                                                  |
+| V01 | 老 BB/缺 experimental 方法、匹配版本、禁用再安装                  | 不兼容有清楚提示；兼容版可安装；停用保数据，原生列表/创建可用。                                                                   |
+| V02 | SDK、CLI、RPC 分别操作成员与查询同一数据                          | 共享 service 相同校验/预算/结果；CLI 身份不污染浏览器。                                                                           |
 
 ## 8. 我自行引入的决定
 
 本轮父线程裁决列在第 1 节；下表保留创建阶段未变的推荐，并只列本轮需由实现者遵守的具体取舍，不把已裁决事项重新当作待选方案。
 
-| 决定 | 原因 | 影响 |
-| --- | --- | --- |
-| 同步 capture、异步 prepare，collector 每插件一个 | 明确提交瞬间身份并避免多 pane 重复注册 | 插件先加载身份资料；提交快照不受之后选择影响。 |
-| 冲突键拒绝、显式 context 对已停用插件报错 | 避免按加载顺序悄悄改归属 | 已有无 context 调用不变；旧请求须重新提交才能移除失效贡献。 |
-| 无身份允许未归属，Agent fork 不从 source 继承 | 保留原生可用性，守住 parent/source 区分 | 人工未选择时不会被强制创建身份；以后扩展继承策略须插件明确实现。 |
-| 不增加创建幂等账本；不自动重发未知结果 | 现有创建无幂等契约，避免扩大接口与数据模型 | 显式重试可能重复，验收必须披露；不宣称 exactly-once。 |
-| 一次一个主组织模式、成员组只读；私有 adapter 接入共同组投影 | 复用现有交互，避免多维列表/归属编辑器 | 三模式与插件共用真实投影边界，现有模式专用操作不外泄。 |
-| 分组按候选根需求加载，行标签按可见行加载 | 只加载可见行会错分未展开根 | useData 为 app-wide，复用批读和 hooks；不要求外部缓存生命周期协议。 |
-| team 按 server；持久默认加窗口覆盖，显式 null 表示未归属 | 将父线程确定的跨会话记忆与多窗口独立落到明确优先级 | 临时窗口选择不写默认；CLI 单独记忆，不跨设备同步。 |
-| 时区存普通 settings，缺省 UTC，首成员创建后单独保存确认值 | 沿用现有配置路径，避免团队表再保存一份或跨库原子性承诺 | 非管理员可修改；设置失败单独重试，未来查询用新时区。 |
-| summary 按 threadId、details 按 sequence 游标；asOf 加 details throughSequence | 使用现有稳定键与每线程高水位，无需全局账本 | 正常追加有明确边界；删除/回填/改写允许改变后续页，coverage 明示。 |
-| 顶层 scalar metadata 交集过滤、核心有界事实、插件用户预算 | 满足真实查询缺口，保持本体通用 | 具体投影和限额见第 5 节；索引仅在 SQL 计划证明需要时增加。 |
-| 每项返回 cursorAfter，插件在最后输出项继续 | 核心分页大小可能超过最终字符预算 | 插件不会跳过已取回但未输出的项，不需缓存剩余页。 |
-| 不追踪逐消息操作者 | 自选身份不能证明实际人，创建上下文只用于归属 | 查询报告工作进展，不做审计/考勤；额外消息上下文留下一版。 |
+| 决定                                                                           | 原因                                                   | 影响                                                                |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| 同步 capture、异步 prepare，collector 每插件一个                               | 明确提交瞬间身份并避免多 pane 重复注册                 | 插件先加载身份资料；提交快照不受之后选择影响。                      |
+| 冲突键拒绝、显式 context 对已停用插件报错                                      | 避免按加载顺序悄悄改归属                               | 已有无 context 调用不变；旧请求须重新提交才能移除失效贡献。         |
+| 无身份允许未归属，Agent fork 不从 source 继承                                  | 保留原生可用性，守住 parent/source 区分                | 人工未选择时不会被强制创建身份；以后扩展继承策略须插件明确实现。    |
+| 不增加创建幂等账本；不自动重发未知结果                                         | 现有创建无幂等契约，避免扩大接口与数据模型             | 显式重试可能重复，验收必须披露；不宣称 exactly-once。               |
+| 一次一个主组织模式、成员组只读；私有 adapter 接入共同组投影                    | 复用现有交互，避免多维列表/归属编辑器                  | 三模式与插件共用真实投影边界，现有模式专用操作不外泄。              |
+| 分组按候选根需求加载，行标签按可见行加载                                       | 只加载可见行会错分未展开根                             | useData 为 app-wide，复用批读和 hooks；不要求外部缓存生命周期协议。 |
+| team 按 server；持久默认加窗口覆盖，显式 null 表示未归属                       | 将父线程确定的跨会话记忆与多窗口独立落到明确优先级     | 临时窗口选择不写默认；CLI 单独记忆，不跨设备同步。                  |
+| 时区存普通 settings，缺省 UTC，首成员创建后单独保存确认值                      | 沿用现有配置路径，避免团队表再保存一份或跨库原子性承诺 | 非管理员可修改；设置失败单独重试，未来查询用新时区。                |
+| summary 按 threadId、details 按 sequence 游标；asOf 加 details throughSequence | 使用现有稳定键与每线程高水位，无需全局账本             | 正常追加有明确边界；删除/回填/改写允许改变后续页，coverage 明示。   |
+| 顶层 scalar metadata 交集过滤、核心有界事实、插件用户预算                      | 满足真实查询缺口，保持本体通用                         | 具体投影和限额见第 5 节；索引仅在 SQL 计划证明需要时增加。          |
+| 每项返回 cursorAfter，插件在最后输出项继续                                     | 核心分页大小可能超过最终字符预算                       | 插件不会跳过已取回但未输出的项，不需缓存剩余页。                    |
+| 不追踪逐消息操作者                                                             | 自选身份不能证明实际人，创建上下文只用于归属           | 查询报告工作进展，不做审计/考勤；额外消息上下文留下一版。           |
 
 ## 9. 冲突、待裁决与本阶段验证
 
