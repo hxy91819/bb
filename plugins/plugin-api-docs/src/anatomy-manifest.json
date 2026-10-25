@@ -50,6 +50,9 @@
         {
           "path": "apps/app/src/components/plugin/PluginThreadContextSegments.tsx",
           "anchors": ["entry.slot[part]", "onVisible(slot, threadId, visible)"]
+        }
+      ]
+    },
     "thread-list": {
       "groupId": "app-shell",
       "fidelity": "state",
