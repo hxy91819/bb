@@ -24,12 +24,12 @@ import {
 } from "react";
 import { act, render, type RenderResult } from "@testing-library/react";
 import {
-  type ExperimentalPageTitle,
   ThreadListContributionProvider,
   useThreadListContributions,
   useThreadRowDecorations,
 } from "../internal/thread-contribution-runtime.js";
 import {
+  type ExperimentalPageTitle,
   type BbContext,
   type BbNavigate,
   type BranchesState,
