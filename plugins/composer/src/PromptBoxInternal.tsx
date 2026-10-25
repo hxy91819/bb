@@ -2101,10 +2101,7 @@ export function PromptBoxInternal({
       deferredFocusOrigin = null;
     };
     const focusEditorWhenVisible = () => {
-      if (
-        editor.isDestroyed ||
-        document.activeElement === editor.view.dom
-      ) {
+      if (editor.isDestroyed || document.activeElement === editor.view.dom) {
         stopDeferredFocus();
         return;
       }
