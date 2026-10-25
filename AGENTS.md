@@ -4,7 +4,14 @@
 
 - Carry the requested change through implementation, relevant verification, and fixes for failures it causes. Continue authorized, reversible local work without asking for approval at each step; ask when a missing user decision blocks progress.
 - Match verification to the change. Once relevant checks pass, broaden or repeat them only for new changes, failures, or unresolved concerns.
+- 本仓库是用户自行管理的 fork。整项任务的最终交付按下方「Fork 维护」完成提交、推送及适用的发布收尾；只提交本任务文件，保留他人的工作。验证、推送或发布实际受阻时明确报告未完成的步骤与原因。
 - Read the linked guidance when its topic applies to the task.
+
+修改功能、排查问题、调整插件或升级 BB 环境前，先读 [功能维护与插件更新索引](docs/feature-index.md)，按维护边界进入对应仓库。新增功能、改变职责、插件 ID 或迁仓时同步索引；环境升级须执行其中的外置插件更新与验收流程。
+
+BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
+
+会话消息书签插件的管家工作簿在 [docs/steward/message-bookmarks.md](docs/steward/message-bookmarks.md)，推进此目标时存在则先读，只报未完成的用户待办。
 
 ## Code And Contracts
 
@@ -45,6 +52,7 @@
 
 ## Build And Test
 
+- Run resource-heavy local builds, full-package tests, and source app launches through `scripts/run-resource-isolated -- <command>`; use `--profile package` for the serialized local aggregate build. Treat scope refusal or an OOM exit as a failed check. Keep only one scoped verification or package job active at a time.
 - Use Turbo for builds, typechecks, and tests so upstream dependencies run first: `pnpm exec turbo run <task> --filter=@bb/<pkg>`. Use the package's actual name for other scopes. Bypass orchestration only for deliberate investigation; do not invoke package scripts or raw `tsc` routinely.
 - Generated modules are gitignored: `packages/templates/src/generated/`, `packages/plugin-build/src/generated/`, and `packages/plugin-sdk/bundled-types/`. Never commit them or add a `--check` mode. New generated modules need Turbo tasks with explicit inputs, outputs, and consumer dependencies.
 - If a plugin cannot resolve `@get-bb/plugin-sdk`, run `pnpm exec turbo run build:types --filter=@get-bb/plugin-sdk`.
@@ -58,3 +66,19 @@
 - End every agent-created issue and PR body with `> AGENT GENERATED`.
 - Ground debugging in observed state: logs, database queries, server APIs, or CLI output. For dev ports, data directories, entity IDs, and the local QA launcher, see [docs/debugging-and-qa.md](docs/debugging-and-qa.md).
 - Never tail the production bb connect gate (`bb-connect`) with `wrangler tail` or the dashboard's live logs. Attaching or detaching a tail resets its Durable Objects and drops every connected tunnel. Instead, query stored Workers Logs or the Cloudflare GraphQL Analytics API (`httpRequestsAdaptiveGroups`, `durableObjectsInvocationsAdaptiveGroups`), and reproduce with `wrangler tail --env staging` against `bb-connect-staging`.
+
+<!-- fork-maintenance:start -->
+
+## Fork 维护
+
+本仓库是个人 fork（远端 `fork` = hxy91819/bb，上游 `origin` = get-bb/bb）。目标只有三个：每个改动是独立、可直接提给上游的分支；方便本机聚合打包；能纳入上游稳定版。完整流程见 [docs/fork-maintenance.md](docs/fork-maintenance.md)，不要引入领域分支、补丁登记表或冻结清单。
+
+- 根目录永远检出 `main`，个人 fork 的默认分支也设为 `main`：它是 `scripts/fork-aggregate` 每次从稳定 tag 重新生成的产物。不在这里写产品代码，不从它拉分支，不从它提上游 PR。
+- 业务优先使用公开插件扩展点；迁移旧插件或核对淘汰决定时读 [插件迁出说明](docs/steward/plugin-extraction.md)，日常维护位置以功能索引为准。
+- 新功能/修复：从 `.fork/branches` 的 `base` tag 拉 `feature/<name>` 或 `fix/<name>`，放在 `.worktrees/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `fork`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
+- 聚合打包：`scripts/fork-package` 一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
+- 发布收尾：功能、修复及影响安装产物的依赖改动完成必要验证与适用的 review 后，默认在整项任务最后统一执行 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包)，完成聚合、推送、tag 触发流水线及 Release 核验；已有持续授权，无需另问是否打包。纯规则与文档改动、已有发布的复用和用户明确要求不发布的处理以该流程为准；分支推送或清单登记完成不等于产品已发布。
+- 上游反馈：分支就是 PR 材料；向 get-bb/bb 提 issue/评论/PR 前必须经用户逐项确认，状态记在 `.fork/branches`。
+- 会停止、重启或替换当前 BB 服务的操作需要用户明确授权，使用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)。允许从 BB 线程内发起并在恢复后完成核验；停服到重新启动及失败回退由独立于目标服务的 systemd 任务执行，线程恢复使用 upgrade-resume 插件。不需要重启服务的 provider 配置、账号绑定和 dispatch alias 修改可由 BB 线程在用户已授权范围内直接完成并验证。
+
+<!-- fork-maintenance:end -->
