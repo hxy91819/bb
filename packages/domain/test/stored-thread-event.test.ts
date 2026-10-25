@@ -5,8 +5,55 @@ import {
 } from "../src/stored-thread-event.js";
 import { threadScope, turnScope } from "../src/thread-event-scope.js";
 import { systemThreadInterruptedEventDataSchema } from "../src/thread-events.js";
+import { threadEventSchema } from "../src/provider-event.js";
 
 describe("parseStoredThreadEvent", () => {
+  it("reads retired environment-switch notices without mutating history or accepting new writes", () => {
+    const data = {
+      direction: "outbound",
+      requestId: "creq_23456789ab",
+      source: "tell",
+      initiator: "system",
+      senderThreadId: null,
+      systemMessageKind: "environment-switched",
+      systemMessageSubject: null,
+      input: [{ type: "text", text: "Continue in the selected environment." }],
+      target: { kind: "new-turn" },
+      request: { method: "turn/start", params: {} },
+      execution: {
+        model: "gpt-5",
+        serviceTier: "default",
+        reasoningLevel: "medium",
+        permissionMode: "full",
+        source: "client/turn/requested",
+      },
+    };
+    const envelope = {
+      type: "client/turn/requested" as const,
+      threadId: "thread-1",
+      scope: threadScope(),
+    };
+
+    expect(() => parseStoredThreadEvent({ ...envelope, data })).not.toThrow();
+    expect(parseStoredThreadEvent({ ...envelope, data })).toMatchObject({
+      ...envelope,
+      systemMessageKind: "unlabeled",
+      input: data.input,
+      requestId: data.requestId,
+      execution: data.execution,
+    });
+    expect(data.systemMessageKind).toBe("environment-switched");
+    expect(threadEventSchema.safeParse({ ...envelope, ...data }).success).toBe(
+      false,
+    );
+    expect(() =>
+      parseStoredThreadEvent({
+        ...envelope,
+        data: { ...data, systemMessageKind: "unknown-notice" },
+      }),
+    ).toThrow();
+  });
+
   it("rejects assistant deltas without an itemId", () => {
     expect(() =>
       parseStoredThreadEvent({
