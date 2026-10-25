@@ -827,7 +827,7 @@ describe("ServerMoveService.inspect and probe", () => {
     expect(result).toEqual({
       dataDir: fixture.dataDir,
       platform: "linux",
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
       bbAppVersion: "1.2.3",
       serverEntryAvailable: true,
       existingServerData: { path: join(fixture.homeDir, ".bb"), sizeBytes: 5 },
