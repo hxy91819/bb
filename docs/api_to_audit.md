@@ -3419,7 +3419,6 @@ Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
 
-
 ## Host-scoped provider options
 
 `PluginProviderDeclaration.models.experimental_cache` defaults to `true`. Setting it to `false` makes each server catalog read await a host probe, coalesces concurrent requests, and prevents serving a previous identity's catalog on failure. This is intended for externally managed credentials; bridge-local connections may still be reused while their credentials are unchanged. Stabilization requires API-level identity-change, concurrent-probe, failure and recovery coverage while default providers retain the existing cache behavior.

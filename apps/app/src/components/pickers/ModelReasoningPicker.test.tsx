@@ -466,7 +466,9 @@ describe("ModelReasoningPicker", () => {
       screen.getByRole("button", { name: "Provider, model and reasoning" }),
     );
 
-    expect(screen.getByTitle("Codex")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Codex", exact: true }),
+    ).not.toBeNull();
     expect(screen.getByText("Could not load models for Codex.")).not.toBeNull();
     expect(screen.getByText("Provider plugin failed to load")).not.toBeNull();
   });
@@ -719,7 +721,10 @@ describe("ModelReasoningPicker", () => {
     fireEvent.change(search, { target: { value: "o4" } });
     fireEvent.keyDown(search, { key: "ArrowDown" });
 
-    const claudeTab = screen.getByTitle("Claude Code");
+    const claudeTab = screen.getByRole("button", {
+      name: "Claude Code",
+      exact: true,
+    });
     if (fireEvent.mouseDown(claudeTab)) claudeTab.focus();
     fireEvent.click(claudeTab);
 
@@ -833,7 +838,9 @@ describe("ModelReasoningPicker", () => {
     );
     expect(screen.getAllByText("5.5")).toHaveLength(2);
 
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Claude Code", exact: true }),
+    );
 
     expect(onSelectedProviderChange).toHaveBeenCalledWith("claude-code");
     expect(await screen.findByText("Opus 4.7")).not.toBeNull();
@@ -904,7 +911,9 @@ describe("ModelReasoningPicker", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Handoff to new thread" }),
     );
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Claude Code", exact: true }),
+    );
 
     expect(screen.queryByText("Fallback model")).toBeNull();
     act(() => {
@@ -954,7 +963,9 @@ describe("ModelReasoningPicker", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Handoff to new thread" }),
       );
-      fireEvent.click(screen.getByTitle("Claude Code"));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Claude Code", exact: true }),
+      );
       await screen.findByText("Opus 4.7");
       act(() => {
         commandHandlers.get(command)?.({ target: document.body });
@@ -1002,12 +1013,19 @@ describe("ModelReasoningPicker", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Handoff to new thread" }),
       );
-      fireEvent.click(screen.getByTitle("Claude Code"));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Claude Code", exact: true }),
+      );
       await screen.findByText("Opus 4.7");
       act(() => {
         commandHandlers.get(command)?.({ target: document.body });
       });
-      expect(screen.getByTitle("Codex (current thread)")).not.toBeNull();
+      expect(
+        screen.getByRole("button", {
+          name: "Codex (current thread)",
+          exact: true,
+        }),
+      ).not.toBeNull();
       fireEvent.click(screen.getByText("Opus 4.7"));
       expect(onSelect).toHaveBeenCalledExactlyOnceWith({
         providerId: "claude-code",
@@ -1036,7 +1054,12 @@ describe("ModelReasoningPicker", () => {
       name: "Provider, model and reasoning",
     });
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByTitle("Codex (current thread)"));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Codex (current thread)",
+        exact: true,
+      }),
+    );
     expect(onExit).not.toHaveBeenCalled();
     expect(onSelectedProviderChange).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Exit handoff" })).not.toBeNull();
@@ -1094,7 +1117,9 @@ describe("ModelReasoningPicker", () => {
         name: "Provider, model and reasoning",
       }),
     );
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Claude Code", exact: true }),
+    );
 
     expect(await screen.findByText("Opus 4.7")).not.toBeNull();
   });
@@ -1650,7 +1675,9 @@ describe("ModelReasoningPicker service tiers", () => {
     openPicker();
     expect(screen.getByRole("radiogroup", { name: "Speed" })).toBeTruthy();
 
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Claude Code", exact: true }),
+    );
 
     expect(
       await screen.findByRole("switch", { name: "Turbo mode" }),
