@@ -3,6 +3,7 @@ import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { TooltipProvider } from "@bb/shared-ui/tooltip";
 import { cn } from "@bb/shared-ui/lib/utils";
+import { COARSE_POINTER_INPUT_TEXT_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import type { VoiceInputTextareaProps } from "@bb/shared-ui/voice-input-textarea";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { transcribeVoiceInput } from "@/lib/api";
@@ -76,6 +77,7 @@ export function VoiceInputTextarea({
         disabled={disabled}
         onChange={(event) => onValueChange(event.target.value)}
         className={cn(
+          COARSE_POINTER_INPUT_TEXT_CLASS,
           className,
           voice.isSupported && "pb-12 max-md:pointer-coarse:pb-14",
         )}
