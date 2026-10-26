@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+用法：scripts/fork-base [--base <tag>] [--no-push]
+
+从 .fork/branches 的 base（或 --base）生成或更新 fork-base/<base>：
+以基线 tag 为起点 merge security/baseline。新 worktree 和聚合都从这个分支拉，
+安全修复因此成为所有下游分支的共同祖先。
+
+--no-push  只更新本地分支，不推送 security/baseline 和 fork-base/<base>。
+USAGE
+}
+
+base_override=""
+push=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base) base_override="${2:?--base 需要 tag}"; shift 2 ;;
+    --no-push) push=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
+root="$(git rev-parse --path-format=absolute --git-common-dir)"
+root="$(dirname "$root")"
+cd "$root"
+
+git fetch --quiet origin "+refs/tags/desktop-v*:refs/tags/desktop-v*"
+git fetch --quiet --prune fork
+
+if git rev-parse --verify --quiet refs/heads/fork-tooling >/dev/null; then
+  list_ref=refs/heads/fork-tooling
+else
+  list_ref=refs/remotes/fork/fork-tooling
+fi
+base="${base_override:-$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')}"
+git rev-parse --verify --quiet "refs/tags/$base" >/dev/null || { echo "找不到 tag $base" >&2; exit 1; }
+
+security_local="$(git rev-parse --verify --quiet refs/heads/security/baseline || true)"
+security_remote="$(git rev-parse --verify --quiet refs/remotes/fork/security/baseline || true)"
+if [ -n "$security_local" ] && [ -n "$security_remote" ] && [ "$security_local" != "$security_remote" ]; then
+  echo "警告：security/baseline 本地与 fork 不一致，使用本地（记得推送）" >&2
+fi
+security_ref=refs/heads/security/baseline
+[ -n "$security_local" ] || security_ref=refs/remotes/fork/security/baseline
+git rev-parse --verify --quiet "$security_ref" >/dev/null || {
+  echo "找不到 security/baseline；先把安全修复合并到该分支并推送" >&2
+  exit 1
+}
+
+branch="fork-base/$base"
+remote_branch="refs/remotes/fork/$branch"
+push_refs() {
+  if [ -n "$security_local" ]; then
+    git push --quiet fork "refs/heads/security/baseline:refs/heads/security/baseline" "refs/heads/$branch:refs/heads/$branch"
+  else
+    git push --quiet fork "refs/heads/$branch:refs/heads/$branch"
+  fi
+}
+if git show-ref --verify --quiet "refs/heads/$branch"; then
+  start_ref="refs/heads/$branch"
+  git merge-base --is-ancestor "refs/tags/$base" "$start_ref" || {
+    echo "$branch 不基于 $base；保留旧分支并停止" >&2
+    exit 1
+  }
+  if git merge-base --is-ancestor "$security_ref" "$start_ref"; then
+    result="$(git rev-parse "$start_ref")"
+    echo "已是最新：$branch = $result"
+    if [ "$push" = 1 ]; then
+      push_refs
+    fi
+    exit 0
+  fi
+elif git rev-parse --verify --quiet "$remote_branch" >/dev/null; then
+  start_ref="$remote_branch"
+else
+  start_ref="refs/tags/$base"
+fi
+
+git merge-base --is-ancestor "refs/tags/$base" "$start_ref" || {
+  echo "$branch 不基于 $base；保留旧分支并停止" >&2
+  exit 1
+}
+
+mkdir -p "$root/.worktrees"
+tmp="$(mktemp -d "$root/.worktrees/.fork-base.XXXXXX")"
+rmdir "$tmp"
+cleanup() {
+  git worktree remove --force "$tmp" >/dev/null 2>&1 || true
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+git worktree add --quiet --detach "$tmp" "$start_ref"
+merge_date="$(git log -1 --format=%cI "$start_ref" "$security_ref" | sort | tail -1)"
+export GIT_AUTHOR_DATE="$merge_date" GIT_COMMITTER_DATE="$merge_date"
+if ! git -C "$tmp" merge --no-autostash --quiet --no-ff --no-edit -m "Merge security/baseline into $base" "$security_ref"; then
+  git -C "$tmp" merge --abort >/dev/null 2>&1 || true
+  cat >&2 <<EOF
+security/baseline 合入 $base 冲突。先在 security/baseline 上 rebase 到 $base，
+解决冲突并通过验证后 push --force-with-lease，再重新运行本脚本。
+EOF
+  exit 1
+fi
+
+result="$(git -C "$tmp" rev-parse HEAD)"
+git update-ref "refs/heads/$branch" "$result"
+git worktree remove --force "$tmp"
+trap - EXIT
+echo "$branch = $result（$base + security/baseline）"
+
+if [ "$push" = 1 ]; then
+  push_refs
+  echo "已推送 security/baseline 与 $branch 到 fork"
+fi

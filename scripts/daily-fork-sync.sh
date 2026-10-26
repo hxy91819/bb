@@ -37,11 +37,11 @@ cat > "$prompt_file" <<'EOF'
 
 1. 保持根目录 main，在 fork-tooling 的独立 worktree 中把 .fork/branches 的 base 更新为本次固定目标；后续出现的新稳定版留到下一轮
 2. 提交并推送 fork-tooling
-3. 先执行 scripts/fork-aggregate --preflight --base <本次固定目标>，集中处理冲突，再执行 scripts/fork-package --base <本次固定目标>；中断后按脚本输出的 --resume <sha> 接续，不手工跳过阶段
+3. 先执行 scripts/fork-base --base <本次固定目标>，再执行 scripts/fork-aggregate --preflight --base <本次固定目标>，集中处理冲突，最后执行 scripts/fork-package --base <本次固定目标>；中断后按脚本输出的 --resume <sha> 接续，不手工跳过阶段
 4. 聚合成功后，使用 local-aggregate-deploy skill 将新版本安装到本机服务
 
 遇到冲突时自动解决：
-- 分支与上游冲突：在该分支 worktree 里 rebase --no-autostash 到基线 tag，修复、测试、push --force-with-lease 到 fork
+- 分支与上游冲突：在该分支 worktree 里 rebase --no-autostash 到 fork-base/<本次固定目标>，修复、测试、push --force-with-lease 到 fork
 - 分支之间冲突：在聚合 worktree 里只做两边合并（不加新行为），git add 后 git commit --no-edit，rerere 会记住解决
 - 修复回到所属分支；用重置到基线或其他分支消除冲突不等于保留功能。移除分支前核对升级前 tip 和目标上游的实际行为。
 

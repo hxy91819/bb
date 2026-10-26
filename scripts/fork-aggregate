@@ -60,6 +60,14 @@ list="$(git show "$list_ref:.fork/branches" | sed -e 's/#.*//' -e '/^[[:space:]]
 
 base="${base_override:-$(printf '%s\n' "$list" | awk '$1 == "base" { print $2 }')}"
 git rev-parse --verify --quiet "refs/tags/$base" >/dev/null || { echo "找不到 tag $base" >&2; exit 1; }
+base_ref="refs/heads/fork-base/$base"
+if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
+  base_ref="refs/remotes/fork/fork-base/$base"
+  git rev-parse --verify --quiet "$base_ref" >/dev/null || {
+    echo "找不到 fork-base/$base；先运行 scripts/fork-base --base $base" >&2
+    exit 1
+  }
+fi
 # macOS 自带 Bash 3.2 没有 mapfile；发布 workflow 会在 darwin runner 上执行本脚本。
 branches=()
 while IFS= read -r branch; do
@@ -100,7 +108,7 @@ promote_result() {
 
 if [ "$promote_only" = 1 ]; then
   result="${result_override:-$(git rev-parse --verify --quiet refs/heads/aggregate/next)}" || { echo "没有 aggregate/next 分支，先运行一次聚合" >&2; exit 1; }
-  git merge-base --is-ancestor "refs/tags/$base" "$result" || { echo "aggregate/next=$result 不基于 $base，停止" >&2; exit 1; }
+  git merge-base --is-ancestor "$base_ref" "$result" || { echo "aggregate/next=$result 不基于 $base_ref，停止" >&2; exit 1; }
   promote_result "$result"
   exit 0
 fi
@@ -118,16 +126,16 @@ if [ -d "$wt" ]; then
     echo "$wt 有未提交改动，先处理后再运行" >&2
     exit 1
   fi
-  git -C "$wt" checkout --quiet -B aggregate/next "refs/tags/$base"
+  git -C "$wt" checkout --quiet -B aggregate/next "$base_ref"
 else
-  git worktree add --quiet -B aggregate/next "$wt" "refs/tags/$base"
+  git worktree add --quiet -B aggregate/next "$wt" "$base_ref"
 fi
 
 refs=()
 for branch in "${branches[@]}"; do
   refs+=("$(resolve_ref "$branch")")
 done
-merge_date="$(git log -1 --format=%cI "refs/tags/$base" "${refs[@]}" | sort | tail -1)"
+merge_date="$(git log -1 --format=%cI "$base_ref" "${refs[@]}" | sort | tail -1)"
 export GIT_AUTHOR_DATE="$merge_date" GIT_COMMITTER_DATE="$merge_date"
 
 for i in "${!branches[@]}"; do
@@ -144,9 +152,9 @@ for i in "${!branches[@]}"; do
   fi
   echo "CONFLICT $branch"
   git -C "$wt" diff --name-only --diff-filter=U | sed 's/^/  /'
-  if ! git merge-tree --write-tree "refs/tags/$base" "$ref" >/dev/null 2>&1; then
+  if ! git merge-tree --write-tree "$base_ref" "$ref" >/dev/null 2>&1; then
     cat <<EOF
-该分支单独合入 $base 就冲突：在它自己的 worktree 里 rebase 到 $base 并修复、验证，
+该分支单独合入 fork-base/$base 就冲突：在它自己的 worktree 里 rebase 到 fork-base/$base 并修复、验证，
 push --force-with-lease 到 fork 后重新运行本脚本。不要在聚合里修。
 EOF
   else
@@ -160,6 +168,12 @@ EOF
 done
 
 result="$(git -C "$wt" rev-parse HEAD)"
+security_ref="$(resolve_ref security/baseline)"
+git merge-base --is-ancestor "$security_ref" "$result" || {
+  echo "聚合结果不含 security/baseline；先运行 scripts/fork-base --base $base" >&2
+  exit 1
+}
+
 echo "聚合完成：aggregate/next = $result（base $base，${#branches[@]} 个分支）"
 
 [ "$promote" = 1 ] || exit 0

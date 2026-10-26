@@ -11,7 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replacementDropIn } from "./fork-cutover.mjs";
-import { latestStable, preflight, readInputs } from "./fork-inputs.mjs";
+import {
+  latestStable,
+  preflight,
+  readInputs,
+  resolveBaseRef,
+} from "./fork-inputs.mjs";
 import { runStage } from "./fork-package-state.mjs";
 
 test("stable selection ignores prereleases and compares version components", () => {
@@ -22,6 +27,41 @@ test("stable selection ignores prereleases and compares version components", () 
     "desktop-v0.10.1",
   );
   assert.throws(() => latestStable("desktop-v0.11.0-rc.1"), /稳定/);
+});
+
+test("fork-base wins over the upstream tag", () => {
+  const root = mkdtempSync(join(tmpdir(), "bb-fork-base-"));
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("config", "commit.gpgsign", "false");
+    writeFileSync(join(root, "file"), "base\n");
+    git("add", ".");
+    git("commit", "-qm", "initial");
+    git("tag", "desktop-v1.1.0");
+    git("checkout", "-qb", "fork-base/desktop-v1.1.0");
+    writeFileSync(join(root, "file"), "security\n");
+    git("add", ".");
+    git("commit", "-qm", "security");
+    assert.equal(
+      resolveBaseRef(root, "desktop-v1.1.0"),
+      "refs/heads/fork-base/desktop-v1.1.0",
+    );
+    assert.equal(
+      git("rev-parse", "refs/heads/fork-base/desktop-v1.1.0"),
+      git("rev-parse", "HEAD"),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("preflight reports every upstream conflict without touching worktrees or refs", () => {
@@ -337,6 +377,7 @@ for (const pinned of [false, true]) {
       git("commit", "-qm", "base");
       git("tag", "desktop-v1.0.0");
       git("branch", "fork-tooling");
+      git("branch", "fork-base/desktop-v1.0.0");
       git("branch", "local/aggregate");
       const previous = git("rev-parse", "HEAD");
       const remote = join(root, ".git", "remote.git");

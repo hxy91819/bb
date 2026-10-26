@@ -76,6 +76,9 @@ if [ -z "$resume" ]; then
     base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
   fi
 
+  step "安全基线"
+  "$here/fork-base" --base "$base"
+
   step "聚合"
   "$here/fork-aggregate" --base "$base"
   result="$(git rev-parse --verify refs/heads/aggregate/next)"

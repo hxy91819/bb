@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+用法：scripts/fork-worktree <name> [branch] [--no-install]
+
+从 fork-base/<base>（基线 tag + security/baseline）创建 .worktrees/<name>。
+branch 省略时为 feature/<name>。默认安装依赖并执行 pnpm prune；
+--no-install 只创建 worktree。
+USAGE
+}
+
+name=""
+branch=""
+install=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-install) install=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *)
+      if [ -z "$name" ]; then
+        name="$1"
+      elif [ -z "$branch" ]; then
+        branch="$1"
+      else
+        usage >&2; exit 2
+      fi
+      shift
+      ;;
+  esac
+done
+[ -n "$name" ] || { usage >&2; exit 2; }
+[[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "name 只能包含字母、数字、点、下划线和连字符" >&2; exit 2; }
+[ "$name" != "." ] && [ "$name" != ".." ] || { echo "name 不能是 . 或 .." >&2; exit 2; }
+
+root="$(git rev-parse --path-format=absolute --git-common-dir)"
+root="$(dirname "$root")"
+cd "$root"
+
+git fetch --quiet --prune fork
+
+if git rev-parse --verify --quiet refs/heads/fork-tooling >/dev/null; then
+  list_ref=refs/heads/fork-tooling
+else
+  list_ref=refs/remotes/fork/fork-tooling
+fi
+base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
+[ -n "$base" ] || { echo "清单缺少 base" >&2; exit 1; }
+
+base_ref=refs/heads/fork-base/$base
+if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
+  remote_ref=refs/remotes/fork/fork-base/$base
+  if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
+    base_ref="$remote_ref"
+  else
+    "$(dirname "${BASH_SOURCE[0]}")/fork-base" --base "$base" --no-push
+    base_ref=refs/heads/fork-base/$base
+  fi
+fi
+
+branch="${branch:-feature/$name}"
+mkdir -p "$root/.worktrees"
+wt="$root/.worktrees/$name"
+[ ! -e "$wt" ] || { echo "$wt 已存在" >&2; exit 1; }
+git show-ref --verify --quiet "refs/heads/$branch" && { echo "分支 $branch 已存在" >&2; exit 1; }
+
+git worktree add --quiet -b "$branch" "$wt" "$base_ref"
+echo "已创建 $wt（分支 $branch，基线 $base_ref）"
+
+if [ "$install" = 1 ]; then
+  pnpm -C "$wt" install --frozen-lockfile
+  pnpm -C "$wt" prune
+fi

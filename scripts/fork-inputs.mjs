@@ -29,10 +29,25 @@ export function latestStable(tags) {
   return versions[0];
 }
 
-export function readInputs(root, baseOverride) {
-  const exists = (ref) =>
+function refExists(root, ref) {
+  return (
     spawnSync("git", ["rev-parse", "--verify", "--quiet", ref], { cwd: root })
-      .status === 0;
+      .status === 0
+  );
+}
+
+export function resolveBaseRef(root, base) {
+  for (const ref of [
+    `refs/heads/fork-base/${base}`,
+    `refs/remotes/fork/fork-base/${base}`,
+    `refs/tags/${base}`,
+  ])
+    if (refExists(root, ref)) return ref;
+  throw new Error(`找不到基线 ${base} 或 fork-base/${base}`);
+}
+
+export function readInputs(root, baseOverride) {
+  const exists = (ref) => refExists(root, ref);
   const listRef = exists("refs/heads/fork-tooling")
     ? "refs/heads/fork-tooling"
     : "refs/remotes/fork/fork-tooling";
@@ -43,7 +58,8 @@ export function readInputs(root, baseOverride) {
   const base = baseOverride ?? rows.find(([name]) => name === "base")?.[1];
   if (!/^desktop-v\d+\.\d+\.\d+$/.test(base ?? ""))
     throw new Error("无效的稳定基线 tag");
-  const baseSha = git(root, "rev-parse", `refs/tags/${base}^{commit}`);
+  const baseRef = resolveBaseRef(root, base);
+  const baseSha = git(root, "rev-parse", `${baseRef}^{commit}`);
   const branches = rows
     .filter(([name]) => name !== "base")
     .map(([name, status]) => {
@@ -58,7 +74,7 @@ export function readInputs(root, baseOverride) {
     });
   if (new Set(branches.map(({ name }) => name)).size !== branches.length)
     throw new Error("清单含重复分支");
-  return { base, baseSha, branches };
+  return { base, baseRef, baseSha, branches };
 }
 
 export function preflight(root, inputs) {
