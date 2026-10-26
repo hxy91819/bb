@@ -236,7 +236,7 @@ node /path/to/fork-tooling/scripts/fork-release/smoke-sdk.mjs /tmp/sdk-candidate
 
 ### 在其他机器安装
 
-新装或升级目标实例时，同时按 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件) 检查集合与升级续跑插件。BB 安装包不会自动更新外置 Git/path 插件；兼容的新版本默认在同一项环境更新任务里完成安装和验收，保留目标机的配置与启停状态。
+新装或升级目标实例时，同时按 [功能索引的外置插件更新流程](feature-index.md#升级时同步外置插件) 检查目标实例已安装的外置插件，包括插件集合、升级续跑、Account Limits 和 Usage。Account Limits 的新环境安装入口见[功能索引](feature-index.md#聚合环境中的-account-limits)。BB 安装包不会自动更新外置 Git/path 插件；兼容的新版本默认在同一项环境更新任务里完成安装和验收，保留目标机的配置与启停状态。
 
 从 Release 下载 Linux x64 的 `.tar.gz` 和同名 `.sha256`：
 

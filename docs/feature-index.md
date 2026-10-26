@@ -32,6 +32,18 @@
 
 `/side` 主输入框快捷入口与原生侧聊入口一起保留。移动端使用原生长按 Queue/Steer，不恢复常驻第二排队按钮。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
 
+## 聚合环境中的 Account Limits
+
+Account Limits（ID `account-limits`）是个人 BB 聚合环境的外置插件，维护来源为上表的独立仓库。新环境首次安装：
+
+```sh
+bb plugin install 'git:https://github.com/hxy91819/bb-plugin-account-limits.git@main' --yes
+```
+
+安装后用 `bb plugin source account-limits --json` 核对实际来源，并用 `bb plugin list --json` 确认运行状态。已安装环境按下方流程保留配置更新；Git 跟踪 `main` 的安装可使用 `bb plugin update account-limits --yes`，本地路径安装按对应路径流程更新。BB 安装包本身不包含该插件，`.fork/branches` 仅提供本索引入口；插件代码和配置继续由独立仓库及目标实例管理。
+
+未配置 CLI Proxy 的环境仍可显示 BB Account Pooler 提供的额度，不显示空的 CLI Proxy 分组。Account Limits 只读取额度，不改变账号或模型路由。
+
 ## 升级时同步外置插件
 
 已授权的 BB 升级、环境更新和插件维护任务，默认同时检查上表中已安装的外置插件，有新版本就更新到目标 BB 可兼容、CI 已通过的最新提交。单独发布 BB 安装包时交付插件来源与兼容性信息；有目标实例更新授权时继续完成安装与验收，不另问是否顺带更新插件。
