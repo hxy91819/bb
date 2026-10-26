@@ -39,7 +39,7 @@
 
 修改功能前先读 [功能维护与插件更新索引](feature-index.md)，业务定制优先使用公开插件扩展点；旧安装来源迁移见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
 
-从 `fork-base/<tag>` 拉分支，在独立 worktree 里开发：
+在 `fork-tooling` 的 worktree 中，从 `fork-base/<tag>` 拉分支：
 
 ```bash
 scripts/fork-worktree <name>                  # 默认 feature/<name>
