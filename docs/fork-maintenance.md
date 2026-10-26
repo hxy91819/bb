@@ -80,6 +80,8 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --fi
 
 ## 2. 聚合打包
 
+以下命令从 `fork-tooling` 的独立 worktree 运行；根目录 `main` 是上一次聚合产物，里面的脚本可能落后一版。
+
 ```bash
 scripts/fork-base --base <tag>             # 先生成/更新 fork-base/<tag>
 scripts/fork-package                       # 聚合 → 验证 → 提升 → 构建 → 发布 tag → 打印 cutover 提示

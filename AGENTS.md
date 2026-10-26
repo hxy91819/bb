@@ -76,7 +76,7 @@ BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/s
 - 业务优先使用公开插件扩展点；迁移旧插件或核对淘汰决定时读 [插件迁出说明](docs/steward/plugin-extraction.md)，日常维护位置以功能索引为准。
 - 新功能/修复：用 `scripts/fork-worktree <name>` 从 `fork-base/<base>`（基线 tag + `security/baseline`）拉 `feature/<name>` 或 `fix/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `fork`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
 - 安全基线：纯依赖/锁文件的安全修复先合入 `security/baseline` 并推送，再运行 `scripts/fork-base --base <tag>` 生成/更新 `fork-base/<tag>`；代码级安全修复仍走普通 `fix/*` 分支。不要直接从裸 `desktop-v*` tag 建 worktree。
-- 聚合打包：`scripts/fork-package` 一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
+- 聚合打包：在 `fork-tooling` 的独立 worktree 中运行 `scripts/fork-package`，一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行；根目录 `main` 中的脚本可能落后一版。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
 - 发布收尾：功能、修复及影响安装产物的依赖改动完成必要验证与适用的 review 后，默认在整项任务最后统一执行 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包)，完成聚合、推送、tag 触发流水线及 Release 核验；已有持续授权，无需另问是否打包。纯规则与文档改动、已有发布的复用和用户明确要求不发布的处理以该流程为准；分支推送或清单登记完成不等于产品已发布。
 - 上游反馈：分支就是 PR 材料；向 get-bb/bb 提 issue/评论/PR 前必须经用户逐项确认，状态记在 `.fork/branches`。
 - 会停止、重启或替换当前 BB 服务的操作需要用户明确授权，使用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)。允许从 BB 线程内发起并在恢复后完成核验；停服到重新启动及失败回退由独立于目标服务的 systemd 任务执行，线程恢复使用 upgrade-resume 插件。不需要重启服务的 provider 配置、账号绑定和 dispatch alias 修改可由 BB 线程在用户已授权范围内直接完成并验证。
