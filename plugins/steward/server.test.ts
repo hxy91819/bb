@@ -5,6 +5,7 @@ import { registrationSchema } from "./contract";
 
 function setup(metadata = new Map<string, Record<string, unknown>>()) {
   let fail = false;
+  const deleted = new Set<string>();
   const host = createFakePluginHost({
     pluginId: "steward",
     sdk: {
@@ -18,7 +19,11 @@ function setup(metadata = new Map<string, Record<string, unknown>>()) {
           (args?.offset ?? 0) === 0
             ? [...metadata.keys()].map((id) => ({ id }))
             : [],
-        getPluginMetadata: ({ threadId }) => metadata.get(threadId) ?? {},
+        getPluginMetadata: ({ threadId }) => {
+          if (deleted.has(threadId))
+            throw Object.assign(new Error("thread not found"), { status: 404 });
+          return metadata.get(threadId) ?? {};
+        },
         experimental_listPluginMetadata: ({ threadIds }) => ({
           threads: threadIds.map((threadId) => ({
             threadId,
@@ -26,6 +31,8 @@ function setup(metadata = new Map<string, Record<string, unknown>>()) {
           })),
         }),
         updatePluginMetadata: ({ threadId, set, remove }) => {
+          if (deleted.has(threadId))
+            throw Object.assign(new Error("thread not found"), { status: 404 });
           if (fail) {
             fail = false;
             throw new Error("write failed");
@@ -47,6 +54,7 @@ function setup(metadata = new Map<string, Record<string, unknown>>()) {
   return {
     host,
     metadata,
+    deleted,
     failNext: () => {
       fail = true;
     },
@@ -61,6 +69,25 @@ const input = (threadId: string) => ({
 });
 
 describe("管家登记", () => {
+  it("acknowledges deleted threads so pending unregister operations can finish", async () => {
+    const { host, deleted } = setup();
+    plugin(host.bb);
+    await host.harness.callRpc("register", input("deleted"));
+    deleted.add("deleted");
+    expect(
+      await host.harness.callRpc("unregister", { threadId: "deleted" }),
+    ).toEqual({ removed: false });
+    expect(
+      (
+        await host.harness.runCli([
+          "unregister",
+          "--thread",
+          "deleted",
+          "--json",
+        ])
+      ).exitCode,
+    ).toBe(0);
+  });
   it("concurrent takeover leaves one owner and reload preserves metadata; CLI and RPC share state", async () => {
     const { host, metadata } = setup();
     plugin(host.bb);

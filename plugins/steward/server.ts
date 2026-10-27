@@ -23,13 +23,24 @@ export default function plugin(bb: BbPluginApi) {
   };
   const unregister = ({ threadId }: { threadId: string }) =>
     serialize(async () => {
-      const removed = (await show({ threadId })) !== null;
-      await bb.sdk.threads.updatePluginMetadata({
-        threadId,
-        remove: ["registration"],
-      });
-      changed();
-      return { removed };
+      try {
+        const removed = (await show({ threadId })) !== null;
+        await bb.sdk.threads.updatePluginMetadata({
+          threadId,
+          remove: ["registration"],
+        });
+        changed();
+        return { removed };
+      } catch (cause) {
+        if (
+          !(cause instanceof Error) ||
+          !("status" in cause) ||
+          cause.status !== 404
+        )
+          throw cause;
+        changed();
+        return { removed: false };
+      }
     });
   const register = (input: ReturnType<typeof registerInput.parse>) =>
     serialize(async () => {
