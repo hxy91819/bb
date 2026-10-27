@@ -4,6 +4,7 @@ import {
   useBbContext,
   useBbNavigate,
   useRealtime,
+  useRealtimeConnectionState,
   useRpc,
   type PluginThreadHeaderActionProps,
 } from "@get-bb/plugin-sdk/app";
@@ -13,6 +14,7 @@ const buttonClass =
   "cursor-pointer rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 function useSteward(threadId: string | null) {
   const rpc = useRpc<typeof rpcContract>();
+  const connection = useRealtimeConnectionState();
   const [value, setValue] = useState<{
     threadId: string;
     registration: Registration | null;
@@ -23,7 +25,7 @@ function useSteward(threadId: string | null) {
   useRealtime("changed", reload);
   useEffect(() => {
     let current = true;
-    if (threadId)
+    if (threadId && connection === "connected")
       rpc.call("show", { threadId }).then(
         (registration) => {
           if (current) {
@@ -38,7 +40,7 @@ function useSteward(threadId: string | null) {
     return () => {
       current = false;
     };
-  }, [rpc, threadId, version]);
+  }, [rpc, threadId, version, connection]);
   return {
     registration: value?.threadId === threadId ? value.registration : null,
     error,
