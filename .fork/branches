@@ -48,3 +48,4 @@ feature/codex-home-launchers                   needs-feedback                   
 fix/dependency-security-refresh               reported        https://github.com/get-bb/bb/pull/5741             # 依赖升级与 SDK 测试适配；叠在 fix/dependency-security 上；PR 因贡献者准入自动关闭、未合并
 feature/plugin-pinned-thread-panels           needs-feedback                                             # 插件可声明常驻会话右侧标签，复用原有打开、持久化与关闭路径
 fix/child-question-notifications             needs-feedback                                             # 插件异步提问接入父线程求助通知，提供表单回答入口与 Codex 回传格式
+feature/steward                             fork-only                                                  # 用户指定仓库内管家插件与自动登记；独立 path 安装，不进入官方目录
