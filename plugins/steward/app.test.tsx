@@ -2,7 +2,7 @@
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { expect, it, vi } from "vitest";
 import entry from "./app";
-import { registrationSchema } from "./contract";
+import { registrationSchema, documentRequest } from "./contract";
 
 it("recovers a failed first read and refreshes missed registration changes after reconnect", async () => {
   const app = await loadPluginApp(entry);
@@ -130,5 +130,121 @@ it("floating document buttons retain the focused thread's navigation through the
     slot.unmount();
     if (previous === null) localStorage.removeItem(storageKey);
     else localStorage.setItem(storageKey, previous);
+  }
+});
+
+it("reads Git history in the plugin at the pinned SHA and clears old content when a remote refresh fails", async () => {
+  const app = await loadPluginApp(entry);
+  const sha = "a".repeat(40);
+  let failed = false;
+  const slot = renderSlot(
+    app.threadHeaderActions[0]!,
+    { threadId: "git", projectId: "project", isCompactViewport: false },
+    {
+      rpc: {
+        show: () =>
+          registrationSchema.parse({
+            threadId: "git",
+            topic: "历史目标",
+            workbook: "docs/workbook.md",
+            ledger: "docs/history/README.md",
+            checker: "/checker.py",
+            source: { kind: "git", repo: "/repo", ref: "origin/main" },
+            ledgerKind: "history",
+            schemaVersion: 1,
+            projectId: "project",
+            hostId: "original-host",
+            repoRoot: "/repo",
+            workbookRelativePath: "docs/workbook.md",
+            registeredAt: "2026-10-27",
+          }),
+        document: (input) =>
+          failed
+            ? { available: false, message: "远端无法核实" }
+            : {
+                available: true,
+                message: "历史流水账；统计不适用",
+                snapshot: { repo: "/repo", ref: "origin/main", sha },
+                path: documentRequest.parse(input).link
+                  ? "docs/history/old.md"
+                  : "docs/history/README.md",
+                content: documentRequest.parse(input).link
+                  ? "原始旧账正文"
+                  : "[旧账](old.md)",
+              },
+      },
+    },
+  );
+  try {
+    (await slot.findByRole("button", { name: "打开要求帐" })).click();
+    await slot.findByText(`SHA：${sha}`, { exact: false });
+    (await slot.findByRole("button", { name: "旧账" })).click();
+    await slot.findByText("原始旧账正文");
+    expect(slot.inspection.rpcCalls.at(-1)).toMatchObject({
+      method: "document",
+      input: {
+        threadId: "git",
+        document: "ledger",
+        link: { from: "docs/history/README.md", target: "old.md", sha },
+      },
+    });
+    expect(slot.inspection.navigateCalls).toHaveLength(0);
+    failed = true;
+    (await slot.findByRole("button", { name: "刷新远端文档" })).click();
+    await slot.findByText("远端无法核实");
+    expect(slot.queryByText("原始旧账正文")).toBeNull();
+  } finally {
+    slot.unmount();
+  }
+});
+
+it("labels historical ledger statistics as inapplicable without zero counts or a passing ledger check", async () => {
+  const app = await loadPluginApp(entry);
+  const key = "steward.collapsed.history";
+  const previous = localStorage.getItem(key);
+  localStorage.setItem(key, "false");
+  const slot = renderSlot(
+    app.threadHeaderActions[0]!,
+    { threadId: "history", projectId: "project", isCompactViewport: false },
+    {
+      context: { threadId: "history", projectId: "project" },
+      rpc: {
+        show: () =>
+          registrationSchema.parse({
+            threadId: "history",
+            topic: "历史",
+            workbook: "/repo/workbook.md",
+            ledger: "/repo/history.md",
+            checker: "/checker.py",
+            ledgerKind: "history",
+            schemaVersion: 1,
+            projectId: "project",
+            hostId: "host",
+            repoRoot: "/repo",
+            workbookRelativePath: "workbook.md",
+            registeredAt: "2026-10-27",
+          }),
+        refresh: () => ({
+          checkedAt: "2026-10-27",
+          workbook: { ok: true, applicable: true, errors: [] },
+          ledger: {
+            ok: false,
+            applicable: false,
+            errors: ["历史流水账；标准五列表统计不适用"],
+          },
+        }),
+      },
+    },
+  );
+  try {
+    (await slot.findByRole("button", { name: "摘要" })).click();
+    (await slot.findByRole("button", { name: "刷新检查" })).click();
+    await slot.findByText("要求帐 ledger-check：不适用");
+    await slot.findByText(/進行中：不适用\s*待使用者：不适用/);
+    expect(slot.queryByText("要求帐 ledger-check：通过")).toBeNull();
+  } finally {
+    slot.unmount();
+    if (previous === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, previous);
   }
 });

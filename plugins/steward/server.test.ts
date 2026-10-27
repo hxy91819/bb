@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import plugin from "./server";
 import { registrationSchema } from "./contract";
 
-function setup(metadata = new Map<string, Record<string, unknown>>()) {
+function setup(
+  metadata = new Map<string, Record<string, unknown>>(),
+  hostId = "host",
+) {
   let fail = false;
   const deleted = new Set<string>();
   const host = createFakePluginHost({
@@ -43,7 +46,7 @@ function setup(metadata = new Map<string, Record<string, unknown>>()) {
           return next;
         },
       },
-      environments: { get: () => ({ hostId: "host" }) },
+      environments: { get: () => ({ hostId }) },
     },
     experimental_callHostRpc: ({ method }) => {
       if (method === "identity")
@@ -151,4 +154,109 @@ describe("管家登记", () => {
       host.harness.callRpc("refresh", { threadId: "owner" }),
     ).rejects.toThrow("文件所在主机暂时无法连接");
   });
+});
+
+it("preserves Git sources on CLI re-registration and reload, and distinguishes refs, local files and hosts", async () => {
+  const { host, metadata } = setup();
+  plugin(host.bb);
+  const git = {
+    ...input("git"),
+    workbook: "docs/workbook.md",
+    ledger: "docs/ledger.md",
+    source: { kind: "git", repo: "/repo", ref: "origin/main" },
+    ledgerKind: "history",
+  };
+  await host.harness.callRpc("register", git);
+  const result = await host.harness.runCli([
+    "register",
+    "--thread",
+    "git",
+    "--topic",
+    "目标",
+    "--workbook",
+    "docs/workbook.md",
+    "--ledger",
+    "docs/ledger.md",
+    "--checker",
+    git.checker,
+    "--repo",
+    "/repo",
+    "--ref",
+    "origin/main",
+    "--ledger-kind",
+    "history",
+  ]);
+  expect(result.exitCode).toBe(0);
+  await host.harness.callRpc("register", {
+    ...git,
+    threadId: "other-ref",
+    source: { ...git.source, ref: "origin/other" },
+  });
+  await host.harness.callRpc("register", input("local"));
+  const remoteHost = setup(metadata, "other-host").host;
+  plugin(remoteHost.bb);
+  await remoteHost.harness.callRpc("register", {
+    ...git,
+    threadId: "other-host",
+  });
+  const reloaded = setup(metadata, "moved-environment-host").host;
+  plugin(reloaded.bb);
+  await reloaded.harness.callRpc("register", git);
+  expect(
+    await reloaded.harness.callRpc("show", { threadId: "git" }),
+  ).toMatchObject({
+    source: git.source,
+    ledgerKind: "history",
+    hostId: "host",
+  });
+  for (const threadId of ["other-ref", "local", "other-host"])
+    expect(await reloaded.harness.callRpc("show", { threadId })).not.toBeNull();
+  expect(
+    (
+      await host.harness.runCli([
+        "register",
+        "--thread",
+        "bad",
+        "--topic",
+        "x",
+        "--workbook",
+        "../outside",
+        "--ledger",
+        "docs/ledger.md",
+        "--checker",
+        git.checker,
+        "--repo",
+        "/repo",
+        "--ref",
+        "origin/main",
+      ])
+    ).exitCode,
+  ).toBe(1);
+  expect(
+    (
+      await host.harness.runCli([
+        "document",
+        "--thread",
+        "git",
+        "--document",
+        "workbook",
+        "--repo",
+        "/ignored",
+      ])
+    ).exitCode,
+  ).toBe(1);
+});
+it("reads legacy metadata without source fields as local registration", async () => {
+  const { host, metadata } = setup();
+  plugin(host.bb);
+  const saved = await host.harness.callRpc("register", input("legacy"));
+  const legacy: Record<string, unknown> = {
+    ...registrationSchema.parse(saved),
+  };
+  delete legacy.source;
+  delete legacy.ledgerKind;
+  metadata.set("legacy", { registration: legacy });
+  expect(
+    await host.harness.callRpc("show", { threadId: "legacy" }),
+  ).toMatchObject({ source: { kind: "local" }, ledgerKind: "standard" });
 });
