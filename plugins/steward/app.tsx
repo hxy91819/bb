@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   definePluginApp,
   useBbContext,
@@ -67,7 +68,7 @@ function DocumentButtons({
         setError(status.message);
         return;
       }
-      navigate.experimental_openFilePreview({
+      const opened = navigate.experimental_openFilePreview({
         target: {
           kind: "host",
           hostId: registration.hostId,
@@ -75,7 +76,9 @@ function DocumentButtons({
         },
         location: null,
       });
-      setError("");
+      setError(
+        opened ? "" : "当前页面无法打开文件预览，请返回管家会话后重试。",
+      );
     } catch {
       setError("文件预览暂时未就绪，请确认主机连接后重试。");
     }
@@ -113,6 +116,7 @@ function Header({
   isCompactViewport,
 }: PluginThreadHeaderActionProps) {
   const { registration, error } = useSteward(threadId);
+  const { threadId: focusedThreadId } = useBbContext();
   if (!registration) return null;
   return (
     <div
@@ -125,6 +129,15 @@ function Header({
         registration={registration}
         compact={isCompactViewport}
       />
+      {focusedThreadId === threadId &&
+        createPortal(
+          <FloatingCard
+            key={`${registration.threadId}:${registration.registeredAt}:${registration.workbook}:${registration.ledger}:${registration.checker}`}
+            registration={registration}
+            error={error}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
@@ -278,23 +291,10 @@ function FloatingCard({
     </aside>
   );
 }
-function Overlay() {
-  const { threadId } = useBbContext();
-  const { registration, error } = useSteward(threadId);
-  if (!registration) return null;
-  return (
-    <FloatingCard
-      key={`${registration.threadId}:${registration.registeredAt}:${registration.workbook}:${registration.ledger}:${registration.checker}`}
-      registration={registration}
-      error={error}
-    />
-  );
-}
 export default definePluginApp((app) => {
   app.slots.experimental_threadHeaderAction({
     id: "documents",
     title: "管家文件",
     component: Header,
   });
-  app.slots.experimental_appOverlay({ id: "steward", component: Overlay });
 });

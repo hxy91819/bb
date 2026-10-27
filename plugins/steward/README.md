@@ -7,3 +7,5 @@
 本版只支持磁盘文件，Git-ref 登记由技能脚本明确跳过 UI，不显示另一版本的磁盘内容。检查结果只证明格式检查，业务验收仍由管家负责。
 
 使用 `bb plugin build plugins/steward` 构建后，以 `bb plugin install <完整插件目录> --yes` 本地安装。此插件依赖独立安装的 bb-steward 技能，不加入官方商店目录。
+
+浮窗由当前焦点会话的标题列组件通过 React portal 挂载到页面，保留会话的文件导航能力；全局 overlay 槽位没有会话文件预览能力。导航返回 false 时显示可见提示。
