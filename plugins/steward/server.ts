@@ -56,14 +56,21 @@ export default function plugin(bb: BbPluginApi) {
       try {
         for (let offset = 0; ; offset += 100) {
           const page = await bb.sdk.threads.list({
-            projectId: thread.projectId,
             limit: 100,
             offset,
             includeHidden: true,
           });
-          for (const candidate of page) {
-            if (candidate.id === input.threadId) continue;
-            const old = await show({ threadId: candidate.id });
+          const batch = page.length
+            ? await bb.sdk.threads.experimental_listPluginMetadata({
+                threadIds: page.map((candidate) => candidate.id),
+              })
+            : { threads: [] };
+          for (const candidate of batch.threads) {
+            if (candidate.threadId === input.threadId) continue;
+            const parsed = registrationSchema.safeParse(
+              candidate.metadata.registration,
+            );
+            const old = parsed.success ? parsed.data : null;
             if (
               old &&
               old.hostId === registration.hostId &&
@@ -71,7 +78,7 @@ export default function plugin(bb: BbPluginApi) {
               old.workbookRelativePath === registration.workbookRelativePath
             ) {
               await bb.sdk.threads.updatePluginMetadata({
-                threadId: candidate.id,
+                threadId: candidate.threadId,
                 remove: ["registration"],
               });
             }

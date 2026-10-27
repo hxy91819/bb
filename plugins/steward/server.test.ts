@@ -19,6 +19,12 @@ function setup(metadata = new Map<string, Record<string, unknown>>()) {
             ? [...metadata.keys()].map((id) => ({ id }))
             : [],
         getPluginMetadata: ({ threadId }) => metadata.get(threadId) ?? {},
+        experimental_listPluginMetadata: ({ threadIds }) => ({
+          threads: threadIds.map((threadId) => ({
+            threadId,
+            metadata: metadata.get(threadId) ?? {},
+          })),
+        }),
         updatePluginMetadata: ({ threadId, set, remove }) => {
           if (fail) {
             fail = false;
