@@ -1,3 +1,4 @@
+import { normalizeThreadSearchText } from "./thread-search-text.js";
 import { prepareCachedQuery } from "../connection.js";
 import { markThreadPruningPolicyWork } from "./thread-pruning-work.js";
 import { copyProjectAttachmentOwnership } from "./project-attachments.js";
@@ -889,12 +890,6 @@ function findHighlightRanges(args: {
   );
 }
 
-function normalizeThreadSearchText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Mark}/gu, "")
-    .toLocaleLowerCase();
-}
 
 function normalizeThreadSearchHighlightText(text: string): {
   originalEnds: number[];
@@ -1004,6 +999,37 @@ function buildThreadSearchSnippet(args: {
   return {
     highlightRanges: rebasedRanges,
     text: `${prefix}${text.slice(start, end)}${suffix}`,
+  };
+}
+
+export function searchThreadMessages(
+  db: DbConnection,
+  args: { threadId: string; query: string; limit: number; offset: number },
+) {
+  const where = and(
+    eq(threadSearchSegments.threadId, args.threadId),
+    inArray(threadSearchSegments.sourceKind, ["user_message", "assistant_message"]),
+    isNotNull(threadSearchSegments.sourceSeq),
+    sql`instr(bb_search_normalize(${threadSearchSegments.text}), ${normalizeThreadSearchText(args.query)}) > 0`,
+  );
+  const total = db.select({ total: count() }).from(threadSearchSegments).where(where).get()?.total ?? 0;
+  const rows = db.select({
+    text: threadSearchSegments.text,
+    sourceKind: sql<"user_message" | "assistant_message">`${threadSearchSegments.sourceKind}`,
+    sourceSeq: sql<number>`${threadSearchSegments.sourceSeq}`,
+  }).from(threadSearchSegments).where(where)
+    .orderBy(asc(threadSearchSegments.sourceSeq), asc(threadSearchSegments.id))
+    .limit(args.limit).offset(args.offset).all();
+  return {
+    total,
+    matches: rows.map((row) => ({
+      sourceKind: row.sourceKind,
+      sourceSeq: row.sourceSeq,
+      ...buildThreadSearchSnippet({
+        text: row.text,
+        tokens: [args.query],
+      }),
+    })),
   };
 }
 

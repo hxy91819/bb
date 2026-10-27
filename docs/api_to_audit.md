@@ -14,6 +14,23 @@ question.
 [provider-bridge-protocol.md](provider-bridge-protocol.md). An entry without
 a "Docs:" line has no owning doc, so it keeps the essential contract itself.
 
+## Thread message search
+
+`PluginBbSdk.threads.experimental_searchMessages({ threadId, query, limit?, offset?, signal? })`
+returns `{ total, matches }` for persisted visible user text and completed assistant
+messages in one thread, including unloaded history. Core CLI `bb thread search
+--thread` and plugin UIs use this same SDK method and route, backed by the existing
+search segments. System messages, tool output and agent-only input are excluded.
+Matching is a literal substring with case and accent normalization; `total` counts
+messages. Results are ordered by sequence and contain snippets with UTF-16 highlight
+ranges and `sourceSeq` for navigation. The server defaults limit/offset to 50/0;
+limit is 1-100 and query length 1-1000 after trimming.
+
+Before stabilization, audit substring/Unicode normalization, edited/deleted history,
+concurrent appends and offset pagination semantics, large-thread search latency,
+and message navigation from compact and split views. Search uses only rows scoped
+to the requested thread; it does not create another index or copy conversation data.
+
 ## Composer popups
 
 `ComposerCustomization.experimental_popups` registers `{ id, label, component }`

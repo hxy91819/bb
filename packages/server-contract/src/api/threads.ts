@@ -524,6 +524,33 @@ export const threadSearchMatchSchema = z
   .strict();
 export type ThreadSearchMatch = z.infer<typeof threadSearchMatchSchema>;
 
+export const threadMessageSearchResponseSchema = z.object({
+  total: z.number().int().nonnegative(),
+  matches: z.array(
+    threadSearchMatchSchema.extend({
+      sourceKind: z.enum(["user_message", "assistant_message"]),
+      sourceSeq: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type ThreadMessageSearchResponse = z.infer<
+  typeof threadMessageSearchResponseSchema
+>;
+
+export const threadMessageSearchQuerySchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1000)
+    .refine((value) => /[^\p{Mark}\s]/u.test(value)),
+  limit: z.string().regex(/^\d+$/).optional(),
+  offset: z.string().regex(/^\d+$/).optional(),
+});
+export type ThreadMessageSearchQuery = z.infer<
+  typeof threadMessageSearchQuerySchema
+>;
+
 export const threadSearchResultSchema = z
   .object({
     thread: threadListEntrySchema,
