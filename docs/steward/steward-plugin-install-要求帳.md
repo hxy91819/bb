@@ -8,4 +8,4 @@
 | 10-27 | 同步并核验最新版 mason-skills 中的 bb-steward 技能与脚本 | 完成 | main 与 origin/main 同为 e728ec3，bb-steward 及两脚本已接入 agents、Codex 和 Claude 入口，无需更新 | [本机技能](/data/code/mason-skills/common-skills/bb-steward/SKILL.md) |
 | 10-27 | 使用 bb-steward 管家流程推进本次安装 | 完成 | 看门狗已登记；steward show 返回本会话工作簿、要求帐和检查器绑定 | [工作簿](steward-plugin-install.md) |
 | 10-27 | 核查几个旧管家是否需要重新登记 | 完成 | 三个旧会话插件绑定均为空；opencraft 与 lightspace 为暂不支持平台入口的 Git-ref 模式，vela 工作簿标头缺要求帐链接；原看门狗登记仍保留 | 會話回覆（2026-10-27） |
-| 10-27 | 把 opencraft、vela、lightspace 三个旧管家的平台入口处理好 | 進行中 | 三份账目及 vela 登记已核验；插件14项、技能65项和大正文联调通过，候选进入独立审查；待发布及三个会话页面验收 | 會話回覆（2026-10-27） |
+| 10-27 | 把 opencraft、vela、lightspace 三个旧管家的平台入口处理好 | 進行中 | 三份账目及 vela 登记已核验；首轮审查发现目录导航和 CLI 大正文两项问题，已接受并交回修复，尚未发布及统一页面验收 | 會話回覆（2026-10-27） |
