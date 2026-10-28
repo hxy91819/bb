@@ -114,7 +114,7 @@ test("repairs npm's physical modules and lock metadata while preserving library 
       [runtimeLock, "node_modules/npm/node_modules/"],
     ]) {
       const lock = JSON.parse(await readFile(path, "utf8"));
-      assert.equal(lock.packages[`${prefix}undici`].version, "6.28.1");
+      assert.equal(lock.packages[`${prefix}undici`].version, "6.29.1");
       assert.equal(lock.packages[`${prefix}brace-expansion`].version, "5.0.12");
     }
     const initialLock = await readFile(runtimeLock, "utf8");
