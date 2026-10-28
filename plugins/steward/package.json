@@ -10,7 +10,7 @@
     "name": "管家",
     "description": "管家工作簿、要求帐与按需检查",
     "branding": {
-      "icon": "BookOpen"
+      "icon": "Bot"
     },
     "server": "./server.ts",
     "app": "./app.tsx",
