@@ -276,6 +276,9 @@ importers:
       '@get-bb/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@mermaid-js/layout-elk':
+        specifier: ^0.2.3
+        version: 0.2.3(mermaid@11.16.1(patch_hash=4nu6ngtzql7lnuzbeqnl42hdhu))
       '@pierre/diffs':
         specifier: ^1.2.9
         version: 1.2.9(patch_hash=wdjikkl65wfpocm6wrflymrtdq)(@shikijs/themes@3.23.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -8493,6 +8496,11 @@ packages:
       '@types/react': '>=16'
       react: '>=16'
 
+  '@mermaid-js/layout-elk@0.2.3':
+    resolution: {integrity: sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg==}
+    peerDependencies:
+      mermaid: 11.16.1
+
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
 
@@ -12763,6 +12771,9 @@ packages:
     resolution: {integrity: sha512-Cv9/yMnZxNWsMlIe8T4v//NKHdUvbeyoTJoXE3BIcRxus2meeFaO9h/P3zB5d4cBXum51IgAYrT2QjpIDWKpJA==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
+
+  elkjs@0.9.3:
+    resolution: {integrity: sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ==}
 
   embla-carousel-react@8.6.0:
     resolution: {integrity: sha512-0/PjqU7geVmo6F734pmPqpyHqiM99olvyecY7zdweCw+6tKEXnrE90pBiBbMMU8s5tICemzpQ3hi5EpxzGW+JA==}
@@ -20636,6 +20647,12 @@ snapshots:
       '@types/react': 19.2.13
       react: 19.2.4
 
+  '@mermaid-js/layout-elk@0.2.3(mermaid@11.16.1(patch_hash=4nu6ngtzql7lnuzbeqnl42hdhu))':
+    dependencies:
+      d3: 7.9.0
+      elkjs: 0.9.3
+      mermaid: 11.16.1(patch_hash=4nu6ngtzql7lnuzbeqnl42hdhu)
+
   '@mermaid-js/parser@1.2.1':
     dependencies:
       '@chevrotain/types': 11.1.2
@@ -25216,6 +25233,8 @@ snapshots:
       '@types/node': 24.12.4
     transitivePeerDependencies:
       - supports-color
+
+  elkjs@0.9.3: {}
 
   embla-carousel-react@8.6.0(react@19.2.4):
     dependencies:
