@@ -77,7 +77,7 @@ Turbo 在 `scripts/run-resource-isolated --profile package` 下以 `--concurrenc
 
 `$autoreview` 经 `$bb-model-routing` 按 medium 派发，线程 `thr_vsh54m6gmt`（acp-amp / medium / medium）完整审查五个依赖文件的 `git diff desktop-v0.44.0`，结果无 P0/P1 可操作发现。主 Agent 核实目标安装版本及官方接口结果。维护登记、报告和聚合脚本的 `--no-autostash` 改动在 `thr_q6sa7cex3b`（codex / gpt-6.1-sol / medium）审查无发现；随后主 Agent 核查出公告主版本范围记录重复计数，报告按包名/GHSA 去重修正。
 
-只向个人远端 `fork` 推送；上游 issue / PR 未提交。源码聚合采用 `.fork/branches` 与 `scripts/fork-aggregate` 的 merge 流程，没有 cherry-pick。当前运行服务没有替换；源码提交和聚合不会自动更新独立部署目录中的服务。本轮交付源码和验证结果，没有发布新的预编译 runtime Release。
+只向个人远端（当时的 `fork`，现为 `origin`）推送；上游 issue / PR 未提交。源码聚合采用 `.fork/branches` 与 `scripts/fork-aggregate` 的 merge 流程，没有 cherry-pick。当前运行服务没有替换；源码提交和聚合不会自动更新独立部署目录中的服务。本轮交付源码和验证结果，没有发布新的预编译 runtime Release。
 
 ## 修复分支全锁文件残余公告
 
