@@ -1104,6 +1104,11 @@ export function ModelReasoningPicker({
                       ? `${provider.label} (current thread)`
                       : provider.label
                   }
+                  title={
+                    isHandoffSource
+                      ? `${provider.label} (current thread)`
+                      : provider.label
+                  }
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     if (provider.value === activeProviderId) {
