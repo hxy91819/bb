@@ -34,6 +34,12 @@
 
 维护规则和脚本以 `fork-tooling` 为准，安全基线只同步 AGENTS 的 Fork 维护块，不为默认分支合入整个维护分支。旧 clone 的现场不自动迁移；有未提交改动、未推送提交或 BB 环境引用的 clone 保留。其他 clone 先完整归档并校验后才能删除。
 
+## 每日安全维护
+
+本机自动化统一在独立的本地仓库 `/data/code/fork-maintenance`，运行入口和判断规则见该仓库的 `README.md`：09:30 `baseline-watch` 扫描并修复 `origin/security/baseline` 的同 major 依赖漏洞，验证通过后推送并调用 `scripts/fork-base`；09:40 `branch-sync` 为未包含 baseline、干净且没有运行任务的功能 worktree 合入当前 `fork-base/<tag>`，再 frozen 安装及 prune；09:47 全量扫描把 BB 的基线问题和分支落后分别交回前两项，仅为分支自己引入的漏洞派发修复线程。三个任务均采用 `Asia/Shanghai`。
+
+基线需要代码适配、只有 major 或没有补丁时交给 DSH，提示词仅引用仓库 AGENTS.md 的安全修复流程。分支同步发生冲突时 abort 并记录，不派线程。旧 clone 的 remote/main 不自动迁移，首次真实验收只执行 dry-run；这些任务不发布、不部署、不停止或重启 BB。
+
 ## 1. 开发新功能或修复
 
 修改功能前先读 [功能维护与插件更新索引](feature-index.md)，业务定制优先使用公开插件扩展点；旧安装来源迁移见 [插件迁出说明](steward/plugin-extraction.md)。插件集合以其 `.bb/plugins.json` 管理；本仓库 `.fork/branches` 只记录仍需合入 BB 的核心、内置公共实现和维护分支。
