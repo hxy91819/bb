@@ -56,8 +56,7 @@ const {
   resetSidebarTitleDoubleClickForTest,
   SidebarProvidersContext,
   ThreadRow,
-} =
-  await import("./ThreadRow.js");
+} = await import("./ThreadRow.js");
 
 const DEFAULT_OPTIONS: ThreadRowOptions = {
   kind: "default",
@@ -120,35 +119,35 @@ function ThreadRowHarness({
   const content = (
     <SidebarProjectsContext.Provider value={projects}>
       <SidebarProvidersContext.Provider value={providers}>
-      <TooltipProvider>
-      <SidebarDraftPresenceSync />
-      <ThreadRowNavigationProvider>
-        <SidebarRenameProvider>
-          <CustomizeRowActionsContext.Provider
-            value={onCustomizeRowActions ?? null}
-          >
-            <ThreadRowActionsCustomizingContext.Provider
-              value={
-                onFinishCustomizingRowActions
-                  ? {
-                      threadId: thread.id,
-                      onDone: onFinishCustomizingRowActions,
-                    }
-                  : null
-              }
-            >
-              <div
-                onPointerDown={onRowEvent}
-                onKeyDown={onRowEvent}
-                onClick={onRowEvent}
+        <TooltipProvider>
+          <SidebarDraftPresenceSync />
+          <ThreadRowNavigationProvider>
+            <SidebarRenameProvider>
+              <CustomizeRowActionsContext.Provider
+                value={onCustomizeRowActions ?? null}
               >
-                {row}
-              </div>
-            </ThreadRowActionsCustomizingContext.Provider>
-          </CustomizeRowActionsContext.Provider>
-        </SidebarRenameProvider>
-      </ThreadRowNavigationProvider>
-      </TooltipProvider>
+                <ThreadRowActionsCustomizingContext.Provider
+                  value={
+                    onFinishCustomizingRowActions
+                      ? {
+                          threadId: thread.id,
+                          onDone: onFinishCustomizingRowActions,
+                        }
+                      : null
+                  }
+                >
+                  <div
+                    onPointerDown={onRowEvent}
+                    onKeyDown={onRowEvent}
+                    onClick={onRowEvent}
+                  >
+                    {row}
+                  </div>
+                </ThreadRowActionsCustomizingContext.Provider>
+              </CustomizeRowActionsContext.Provider>
+            </SidebarRenameProvider>
+          </ThreadRowNavigationProvider>
+        </TooltipProvider>
       </SidebarProvidersContext.Provider>
     </SidebarProjectsContext.Provider>
   );
@@ -1468,8 +1467,8 @@ describe("ThreadRow", () => {
   it("renames inline after a fine-pointer double click on a compact viewport", async () => {
     renderThreadRow({ isCompactViewport: true });
     const link = screen.getByRole("link", { name: "Open Thread" });
-    expect(fireEvent.click(link)).toBe(true);
-    expect(fireEvent.click(link)).toBe(false);
+    expect(fireEvent.click(link, { detail: 1 })).toBe(true);
+    expect(fireEvent.click(link, { detail: 2 })).toBe(false);
     expect(
       await screen.findByRole("textbox", { name: "Thread name" }),
     ).toHaveProperty("value", "Thread");
@@ -1630,12 +1629,33 @@ describe("ThreadRow", () => {
     const { rerenderThreadRow } = renderThreadRow({ thread });
     const link = screen.getByRole("link", { name: "Open Thread" });
 
-    fireEvent.click(link);
+    fireEvent.click(link, { detail: 1 });
     rerenderThreadRow(thread);
-    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }));
+    fireEvent.click(screen.getByRole("link", { name: "Open Thread" }), {
+      detail: 1,
+    });
 
     expect(
       await screen.findByRole("textbox", { name: "Thread name" }),
     ).toHaveProperty("value", "Thread");
   });
+
+  it.each(["touch", "pen", "mouse"])(
+    "only renames wide-viewport double clicks from a mouse (%s)",
+    (pointerType) => {
+      renderThreadRow({ isCompactViewport: false });
+      const link = screen.getByRole("link", { name: "Open Thread" });
+      fireEvent.pointerDown(link, { pointerType });
+      expect(fireEvent.click(link, { detail: 1 })).toBe(true);
+      fireEvent.pointerDown(link, { pointerType });
+      expect(fireEvent.click(link, { detail: 2 })).toBe(
+        pointerType !== "mouse",
+      );
+      fireEvent.doubleClick(link);
+      const editor = screen.queryByRole("textbox", { name: "Thread name" });
+      if (pointerType === "mouse")
+        expect(editor).toHaveProperty("value", "Thread");
+      else expect(editor).toBeNull();
+    },
+  );
 });
