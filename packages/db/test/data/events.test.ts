@@ -34,6 +34,7 @@ import {
   getLatestCompletedThreadContextClearSequence,
   getLatestStoredConversationOutlineSequence,
   getLastStoredTurnRequestEvent,
+  listStoredTurnRequestEventsForTurn,
   getLatestThreadOutputEventRow,
   getLatestThreadSequence,
   insertEvents,
@@ -136,6 +137,130 @@ function createTurnEventFields(args: CreateTurnEventFieldsArgs) {
 function textInput(text: string): PromptInput[] {
   return [{ type: "text", text, mentions: [] }];
 }
+
+describe("accepted turn request lookup", () => {
+  const cases = [
+    {
+      name: "parent spawn",
+      requests: [
+        {
+          source: "spawn",
+          initiator: "user",
+          senderThreadId: null,
+          text: "spawned",
+        },
+      ],
+    },
+    {
+      name: "parent tell",
+      requests: [
+        {
+          source: "tell",
+          initiator: "agent",
+          senderThreadId: "thr_parent",
+          text: "delegated",
+        },
+      ],
+    },
+    {
+      name: "direct user tell",
+      requests: [
+        {
+          source: "tell",
+          initiator: "user",
+          senderThreadId: null,
+          text: "authorized",
+        },
+      ],
+    },
+    {
+      name: "parent tell followed by user steer",
+      requests: [
+        {
+          source: "tell",
+          initiator: "agent",
+          senderThreadId: "thr_parent",
+          text: "read only",
+        },
+        {
+          source: "tell",
+          initiator: "user",
+          senderThreadId: null,
+          text: "you may delete",
+        },
+      ],
+    },
+  ] as const;
+
+  for (const scenario of cases) {
+    it(`lists all accepted requests in order for ${scenario.name}`, () => {
+      const { db, thread } = setup();
+      const entries: InsertEventInput[] = scenario.requests.flatMap(
+        (request, index) => {
+          const requestId = `creq_23456789a${index}b`;
+          return [
+            {
+              threadId: thread.id,
+              sequence: index * 2 + 1,
+              type: "client/turn/requested" as const,
+              ...threadEventFields,
+              data: JSON.stringify({
+                direction: "outbound",
+                requestId,
+                source: request.source,
+                initiator: request.initiator,
+                senderThreadId: request.senderThreadId,
+                input: textInput(request.text),
+                target: { kind: "new-turn" },
+                request: { method: "turn/start", params: {} },
+                execution: {
+                  model: "gpt-5",
+                  reasoningLevel: "medium",
+                  permissionMode: "full",
+                  source: "client/turn/requested",
+                  serviceTier: "default",
+                },
+              }),
+            },
+            {
+              threadId: thread.id,
+              sequence: index * 2 + 2,
+              type: "turn/input/accepted" as const,
+              ...createTurnEventFields({ turnId: "turn-author" }),
+              data: JSON.stringify({ clientRequestId: requestId }),
+            },
+          ];
+        },
+      );
+      insertEvents(db, noopNotifier, entries);
+
+      const rows = listStoredTurnRequestEventsForTurn(db, {
+        threadId: thread.id,
+        turnId: "turn-author",
+      });
+      expect(rows.map((row) => JSON.parse(row.data))).toEqual(
+        scenario.requests.map((request, index) => ({
+          direction: "outbound",
+          requestId: `creq_23456789a${index}b`,
+          source: request.source,
+          initiator: request.initiator,
+          senderThreadId: request.senderThreadId,
+          input: textInput(request.text),
+          target: { kind: "new-turn" },
+          request: { method: "turn/start", params: {} },
+          execution: {
+            model: "gpt-5",
+            reasoningLevel: "medium",
+            permissionMode: "full",
+            source: "client/turn/requested",
+            serviceTier: "default",
+          },
+        })),
+      );
+      db.$client.close();
+    });
+  }
+});
 
 function listSearchNeedleThreadIds(
   db: ReturnType<typeof setup>["db"],
