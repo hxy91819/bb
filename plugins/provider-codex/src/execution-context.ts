@@ -19,6 +19,7 @@ const executionOptionsSchema = z
             kind: z.literal("home"),
             providerId: z.string().min(1),
             codexHome: codexHomeExpressionSchema,
+            command: codexHomeExpressionSchema.optional(),
           })
           .strict(),
       ])
@@ -29,6 +30,7 @@ const executionOptionsSchema = z
 export interface CodexExecutionContext {
   providerId: string;
   codexHome: string | null;
+  command?: string;
 }
 
 export function codexHomeLoginCommand(
@@ -57,6 +59,13 @@ export function resolveCodexExecution(
   return {
     providerId: execution.providerId,
     codexHome: path.normalize(codexHome),
+    ...(execution.command === undefined
+      ? {}
+      : {
+          command: execution.command.startsWith("~/")
+            ? path.join(os.homedir(), execution.command.slice(2))
+            : execution.command,
+        }),
   };
 }
 
@@ -77,6 +86,10 @@ export function codexExecutionEnv(
       delete env[name];
     env.CODEX_HOME = execution.codexHome;
     env.CODEX_SQLITE_HOME = execution.codexHome;
+    if (execution.command !== undefined) {
+      env.BB_CODEX_BRIDGE_APP_SERVER_COMMAND = execution.command;
+      env.BB_CODEX_BRIDGE_APP_SERVER_ARGS = JSON.stringify(["app-server"]);
+    }
   }
   return env;
 }
