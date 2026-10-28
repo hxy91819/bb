@@ -23,6 +23,7 @@ const providerEventTypeValues = [
   "turn/started",
   "turn/completed",
   "turn/input/accepted",
+  "turn/input/delivery",
   "thread/name/updated",
   "thread/compacted",
   "thread/context/cleared",
