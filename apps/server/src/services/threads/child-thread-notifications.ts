@@ -171,7 +171,7 @@ interface BuildChildThreadNeedsAttentionInputArgs {
 }
 
 interface QueueChildThreadTurnNotificationArgs {
-  author: ChildThreadTurnAuthor | null;
+  author?: ChildThreadTurnAuthor | null;
   childThread: ChildThreadNotificationSource;
   parentThreadId: string;
   turnStatus: ThreadEventTurnStatus;
@@ -608,7 +608,7 @@ function queueChildThreadTurnNotificationBatchItem(
 ): void {
   const item: ChildThreadTurnNotificationBatchItem = {
     activeWorkflowCount: getChildThreadActiveWorkflowCount(deps, args),
-    author: args.author,
+    author: args.author ?? null,
     childThread: args.childThread,
     terminalOutput: getChildThreadCompletionOutput(deps, args),
     turnStatus: args.turnStatus,
