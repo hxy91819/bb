@@ -106,3 +106,5 @@ config/local-aggregate-web*.json
 /docu-mermaid-*.html
 /docu-mermaid-*.png
 /memory/
+/node-compile-cache/
+/tsx-0/
