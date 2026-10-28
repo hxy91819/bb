@@ -451,7 +451,7 @@ export {
   deleteQueuedThreadMessage,
   getQueuedThreadMessage,
   getQueuedThreadStartMessage,
-  hasQueuedRetryOfTurnRequest,
+  getQueuedRetryOfTurnRequest,
   hasClaimedQueuedThreadMessages,
   holdQueuedThreadMessageForEdit,
   isOrdinaryTurnEndQueuedMessage,

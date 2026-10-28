@@ -1,11 +1,14 @@
 import {
   getQueuedThreadMessage,
+  getThread,
   listEvents,
   listQueuedThreadMessages,
 } from "@bb/db";
 import { threadScope, turnScope, turnRequestEventDataSchema } from "@bb/domain";
 import { groupHostDaemonEvents } from "@bb/host-daemon-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { retryFailedTurn } from "../../src/services/threads/turn-retry.js";
+import { applyLoggedThreadLifecycleEvent } from "../../src/services/threads/lifecycle-outcome.js";
 import { finalizeStoppedThread } from "../../src/services/threads/thread-lifecycle.js";
 import { queueChildThreadTurnNotificationBestEffort } from "../../src/services/threads/child-thread-notifications.js";
 import { interruptEnvironmentProvisioningForHost } from "../../src/services/environments/environment-engine.js";
@@ -282,51 +285,90 @@ describe("child outcomes without provider completion", () => {
     });
   });
 
-  it("notifies the parent only after a queued send exhausts retries", async () => {
-    await withTestHarness(async (harness) => {
-      const { parent, child } = seedParentAndChild(harness, "idle");
-      const row = seedQueuedMessage(harness.deps, {
-        threadId: child.id,
-        content: textInput("Continue the child work"),
-        waitingOn: { kind: "thread-busy" },
-      });
+  it.each(["inline", "retry"] as const)(
+    "notifies once after a queued %s exhausts retries, even if its row is deleted",
+    async (kind) => {
+      await withTestHarness(async (harness) => {
+        const { parent, child, environment } = seedParentAndChild(
+          harness,
+          kind === "retry" ? "active" : "idle",
+        );
+        vi.useFakeTimers();
+        if (kind === "retry") {
+          seedThreadRuntimeState(harness.deps, {
+            threadId: child.id,
+            environmentId: environment.id,
+            providerThreadId: "child-provider",
+          });
+          applyLoggedThreadLifecycleEvent(harness.deps, {
+            threadId: child.id,
+            event: { type: "run.failed" },
+          });
+          await retryFailedTurn(harness.deps, {
+            thread: getThread(harness.db, child.id)!,
+            request: {
+              turnRequestId: null,
+              sendAt: Date.now() + 60000,
+              reason: "Provider overloaded",
+            },
+          });
+        } else {
+          seedQueuedMessage(harness.deps, {
+            threadId: child.id,
+            content: textInput("Continue the child work"),
+            waitingOn: { kind: "thread-busy" },
+          });
+        }
+        const row = listQueuedThreadMessages(harness.db, child.id)[0]!;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          recordQueuedMessageDrainFailure(harness.deps, {
+            error: new Error("dispatch failed"),
+            now: Date.now(),
+            row,
+            thread: child,
+          });
+        }
+        expect(
+          getQueuedThreadMessage(harness.db, row.id)?.nextAttemptAt,
+        ).not.toBeNull();
+        expect(parentSystemRequests(harness, parent.id)).toHaveLength(0);
 
-      vi.useFakeTimers();
-      for (let attempt = 0; attempt < 3; attempt += 1) {
         recordQueuedMessageDrainFailure(harness.deps, {
           error: new Error("dispatch failed"),
           now: Date.now(),
           row,
           thread: child,
         });
-      }
-      expect(
-        getQueuedThreadMessage(harness.db, row.id)?.nextAttemptAt,
-      ).not.toBeNull();
-      expect(parentSystemRequests(harness, parent.id)).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(2_000);
 
-      recordQueuedMessageDrainFailure(harness.deps, {
-        error: new Error("dispatch failed"),
-        now: Date.now(),
-        row,
-        thread: child,
+        expect(
+          getQueuedThreadMessage(harness.db, row.id)?.nextAttemptAt,
+        ).toBeNull();
+        await vi.waitFor(() =>
+          expect(parentSystemRequests(harness, parent.id)).toMatchObject([
+            { systemMessageKind: "child-failed" },
+          ]),
+        );
+        expect(
+          JSON.stringify(parentSystemRequests(harness, parent.id)[0]?.input),
+        ).toContain("could not send a queued message after retrying");
+        expect(listQueuedThreadMessages(harness.db, parent.id)).toHaveLength(0);
+        seedTurnStarted(harness.deps, {
+          threadId: parent.id,
+          environmentId: environment.id,
+          turnId: "parent-notification-turn",
+        });
+        const response = await harness.app.request(
+          `/api/v1/threads/${child.id}/queued-messages/${row.id}`,
+          { method: "DELETE" },
+        );
+        expect(response.status).toBe(200);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(parentSystemRequests(harness, parent.id)).toHaveLength(1);
+        expect(listQueuedThreadMessages(harness.db, parent.id)).toHaveLength(0);
       });
-      await vi.advanceTimersByTimeAsync(2_000);
-
-      expect(
-        getQueuedThreadMessage(harness.db, row.id)?.nextAttemptAt,
-      ).toBeNull();
-      await vi.waitFor(() =>
-        expect(parentSystemRequests(harness, parent.id)).toMatchObject([
-          { systemMessageKind: "child-failed" },
-        ]),
-      );
-      expect(
-        JSON.stringify(parentSystemRequests(harness, parent.id)[0]?.input),
-      ).toContain("could not send a queued message after retrying");
-      expect(listQueuedThreadMessages(harness.db, parent.id)).toHaveLength(0);
-    });
-  });
+    },
+  );
 });
 
 describe("child parent-notification policy", () => {
