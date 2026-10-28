@@ -257,31 +257,37 @@ describe("useThreadReadTracking", () => {
     expect(markThreadRead.mutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for input when attention arrives after the user went idle", () => {
-    pressKeyWithFakeTimers();
-    const markThreadRead = makeMarkThreadRead();
-    const { rerender } = renderHook(
-      ({ latestAttentionAt }: { latestAttentionAt: number }) =>
-        useThreadReadTracking({
-          markThreadRead,
-          thread: { id: "thr_idle", lastReadAt: 20, latestAttentionAt },
-        }),
-      { initialProps: { latestAttentionAt: 20 } },
-    );
+  it.each([false, true])(
+    "keeps watching replies after the activity window only while focused (focused: %s)",
+    (focused) => {
+      vi.spyOn(document, "hasFocus").mockReturnValue(focused);
+      pressKeyWithFakeTimers();
+      const markThreadRead = makeMarkThreadRead();
+      const { rerender } = renderHook(
+        ({ latestAttentionAt }: { latestAttentionAt: number }) =>
+          useThreadReadTracking({
+            markThreadRead,
+            thread: { id: "thr_watching", lastReadAt: 20, latestAttentionAt },
+          }),
+        { initialProps: { latestAttentionAt: 20 } },
+      );
 
-    act(() => {
-      vi.advanceTimersByTime(USER_ACTIVITY_WINDOW_MS);
-    });
-    rerender({ latestAttentionAt: 30 });
+      act(() => {
+        vi.advanceTimersByTime(USER_ACTIVITY_WINDOW_MS * 3);
+      });
+      rerender({ latestAttentionAt: 30 });
 
-    expect(markThreadRead.mutateAsync).not.toHaveBeenCalled();
+      expect(markThreadRead.mutateAsync).toHaveBeenCalledTimes(focused ? 1 : 0);
 
-    pressKey();
+      if (!focused) {
+        pressKey();
+        expect(markThreadRead.mutateAsync).toHaveBeenCalledTimes(1);
+      }
+    },
+  );
 
-    expect(markThreadRead.mutateAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it("goes idle when the window loses focus", () => {
+  it("goes idle when the window loses focus after prolonged reading", () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
     pressKeyWithFakeTimers();
     const markThreadRead = makeMarkThreadRead();
     const { rerender } = renderHook(
@@ -293,7 +299,10 @@ describe("useThreadReadTracking", () => {
       { initialProps: { latestAttentionAt: 20 } },
     );
 
-    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    act(() => {
+      vi.advanceTimersByTime(USER_ACTIVITY_WINDOW_MS * 3);
+    });
+    vi.mocked(document.hasFocus).mockReturnValue(false);
     act(() => {
       window.dispatchEvent(new Event("blur"));
       vi.advanceTimersByTime(0);
