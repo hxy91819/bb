@@ -74,7 +74,10 @@ export class PoolOperations {
       await this.onAccountEnabled(account.id);
       return account;
     }
-    const imported = await this.hub.importAccount(input.provider);
+    const imported = await this.hub.importAccount(
+      input.provider,
+      input.source.authFile,
+    );
     const account = await this.accounts.add(
       {
         provider: input.provider,
