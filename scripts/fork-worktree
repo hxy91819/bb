@@ -42,6 +42,18 @@ cd "$root"
 
 git fetch --quiet --prune fork
 
+security_local="$(git rev-parse --verify --quiet refs/heads/security/baseline || true)"
+security_remote="$(git rev-parse --verify --quiet refs/remotes/fork/security/baseline || true)"
+if [ -n "$security_local" ] && [ -n "$security_remote" ] && [ "$security_local" != "$security_remote" ]; then
+  if git merge-base --is-ancestor "$security_local" "$security_remote"; then
+    git update-ref refs/heads/security/baseline "$security_remote"
+    echo "已将 security/baseline 快进到 fork 基线"
+  else
+    echo "security/baseline 与 fork 不一致；先解决并推送，再创建 worktree" >&2
+    exit 1
+  fi
+fi
+
 if git rev-parse --verify --quiet refs/heads/fork-tooling >/dev/null; then
   list_ref=refs/heads/fork-tooling
 else
@@ -52,6 +64,12 @@ base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
 
 "$here/fork-base" --base "$base" --no-push
 base_ref=refs/heads/fork-base/$base
+security_ref=refs/heads/security/baseline
+[ -n "$security_local" ] || security_ref=refs/remotes/fork/security/baseline
+git merge-base --is-ancestor "$security_ref" "$base_ref" || {
+  echo "$base_ref 未包含 security/baseline；先运行 scripts/fork-base --base $base" >&2
+  exit 1
+}
 
 branch="${branch:-feature/$name}"
 mkdir -p "$root/.worktrees"

@@ -56,15 +56,21 @@ scripts/fork-worktree <name> fix/<name>       # 修复用 fix/<name>
 
 ### 安全基线
 
-`security/baseline` 只放纯依赖/锁文件的安全修复（例如 Vite CVE 的 override）。改产品代码或测试的安全修复仍走普通 `fix/*` 分支，不要塞进基线。
+`security/baseline` 是所有 worktree 和聚合的唯一安全祖先。它收纳已验收的安全修复，以及升级必需的代码/测试适配；修复分支（`fix/*`）仍作为上游 PR 材料保留，但只有合入 baseline 后才对本地 worktree 生效。
 
 新增安全修复时：
 
+1. 在修复分支完成实现和验证。
+2. 在 `security/baseline` 的 worktree 中执行 `git merge --no-ff <fix-branch>`。冲突时取修复分支的版本。不要只挑 manifest/锁文件：升级必需的代码/测试适配要一起进入基线，否则新 worktree 会安装新依赖但 typecheck/test 失败。
+3. 运行 `pnpm install --frozen-lockfile && pnpm prune`，确认修复版本已安装且检查通过。
+4. `git push fork security/baseline`。
+5. 运行 `scripts/fork-base --base <tag>` 生成/更新 `fork-base/<tag>`。
+6. 新 worktree 只能从 `fork-base/<tag>` 创建；`scripts/fork-worktree <name>` 会先更新并校验基线。禁止 `git worktree add <tag>`。
+
+校验 fork-base 已包含基线：
+
 ```bash
-git worktree add .worktrees/security-baseline security/baseline
-git -C .worktrees/security-baseline merge --no-ff <fix-branch>   # 只合入 manifest/锁文件变更
-git -C .worktrees/security-baseline push fork security/baseline
-scripts/fork-base --base <tag>                 # 生成/更新 fork-base/<tag>
+git merge-base --is-ancestor security/baseline fork-base/<tag>
 ```
 
 新上游基线确定后，同样运行 `scripts/fork-base --base <new-tag>`；如果 `security/baseline` 合入新 tag 冲突，先在该分支上 `git rebase <new-tag>`，解决并验证后 `git push --force-with-lease fork security/baseline`，再重新生成。已有 worktree 需要新安全修复时，执行 `git merge fork-base/<tag>` 后重新 `pnpm install --frozen-lockfile && pnpm prune`。
