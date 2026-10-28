@@ -1,5 +1,13 @@
 # Codebase Guidelines
 
+<!-- fork-worktree-policy:start -->
+
+## Fork 工作区
+
+本目录是个人 fork 的 worktree。不要从裸 `desktop-v*` tag、`main` 或上游默认分支创建新 worktree；新 worktree 必须从 `fork-base/<base>` 创建，该分支已包含 `security/baseline` 的全部安全修复。优先使用维护 checkout 中的 `scripts/fork-worktree <name>`。如果当前 worktree 缺少安全修复，先把修复合入 `security/baseline` 并运行 `scripts/fork-base --base <tag>`，再重建或 merge。
+
+<!-- fork-worktree-policy:end -->
+
 ## Task Completion
 
 - Carry the requested change through implementation, relevant verification, and fixes for failures it causes. Continue authorized, reversible local work without asking for approval at each step; ask when a missing user decision blocks progress.
