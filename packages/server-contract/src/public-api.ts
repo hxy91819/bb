@@ -289,6 +289,8 @@ import type {
   ThreadPluginMetadataResponse,
   ThreadSearchQuery,
   ThreadSearchResponse,
+  ThreadMessageSearchResponse,
+  ThreadMessageSearchQuery,
   ThreadStorageFileListResponse,
   ThreadStorageFilesQuery,
   ThreadStorageLocationResponse,
@@ -411,6 +413,7 @@ import {
   threadOpenRequestSchema,
   threadPaneActionRequestSchema,
   threadSearchQuerySchema,
+  threadMessageSearchQuerySchema,
   threadStorageFilesQuerySchema,
   threadStoragePathsQuerySchema,
   terminalInputRequestSchema,
@@ -1409,6 +1412,14 @@ export const publicApiRoutes = {
         threadSearchQuerySchema,
       ),
       response: jsonResponse<ThreadSearchResponse>(),
+    }),
+    searchMessages: defineRoute({
+      path: "/threads/:id/search",
+      method: "get",
+      request: queryRequest<PathId, ThreadMessageSearchQuery>(
+        threadMessageSearchQuerySchema,
+      ),
+      response: jsonResponse<ThreadMessageSearchResponse>(),
     }),
     resolveMentions: defineRoute({
       path: "/threads/resolve-mentions",
