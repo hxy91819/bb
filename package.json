@@ -143,7 +143,7 @@
       "prosemirror-transform@>=1 <1.12.2": "1.12.2",
       "prosemirror-view@>=1 <1.42.3": "1.42.3",
       "proxy-addr@>=2 <2.0.8": "2.0.8",
-      "qs@>=6 <6.16.0": "6.16.0",
+      "qs@>=6 <6.16.0": "6.16.1",
       "react-router@>=7 <7.18.2": "7.18.2",
       "react-router-dom@>=7 <7.18.2": "7.18.2",
       "seroval@>=1 <1.6.3": "1.6.3",
@@ -158,7 +158,16 @@
       "vitest@>=4 <4.1.12": "4.1.12",
       "yaml@>=2 <2.8.3": "2.8.3",
       "@tiptap/extension-bubble-menu@>=3 <4": "3.30.5",
-      "@tiptap/extension-floating-menu@>=3 <4": "3.30.5"
+      "@tiptap/extension-floating-menu@>=3 <4": "3.30.5",
+      "decode-uri-component@0.2.2": "0.5.0",
+      "decode-uri-component@0.4.1": "0.5.0",
+      "drizzle-orm@0.38.4": "0.45.2",
+      "esbuild@0.18.20": "0.25.0",
+      "esbuild@0.19.12": "0.25.0",
+      "katex@0.16.47": "0.18.2",
+      "qs@6.16.0": "6.16.1",
+      "satori@0.18.3": "0.33.5",
+      "sharp@0.34.5": "0.35.5"
     },
     "patchedDependencies": {
       "app-builder-lib@26.15.7": "patches/app-builder-lib@26.15.7.patch",
