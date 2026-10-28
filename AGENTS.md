@@ -66,3 +66,20 @@
 - End every agent-created issue and PR body with `> AGENT GENERATED`.
 - Ground debugging in observed state: logs, database queries, server APIs, or CLI output. For dev ports, data directories, entity IDs, and the local QA launcher, see [docs/debugging-and-qa.md](docs/debugging-and-qa.md).
 - Never tail the production bb connect gate (`bb-connect`) with `wrangler tail` or the dashboard's live logs. Attaching or detaching a tail resets its Durable Objects and drops every connected tunnel. Instead, query stored Workers Logs or the Cloudflare GraphQL Analytics API (`httpRequestsAdaptiveGroups`, `durableObjectsInvocationsAdaptiveGroups`), and reproduce with `wrangler tail --env staging` against `bb-connect-staging`.
+
+<!-- fork-maintenance:start -->
+
+## Fork 维护
+
+本仓库是个人 fork（远端 `origin` = hxy91819/bb，上游 `upstream` = get-bb/bb）。目标只有三个：每个改动是独立、可直接提给上游的分支；方便本机聚合打包；能纳入上游稳定版。完整流程见 [docs/fork-maintenance.md](docs/fork-maintenance.md)，不要引入领域分支、补丁登记表或冻结清单；`security/baseline` 是唯一的安全基线例外。维护脚本与完整文档以 `origin/fork-tooling` 为准；安全入口未包含文档时用 `git show origin/fork-tooling:docs/fork-maintenance.md` 读取，在 tooling worktree 中执行维护脚本。
+
+- 根目录永远检出 `main`，个人 fork 的默认分支也设为 `main`：它等于 `fork-base/<tag>`（上游稳定 tag + `security/baseline`），普通 clone 和 BB 默认 worktree 因此包含安全修复。`origin/HEAD` 指向 `origin/main`；`scripts/fork-base` 同步远端 main 与干净的本地 main。不在根目录写产品代码；可以从已同步的 main 拉独立分支。
+- 业务优先使用公开插件扩展点；迁移旧插件或核对淘汰决定时读 [插件迁出说明](docs/steward/plugin-extraction.md)，日常维护位置以功能索引为准。
+- 新功能/修复：在 `fork-tooling` 的 worktree 中用 `scripts/fork-worktree <name>`，从 `fork-base/<base>`（基线 tag + `security/baseline`）拉 `feature/<name>` 或 `fix/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `origin`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
+- 安全基线：`security/baseline` 是所有 worktree 与聚合的唯一安全祖先，收纳已验收的安全修复及其必需的代码/测试适配；修复分支仍作为上游 PR 材料保留。安全修复完成后先合入 `security/baseline`、推送并运行 `scripts/fork-base --base <tag>` 更新 `fork-base/<tag>` 和 main；main 换 tag 可 force-with-lease，其他分支普通推送。新 worktree 默认从 main / origin/main 创建，也可显式选 fork-base；禁止从裸 tag、aggregate 或上游默认分支创建。已有 worktree 用 `git merge fork-base/<tag>` 后重新 `pnpm install --frozen-lockfile && pnpm prune`。
+- 聚合打包：在 `fork-tooling` 的独立 worktree 中运行 `scripts/fork-package`，一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行；聚合只提升到 `aggregate` / `origin/aggregate`，根目录 main 保持安全基线。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
+- 发布收尾：功能、修复及影响安装产物的依赖改动完成必要验证与适用的 review 后，默认在整项任务最后统一执行 [发布流程](docs/fork-maintenance.md#3-发布预编译聚合包)，完成聚合、推送、tag 触发流水线及 Release 核验；已有持续授权，无需另问是否打包。纯规则与文档改动、已有发布的复用和用户明确要求不发布的处理以该流程为准；分支推送或清单登记完成不等于产品已发布。
+- 上游反馈：分支就是 PR 材料；向 get-bb/bb 提 issue/评论/PR 前必须经用户逐项确认，状态记在 `.fork/branches`。
+- 会停止、重启或替换当前 BB 服务的操作需要用户明确授权，使用 [local-aggregate-deploy](.bb/skills/local-aggregate-deploy/SKILL.md)。允许从 BB 线程内发起并在恢复后完成核验；停服到重新启动及失败回退由独立于目标服务的 systemd 任务执行，线程恢复使用 upgrade-resume 插件。不需要重启服务的 provider 配置、账号绑定和 dispatch alias 修改可由 BB 线程在用户已授权范围内直接完成并验证。
+
+<!-- fork-maintenance:end -->
