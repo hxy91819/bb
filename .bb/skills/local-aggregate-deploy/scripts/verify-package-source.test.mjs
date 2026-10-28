@@ -24,8 +24,8 @@ function withRepository(run) {
     writeFileSync(join(repoPath, "source.txt"), "first\n");
     git(repoPath, "add", "source.txt");
     git(repoPath, "commit", "-q", "-m", "aggregate");
-    git(repoPath, "remote", "add", "fork", forkPath);
-    git(repoPath, "push", "-q", "fork", "HEAD:refs/heads/main");
+    git(repoPath, "remote", "add", "origin", forkPath);
+    git(repoPath, "push", "-q", "origin", "HEAD:refs/heads/aggregate");
     run(repoPath);
   } finally {
     rmSync(repoPath, { recursive: true, force: true });

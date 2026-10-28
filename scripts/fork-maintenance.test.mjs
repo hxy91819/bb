@@ -294,7 +294,7 @@ for (const dataDirectory of ["/data/bb", "/src/old/data"]) {
   });
 }
 
-for (const dirty of ["legacy", "tracked", "untracked"]) {
+for (const dirty of ["tracked", "untracked"]) {
   test(`promote refuses ${dirty} roots without changing files or HEAD`, () => {
     const root = mkdtempSync(join(tmpdir(), "bb-promote-"));
     try {
@@ -312,9 +312,7 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
       writeFileSync(join(root, ".fork/branches"), "base desktop-v1.0.0\n");
       writeFileSync(
         join(root, "AGENTS.md"),
-        dirty === "legacy"
-          ? "<!-- open-source-fork-maintenance:start -->\n"
-          : "<!-- fork-maintenance:start -->\n",
+        "<!-- fork-maintenance:start -->\n",
       );
       git("add", ".");
       git("commit", "-qm", "fixture");
@@ -336,10 +334,7 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
         { cwd: root, env, encoding: "utf8" },
       );
       assert.equal(result.status, 1);
-      assert.match(
-        result.stderr,
-        dirty === "legacy" ? /旧维护模型/ : /未提交或未跟踪/,
-      );
+      assert.match(result.stderr, /未提交或未跟踪/);
       assert.equal(git("rev-parse", "HEAD"), before);
       assert.equal(git("status", "--porcelain"), status);
       if (dirty === "untracked")
@@ -354,7 +349,7 @@ for (const dirty of ["legacy", "tracked", "untracked"]) {
 }
 
 for (const pinned of [false, true]) {
-  test(`a clean main root promotes the ${pinned ? "explicit" : "staged"} verified SHA to fork/main`, () => {
+  test(`a clean main root promotes the ${pinned ? "explicit" : "staged"} verified SHA to origin/aggregate`, () => {
     const root = mkdtempSync(join(tmpdir(), "bb-promote-clean-"));
     try {
       const env = {
@@ -382,12 +377,12 @@ for (const pinned of [false, true]) {
       const previous = git("rev-parse", "HEAD");
       const remote = join(root, ".git", "remote.git");
       git("init", "--bare", "-q", "-b", "main", remote);
+      git("remote", "add", "upstream", remote);
       git("remote", "add", "origin", remote);
-      git("remote", "add", "fork", remote);
       git(
         "push",
         "-q",
-        "fork",
+        "origin",
         "main",
         "fork-tooling",
         "local/aggregate",
@@ -401,7 +396,7 @@ for (const pinned of [false, true]) {
         "-m",
         "verified candidate",
       );
-      git("branch", "aggregate/next", pinned ? previous : next);
+      git("branch", "aggregate-next", pinned ? previous : next);
       const result = spawnSync(
         "bash",
         [
@@ -413,19 +408,19 @@ for (const pinned of [false, true]) {
       );
       assert.equal(result.status, 0, result.stderr);
       assert.equal(git("branch", "--show-current"), "main");
-      assert.equal(git("rev-parse", "HEAD"), next);
+      assert.equal(git("rev-parse", "HEAD"), previous);
       assert.equal(
-        git("ls-remote", "fork", "refs/heads/main").split("\t")[0],
+        git("ls-remote", "origin", "refs/heads/aggregate").split("\t")[0],
         next,
       );
       assert.equal(
-        git("ls-remote", "fork", "refs/heads/local/aggregate").split("\t")[0],
+        git("ls-remote", "origin", "refs/heads/local/aggregate").split("\t")[0],
         previous,
       );
       const clone = join(root, ".git", "clone");
       git("clone", "-q", remote, clone);
       assert.equal(git("-C", clone, "branch", "--show-current"), "main");
-      assert.equal(git("-C", clone, "rev-parse", "HEAD"), next);
+      assert.equal(git("-C", clone, "rev-parse", "HEAD"), previous);
       assert.equal(git("status", "--porcelain"), "");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -627,6 +622,190 @@ if [ "$1 $2" = 'release view' ]; then cat "$FIXTURE_ROOT/state.json"; fi
     assert.notEqual(invoke().status, 0);
     rmSync(archive);
     assert.notEqual(invoke().status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const dirty of [false, true]) {
+  test(`fork-base publishes secured main and ${dirty ? "preserves dirty" : "updates clean"} local main`, () => {
+    const root = mkdtempSync(join(tmpdir(), "bb-secure-main-"));
+    const env = {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    };
+    const git = (...args) =>
+      execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+    const script = new URL("./fork-base", import.meta.url).pathname;
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "Test");
+      git("config", "user.email", "test@example.com");
+      git("config", "commit.gpgsign", "false");
+      writeFileSync(join(root, ".gitignore"), ".worktrees/\n");
+      writeFileSync(join(root, "lockfile"), "vulnerable\n");
+      mkdirSync(join(root, ".fork"));
+      writeFileSync(join(root, ".fork/branches"), "base desktop-v1.0.0\n");
+      git("add", ".");
+      git("commit", "-qm", "stable");
+      git("tag", "desktop-v1.0.0");
+      git("branch", "fork-tooling");
+      git("branch", "fork-base/desktop-v1.0.0");
+      git("branch", "security/baseline");
+      const initial = git("rev-parse", "HEAD");
+      const remote = join(root, ".git/remote.git");
+      git("init", "--bare", "-q", "-b", "main", remote);
+      git("remote", "add", "origin", remote);
+      git("remote", "add", "upstream", remote);
+      git(
+        "push",
+        "-q",
+        "origin",
+        "main",
+        "security/baseline",
+        "fork-base/desktop-v1.0.0",
+        "refs/tags/desktop-v1.0.0",
+      );
+      git("checkout", "-qb", "remote-security");
+      writeFileSync(join(root, "lockfile"), "fixed\n");
+      git("add", ".");
+      git("commit", "-qm", "security");
+      const secure = git("rev-parse", "HEAD");
+      git(
+        "push",
+        "-q",
+        "origin",
+        "HEAD:refs/heads/security/baseline",
+        "HEAD:refs/heads/fork-base/desktop-v1.0.0",
+      );
+      git("checkout", "-q", "main");
+      if (dirty) writeFileSync(join(root, "user-work"), "preserve\n");
+      const run = () =>
+        spawnSync("bash", [script], { cwd: root, env, encoding: "utf8" });
+      let result = run();
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(
+        git("ls-remote", "origin", "refs/heads/main").split("\t")[0],
+        secure,
+      );
+      assert.equal(git("rev-parse", "main"), dirty ? initial : secure);
+      assert.equal(git("show", "origin/main:lockfile"), "fixed");
+      assert.equal(
+        git("symbolic-ref", "refs/remotes/origin/HEAD"),
+        "refs/remotes/origin/main",
+      );
+      if (dirty) {
+        assert.equal(
+          readFileSync(join(root, "user-work"), "utf8"),
+          "preserve\n",
+        );
+        rmSync(join(root, "user-work"));
+      }
+      git("checkout", "-q", "main");
+      result = spawnSync("bash", [script, "--base", "desktop-v1.1.0"], {
+        cwd: root,
+        env,
+        encoding: "utf8",
+      });
+      assert.notEqual(result.status, 0);
+      assert.equal(
+        git("ls-remote", "origin", "refs/heads/main").split("\t")[0],
+        secure,
+      );
+      git("tag", "desktop-v1.1.0", initial);
+      git("push", "-q", "upstream", "refs/tags/desktop-v1.1.0");
+      result = spawnSync("bash", [script, "--base", "desktop-v1.1.0"], {
+        cwd: root,
+        env,
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const current = git("rev-parse", "main");
+      assert.equal(git("rev-parse", "fork-base/desktop-v1.1.0"), current);
+      assert.equal(
+        git("ls-remote", "origin", "refs/heads/main").split("\t")[0],
+        current,
+      );
+      git("merge-base", "--is-ancestor", secure, current);
+      assert.equal(git("status", "--porcelain"), "");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("aggregate rebuild retains push history while dropping removed product files", () => {
+  const root = mkdtempSync(join(tmpdir(), "bb-aggregate-history-"));
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("config", "commit.gpgsign", "false");
+    mkdirSync(join(root, ".fork"));
+    writeFileSync(
+      join(root, ".fork/branches"),
+      "base desktop-v1.0.0\nsecurity/baseline internal\n",
+    );
+    writeFileSync(join(root, ".gitignore"), ".worktrees/\n");
+    git("add", ".");
+    git("commit", "-qm", "secured stable");
+    const baseline = git("rev-parse", "HEAD");
+    git("tag", "desktop-v1.0.0");
+    for (const branch of [
+      "fork-tooling",
+      "security/baseline",
+      "fork-base/desktop-v1.0.0",
+    ])
+      git("branch", branch);
+    git("checkout", "-qb", "aggregate");
+    writeFileSync(join(root, "removed-product"), "old feature\n");
+    git("add", ".");
+    git("commit", "-qm", "old aggregate");
+    const previous = git("rev-parse", "HEAD");
+    git("checkout", "-q", "main");
+    const remote = join(root, ".git/remote.git");
+    git("init", "--bare", "-q", remote);
+    for (const name of ["upstream", "origin"])
+      git("remote", "add", name, remote);
+    git(
+      "push",
+      "-q",
+      "origin",
+      "main",
+      "aggregate",
+      "refs/tags/desktop-v1.0.0",
+    );
+    const script = new URL("./fork-aggregate", import.meta.url).pathname;
+    const run = (...args) =>
+      spawnSync("bash", [script, ...args], {
+        cwd: root,
+        env,
+        encoding: "utf8",
+      });
+    let result = run("--promote");
+    assert.equal(result.status, 0, result.stderr);
+    const candidate = git("rev-parse", "origin/aggregate");
+    git("merge-base", "--is-ancestor", previous, candidate);
+    assert.equal(
+      git("rev-parse", `${candidate}^{tree}`),
+      git("rev-parse", `${baseline}^{tree}`),
+    );
+    assert.equal(git("rev-parse", "HEAD"), baseline);
+    assert.equal(
+      git("ls-remote", "origin", "refs/heads/aggregate").split("\t")[0],
+      candidate,
+    );
+    result = run("--promote");
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(git("rev-parse", "origin/aggregate"), candidate);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

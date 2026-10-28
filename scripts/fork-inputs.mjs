@@ -39,7 +39,7 @@ function refExists(root, ref) {
 export function resolveBaseRef(root, base) {
   for (const ref of [
     `refs/heads/fork-base/${base}`,
-    `refs/remotes/fork/fork-base/${base}`,
+    `refs/remotes/origin/fork-base/${base}`,
     `refs/tags/${base}`,
   ])
     if (refExists(root, ref)) return ref;
@@ -50,7 +50,7 @@ export function readInputs(root, baseOverride) {
   const exists = (ref) => refExists(root, ref);
   const listRef = exists("refs/heads/fork-tooling")
     ? "refs/heads/fork-tooling"
-    : "refs/remotes/fork/fork-tooling";
+    : "refs/remotes/origin/fork-tooling";
   const rows = git(root, "show", `${listRef}:.fork/branches`)
     .split("\n")
     .map((line) => line.split("#")[0].trim().split(/\s+/))
@@ -64,7 +64,7 @@ export function readInputs(root, baseOverride) {
     .filter(([name]) => name !== "base")
     .map(([name, status]) => {
       const local = `refs/heads/${name}`;
-      const remote = `refs/remotes/fork/${name}`;
+      const remote = `refs/remotes/origin/${name}`;
       const ref = exists(local) ? local : remote;
       return {
         name,
@@ -127,7 +127,7 @@ if (
         root,
         "ls-remote",
         "--tags",
-        "origin",
+        "upstream",
         "refs/tags/desktop-v*",
       );
       console.log(

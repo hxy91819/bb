@@ -10,7 +10,7 @@ cd "$checkout_path"
 
 echo "=== $(date -Iseconds) 开始检查上游版本 ==="
 
-/usr/bin/git fetch --no-tags origin 'refs/tags/desktop-v*:refs/tags/desktop-v*'
+/usr/bin/git fetch --no-tags upstream 'refs/tags/desktop-v*:refs/tags/desktop-v*'
 
 latest_tag=$(node "$here/fork-inputs.mjs" latest "$PWD")
 echo "上游最新稳定版本: $latest_tag"
@@ -41,7 +41,7 @@ cat > "$prompt_file" <<'EOF'
 4. 聚合成功后，使用 local-aggregate-deploy skill 将新版本安装到本机服务
 
 遇到冲突时自动解决：
-- 分支与上游冲突：在该分支 worktree 里 rebase --no-autostash 到 fork-base/<本次固定目标>，修复、测试、push --force-with-lease 到 fork
+- 分支与上游冲突：在该分支 worktree 里 rebase --no-autostash 到 fork-base/<本次固定目标>，修复、测试、push --force-with-lease 到 origin
 - 分支之间冲突：在聚合 worktree 里只做两边合并（不加新行为），git add 后 git commit --no-edit，rerere 会记住解决
 - 修复回到所属分支；用重置到基线或其他分支消除冲突不等于保留功能。移除分支前核对升级前 tip 和目标上游的实际行为。
 
@@ -54,7 +54,7 @@ cat > "$prompt_file" <<'EOF'
 - 证据不足时明确写无法确认，不猜测新增功能或修复。不把未运行的测试写成通过。
 EOF
 printf '\n本次固定上游目标：%s\n检查时基线：%s\n' "$latest_tag" "$current_base" >> "$prompt_file"
-printf '本次维护脚本目录：%s\n预检入口：%s/fork-aggregate --preflight --base %s\n打包入口：%s/fork-package --base %s\n优先使用上述 fork-tooling 入口，根目录聚合中的脚本可能仍是旧版。根目录有未提交或未跟踪工作时保留现场，使用独立干净 clone 打包。\n' "$here" "$here" "$latest_tag" "$here" "$latest_tag" >> "$prompt_file"
+printf '本次维护脚本目录：%s\n预检入口：%s/fork-aggregate --preflight --base %s\n打包入口：%s/fork-package --base %s\n优先使用上述 fork-tooling 入口，根目录 main 是安全基线，维护脚本以 fork-tooling 为准。根目录有未提交或未跟踪工作时保留现场，使用独立干净 clone 打包。\n' "$here" "$here" "$latest_tag" "$here" "$latest_tag" >> "$prompt_file"
 
 if bb thread spawn \
   --prompt-file "$prompt_file" \

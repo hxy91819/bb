@@ -14,26 +14,25 @@
 
 | 引用                 | 作用                                                                     |
 | -------------------- | ------------------------------------------------------------------------ |
-| `origin`             | 上游 get-bb/bb，只读                                                     |
-| `fork`               | 个人 fork hxy91819/bb，所有推送都去这里                                  |
+| `upstream`           | 上游 get-bb/bb，只读                                                     |
+| `origin`             | 个人 fork hxy91819/bb，所有推送都去这里                                  |
 | `desktop-v*` tag     | 上游稳定版，`fork-base/<tag>` 的起点                                     |
-| `security/baseline`  | 纯依赖/锁文件安全修复的集成分支                                           |
+| `security/baseline`  | 纯依赖/锁文件安全修复的集成分支                                          |
 | `fork-base/<tag>`    | 基线 tag + `security/baseline`，所有 worktree 和聚合的起点               |
 | `feature/*`、`fix/*` | 每个改动一个分支，基于 `fork-base/<tag>`                                 |
 | `fork-tooling`       | 维护规则、`.fork/branches`、聚合脚本、部署 skill；和其他分支一样被 merge |
-| `main`               | 个人 fork 默认分支，保存最新聚合产物，根目录永远检出它                   |
+| `aggregate`          | 已验证的聚合产物，供打包、部署和分享                                     |
+| `main`               | 个人 fork 默认分支，等于 fork-base/<tag>，根目录检出它                   |
 
-当前基线是 `.fork/branches` 里 `base` 行的 tag。`origin/main` 上还没进 tag 的提交不追，除非用户明确要求。
+当前基线是 `.fork/branches` 里 `base` 行的 tag。`upstream/main` 上还没进 tag 的提交不追，除非用户明确要求。
 `scripts/fork-base` 会把 `security/baseline` 合入该 tag，生成 `fork-base/<tag>`；
 不要直接拿裸 `desktop-v*` tag 建 worktree，否则会漏掉安全修复。
 
-个人 fork 的 `main` 是最新聚合入口，`origin/main` 是上游开发主干，两者用途不同。GitHub 默认分支设为 `main`，访客打开仓库或普通 clone 即可拿到最新聚合代码。聚合仍基于稳定 tag 加安全基线，因此 GitHub 与上游主干比较时可能显示落后；是否纳入新代码以基线 tag 和分支清单为准。
+个人 fork 的 `main` 是安全默认入口，等于当前 `fork-base/<tag>`。GitHub 默认分支保持 `main`；普通 clone、从 main 拉分支及 BB 默认 worktree 都包含安全修复。`origin/HEAD` 必须指向 `origin/main`，本地 `main` 应与它一致，避免 BB 选中分叉的旧本地主干。`upstream/main` 是上游开发主干，不是日常新分支起点。
 
-日常检出、clone、部署和对外分享统一使用 `main` / `fork/main`。脚本中的 `aggregate/next` 仅是本地临时验证候选，验证后提升到 `main`；它不作为日常使用或对外发布的分支。
+`aggregate` / `origin/aggregate` 保存已验证聚合，供打包、部署和分享；`aggregate-next` 只是本地临时候选。首次迁移先把旧远端 main 原样推到 aggregate，再用带精确 lease 的推送将 main 改为安全基线。不要把聚合提升回 main。
 
-### 旧 checkout 的入口
-
-维护清单与流程只以 `fork-tooling` 中的 `.fork/branches` 和本文为准。旧 checkout 的 cherry-pick 登记表不是第二套权威来源；保留其中的未提交工作，不自动迁移或删除。缺少 `.fork/branches` 或仍载入旧 AGENTS 维护块的根目录不得 promote；脏根目录（包括未跟踪文件）同样拒绝。需要打包时使用已经迁移、干净且根分支为 `main` 的独立 clone，而不是 reset/stash 旧根目录。旧根目录只保留入口指针与现场保护说明。
+维护规则和脚本以 `fork-tooling` 为准，安全基线只同步 AGENTS 的 Fork 维护块，不为默认分支合入整个维护分支。旧 clone 的现场不自动迁移；有未提交改动、未推送提交或 BB 环境引用的 clone 保留。其他 clone 先完整归档并校验后才能删除。
 
 ## 1. 开发新功能或修复
 
@@ -47,10 +46,10 @@ scripts/fork-worktree <name> fix/<name>       # 修复用 fix/<name>
 ```
 
 - `scripts/fork-worktree` 会先确保 `fork-base/<tag>` 存在，再创建 worktree，默认安装依赖并执行 `pnpm prune`。
-- 不要从 `main` 拉分支，否则分支会带上全部聚合内容，无法单独提给上游；也不要用裸 `desktop-v*` tag。
+- 可以从已同步的 `main` / `origin/main` 拉分支；脚本显式使用 `fork-base/<tag>`。不要从 `aggregate` 或裸 `desktop-v*` tag 拉独立功能分支。
 - 只有真正依赖另一个 fork 分支时，才从那个分支拉出（叠放），并在清单说明里写"叠在 X 上"。
 - 修改已有功能：直接在它的分支上继续提交。分支落后于基线也没关系，merge 会处理；只有冲突时才 rebase。
-- 完成后：相关测试通过 → 提交 → `git push fork <branch>` 并核对远端 SHA。
+- 完成后：相关测试通过 → 提交 → `git push origin <branch>` 并核对远端 SHA。
 - 在 `fork-tooling` 分支的 `.fork/branches` 加一行（分支、上游状态、说明），提交并推送 `fork-tooling`。
 - 整项任务进入最终交付时，按第 3 节完成适用的聚合与发布收尾；不要以分支已推送或已登记清单代替安装包交付。
 
@@ -63,9 +62,9 @@ scripts/fork-worktree <name> fix/<name>       # 修复用 fix/<name>
 1. 在修复分支完成实现和验证。
 2. 在 `security/baseline` 的 worktree 中执行 `git merge --no-ff <fix-branch>`。冲突时取修复分支的版本。不要只挑 manifest/锁文件：升级必需的代码/测试适配要一起进入基线，否则新 worktree 会安装新依赖但 typecheck/test 失败。
 3. 运行 `pnpm install --frozen-lockfile && pnpm prune`，确认修复版本已安装且检查通过。
-4. `git push fork security/baseline`。
-5. 运行 `scripts/fork-base --base <tag>` 生成/更新 `fork-base/<tag>`。
-6. 新 worktree 只能从 `fork-base/<tag>` 创建；`scripts/fork-worktree <name>` 会先更新并校验基线。禁止 `git worktree add <tag>`。
+4. `git push origin security/baseline`。
+5. 运行 `scripts/fork-base --base <tag>` 生成/更新 `fork-base/<tag>`，并同步远端 main 与干净的本地 main；main 换 tag 允许 force-with-lease，其他分支普通推送。
+6. 新 worktree 默认从同步后的 `main` / `origin/main` 创建，也可显式选 `fork-base/<tag>`；`scripts/fork-worktree <name>` 会先更新并校验基线。禁止 `git worktree add <tag>`。
 
 校验 fork-base 已包含基线：
 
@@ -73,7 +72,7 @@ scripts/fork-worktree <name> fix/<name>       # 修复用 fix/<name>
 git merge-base --is-ancestor security/baseline fork-base/<tag>
 ```
 
-新上游基线确定后，同样运行 `scripts/fork-base --base <new-tag>`；如果 `security/baseline` 合入新 tag 冲突，先在该分支上 `git rebase <new-tag>`，解决并验证后 `git push --force-with-lease fork security/baseline`，再重新生成。已有 worktree 需要新安全修复时，执行 `git merge fork-base/<tag>` 后重新 `pnpm install --frozen-lockfile && pnpm prune`。
+新上游基线确定后，同样运行 `scripts/fork-base --base <new-tag>`；如果 `security/baseline` 合入新 tag 冲突，先在该分支上 `git merge <new-tag>`，解决并验证后 `git push origin security/baseline`，再重新生成。已有 worktree 需要新安全修复时，执行 `git merge fork-base/<tag>` 后重新 `pnpm install --frozen-lockfile && pnpm prune`。
 
 修改 daemon wire 或 SDK 导出时，在功能分支提交/审查前运行已有契约测试，不等到聚合阶段才检查：
 
@@ -86,7 +85,7 @@ scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --fi
 
 ## 2. 聚合打包
 
-以下命令从 `fork-tooling` 的独立 worktree 运行；根目录 `main` 是上一次聚合产物，里面的脚本可能落后一版。
+以下命令从 `fork-tooling` 的独立 worktree 运行；根目录 `main` 是安全基线，维护脚本从 `fork-tooling` 调用。
 
 ```bash
 scripts/fork-base --base <tag>             # 先生成/更新 fork-base/<tag>
@@ -101,16 +100,16 @@ scripts/fork-aggregate --preflight         # 不改聚合 worktree，一次列�
 Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
 
 1. `scripts/fork-base`：确保 `fork-base/<tag>` 已包含最新的 `security/baseline`；`fork-package` 会自动执行，单独聚合时需要先手动运行。
-2. `scripts/fork-aggregate`：先只读预检所有输入与 `fork-base/<tag>` 的冲突，集中报告；通过后从该分支开始依次 `merge --no-ff`，生成 `.worktrees/aggregate-next`，并在结束时断言 `security/baseline` 是结果的祖先。merge 提交的时间固定取基线分支与各分支 tip 中最新的提交时间，所以输入没变时重跑得到同一个 SHA。
+2. `scripts/fork-aggregate`：先只读预检所有输入与 `fork-base/<tag>` 的冲突，集中报告；通过后从该分支开始依次 `merge --no-ff`，生成 `.worktrees/aggregate-next`，并在结束时断言 `security/baseline` 是结果的祖先。merge 提交的时间固定取基线、各分支 tip 和上一版 aggregate 中最新的提交时间。生成候选后用 ours merge 保留上一版 aggregate 为祖先，文件树仍完全取本次清单结果，使普通推送能够快进；文件树与上一版相同且基线已包含时复用上一版 SHA。相同输入得到同一个 SHA。
 3. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-4. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 main>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
-5. `scripts/fork-aggregate --base <固定tag> --promote-only --result <已验证sha>`：把根目录 `main` 移到已验证的那个提交并推送 fork，不依赖可能已被其他任务移动的 `aggregate/next`。
+4. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
+5. `scripts/fork-aggregate --base <固定tag> --promote-only --result <已验证sha>`：把 `aggregate` 更新到已验证的提交并普通推送 origin，保留根目录 `main`，不依赖可能已被其他任务移动的 `aggregate-next`。
 6. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 7. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
-8. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `main` 的那些。
+8. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `aggregate` 的那些。
 9. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
 
-修改分支后重新运行 `fork-package`，生成新 SHA；输入未变、只因进程中断或外部故障失败时，按输出的 `--resume <sha>` 接续。接续固定原来的基线、上次 main、测试范围和部署检出，逐阶段保存成功结果、耗时与日志到 Git common directory 的 `fork-package/`，不写入产品 Git。失败阶段不会记为成功；SHA、执行命令、流水线实现或相关运行环境变化时重跑对应检查。安装目录丢失时重新安装并清除旧检查结果；运行时构建和原生模块检查每次执行并使用 Turbo 缓存恢复产物。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。
+修改分支后重新运行 `fork-package`，生成新 SHA；输入未变、只因进程中断或外部故障失败时，按输出的 `--resume <sha>` 接续。接续固定原来的基线、上次 aggregate、测试范围和部署检出，逐阶段保存成功结果、耗时与日志到 Git common directory 的 `fork-package/`，不写入产品 Git。失败阶段不会记为成功；SHA、执行命令、流水线实现或相关运行环境变化时重跑对应检查。安装目录丢失时重新安装并清除旧检查结果；运行时构建和原生模块检查每次执行并使用 Turbo 缓存恢复产物。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。
 
 普通发布在安装前检查根目录是否为干净的 `main`；根目录有并行工作时保留现场，使用独立干净 clone，或先用 `--verify-only` 验证。不要移动用户文件来绕过提升检查。
 
@@ -121,27 +120,27 @@ Turbo 缓存统一在 `~/.cache/bb-turbo`（`run-resource-isolated` 和 `build-r
 
 ```bash
 scripts/fork-base --base <tag>              # 先确保 fork-base/<tag> 含最新安全基线
-scripts/fork-aggregate                      # 只生成本地临时验证候选 aggregate/next
+scripts/fork-aggregate                      # 只生成本地临时验证候选 aggregate-next
 scripts/run-resource-isolated --profile package -- pnpm install --frozen-lockfile
 scripts/run-resource-isolated --profile package -- pnpm exec turbo run typecheck --concurrency=1 --continue --output-logs=errors-only
 scripts/run-resource-isolated --profile package -- pnpm exec turbo run test --concurrency=1 --continue --output-logs=errors-only --filter=<涉及的包>
-scripts/fork-aggregate --promote-only       # 把已验证候选提升到 main 并推送 fork/main
-scripts/fork-aggregate --promote            # 重新聚合并提升到 main；已验证的候选用 --promote-only
+scripts/fork-aggregate --promote-only       # 把已验证候选提升到 aggregate 并推送 origin/aggregate
+scripts/fork-aggregate --promote            # 重新聚合并提升到 aggregate；已验证的候选用 --promote-only
 ```
 
 全仓 typecheck 必须用 `--profile package --concurrency=1`：默认 verification 档（3G）加 turbo 默认并发会让 tsc 被内存限流卡住。
 `run-resource-isolated` 启动前会释放上一次遗留的空 scope；scope 里仍有进程时它会拒绝并列出 pid，说明另一个验证还在跑。
-提升、推送到 fork 和打包后的 tag 发布不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
+提升、推送到 origin 和打包后的 tag 发布不需要再询问；替换本机运行中的 BB 服务需要用户明确授权，走 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md)。
 
 ### 冲突怎么解决
 
 脚本遇到冲突会停下，并判断是哪一类：
 
-| 类型           | 判断                          | 处理                                                                                                                                                            |
-| -------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 分支与上游冲突 | 该分支单独合入 `fork-base/<tag>` 就冲突 | 在该分支 worktree 里 `git rebase --no-autostash fork-base/<tag>`，修复、测试、`git push --force-with-lease fork <branch>`，重跑脚本。 |
-| 安全基线与新 tag 冲突 | `security/baseline` 合入新 `desktop-v*` 冲突 | 在 `security/baseline` 上 `git rebase <new-tag>`，解决并验证后 force-with-lease 推送，再运行 `scripts/fork-base --base <new-tag>`。 |
-| 分支之间冲突   | 单独都能合入，一起才冲突      | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。               |
+| 类型                  | 判断                                         | 处理                                                                                                                                              |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 分支与上游冲突        | 该分支单独合入 `fork-base/<tag>` 就冲突      | 在该分支 worktree 里 `git rebase --no-autostash fork-base/<tag>`，修复、测试、`git push --force-with-lease origin <branch>`，重跑脚本。           |
+| 安全基线与新 tag 冲突 | `security/baseline` 合入新 `desktop-v*` 冲突 | 在 `security/baseline` 上 `git merge <new-tag>`，解决并验证后普通推送，再运行 `scripts/fork-base --base <new-tag>`。                              |
+| 分支之间冲突          | 单独都能合入，一起才冲突                     | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。 |
 
 - 产品修复永远回到对应分支，不写在聚合的 merge 提交里。
 - 独立的正确性修复继续保留独立分支；同一功能的补充分支、共享测试隔离设置可以在保留双方内容后收敛。减少清单行数不能代替减少实际改动和冲突。
@@ -170,15 +169,15 @@ scripts/fork-aggregate --promote            # 重新聚合并提升到 main；�
 
 功能、修复及影响安装产物的依赖改动完成必要验证和适用的 review 后，聚合与发布是默认收尾，已有持续授权，无需另问是否打包。先完成本任务分支的提交、推送与清单登记，再在整项任务最后统一运行 `scripts/fork-package`，跟踪它触发的 Release 流水线至结束；同一任务的中间检查点提交不反复发版。
 
-用户或其他 Agent 已完成本任务的发布时，先核对产品内容、聚合 SHA、远端 tag 和成功的 Release 结果并复用。纯规则或文档改动只提交、推送并完成必要检查，不为相同产品重新打运行包；BB 维护规则提交到 `fork-tooling`，随下一次产品聚合进入 `main`。用户明确要求仅验证、不推送或不发布时按其要求执行。构建或必要验证失败时先修复，不给失败结果打发布 tag；推送或发布实际受阻时明确交付尚未完成的步骤。
+用户或其他 Agent 已完成本任务的发布时，先核对产品内容、聚合 SHA、远端 tag 和成功的 Release 结果并复用。纯规则或文档改动只提交、推送并完成必要检查，不为相同产品重新打运行包；BB 维护规则提交到 `fork-tooling`，随下一次产品聚合进入 `aggregate`。用户明确要求仅验证、不推送或不发布时按其要求执行。构建或必要验证失败时先修复，不给失败结果打发布 tag；推送或发布实际受阻时明确交付尚未完成的步骤。
 
-维护入口需要立即在默认 `main` 可用时，以最新已发布的聚合为基础，在 `aggregate/next` 仅合并 `fork-tooling` 的规则与文档增量；确认差异全部属于本任务的维护文件、产品文件逐字节不变后，用 `scripts/fork-aggregate --promote-only` 提升并复用原产品 Release。其他尚未发布的产品分支留待正常产品聚合，不为同步索引而合入。
+维护入口需要立即在默认 `main` 可用时，只将 AGENTS 的 Fork 维护规则块同步到 `security/baseline`，普通推送后运行 `scripts/fork-base`。维护脚本和完整文档仍从 `fork-tooling` 读取，不把产品聚合或整个 tooling 分支合入安全入口。
 
 发布完成的凭据是本任务产品改动已进入已验证聚合、远端 tag 指向该聚合，以及对应流水线成功且 Release 资产齐全。只打 tag、推送分支、登记清单或看到流水线开始都不是发布完成。此授权覆盖个人 fork 的代码与 Release 发布；上游反馈和运行服务替换仍按各自的授权规则执行。
 
-1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `fork`，并包含发布 workflow。后续即使 `main` 被其他任务移动，也使用这个已验证的 SHA。
+1. 完成聚合、必要验证、打包及提升，记录实际打包的聚合 SHA；确认它已推送到 `origin`，并包含发布 workflow。后续即使 `aggregate` 被其他任务移动，也使用这个已验证的 SHA。
 2. 查询 fork 的发布 tag 和 Release。同一 SHA 已有成功发布的 `fork-v*` Release 时复用并交付链接；已有 tag 的流水线尚未成功时跟踪或重跑原任务，处理方法见下方「失败后重跑」。
-3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 fork 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `fork`。
+3. 需要新增发布时，使用 `fork-v<上游基线版本>-<UTC日期YYYYMMDD>.<序号>` 的 annotated tag。序号从 1 开始，递增到本地和 origin 远端均未使用的名称，tag 指向第 1 步记录的 SHA，并只推送这个 tag 到 `origin`。
 4. 核对远端 tag 解引用后的 commit SHA。流水线要 20 到 30 分钟，不要停下来盯着它：先完成构建、清理、cutover 提示等本地收尾，最后再用 `gh run watch` 等一次，确认 Release 已公开，Linux x64 包、校验文件及通用 SDK 三件资产齐全。
 5. 交付 tag、聚合 SHA 和 Release 链接。tag 推送成功只代表已触发构建；流水线失败、无法查询或资产不全时，明确报告发布未完成。
 
@@ -189,8 +188,8 @@ git status --short
 aggregate_sha='<本次打包时记录的聚合SHA>'
 git show "${aggregate_sha}:.github/workflows/fork-release.yml"
 git tag -a fork-v0.44.0-20261001.1 "$aggregate_sha" -m "BB fork aggregate 2026-10-01"
-git push fork refs/tags/fork-v0.44.0-20261001.1
-git ls-remote fork 'refs/tags/fork-v0.44.0-20261001.1^{}'
+git push origin refs/tags/fork-v0.44.0-20261001.1
+git ls-remote origin 'refs/tags/fork-v0.44.0-20261001.1^{}'
 ```
 
 workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
@@ -273,7 +272,7 @@ tar -xzf "$asset" -C "$HOME/.local/opt/bb"
 
 1. 先在 get-bb/bb 搜索是否已有相关 issue/PR；按 [docs/filing-issues.md](filing-issues.md) 准备内容。
 2. **向 get-bb/bb 提 issue、评论或 PR 之前，必须把拟提交的内容给用户逐项确认。** 用户可以决定把它标为 `fork-only` 保留在本地。
-3. 提 PR 时：`git rebase --onto origin/main fork-base/<tag> <branch>`，只保留 feature commits 并去掉安全基线和聚合层，再推送到 fork 的 `upstream/<name>` 后开 PR；叠放分支要先把依赖部分一并处理或拆开。
+3. 提 PR 时：`git rebase --onto upstream/main fork-base/<tag> <branch>`，只保留 feature commits 并去掉安全基线和聚合层，再推送到 origin 的 `upstream/<name>` 后开 PR；叠放分支要先把依赖部分一并处理或拆开。
 4. 在 `.fork/branches` 更新该行的状态和链接（`reported` / `pr-open` / `fork-only`）。
 5. 上游合并后，等它进入一个 `desktop-v*` tag 再从清单移除（见上一节第 3 步）。issue 关闭本身不是移除理由。
 

@@ -1,7 +1,7 @@
 # 本机聚合网页服务维护
 
 本说明适用于把 `main` 作为本机 Tailnet 网页服务运行的场景。
-它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `origin`，也不要从保存聚合结果的 `main` 创建上游 PR。
+它是本地运维资料：验证后按仓库规则提交并推送到个人 fork；绝不推送到上游 `upstream`，也不要从保存聚合结果的 `aggregate` 创建上游 PR。
 
 ## 文件与保密边界
 
@@ -108,8 +108,8 @@ git check-ignore -v config/local-aggregate-web.json
 聚合按 [Fork 维护](fork-maintenance.md) 用 `scripts/fork-aggregate --promote` 生成并推送；
 构建与服务替换以 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 为唯一入口。
 
-- 本机：在根目录 `main`（与 `fork/main` 同一 commit、工作区干净）上构建。
-- 另一台机器：`git fetch fork`，在现有工作区之外用 `git worktree add --detach <path> fork/main` 建干净 worktree，记下该 SHA，在里面安装依赖和构建。
+- 本机：在干净的独立聚合检出（与 `origin/aggregate` 同一 commit）上构建，根目录 `main` 保持安全基线。
+- 另一台机器：`git fetch origin`，在现有工作区之外用 `git worktree add --detach <path> origin/aggregate` 建干净 worktree，记下该 SHA，在里面安装依赖和构建。
 - 没有明确服务部署授权时，到构建和原生 ABI 检查完成为止，不修改 systemd、Tailscale 或本机目标配置。
 - 切换后，在浏览器强制刷新一次以加载新的前端 bundle，并打开一个既有会话确认数据可见。
 

@@ -6,12 +6,12 @@ usage() {
 用法：scripts/fork-package [--base <tag>] [--resume <sha>] [--test-filter <turbo filter>]... [--verify-only] [--no-release] [--no-build]
 
 一条命令完成聚合打包：聚合 → 在 .worktrees/aggregate-deploy-<sha> 里安装、typecheck、测试 →
-提升 main → 运行时构建与原生模块检查 → 打 fork-v* tag 并推送 → 清理被取代的候选 →
+提升 aggregate → 运行时构建与原生模块检查 → 打 fork-v* tag 并推送 → 清理被取代的候选 →
 打印 cutover 提示。全程串行，每一步都在单个 run-resource-isolated scope 里执行；任何一步失败就停在原地。
 聚合 SHA 由输入决定，分支没变时重跑会复用同一个 aggregate-deploy-<sha> 检出及其依赖。
-清理只删除干净、既不是本次结果、也不是服务运行目录或上一次 main 的 aggregate-deploy-* 检出。
+清理只删除干净、既不是本次结果、也不是服务运行目录或上一次 aggregate 的 aggregate-deploy-* 检出。
 
---test-filter  传给 turbo run test 的 --filter，可重复；默认 "[<上一次 main>]"，
+--test-filter  传给 turbo run test 的 --filter，可重复；默认 "[<上一次 aggregate>]"，
                即只测相对上次聚合有文件改动的包。
 --resume       从该 SHA 的已记录检出接续；保留原基线、比较起点和测试范围。
 --verify-only  测试通过后停止：不提升、不构建、不打 tag，保留 .worktrees/aggregate-deploy-<sha> 供检查。
@@ -65,14 +65,14 @@ run_stage() {
 }
 
 if [ -z "$resume" ]; then
-  previous="$(git ls-remote fork refs/heads/main | cut -f1)"
-  [ -n "$previous" ] || { echo "fork 上没有 main" >&2; exit 1; }
+  previous="$(git ls-remote origin refs/heads/aggregate | cut -f1)"
+  [ -n "$previous" ] || { echo "origin 上没有 aggregate" >&2; exit 1; }
 
   if [ -n "$base_override" ]; then
     base="$base_override"
   else
     list_ref=refs/heads/fork-tooling
-    git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/fork/fork-tooling
+    git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/origin/fork-tooling
     base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
   fi
 
@@ -81,7 +81,7 @@ if [ -z "$resume" ]; then
 
   step "聚合"
   "$here/fork-aggregate" --base "$base"
-  result="$(git rev-parse --verify refs/heads/aggregate/next)"
+  result="$(git rev-parse --verify refs/heads/aggregate-next)"
   short="$(git rev-parse --short "$result")"
   wt="$root/.worktrees/aggregate-deploy-$short"
   step "工作区 $wt"
@@ -131,17 +131,17 @@ run_stage tests "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --
 
 if [ "$verify_only" = 1 ]; then
   step "仅验证，停止"
-  printf '聚合 SHA：%s\n部署检出：%s\n上次 main：%s\n' "$result" "$wt" "$previous"
+  printf '聚合 SHA：%s\n部署检出：%s\n上次 aggregate：%s\n' "$result" "$wt" "$previous"
   exit 0
 fi
 
-step "提升 main"
+step "提升 aggregate"
 if [ "$result" = "$previous" ]; then
-  echo "fork/main 已经是 $result"
+  echo "origin/aggregate 已经是 $result"
 else
   "$here/fork-aggregate" --base "$base" --promote-only --result "$result"
 fi
-[ "$(git ls-remote fork refs/heads/main | cut -f1)" = "$result" ]
+[ "$(git ls-remote origin refs/heads/aggregate | cut -f1)" = "$result" ]
 
 if [ "$build" = 1 ]; then
   config="$root/config/local-aggregate-web.json"
@@ -157,7 +157,7 @@ if [ "$release" = 1 ]; then
   version="${base#desktop-v}"
   tag="$(git tag --points-at "$result" 'fork-v*' | head -1)"
   if [ -z "$tag" ]; then
-    tag="$(git ls-remote fork 'refs/tags/fork-v*^{}' | awk -v sha="$result" '$1 == sha { sub(/\^\{\}$/, "", $2); sub(/^refs\/tags\//, "", $2); print $2 }' | head -1)"
+    tag="$(git ls-remote origin 'refs/tags/fork-v*^{}' | awk -v sha="$result" '$1 == sha { sub(/\^\{\}$/, "", $2); sub(/^refs\/tags\//, "", $2); print $2 }' | head -1)"
   fi
   if [ -n "$tag" ]; then
     echo "复用已有 tag $tag"
@@ -165,14 +165,14 @@ if [ "$release" = 1 ]; then
     day="$(date -u +%Y%m%d)"
     n=1
     while git rev-parse --verify --quiet "refs/tags/fork-v$version-$day.$n" >/dev/null \
-      || [ -n "$(git ls-remote fork "refs/tags/fork-v$version-$day.$n")" ]; do
+      || [ -n "$(git ls-remote origin "refs/tags/fork-v$version-$day.$n")" ]; do
       n=$((n + 1))
     done
     tag="fork-v$version-$day.$n"
     git tag -a "$tag" "$result" -m "BB fork aggregate $(date -u +%Y-%m-%d)"
-    git push fork "refs/tags/$tag"
+    git push origin "refs/tags/$tag"
   fi
-  remote_tag="$(git ls-remote fork "refs/tags/$tag^{}" | cut -f1)"
+  remote_tag="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
   [ "$remote_tag" = "$result" ] || { echo "远端 tag $tag 指向 $remote_tag，不是 $result" >&2; exit 1; }
   echo "tag $tag -> $result；流水线：https://github.com/hxy91819/bb/actions/workflows/fork-release.yml"
 fi
@@ -199,7 +199,7 @@ step "完成"
 cat <<EOF
 聚合 SHA：$result
 部署检出：$wt
-上次 main：$previous
+上次 aggregate：$previous
 EOF
 if [ "$build" = 1 ]; then
   unit="$(config_value systemdUnit)"
