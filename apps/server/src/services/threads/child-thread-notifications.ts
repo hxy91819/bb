@@ -425,11 +425,7 @@ async function flushChildThreadTurnNotificationBatch(
       if (item.failedRequestId === null) return true;
       const thread = getThread(deps.db, item.childThread.id);
       const failed = loadFailedTurn(deps.db, item.childThread.id);
-      if (
-        !thread ||
-        thread.status !== "error" ||
-        failed?.request.requestId !== item.failedRequestId
-      )
+      if (!thread || failed?.request.requestId !== item.failedRequestId)
         return false;
       const retry = getQueuedRetryOfTurnRequest(deps.db, {
         threadId: thread.id,
