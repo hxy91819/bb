@@ -30,6 +30,7 @@ import type {
   EnvironmentStatus,
   PermissionMode,
   PromptInput,
+  QueuedMessageSystemNotice,
   QueuedMessageWaitingOn,
   RecordedPermissionMode,
   StoredThreadEventDataForType,
@@ -272,6 +273,7 @@ export function seedQueuedMessage(
     permissionMode?: PermissionMode;
     senderThreadId?: string | null;
     serviceTier?: string;
+    systemNotice?: QueuedMessageSystemNotice | null;
     /** Defaults to a row with no wait: an ordinary queued message. */
     waitingOn?: QueuedMessageWaitingOn | null;
     sendAt?: number | null;
@@ -288,7 +290,7 @@ export function seedQueuedMessage(
     waitingOn: args.waitingOn ?? null,
     sendAt: args.sendAt ?? null,
     payload: { kind: "inline" },
-    systemNotice: null,
+    systemNotice: args.systemNotice ?? null,
   });
 }
 
