@@ -1,7 +1,7 @@
 import * as React from "react";
 import { type DialogProps } from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
-import { COARSE_POINTER_TEXT_BASE_CLASS } from "./coarse-pointer-sizing";
+import { COARSE_POINTER_INPUT_TEXT_CLASS } from "./coarse-pointer-sizing";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
@@ -43,7 +43,7 @@ const CommandInput = React.forwardRef<
       ref={ref}
       className={cn(
         "flex h-10 w-full rounded-md bg-transparent py-3 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-        COARSE_POINTER_TEXT_BASE_CLASS,
+        COARSE_POINTER_INPUT_TEXT_CLASS,
         className,
       )}
       {...props}
