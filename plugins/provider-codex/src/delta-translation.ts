@@ -1354,6 +1354,13 @@ export function translateCodexEventToDeltas(
         },
       ];
     case "warning":
+      if (
+        handledEvent.params.message.startsWith(
+          "Heads up: Long threads and multiple compactions can cause the model to be less accurate.",
+        )
+      ) {
+        return [];
+      }
       return [
         {
           kind: "provider.warning",
