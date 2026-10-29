@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  symlinkSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -346,7 +347,7 @@ test("interrupted stage terminates its child process tree and resume retries ins
       { cwd: f.root, env: f.env, encoding: "utf8" },
     );
     assert.notEqual(contender.status, 0);
-    assert.match(contender.stderr, /EEXIST/);
+    assert.match(contender.stderr, /阶段执行仍持有/);
     child.kill("SIGTERM");
     assert.equal((await done).code, 1);
     const state = JSON.parse(readFileSync(path, "utf8"));
@@ -493,6 +494,253 @@ test("execution metadata changes reuse validation while unknown environment chan
     }
     assert.equal(readFileSync(join(f.root, ".git/counter"), "utf8"), "xx");
   } finally {
+    f.cleanup();
+  }
+});
+
+function alive(pid) {
+  try {
+    if (readFileSync(`/proc/${pid}/stat`, "utf8").split(" ")[2] === "Z")
+      return false;
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForKernelRelease(path) {
+  await waitFor(() => {
+    const result = spawnSync(
+      "perl",
+      [
+        "-MFcntl=:flock",
+        "-e",
+        "open(my $file, '+<', $ARGV[0]) or die $!; flock($file, LOCK_EX|LOCK_NB) or exit 75",
+        path,
+      ],
+      { encoding: "utf8" },
+    );
+    if (result.status === 75) return false;
+    assert.equal(result.status, 0, result.stderr);
+    return true;
+  });
+}
+
+for (const signal of ["SIGKILL", "SIGTERM"]) {
+  test(`execution ${signal} recovery retains inherited writers and admits only one new owner`, async () => {
+    const f = fixture();
+    const { root, env } = f;
+    const script = join(root, ".git/writer.sh");
+    const grandScript = join(root, ".git/grand.sh");
+    const marker = join(root, ".git/owner-ready");
+    const runs = join(root, ".git/fork-package/runs");
+    mkdirSync(runs, { recursive: true });
+    const record = join(runs, "run.crashed");
+    const partial = join(runs, "run.partial");
+    let owner;
+    const descendants = [];
+    const contenders = [];
+    try {
+      writeFileSync(
+        grandScript,
+        `#!/bin/bash\necho $$ > '${root}/.git/grand-pid'\nwhile [ ! -f '${root}/.git/leave' ]; do sleep .05; done\n`,
+      );
+      writeFileSync(
+        script,
+        `#!/bin/bash\n'${process.execPath}' '${stateTool}' journal '${record}' tests\n: > '${partial}'\necho $$ > '${root}/.git/shell-pid'\nbash '${grandScript}' &\ntouch '${marker}'\nwait\n`,
+      );
+      owner = spawn(process.execPath, [execution, script], {
+        cwd: root,
+        env,
+        stdio: "ignore",
+      });
+      const exited = completed(owner);
+      await waitFor(
+        () => existsSync(marker) && existsSync(join(root, ".git/grand-pid")),
+      );
+      const shell = Number(readFileSync(join(root, ".git/shell-pid"), "utf8"));
+      const grand = Number(readFileSync(join(root, ".git/grand-pid"), "utf8"));
+      descendants.push(shell, grand);
+      owner.kill(signal);
+      assert.notEqual((await exited).code, 0);
+      if (signal === "SIGKILL") {
+        assert.equal(alive(grand), true);
+        assert.equal(
+          JSON.parse(readFileSync(record, "utf8")).status,
+          undefined,
+        );
+        assert.match(f.run("--preflight").stderr, /仍持有/);
+        process.kill(shell, "SIGKILL");
+        await waitFor(() => !alive(shell));
+        assert.match(f.run("--preflight").stderr, /仍持有/);
+        process.kill(grand, "SIGTERM");
+      }
+      await waitFor(() => !alive(shell) && !alive(grand));
+      await waitForKernelRelease(join(root, ".git/fork-execution.lock"));
+      const gate = join(root, ".git/new-ready");
+      writeFileSync(
+        script,
+        `#!/bin/bash\necho x >> '${root}/.git/owners'\ntouch '${gate}'\nwhile [ ! -f '${root}/.git/release-new' ]; do sleep .05; done\n`,
+      );
+      const endings = [];
+      for (let i = 0; i < 2; i++) {
+        const next = spawn(process.execPath, [execution, script], {
+          cwd: root,
+          env,
+          stdio: "ignore",
+        });
+        contenders.push(next);
+        endings.push(completed(next));
+      }
+      await waitFor(() => existsSync(gate));
+      assert.equal((await Promise.race(endings)).code, 1);
+      assert.equal(readFileSync(join(root, ".git/owners"), "utf8"), "x\n");
+      assert.match(f.run("--preflight").stderr, /仍持有/);
+      writeFileSync(join(root, ".git/release-new"), "release");
+      assert.deepEqual(
+        (await Promise.all(endings)).map(({ code }) => code).sort(),
+        [0, 1],
+      );
+      assert.equal(f.run("--preflight").status, 0);
+      const recovered = JSON.parse(readFileSync(record, "utf8"));
+      assert.equal(recovered.status, "interrupted");
+      assert.equal(recovered.phases.at(-1).status, "interrupted");
+      assert.equal(
+        JSON.parse(readFileSync(partial, "utf8")).status,
+        "interrupted",
+      );
+    } finally {
+      owner?.kill("SIGKILL");
+      for (const child of contenders) child.kill("SIGKILL");
+      for (const pid of descendants) {
+        if (alive(pid)) {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {}
+        }
+      }
+      f.cleanup();
+    }
+  });
+}
+
+test("SIGKILL stage recovery waits for its writer, preserves interruption and retries without accepting partial success", async () => {
+  const f = fixture();
+  const path = join(f.root, ".git/state.json");
+  const writerFile = join(f.root, ".git/writer-pid");
+  let runner;
+  let writer;
+  try {
+    writeFileSync(path, JSON.stringify({ source: f.base, completed: {} }));
+    const command = [
+      "bash",
+      "-c",
+      `echo $$ > '${writerFile}'; while [ ! -f '${f.root}/.git/leave' ]; do sleep .05; done`,
+    ];
+    runner = spawn(
+      process.execPath,
+      [stateTool, "run", path, "tests", f.root, ...command],
+      { cwd: f.root, env: f.env, stdio: "ignore" },
+    );
+    const exited = completed(runner);
+    await waitFor(() => existsSync(writerFile));
+    writer = Number(readFileSync(writerFile, "utf8"));
+    runner.kill("SIGKILL");
+    assert.equal((await exited).signal, "SIGKILL");
+    assert.equal(alive(writer), true);
+    const retry = () =>
+      spawnSync(
+        process.execPath,
+        [
+          stateTool,
+          "run",
+          path,
+          "tests",
+          f.root,
+          process.execPath,
+          "-e",
+          "require('node:fs').appendFileSync('.git/retried','x')",
+        ],
+        { cwd: f.root, env: f.env, encoding: "utf8" },
+      );
+    const busy = retry();
+    assert.equal(busy.status, 1);
+    assert.match(busy.stderr, /仍持有/);
+    assert.equal(
+      JSON.parse(readFileSync(path, "utf8")).completed.tests,
+      undefined,
+    );
+    writeFileSync(join(f.root, ".git/leave"), "leave");
+    await waitFor(() => !alive(writer));
+    await waitForKernelRelease(`${path}.lock`);
+    const result = retry();
+    assert.equal(result.status, 0, result.stderr);
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    assert.equal(state.events.at(-2).status, "interrupted");
+    assert.equal(state.events.at(-1).status, "completed");
+    assert.equal(readFileSync(join(f.root, ".git/retried"), "utf8"), "x");
+  } finally {
+    runner?.kill("SIGKILL");
+    if (writer && alive(writer)) process.kill(writer, "SIGKILL");
+    f.cleanup();
+  }
+});
+
+test("Perl kernel-lock fallback recovers after SIGKILL without losing inherited writer exclusion", async () => {
+  const f = fixture();
+  let owner;
+  let writer;
+  try {
+    const utilities = join(f.root, ".git/utilities");
+    mkdirSync(utilities);
+    for (const name of ["git", "bash", "perl", "sleep"]) {
+      const binary = execFileSync("bash", ["-c", `command -v ${name}`], {
+        encoding: "utf8",
+      }).trim();
+      symlinkSync(binary, join(utilities, name));
+    }
+    const env = { ...f.env, PATH: utilities };
+    const hold = join(f.root, ".git/hold.sh");
+    const once = join(f.root, ".git/once.sh");
+    const pidFile = join(f.root, ".git/pid");
+    writeFileSync(
+      hold,
+      `#!/bin/bash\necho $$ > '${pidFile}'\nwhile [ ! -f '${f.root}/.git/leave' ]; do sleep .05; done\n`,
+    );
+    writeFileSync(
+      once,
+      `#!/bin/bash\necho success > '${f.root}/.git/recovered'\n`,
+    );
+    owner = spawn(process.execPath, [execution, hold], {
+      cwd: f.root,
+      env,
+      stdio: "ignore",
+    });
+    const exited = completed(owner);
+    await waitFor(() => existsSync(pidFile));
+    writer = Number(readFileSync(pidFile, "utf8"));
+    owner.kill("SIGKILL");
+    await exited;
+    const retry = () =>
+      spawnSync(process.execPath, [execution, once], {
+        cwd: f.root,
+        env,
+        encoding: "utf8",
+      });
+    assert.match(retry().stderr, /仍持有/);
+    writeFileSync(join(f.root, ".git/leave"), "leave");
+    await waitFor(() => !alive(writer));
+    await waitForKernelRelease(join(f.root, ".git/fork-execution.lock"));
+    const result = retry();
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      readFileSync(join(f.root, ".git/recovered"), "utf8"),
+      "success\n",
+    );
+  } finally {
+    owner?.kill("SIGKILL");
+    if (writer && alive(writer)) process.kill(writer, "SIGKILL");
     f.cleanup();
   }
 });

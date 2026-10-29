@@ -142,6 +142,7 @@ export function executionIdentity(cwd, command) {
         ([name]) =>
           ![
             "BB_FORK_EXECUTION_TOKEN",
+            "BB_FORK_LOCKS",
             "BB_FORK_EXECUTION_ACTIVE",
             "BB_FORK_INPUT_SNAPSHOT",
             "SHLVL",

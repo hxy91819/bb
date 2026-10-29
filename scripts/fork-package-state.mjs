@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { acquireLock, lockInvocation } from "./fork-lock.mjs";
 import { randomUUID } from "node:crypto";
 import {
   digest,
@@ -11,7 +12,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  rmSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
@@ -37,16 +37,15 @@ const order = [
 ];
 
 export async function runStage(path, name, cwd, command) {
-  const lock = `${path}.lock`;
-  mkdirSync(lock);
+  const lock = acquireLock(`${path}.lock`, false);
   try {
-    return await executeStage(path, name, cwd, command);
+    return await executeStage(path, name, cwd, command, lock);
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    lock.release();
   }
 }
 
-async function executeStage(path, name, cwd, command) {
+async function executeStage(path, name, cwd, command, lock) {
   const started = Date.now();
   const state = JSON.parse(readFileSync(path, "utf8"));
   state.completed ??= {};
@@ -56,7 +55,10 @@ async function executeStage(path, name, cwd, command) {
       ...state.running,
       ended: new Date().toISOString(),
       status: "interrupted",
-      reason: "previous runner exited without a result",
+      cacheHit: false,
+      seconds: (Date.now() - Date.parse(state.running.started)) / 1000,
+      reason:
+        "previous runner exited without a result; kernel lock is now available",
     });
     delete state.running;
   }
@@ -76,6 +78,10 @@ async function executeStage(path, name, cwd, command) {
       filters: state.filters,
       dependencies,
       runner: readFileSync(new URL(import.meta.url), "utf8"),
+      locking: readFileSync(
+        new URL("./fork-lock.mjs", import.meta.url),
+        "utf8",
+      ),
       receipts: readFileSync(
         new URL("./fork-stage-receipts.mjs", import.meta.url),
         "utf8",
@@ -125,15 +131,16 @@ async function executeStage(path, name, cwd, command) {
     delete environment[key];
   const child = spawn(command[0], command.slice(1), {
     cwd,
-    env: environment,
+    ...lockInvocation(lock, ["ignore", "pipe", "pipe"], environment),
     detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
   });
   let interrupted;
   let killTimer;
   const stop = (signal) => {
     interrupted = signal;
+    if (child.exitCode !== null || child.signalCode !== null) return;
     killTimer ??= setTimeout(() => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
       try {
         if (process.platform === "win32") child.kill("SIGKILL");
         else process.kill(-child.pid, "SIGKILL");
@@ -204,11 +211,6 @@ async function executeStage(path, name, cwd, command) {
     );
   } finally {
     clearTimeout(killTimer);
-    if (process.platform !== "win32") {
-      try {
-        process.kill(-child.pid, "SIGKILL");
-      } catch {}
-    }
     delete state.running;
     save(path, state);
     for (const [signal, handler] of handlers)
