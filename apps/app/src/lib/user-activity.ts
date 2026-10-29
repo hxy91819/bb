@@ -22,6 +22,7 @@ function checkIdle(): void {
     idleTimer = setTimeout(checkIdle, remaining);
     return;
   }
+  if (document.hasFocus()) return;
   setActive(false);
 }
 
