@@ -53,3 +53,4 @@ feature/thread-content-search                needs-feedback                     
 fix/tunnel-contract-buffer-types              pr-open         https://github.com/get-bb/bb/pull/6430             # tunnel-contract 分片重组断言不再使用未声明的 Buffer；关联 https://github.com/get-bb/bb/issues/6432；准入检查已自动关闭 PR，待维护者重开
 fix/interaction-submit-cache                needs-feedback                                             # 插件交互确认提交或取消后立即更新缓存，实时通知缺失时关闭等待卡片
 fix/retry-parent-notifications              needs-feedback                                             # 自动重试排队期间不报父线程失败；核心等待插件决定，保留最终结果与取消通知，固定截止时间并避免耗尽行删除重复通知
+fix/server-worker-budget                    needs-feedback                                             # server 测试按 VITEST_MAX_WORKERS 应用有效 CPU/内存容量，保留隔离分类与完整范围；资源模块进入测试缓存输入
