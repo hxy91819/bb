@@ -125,12 +125,14 @@ function cacheKey(args: {
   providerId: string;
   hostId: string;
   cwd: string | null;
+  providerOptions: Readonly<Record<string, import("@bb/domain").JsonValue>>;
 }): string {
   return JSON.stringify([
     args.pluginId,
     args.providerId,
     args.hostId,
     args.cwd ?? "",
+    args.providerOptions,
   ]);
 }
 
@@ -163,7 +165,18 @@ async function callResolveNativeRoots(
         pluginId,
         contract: experimental_nativeRootsHostContract,
         method: "resolveNativeRoots",
-        input: { providerId, cwd: args.cwd },
+        input: {
+          providerId,
+          cwd: args.cwd,
+          ...(registration.deriveHostOptions === undefined
+            ? {}
+            : {
+                experimental_providerOptions: {
+                  ...registration.bridgeOptions,
+                  ...registration.deriveHostOptions(args.hostId),
+                },
+              }),
+        },
         hostId: args.hostId,
         timeoutMs: args.timeoutMs,
         artifact,
@@ -192,6 +205,10 @@ export async function resolveProviderResolvedNativeRoots(
     providerId: registration.info.id,
     hostId: args.hostId,
     cwd: args.cwd,
+    providerOptions: {
+      ...registration.bridgeOptions,
+      ...registration.deriveHostOptions?.(args.hostId),
+    },
   });
   const registrationRevision = deps.providerRegistry.getRegistrationRevision();
   const cached = deps.providerNativeRoots.lookup(key, registrationRevision);
