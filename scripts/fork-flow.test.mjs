@@ -1,9 +1,13 @@
+import { receipt, validReceipt } from "./fork-stage-receipts.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  statSync,
+  utimesSync,
+  renameSync,
   symlinkSync,
   existsSync,
   mkdirSync,
@@ -44,6 +48,9 @@ function fixture() {
     "BB_FORK_EXECUTION_ACTIVE",
   ])
     delete env[key];
+  for (const key of Object.keys(env))
+    if (key.startsWith("BB_RESOURCE_") || key === "VITEST_MAX_WORKERS")
+      delete env[key];
   const git = (...args) =>
     execFileSync("git", args, {
       cwd: root,
@@ -1714,6 +1721,61 @@ test("independent execution scopes reuse one state while source, configuration, 
       readFileSync(join(f.root, ".git/execution-count"), "utf8"),
       "xxxxx",
     );
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("installation signatures reject restored mtimes, atomic replacement and topology changes while outputs retain content checks", () => {
+  const f = fixture();
+  try {
+    const directory = join(f.root, "node_modules/dep");
+    mkdirSync(directory, { recursive: true });
+    const file = join(directory, "index.js");
+    const fixed = new Date("2020-01-01T00:00:00Z");
+    writeFileSync(file, 'module.exports="good"');
+    utimesSync(file, fixed, fixed);
+    const base = receipt(f.root, true);
+    const before = statSync(file);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    writeFileSync(file, 'module.exports="evil"');
+    utimesSync(file, fixed, fixed);
+    const polluted = statSync(file);
+    assert.equal(polluted.size, before.size);
+    assert.equal(polluted.mtimeMs, before.mtimeMs);
+    assert.notEqual(polluted.ctimeMs, before.ctimeMs);
+    assert.equal(
+      spawnSync(process.execPath, ["-p", "require('./node_modules/dep')"], {
+        cwd: f.root,
+        encoding: "utf8",
+      }).stdout.trim(),
+      "evil",
+    );
+    assert.equal(validReceipt(f.root, base), false);
+    const replaced = receipt(f.root, true);
+    const oldInode = statSync(file).ino;
+    writeFileSync(`${file}.replacement`, readFileSync(file));
+    utimesSync(`${file}.replacement`, fixed, fixed);
+    renameSync(`${file}.replacement`, file);
+    assert.notEqual(statSync(file).ino, oldInode);
+    assert.equal(validReceipt(f.root, replaced), false);
+    const metadata = receipt(f.root, true);
+    utimesSync(file, fixed, new Date(fixed.getTime() + 1000));
+    assert.equal(validReceipt(f.root, metadata), false);
+    const permissions = receipt(f.root, true);
+    chmodSync(file, 0o744);
+    assert.equal(validReceipt(f.root, permissions), false);
+    const added = receipt(f.root, true);
+    writeFileSync(join(directory, "new"), "new");
+    assert.equal(validReceipt(f.root, added), false);
+    const removed = receipt(f.root, true);
+    rmSync(join(directory, "new"));
+    assert.equal(validReceipt(f.root, removed), false);
+    const output = receipt(f.root, false, {}, ["node_modules"]);
+    utimesSync(file, fixed, new Date(fixed.getTime() + 2000));
+    assert.equal(validReceipt(f.root, output), true);
+    writeFileSync(file, 'module.exports="good"');
+    assert.equal(validReceipt(f.root, output), false);
   } finally {
     f.cleanup();
   }

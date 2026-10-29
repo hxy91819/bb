@@ -338,7 +338,7 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
   const selected = selectedRoots ?? roots(cwd, install);
   const files = {
     $receipt: {
-      version: 2,
+      version: install && !selectedRoots ? 3 : 2,
       kind: selectedRoots ? "explicit" : install ? "install" : "outputs",
       roots: selected,
     },
@@ -373,10 +373,14 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
       files[relative] = {
         signature,
         mode: stat.mode,
-        hash:
-          previous?.signature === signature
-            ? previous.hash
-            : digest(readFileSync(path)),
+        ...(install && !selectedRoots
+          ? {}
+          : {
+              hash:
+                previous?.signature === signature
+                  ? previous.hash
+                  : digest(readFileSync(path)),
+            }),
       };
     }
   };
@@ -385,7 +389,10 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
 }
 
 export function validReceipt(cwd, files) {
-  if (files?.$receipt?.version !== 2) return false;
+  if (!files?.$receipt || ![2, 3].includes(files.$receipt.version))
+    return false;
+  const signaturesOnly = files.$receipt.version === 3;
+  if (signaturesOnly && files.$receipt.kind !== "install") return false;
   if (
     files.$receipt.kind !== "explicit" &&
     JSON.stringify(roots(cwd, files.$receipt.kind === "install")) !==
@@ -424,7 +431,7 @@ export function validReceipt(cwd, files) {
         const signature = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.mode}`;
         if (
           signature !== expected.signature &&
-          digest(readFileSync(path)) !== expected.hash
+          (signaturesOnly || digest(readFileSync(path)) !== expected.hash)
         )
           return false;
       }
