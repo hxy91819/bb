@@ -105,17 +105,24 @@ scripts/fork-aggregate --preflight         # 不改聚合 worktree，一次列�
 `fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
 Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
 
+0. 持有 Git common directory 的执行锁，一轮只同步 upstream/origin 各一次，按 local 优先解析稳定 tag 对象、安全 tip、tooling 清单 blob、有序分支 tip 和 previous aggregate，保存本轮私有输入快照。后续基线、预检、真实 merge 和提升只消费固定 SHA；执行期间 refs 移动留到下轮，远端普通推送冲突则停止。
 1. `scripts/fork-base`：确保 `fork-base/<tag>` 已包含最新的 `security/baseline`；`fork-package` 会自动执行，单独聚合时需要先手动运行。
 2. `scripts/fork-aggregate`：先只读预检所有输入与 `fork-base/<tag>` 的冲突，集中报告；通过后从该分支开始依次 `merge --no-ff`，生成 `.worktrees/aggregate-next`，并在结束时断言 `security/baseline` 是结果的祖先。merge 提交的时间固定取基线、各分支 tip 和上一版 aggregate 中最新的提交时间。生成候选后用 ours merge 保留上一版 aggregate 为祖先，文件树仍完全取本次清单结果，使普通推送能够快进；文件树与上一版相同且基线已包含时复用上一版 SHA。相同输入得到同一个 SHA。
 3. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-4. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
+4. 显式 `CI=true NODE_ENV=development npm_config_production=false pnpm install --frozen-lockfile --prod=false` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
 5. `scripts/fork-aggregate --base <固定tag> --promote-only --result <已验证sha>`：把 `aggregate` 更新到已验证的提交并普通推送 origin，保留根目录 `main`，不依赖可能已被其他任务移动的 `aggregate-next`。
 6. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 7. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
 8. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `aggregate` 的那些。
 9. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
 
-修改分支后重新运行 `fork-package`，生成新 SHA；输入未变、只因进程中断或外部故障失败时，按输出的 `--resume <sha>` 接续。接续固定原来的基线、上次 aggregate、测试范围和部署检出，逐阶段保存成功结果、耗时与日志到 Git common directory 的 `fork-package/`，不写入产品 Git。失败阶段不会记为成功；SHA、执行命令、流水线实现或相关运行环境变化时重跑对应检查。安装目录丢失时重新安装并清除旧检查结果；运行时构建和原生模块检查每次执行并使用 Turbo 缓存恢复产物。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。
+修改分支后重新运行 `fork-package`，生成新候选并记录新的 previous 和测试范围；只有 `--resume <sha>` 保留原来的基线、输入快照、比较起点、测试范围和部署检出。Git common directory 的 `fork-package/` 保存阶段成功回执、日志和每轮 `runs/run.*` 记录，不写入产品 Git。旧格式缺少快照的记录须重新运行入口。
+
+回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁 token、快照路径、shell 层数和工作目录等执行元数据；其余未知环境变量仍只存摘要并保守失效，不保存环境值。安装后记录 node_modules 文件内容、权限和链接；检查及构建记录 ignored 的 dist/generated/bundled-types 产物。复用前校验目录完整性与文件内容，文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
+
+安装或工具身份变化、产物丢失/损坏、覆盖变化、阶段失败均重跑，并使后续阶段失效；失败和中断不写成功回执。运行时构建与原生检查也纳入同一回执和 package 资源 scope。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。锁覆盖 Git 操作和全部阶段，子调用复用父锁；异常强杀遗留锁时先核对 owner PID 和遗留进程，确认没有执行者后删除对应锁目录再接续。
+
+每轮结果分别记录验证、提升、运行时构建、tag；推送 tag 只表示已触发流水线，Release 和安装保留 `not-observed`，直到各自独立验收。`runs/run.*` 给出每段起止、耗时和失败状态；源码状态的 events 给出每次阶段执行/复用、耗时和失败/中断原因。
 
 普通发布在安装前检查根目录是否为干净的 `main`；根目录有并行工作时保留现场，使用独立干净 clone，或先用 `--verify-only` 验证。不要移动用户文件来绕过提升检查。
 

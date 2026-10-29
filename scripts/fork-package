@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+original_args=("$@")
 
 usage() {
   cat <<'USAGE'
@@ -26,12 +27,11 @@ build=1
 verify_only=0
 resume=""
 test_filters=()
-filters_explicit=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base_override="${2:?--base 需要 tag}"; shift 2 ;;
     --resume) resume="${2:?--resume 需要 SHA}"; shift 2 ;;
-    --test-filter) test_filters+=("${2:?--test-filter 需要值}"); filters_explicit=1; shift 2 ;;
+    --test-filter) test_filters+=("${2:?--test-filter 需要值}"); shift 2 ;;
     --verify-only) verify_only=1; shift ;;
     --no-release) release=0; shift ;;
     --no-build) build=0; shift ;;
@@ -44,6 +44,9 @@ if [ -n "$resume" ]; then
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${BB_FORK_EXECUTION_ACTIVE:-}" != "$here/fork-package" ]; then
+  exec node "$here/fork-execution.mjs" "$here/fork-package" "${original_args[@]}"
+fi
 root="$(git rev-parse --path-format=absolute --git-common-dir)"
 root="$(dirname "$root")"
 cd "$root"
@@ -55,7 +58,21 @@ if [ "$verify_only" = 0 ]; then
   }
 fi
 
-step() { printf '\n==> %s\n' "$*"; }
+run_root="$(git rev-parse --path-format=absolute --git-common-dir)/fork-package/runs"
+mkdir -p "$run_root"
+run_record="$(mktemp "$run_root/run.XXXXXX")"
+rm "$run_record"
+finish_run() {
+  local code=$?
+  trap - EXIT
+  if [ "$code" = 0 ]; then outcome=success; else outcome=failed; fi
+  node "$here/fork-package-state.mjs" journal "$run_record" "$outcome" "${state:-}" "$code"
+  echo "本轮结果：$run_record；Release 与安装状态须另行核验"
+  exit "$code"
+}
+trap finish_run EXIT
+node "$here/fork-package-state.mjs" journal "$run_record" "准备"
+step() { node "$here/fork-package-state.mjs" journal "$run_record" "$*"; printf '\n==> %s\n' "$*"; }
 config_value() { node -p "require('$config').service.$1"; }
 state_tool="$here/fork-package-state.mjs"
 state_root="$(git rev-parse --path-format=absolute --git-common-dir)/fork-package"
@@ -65,16 +82,17 @@ run_stage() {
 }
 
 if [ -z "$resume" ]; then
-  previous="$(git ls-remote origin refs/heads/aggregate | cut -f1)"
+  step "同步并固定输入"
+  git fetch --quiet upstream "+refs/heads/main:refs/remotes/upstream/main" "refs/tags/desktop-v*:refs/tags/desktop-v*"
+  git fetch --quiet --prune origin
+  mkdir -p "$state_root/inputs"
+  BB_FORK_INPUT_SNAPSHOT="$(mktemp "$state_root/inputs/run.XXXXXX")"
+  export BB_FORK_INPUT_SNAPSHOT
+  node "$here/fork-inputs.mjs" snapshot "$root" "$base_override" "$BB_FORK_INPUT_SNAPSHOT"
+  snapshot_shell="$(node "$here/fork-inputs.mjs" shell "$BB_FORK_INPUT_SNAPSHOT")"
+  eval "$snapshot_shell"
+  previous="$previous_aggregate"
   [ -n "$previous" ] || { echo "origin 上没有 aggregate" >&2; exit 1; }
-
-  if [ -n "$base_override" ]; then
-    base="$base_override"
-  else
-    list_ref=refs/heads/fork-tooling
-    git rev-parse --verify --quiet "$list_ref" >/dev/null || list_ref=refs/remotes/origin/fork-tooling
-    base="$(git show "$list_ref:.fork/branches" | awk '$1 == "base" { print $2 }')"
-  fi
 
   step "安全基线"
   "$here/fork-base" --base "$base"
@@ -97,10 +115,15 @@ if [ -z "$resume" ]; then
     test_filters=("[$previous]")
   fi
   state="$state_root/$result.json"
-  node "$state_tool" init "$state" "$result" "$base" "$previous" "$wt" "$filters_explicit" "${test_filters[@]}"
+  node "$state_tool" init "$state" "$result" "$base" "$previous" "$wt" "${test_filters[@]}"
 else
   state="$state_root/$resume.json"
   [ -f "$state" ] || { echo "没有该 SHA 的接续记录：$resume" >&2; exit 1; }
+fi
+if [ -n "$resume" ]; then
+  BB_FORK_INPUT_SNAPSHOT="$(node "$state_tool" field "$state" snapshot)"
+  [ -f "$BB_FORK_INPUT_SNAPSHOT" ] || { echo "接续缺少输入快照；请重新运行" >&2; exit 1; }
+  export BB_FORK_INPUT_SNAPSHOT
 fi
 result="$(node "$state_tool" field "$state" source)"
 base="$(node "$state_tool" field "$state" base)"
@@ -113,11 +136,12 @@ done < <(node "$state_tool" field "$state" filters)
 iso="$wt/scripts/run-resource-isolated"
 printf '固定输入：base=%s source=%s previous=%s\n接续命令：%s --resume %s\n' "$base" "$result" "$previous" "$0" "$result"
 
+node "$state_tool" begin "$state" "$verify_only" "$build" "$release"
 step "安装依赖"
-run_stage install "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile
+CI=true NODE_ENV=development npm_config_production=false run_stage install "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile --prod=false
 
 step "维护脚本与边界契约"
-run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs"
+run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs" "$wt/scripts/fork-flow.test.mjs"
 run_stage protocol "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
 run_stage plugin-contract "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
 
@@ -129,6 +153,7 @@ filter_args=()
 for f in "${test_filters[@]}"; do filter_args+=("--filter=$f"); done
 run_stage tests "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --concurrency=1 --continue --output-logs=errors-only "${filter_args[@]}"
 
+node "$state_tool" result "$state" verification completed
 if [ "$verify_only" = 1 ]; then
   step "仅验证，停止"
   printf '聚合 SHA：%s\n部署检出：%s\n上次 aggregate：%s\n' "$result" "$wt" "$previous"
@@ -142,14 +167,16 @@ else
   "$here/fork-aggregate" --base "$base" --promote-only --result "$result"
 fi
 [ "$(git ls-remote origin refs/heads/aggregate | cut -f1)" = "$result" ]
+node "$state_tool" result "$state" promotion "$result"
 
 if [ "$build" = 1 ]; then
   config="$root/config/local-aggregate-web.json"
   [ -f "$config" ] || { echo "缺少 $config，无法构建部署检出" >&2; exit 1; }
   node_exe="$(config_value nodeExecutable)"
   step "运行时构建（$node_exe）"
-  "$iso" --profile package -- "$node_exe" "$wt/.bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs" --repo "$wt"
-  "$node_exe" "$wt/scripts/ensure-native-modules.mjs" --check
+  run_stage runtime "$iso" --profile package -- "$node_exe" "$wt/.bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs" --repo "$wt"
+  run_stage native "$iso" --profile package -- "$node_exe" "$wt/scripts/ensure-native-modules.mjs" --check
+  node "$state_tool" result "$state" runtime completed
 fi
 
 if [ "$release" = 1 ]; then
@@ -174,6 +201,7 @@ if [ "$release" = 1 ]; then
   fi
   remote_tag="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
   [ "$remote_tag" = "$result" ] || { echo "远端 tag $tag 指向 $remote_tag，不是 $result" >&2; exit 1; }
+  node "$state_tool" result "$state" tag "$tag"
   echo "tag $tag -> $result；流水线：https://github.com/hxy91819/bb/actions/workflows/fork-release.yml"
 fi
 
