@@ -379,6 +379,7 @@ describe("generate-native-theme", () => {
       "2xs": { fontSize: 11, lineHeight: 13 },
       xs: { fontSize: 13, lineHeight: 18 },
       sm: { fontSize: 15, lineHeight: 20 },
+      editable: { fontSize: 16, lineHeight: 24 },
       base: { fontSize: 17, lineHeight: 22 },
       lg: { fontSize: 20, lineHeight: 25 },
       xl: { fontSize: 22, lineHeight: 28 },
