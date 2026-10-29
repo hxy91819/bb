@@ -1,0 +1,13 @@
+# Server worker budget
+
+`VITEST_MAX_WORKERS` remains the only worker selection input. The server configuration resolves it before inherited Vitest projects are built. With no variable, the existing single-worker default stays unchanged, including CI shards. Explicit values must be positive integers; malformed values fail rather than silently enabling default parallelism.
+
+On Linux, the resource detector caps the requested count by affinity/effective ancestor CPU capacity and memory availability/ancestor headroom, estimating 2GiB per worker. Fractional CPU capacity still permits the required single worker. A positive memory budget below 2GiB also permits one worker; MemoryMax remains the hard protection. Detection errors fail closed for explicit selection. Non-Linux platforms use availableParallelism/freemem; no Linux cgroup controls are assumed there.
+
+The selected value is written back to the same VITEST_MAX_WORKERS variable. Vitest reads this variable again after config merging; returning a smaller config value alone does not enforce the cap. There is no second production variable or competing CLI control. In particular, root --maxWorkers alone is not the supported route for overriding inherited project values. Turbo's existing @bb/server#test env declaration already includes VITEST_MAX_WORKERS; no declaration or wrapper change is needed.
+
+Use the resource selector's workers recommendation as this environment value before invoking Turbo. Example for an authorized run: `VITEST_MAX_WORKERS=4 scripts/run-resource-isolated ... pnpm exec turbo run test --filter=@bb/server --force`. The caller must choose/verify the actual cgroup budget. This helper does not create or modify a scope, change test timeout, shard, files, setup, teardown, pool or isolation. Concurrency naturally changes which shared files coexist; it is not a guarantee of the single-worker order's pollution-detection opportunities.
+
+Lightweight regression: `node --test apps/server/scripts/server-test-workers.test.mjs`. It calls real createVitest in fresh processes and closes it without executing tests. Cases cover environment4, explicit2, absent/default1, CI shard1/3, and actual single-CPU taskset affinity with requested4 resolving to1. It compares every discovered project/file/isolation identity across cases. Pure selection fixtures additionally cover ancestor fractional CPU and memory headroom, and malformed values. This is config proof, not a four-worker execution or performance result.
+
+This change depends on the separately committed scripts/resource-profile.mjs module. Prepare installed dependencies in an independent worktree before real execution; temporary borrowed links used for configuration-only inspection must not be used for builds/native repair.
