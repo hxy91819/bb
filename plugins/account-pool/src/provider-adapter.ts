@@ -83,7 +83,7 @@ export interface ImportedProviderAccount {
 export interface ProviderAdapter {
   provider: PoolProvider;
   upstreamName: string;
-  importAccount(): Promise<ImportedProviderAccount>;
+  importAccount(authFile: string | null): Promise<ImportedProviderAccount>;
   parseRequest(
     body: Uint8Array,
     headers: Headers,
