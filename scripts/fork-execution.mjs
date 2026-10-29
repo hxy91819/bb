@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { spawnManaged } from "./fork-process.mjs";
 import { acquireLock, lockInvocation } from "./fork-lock.mjs";
 
 const [script, ...args] = process.argv.slice(2);
@@ -58,21 +59,26 @@ if (!lock.inherited) {
       renameSync(temporary, path);
     }
 }
-const child = spawn("bash", [script, ...args], {
-  ...lockInvocation(lock, ["inherit", "inherit", "inherit"], {
-    ...process.env,
-    BB_FORK_EXECUTION_ACTIVE: script,
-  }),
-  detached: process.platform !== "win32",
-});
+const invocation = {
+  cwd: process.cwd(),
+  stdio: ["inherit", "inherit", "inherit"],
+  env: { ...process.env, BB_FORK_EXECUTION_ACTIVE: script },
+};
+const child =
+  process.platform === "linux"
+    ? spawnManaged(lock, ["bash", script, ...args], invocation)
+    : spawn(
+        "bash",
+        [script, ...args],
+        lockInvocation(lock, invocation.stdio, invocation.env),
+      );
 let interrupted = false;
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"])
   process.on(signal, () => {
     interrupted = true;
     if (child.exitCode !== null || child.signalCode !== null) return;
     try {
-      if (process.platform === "win32") child.kill(signal);
-      else process.kill(-child.pid, signal);
+      child.kill(signal);
     } catch {}
   });
 child.once("error", (error) => {

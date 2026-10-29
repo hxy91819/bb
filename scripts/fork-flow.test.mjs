@@ -694,10 +694,17 @@ test("Perl kernel-lock fallback recovers after SIGKILL without losing inherited 
   try {
     const utilities = join(f.root, ".git/utilities");
     mkdirSync(utilities);
-    for (const name of ["git", "bash", "perl", "sleep"]) {
-      const binary = execFileSync("bash", ["-c", `command -v ${name}`], {
-        encoding: "utf8",
-      }).trim();
+    for (const name of ["git", "bash", "perl", "sleep", "python3"]) {
+      const binary =
+        name === "python3"
+          ? execFileSync(
+              "python3",
+              ["-c", "import sys; print(sys.executable)"],
+              { encoding: "utf8" },
+            ).trim()
+          : execFileSync("bash", ["-c", `command -v ${name}`], {
+              encoding: "utf8",
+            }).trim();
       symlinkSync(binary, join(utilities, name));
     }
     const env = { ...f.env, PATH: utilities };
@@ -744,6 +751,185 @@ test("Perl kernel-lock fallback recovers after SIGKILL without losing inherited 
     f.cleanup();
   }
 });
+
+test("actual runtime helper supervision excludes recovery while detached Node writers outlive the runner and wrappers", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  const writerPath = join(f.root, ".git/writer.cjs");
+  const turbo = join(f.root, "node_modules/turbo/bin");
+  const children = [];
+  let runner;
+  try {
+    writeFileSync(
+      join(f.root, "package.json"),
+      JSON.stringify({ name: "fixture", private: true }),
+    );
+    const source = f.commit("runtime fixture");
+    f.git("push", "-q", "origin", "HEAD:refs/heads/aggregate");
+    mkdirSync(turbo, { recursive: true });
+    writeFileSync(
+      join(turbo, "../package.json"),
+      JSON.stringify({ name: "turbo" }),
+    );
+    writeFileSync(
+      writerPath,
+      "const f=require('node:fs');f.writeFileSync('.git/writer-pid',String(process.pid));setInterval(()=>f.appendFileSync('.git/writes','x'),20)",
+    );
+    writeFileSync(
+      join(turbo, "turbo"),
+      `const f=require('node:fs');f.writeFileSync('.git/helper-pid',String(process.ppid));f.writeFileSync('.git/turbo-pid',String(process.pid));require('node:child_process').spawn(process.execPath,[${JSON.stringify(writerPath)}],{stdio:'ignore',detached:true});setInterval(()=>{},1000)`,
+    );
+    writeFileSync(state, JSON.stringify({ source, completed: {} }));
+    runner = spawn(
+      process.execPath,
+      [
+        stateTool,
+        "run",
+        state,
+        "runtime",
+        f.root,
+        process.execPath,
+        new URL(
+          "../.bb/skills/local-aggregate-deploy/scripts/build-runtime.mjs",
+          import.meta.url,
+        ).pathname,
+        "--repo",
+        f.root,
+      ],
+      { cwd: f.root, env: f.env, stdio: "ignore" },
+    );
+    const done = completed(runner);
+    await waitFor(() => existsSync(join(f.root, ".git/writes")));
+    for (const file of ["helper-pid", "turbo-pid", "writer-pid"])
+      children.push(Number(readFileSync(join(f.root, `.git/${file}`), "utf8")));
+    runner.kill("SIGKILL");
+    await done;
+    process.kill(children[0], "SIGKILL");
+    process.kill(children[1], "SIGKILL");
+    const writer = children[2];
+    await waitFor(() => !alive(children[0]) && !alive(children[1]));
+    assert.equal(alive(writer), true);
+    const count = readFileSync(join(f.root, ".git/writes"), "utf8").length;
+    const retry = () =>
+      spawnSync(
+        process.execPath,
+        [
+          stateTool,
+          "run",
+          state,
+          "runtime",
+          f.root,
+          process.execPath,
+          "-e",
+          "require('node:fs').writeFileSync('.git/recovered','yes')",
+        ],
+        { cwd: f.root, env: f.env, encoding: "utf8" },
+      );
+    const blocked = retry();
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /仍持有/);
+    await waitFor(
+      () => readFileSync(join(f.root, ".git/writes"), "utf8").length > count,
+    );
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).completed.runtime,
+      undefined,
+    );
+    process.kill(writer, "SIGTERM");
+    await waitFor(() => !alive(writer));
+    await waitForKernelRelease(`${state}.lock`);
+    const resumed = retry();
+    assert.equal(resumed.status, 0, resumed.stderr);
+    assert.equal(readFileSync(join(f.root, ".git/recovered"), "utf8"), "yes");
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-2).status,
+      "interrupted",
+    );
+  } finally {
+    runner?.kill("SIGKILL");
+    for (const pid of children) if (alive(pid)) process.kill(pid, "SIGKILL");
+    f.cleanup();
+  }
+});
+
+for (const outer of [false, true])
+  test(`${outer ? "nested execution TERM" : "TERM"} bounds cleanup when the Node wrapper exits and its pipe-inheriting writer ignores TERM`, async () => {
+    const f = fixture();
+    const state = join(f.root, ".git/state.json");
+    const writerPath = join(f.root, ".git/writer.cjs");
+    let runner;
+    let writer;
+    try {
+      writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+      writeFileSync(
+        writerPath,
+        "const f=require('node:fs');process.on('SIGTERM',()=>{});f.writeFileSync('.git/writer-pid',String(process.pid));setInterval(()=>f.appendFileSync('.git/writes','x'),20)",
+      );
+      const wrapper = `require('node:fs').writeFileSync('.git/wrapper-pid',String(process.pid));require('node:child_process').spawn(process.execPath,[${JSON.stringify(writerPath)}],{stdio:'inherit'});setInterval(()=>{},1000)`;
+      const launcher = join(f.root, ".git/launch.sh");
+      writeFileSync(join(f.root, ".git/wrapper.cjs"), wrapper);
+      writeFileSync(
+        launcher,
+        `#!/bin/bash\nexec '${process.execPath}' '${stateTool}' run '${state}' tests '${f.root}' '${process.execPath}' '${f.root}/.git/wrapper.cjs'\n`,
+      );
+      runner = spawn(
+        process.execPath,
+        outer
+          ? [execution, launcher]
+          : [
+              stateTool,
+              "run",
+              state,
+              "tests",
+              f.root,
+              process.execPath,
+              "-e",
+              wrapper,
+            ],
+        { cwd: f.root, env: f.env, stdio: "ignore" },
+      );
+      const done = completed(runner);
+      await waitFor(() => existsSync(join(f.root, ".git/writes")));
+      writer = Number(readFileSync(join(f.root, ".git/writer-pid"), "utf8"));
+      const wrapperPid = Number(
+        readFileSync(join(f.root, ".git/wrapper-pid"), "utf8"),
+      );
+      const started = Date.now();
+      runner.kill("SIGTERM");
+      await waitFor(() => !alive(wrapperPid));
+      assert.equal(alive(writer), true);
+      let timer;
+      try {
+        const outcome = await Promise.race([
+          done,
+          new Promise((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("TERM cleanup exceeded 6s")),
+              6000,
+            );
+          }),
+        ]);
+        assert.notEqual(outcome.code, 0);
+      } finally {
+        clearTimeout(timer);
+      }
+      assert.ok(Date.now() - started < 6000);
+      assert.equal(alive(writer), false);
+      const failed = JSON.parse(readFileSync(state, "utf8"));
+      if (!outer) assert.equal(failed.events.at(-1).status, "interrupted");
+      assert.equal(failed.completed.tests, undefined);
+      if (!outer) assert.equal(failed.running, undefined);
+      await runStage(state, "tests", f.root, [
+        process.execPath,
+        "-e",
+        "process.exit(0)",
+      ]);
+    } finally {
+      runner?.kill("SIGKILL");
+      if (writer && alive(writer)) process.kill(writer, "SIGKILL");
+      f.cleanup();
+    }
+  });
 
 test("workspace dependency redirection and missing workspace installation roots force reinstall and observable revalidation", async () => {
   const f = fixture();

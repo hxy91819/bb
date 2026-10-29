@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { acquireLock, lockInvocation } from "./fork-lock.mjs";
+import { spawnManaged } from "./fork-process.mjs";
+import { acquireLock } from "./fork-lock.mjs";
 import { randomUUID } from "node:crypto";
 import {
   digest,
@@ -78,6 +78,9 @@ async function executeStage(path, name, cwd, command, lock) {
       filters: state.filters,
       dependencies,
       runner: readFileSync(new URL(import.meta.url), "utf8"),
+      supervision: ["fork-process.mjs", "fork-supervise.py"].map((name) =>
+        readFileSync(new URL(`./${name}`, import.meta.url), "utf8"),
+      ),
       locking: readFileSync(
         new URL("./fork-lock.mjs", import.meta.url),
         "utf8",
@@ -129,27 +132,16 @@ async function executeStage(path, name, cwd, command, lock) {
     "BB_FORK_INPUT_SNAPSHOT",
   ])
     delete environment[key];
-  const child = spawn(command[0], command.slice(1), {
+  const child = spawnManaged(lock, command, {
     cwd,
-    ...lockInvocation(lock, ["ignore", "pipe", "pipe"], environment),
-    detached: process.platform !== "win32",
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe"],
   });
   let interrupted;
-  let killTimer;
   const stop = (signal) => {
     interrupted = signal;
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    killTimer ??= setTimeout(() => {
-      if (child.exitCode !== null || child.signalCode !== null) return;
-      try {
-        if (process.platform === "win32") child.kill("SIGKILL");
-        else process.kill(-child.pid, "SIGKILL");
-      } catch {}
-    }, 3000);
-    try {
-      if (process.platform === "win32") child.kill(signal);
-      else process.kill(-child.pid, signal);
-    } catch {}
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill(signal);
   };
   const handlers = new Map(
     ["SIGINT", "SIGTERM", "SIGHUP"].map((signal) => [
@@ -210,7 +202,6 @@ async function executeStage(path, name, cwd, command, lock) {
       `${error.message}；使用 --resume ${state.source} 接续，日志：${log}`,
     );
   } finally {
-    clearTimeout(killTimer);
     delete state.running;
     save(path, state);
     for (const [signal, handler] of handlers)

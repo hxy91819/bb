@@ -8,7 +8,7 @@ import {
   readlinkSync,
   realpathSync,
 } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, release } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
 export function digest(value) {
@@ -133,6 +133,16 @@ export function executionIdentity(cwd, command) {
     : null;
   const payload =
     version?.status === 0 ? pnpmPayload(pnpm, version.stdout.trim()) : null;
+  const python = spawnSync(
+    "python3",
+    ["-c", "import json,sys; print(json.dumps([sys.executable,sys.version]))"],
+    { cwd, encoding: "utf8", timeout: 10000 },
+  );
+  let pythonIdentity = null;
+  if (python.status === 0) {
+    const [path, version] = JSON.parse(python.stdout);
+    pythonIdentity = { ...fileIdentity(path), version };
+  }
   const libc =
     process.report?.getReport().header.glibcVersionRuntime ??
     (process.platform === "linux" ? "unknown" : process.platform);
@@ -157,6 +167,8 @@ export function executionIdentity(cwd, command) {
     tools,
     nodeTargets,
     pnpmPayload: payload,
+    python: pythonIdentity,
+    kernel: release(),
     pnpm:
       version?.status === 0
         ? version.stdout.trim()
@@ -166,7 +178,8 @@ export function executionIdentity(cwd, command) {
     nonce:
       (command.includes("pnpm") &&
         (!version || version.status !== 0 || !payload)) ||
-      libc === "unknown"
+      libc === "unknown" ||
+      !pythonIdentity
         ? `${Date.now()}-${Math.random()}`
         : null,
     node: fileIdentity(process.execPath),
