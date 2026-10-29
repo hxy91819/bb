@@ -117,7 +117,12 @@ const codexBridgeCommandSchema = z.discriminatedUnion("method", [
     method: z.literal("initialize"),
     params: initializeParamsSchema,
   }),
-  z.object({ method: z.literal("model/list"), params: modelListParamsSchema }),
+  z.object({
+    method: z.literal("model/list"),
+    params: modelListParamsSchema.extend({
+      envVars: z.record(z.string(), z.string()).optional(),
+    }),
+  }),
   z.object({
     method: z.literal("provider/health"),
     params: providerMaintenanceParamsSchema,
@@ -308,6 +313,7 @@ const CODEX_INITIALIZE_PARAMS = {
 };
 
 const CHILD_REQUEST_TIMEOUT_MS = 60_000;
+const LAUNCHER_HEALTH_TIMEOUT_MS = 10_000;
 const RATE_LIMIT_RECOVERY_TIMEOUT_MS = 5_000;
 const INTERRUPT_SETTLEMENT_TIMEOUT_MS = 5_000;
 const CODEX_ARCHIVED_SESSION_ERROR_PATTERN =
@@ -517,6 +523,7 @@ const modelListConnections = new Map<
     connection: CodexAppServerConnection | null;
     promise: Promise<CodexAppServerConnection> | null;
     credentialFingerprint: string | null;
+    routeFingerprint: string;
   }
 >();
 let sessionSerialCounter = 0;
@@ -1030,21 +1037,28 @@ function spawnChildConnection(callbacks: {
 
 const ignoredChildResultSchema = z.unknown();
 
+function childRequestTimeout(deadline?: number): number {
+  return deadline === undefined
+    ? CHILD_REQUEST_TIMEOUT_MS
+    : Math.max(1, deadline - Date.now());
+}
+
 async function initializeChild(
   connection: CodexAppServerConnection,
+  deadline?: number,
 ): Promise<void> {
   await connection.request({
     method: "initialize",
     params: CODEX_INITIALIZE_PARAMS,
     resultSchema: ignoredChildResultSchema,
-    timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+    timeoutMs: childRequestTimeout(deadline),
   });
   if (configuredSkillExtraRoots !== null) {
     await connection.request({
       method: "skills/extraRoots/set",
       params: { extraRoots: configuredSkillExtraRoots },
       resultSchema: ignoredChildResultSchema,
-      timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+      timeoutMs: childRequestTimeout(deadline),
     });
   }
 }
@@ -1524,6 +1538,7 @@ async function rebuildThreadSession(
 async function withMaintenanceChild<T>(
   fn: (connection: CodexAppServerConnection) => Promise<T>,
   execution: CodexExecutionContext,
+  deadline?: number,
 ): Promise<T> {
   const connection = spawnChildConnection({
     execution,
@@ -1539,7 +1554,7 @@ async function withMaintenanceChild<T>(
   });
   maintenanceConnections.add(connection);
   try {
-    await initializeChild(connection);
+    await initializeChild(connection, deadline);
     return await fn(connection);
   } finally {
     maintenanceConnections.delete(connection);
@@ -1549,8 +1564,18 @@ async function withMaintenanceChild<T>(
 
 async function getModelListConnection(
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<CodexAppServerConnection> {
+  const launchEnv = appServerLaunchEnv(envVars, execution);
   const key = JSON.stringify(execution);
+  const routeFingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        poolBaseUrl: launchEnv[CODEX_POOL_BASE_URL_ENV] ?? null,
+        poolAuthToken: launchEnv[CODEX_POOL_AUTH_TOKEN_ENV] ?? null,
+      }),
+    )
+    .digest("hex");
   let credentialFingerprint: string | null = null;
   if (execution.codexHome !== null) {
     try {
@@ -1568,27 +1593,31 @@ async function getModelListConnection(
   let cached = modelListConnections.get(key);
   if (
     cached === undefined ||
-    cached.credentialFingerprint !== credentialFingerprint
+    cached.credentialFingerprint !== credentialFingerprint ||
+    cached.routeFingerprint !== routeFingerprint
   ) {
-    if (cached?.connection) retireModelListConnection(cached.connection);
-    if (cached?.promise)
-      void cached.promise
-        .then((connection) => connection.kill())
-        .catch(() => undefined);
-    cached = { connection: null, promise: null, credentialFingerprint };
+    const previous = cached?.connection;
+    cached = {
+      connection: null,
+      promise: null,
+      credentialFingerprint,
+      routeFingerprint,
+    };
     modelListConnections.set(key, cached);
+    if (previous) await retireModelListConnection(previous);
   }
   const entry = cached;
-  if (entry.connection !== null && !entry.connection.exited) {
+  if (modelListConnections.get(key) !== entry) {
+    throw new Error("Codex model catalog route changed during discovery");
+  }
+  if (entry.promise !== null) return entry.promise;
+  if (entry.connection !== null && !entry.connection.exited)
     return entry.connection;
-  }
-  if (entry.promise !== null) {
-    return entry.promise;
-  }
 
   const connectionPromise = (async () => {
     const connection = spawnChildConnection({
       execution,
+      envVars,
       recordThreadId: null,
       onNotification: () => {},
       onRequest: (_method, _params, responder) => {
@@ -1605,9 +1634,12 @@ async function getModelListConnection(
       },
     });
     maintenanceConnections.add(connection);
+    entry.connection = connection;
     try {
       await initializeChild(connection);
-      entry.connection = connection;
+      if (modelListConnections.get(key) !== entry) {
+        throw new Error("Codex model catalog route changed during discovery");
+      }
       return connection;
     } catch (error) {
       maintenanceConnections.delete(connection);
@@ -1625,12 +1657,14 @@ async function getModelListConnection(
   }
 }
 
-function retireModelListConnection(connection: CodexAppServerConnection): void {
+async function retireModelListConnection(
+  connection: CodexAppServerConnection,
+): Promise<void> {
   maintenanceConnections.delete(connection);
   for (const entry of modelListConnections.values()) {
     if (entry.connection === connection) entry.connection = null;
   }
-  connection.kill();
+  await connection.kill();
 }
 
 async function withChildForThread<T>(
@@ -1677,10 +1711,11 @@ function handleInitialize(id: string | number): void {
 async function handleModelList(
   id: string | number,
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<void> {
   let connection: CodexAppServerConnection | null = null;
   try {
-    connection = await getModelListConnection(execution);
+    connection = await getModelListConnection(execution, envVars);
     const result = await connection.request({
       method: "model/list",
       params: {},
@@ -1710,7 +1745,7 @@ async function handleModelList(
     });
   } catch (error) {
     if (connection !== null) {
-      retireModelListConnection(connection);
+      await retireModelListConnection(connection);
     }
     sendError(
       id,
@@ -2506,6 +2541,7 @@ async function handleRequest(
       await handleModelList(
         request.id,
         resolveCodexExecution(request.params.providerOptions),
+        request.params.envVars,
       );
       break;
     case "provider/health":
@@ -2518,6 +2554,39 @@ async function handleRequest(
           result.health.loginCommand = codexHomeLoginCommand(
             execution.codexHome,
           );
+        if (execution.command !== undefined && result.supported) {
+          const deadline = Date.now() + LAUNCHER_HEALTH_TIMEOUT_MS;
+          try {
+            const account = await withMaintenanceChild(
+              (child) =>
+                child.request({
+                  method: "account/read",
+                  params: {},
+                  timeoutMs: childRequestTimeout(deadline),
+                  resultSchema: z.object({ requiresOpenaiAuth: z.boolean() }),
+                }),
+              execution,
+              deadline,
+            );
+            if (!account.requiresOpenaiAuth) {
+              result.health.status = "ready";
+              result.health.accountEmail = null;
+              result.health.planLabel = null;
+              result.health.loginCommand = null;
+              result.health.localLoginCommand = null;
+              result.health.installedVersion = null;
+              result.health.canInstall = false;
+              result.health.canUpdate = false;
+              result.health.statusMessage =
+                "Authentication managed by the configured Codex launcher.";
+            }
+          } catch {
+            if (result.health.status === "ready")
+              result.health.status = "unknown";
+            result.health.statusMessage =
+              "The configured Codex launcher could not be verified.";
+          }
+        }
         sendResult(request.id, result);
       }
       break;
