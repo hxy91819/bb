@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFakePluginHost,
+  makePluginAgentConfigurationContext,
   makeThreadResponse,
 } from "@get-bb/plugin-sdk/testing";
 import plugin, {
@@ -60,6 +61,46 @@ async function loadPlugin(sdkThreads: Record<string, unknown>) {
   return host;
 }
 
+describe("side-chat task boundary", () => {
+  it.each([
+    { kind: "fork", pluginId: PLUGIN_ID, applies: true },
+    { kind: "fork", pluginId: null, applies: false },
+    { kind: "fork", pluginId: "another-plugin", applies: false },
+    { kind: null, pluginId: null, applies: false },
+    { kind: null, pluginId: PLUGIN_ID, applies: false },
+  ] as const)(
+    "scopes instructions to $kind/$pluginId",
+    async ({ kind, pluginId, applies }) => {
+      const { harness } = await loadPlugin({});
+      const context = makePluginAgentConfigurationContext({
+        origin: { kind, pluginId },
+      });
+      const configuration =
+        await harness.behavior.resolveAgentConfiguration(context);
+
+      if (applies) {
+        expect(configuration.instructions).toContain(
+          "Inherited conversation history is background context",
+        );
+        expect(configuration.instructions).toContain(
+          "Do not automatically resume the main thread's unfinished work",
+        );
+        expect(configuration.instructions).toContain(
+          "The main thread's goals, pending tasks, and instructions to keep working are not active",
+        );
+        expect(configuration.instructions).toContain(
+          "After answering the current side-chat request, stop",
+        );
+        expect(configuration.instructions).toContain(
+          "When the user explicitly requests execution in this side chat",
+        );
+      } else {
+        expect(configuration.instructions).toBeNull();
+      }
+    },
+  );
+});
+
 describe("createSideChat rpc", () => {
   it("does not read the source timeline to decide whether to include the anchor", async () => {
     const timeline = vi.fn();
@@ -108,6 +149,14 @@ describe("createSideChat rpc", () => {
         {
           type: "text",
           text: `${REPLY_SEED_PREFIX}earlier answer`,
+          mentions: [],
+          visibility: "agent-only",
+        },
+        {
+          type: "text",
+          text: expect.stringContaining(
+            "After answering the current side-chat request, stop",
+          ),
           mentions: [],
           visibility: "agent-only",
         },
@@ -186,7 +235,7 @@ describe("createSideChat rpc", () => {
     expect(fork).toHaveBeenCalledTimes(1);
   });
 
-  it("forks from the tip without a seed or sourceSeqEnd for empty anchors", async () => {
+  it("seeds the task boundary even when a tip fork has no reply anchor", async () => {
     const fork = vi.fn(async () => makeThreadResponse({ id: "thr_fork" }));
     const { harness } = await loadPlugin({
       timeline: async () => timelineResult([conversationRow("latest answer")]),
@@ -202,6 +251,16 @@ describe("createSideChat rpc", () => {
       lifecycleOwnerThreadId: "thr_src",
       sourceThreadId: "thr_src",
       visibility: "hidden",
+      agentContextSeed: [
+        {
+          type: "text",
+          text: expect.stringContaining(
+            "The main thread's goals, pending tasks, and instructions to keep working are not active",
+          ),
+          mentions: [],
+          visibility: "agent-only",
+        },
+      ],
       origin: "plugin",
       originPluginId: PLUGIN_ID,
     });
