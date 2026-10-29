@@ -79,6 +79,9 @@ function pnpmPayload(path, version) {
 }
 
 export function executionIdentity(cwd, command) {
+  const usesPnpm =
+    command.includes("pnpm") ||
+    command.some((arg) => arg.endsWith("/fork-install.mjs"));
   const separator = command.indexOf("--");
   const target = separator >= 0 ? command[separator + 1] : command[0];
   const names = new Set(
@@ -90,7 +93,7 @@ export function executionIdentity(cwd, command) {
       "git",
       "systemctl",
       "systemd-run",
-      ...(command.includes("pnpm") ? ["pnpm"] : []),
+      ...(usesPnpm ? ["pnpm"] : []),
     ].filter(Boolean),
   );
   for (const arg of command)
@@ -129,7 +132,7 @@ export function executionIdentity(cwd, command) {
           result.status === 0 ? result.stdout.trim() : `${Date.now()}-unknown`,
       };
     });
-  const pnpm = command.includes("pnpm") ? executable("pnpm", cwd) : null;
+  const pnpm = usesPnpm ? executable("pnpm", cwd) : null;
   const version = pnpm
     ? spawnSync(pnpm, ["--version"], { cwd, encoding: "utf8", timeout: 15000 })
     : null;
@@ -169,8 +172,7 @@ export function executionIdentity(cwd, command) {
           ? "unknown"
           : "unused",
     nonce:
-      (command.includes("pnpm") &&
-        (!version || version.status !== 0 || !payload)) ||
+      (usesPnpm && (!version || version.status !== 0 || !payload)) ||
       libc === "unknown"
         ? `${Date.now()}-${Math.random()}`
         : null,
@@ -190,6 +192,7 @@ export function executionIdentity(cwd, command) {
       "scripts/run-resource-isolated",
       "scripts/resource-profile.mjs",
       "scripts/resource-runtime.mjs",
+      "scripts/ensure-native-modules.mjs",
     ].map((name) => fileIdentity(resolve(cwd, name))),
   };
 }

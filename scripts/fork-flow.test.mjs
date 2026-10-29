@@ -1993,9 +1993,13 @@ test("install receipt is written after native preparation and failed native repa
   try {
     mkdirSync(join(f.root, "scripts"));
     mkdirSync(join(f.root, ".git/bin"));
-    writeFileSync(join(f.root, ".git/bin/pnpm"), "#!/bin/sh\nexit 0\n", {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(f.root, ".git/bin/pnpm"),
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 9.15.0; fi\nexit 0\n',
+      {
+        mode: 0o755,
+      },
+    );
     writeFileSync(
       join(f.root, "scripts/ensure-native-modules.mjs"),
       `import * as f from 'node:fs';f.mkdirSync('node_modules',{recursive:true});if(f.existsSync('.git/fail-native'))throw Error('native repair failed');f.writeFileSync('node_modules/native.node','prepared ABI');`,
@@ -2004,6 +2008,10 @@ test("install receipt is written after native preparation and failed native repa
     writeFileSync(
       state,
       JSON.stringify({ source: "source", base: "base", completed: {} }),
+    );
+    writeFileSync(
+      join(f.root, ".git/bin/package.json"),
+      JSON.stringify({ name: "pnpm" }),
     );
     const env = { ...f.env, PATH: `${join(f.root, ".git/bin")}:${f.env.PATH}` };
     const helper = new URL("./fork-install.mjs", import.meta.url).pathname;

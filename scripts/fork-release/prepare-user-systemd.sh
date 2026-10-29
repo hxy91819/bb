@@ -54,7 +54,7 @@ caller_group="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"
 manager_group="$(systemctl show "${manager_unit}" -p ControlGroup --value)"
 printf 'Preparation caller cgroup: %s\n' "${caller_group}"
 if [[ -n "${manager_group}" && ( "${caller_group}" == "${manager_group}" || "${caller_group}" == "${manager_group}/"* ) ]]; then
-  printf '%s\n' 'Refusing to restart the CI user manager containing this job' >&2
+  printf '%s\n' 'Refusing to reconfigure the CI user manager containing this job' >&2
   exit 1
 fi
 dropin="/run/systemd/system/${manager_unit}.d"
@@ -63,14 +63,14 @@ printf '[Service]\nDelegate=cpu memory pids\n' | sudo tee "${dropin}/90-bb-maint
 sudo systemctl daemon-reload
 sudo systemctl set-property --runtime "${manager_unit}" CPUAccounting=yes MemoryAccounting=yes TasksAccounting=yes
 snapshot 'After activating resource accounting through PID1'
-sudo systemctl restart "${manager_unit}"
+systemctl --user daemon-reexec
 systemctl cat "${manager_unit}"
 for attempt in {1..50}; do
   if systemctl --user show --property=ControlGroup --value -- -.slice >/dev/null; then break; fi
   sleep 0.1
 done
 systemctl --user show --property=ControlGroup --value -- -.slice
-snapshot 'After CI user service runtime drop-in and restart'
+snapshot 'After CI user service runtime drop-in and user daemon reexec'
 group="$(systemctl show "${manager_unit}" -p ControlGroup --value)"
 for controller in cpu memory pids; do
   grep -qw "${controller}" "/sys/fs/cgroup${group}/cgroup.controllers" || { printf 'Missing delegated controller: %s\n' "${controller}" >&2; exit 1; }
