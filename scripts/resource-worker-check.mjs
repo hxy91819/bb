@@ -22,6 +22,9 @@ readFileSync(join(repo, "apps/server/scripts/server-test-workers.mjs"));
 const temporary = mkdtempSync(join(tmpdir(), "bb-worker-bridge-"));
 const units = [];
 const results = [];
+const inheritedBudget = process.env.BB_RESOURCE_BUDGET
+  ? JSON.parse(process.env.BB_RESOURCE_BUDGET)
+  : null;
 const env = {
   ...process.env,
   CI: "1",
@@ -112,12 +115,31 @@ try {
           `import {spawnSync} from 'node:child_process';const r=spawnSync(${JSON.stringify(wrapper)},['--profile','package','--',process.execPath,'--input-type=module','-e',${JSON.stringify(code)}],{env:{...process.env,VITEST_MAX_WORKERS:${JSON.stringify(item.nested)},BB_RESOURCE_VITEST_WORKERS:'99'},stdio:'inherit'});process.exit(r.status??1)`,
         ]
       : [process.execPath, "--input-type=module", "-e", code];
+    const scenarioEnv = { ...env, ...item.env };
+    if (inheritedBudget) {
+      const budget = structuredClone(inheritedBudget);
+      if (item.name === "explicit-budget-cap") {
+        budget.selected.workers = 2;
+        budget.workerCapacity = Math.min(budget.workerCapacity, 2);
+        budget.vitestWorkers = Math.min(budget.vitestWorkers, 2);
+      } else if (item.name === "low-capacity") {
+        Object.assign(budget.selected, {
+          cpuQuotaPercent: 100,
+          memoryMaxBytes: 1024 ** 3,
+          memoryHighBytes: 768 * 1024 ** 2,
+          workers: 1,
+        });
+        budget.workerCapacity = 1;
+        budget.vitestWorkers = 1;
+      }
+      scenarioEnv.BB_RESOURCE_BUDGET = JSON.stringify(budget);
+    }
     const child = spawnSync(
       wrapper,
       ["--profile", "package", "--", ...command],
       {
         cwd: repo,
-        env: { ...env, ...item.env },
+        env: scenarioEnv,
         encoding: "utf8",
         timeout: 18000,
       },
@@ -130,7 +152,11 @@ try {
     const observed = JSON.parse(line.slice("WORKER_RESULT=".length));
     assert.equal(observed.projects.length, 2, item.name);
     const injected = item.capacityTightening
-      ? Math.min(item.expected, observed.budget.workerCapacity)
+      ? Math.min(
+          item.expected,
+          observed.budget.workerCapacity,
+          inheritedBudget?.vitestWorkers ?? Infinity,
+        )
       : item.expected;
     const resolved = item.capacityTightening
       ? Number(observed.after)

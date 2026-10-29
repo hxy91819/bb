@@ -44,6 +44,9 @@ function fixture() {
     "BB_FORK_EXECUTION_ACTIVE",
   ])
     delete env[key];
+  for (const key of Object.keys(env))
+    if (key.startsWith("BB_RESOURCE_") || key === "VITEST_MAX_WORKERS")
+      delete env[key];
   const git = (...args) =>
     execFileSync("git", args, {
       cwd: root,
