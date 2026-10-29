@@ -86,6 +86,19 @@ export const ComposerSearchProvider = memo(function ComposerSearchProvider({
         ),
     },
     command: {
+      experimental_select(suggestion) {
+        const candidate = command.suggestions.find(
+          (item) =>
+            item.name === suggestion.name &&
+            item.source === suggestion.source &&
+            item.origin === suggestion.origin &&
+            item.pluginId === suggestion.pluginId,
+        );
+        return (
+          candidate?.panelAction !== undefined &&
+          typeahead.command.onPanelAction?.(candidate.panelAction) === true
+        );
+      },
       status:
         commandQuery === null
           ? "idle"
