@@ -38,6 +38,9 @@ diagnose_failure() {
   systemctl show "${manager_unit}" -p Result -p ExecMainCode -p ExecMainStatus -p StatusErrno -p ActiveState -p SubState || true
   sudo systemctl status --no-pager -l "${manager_unit}" || true
   sudo journalctl --no-pager -b -u "${manager_unit}" -n 100 || true
+  local failed_pid
+  failed_pid="$(systemctl show "${manager_unit}" -p ExecMainPID --value)"
+  if [[ "${failed_pid}" =~ ^[1-9][0-9]*$ ]]; then sudo journalctl --no-pager -b "_PID=${failed_pid}" || true; fi
   snapshot "Failed preparation" || true
   exit "${status}"
 }
@@ -58,6 +61,8 @@ dropin="/run/systemd/system/${manager_unit}.d"
 sudo mkdir -p "${dropin}"
 printf '[Service]\nDelegate=cpu memory pids\n' | sudo tee "${dropin}/90-bb-maintenance.conf" >/dev/null
 sudo systemctl daemon-reload
+sudo systemctl set-property --runtime "${manager_unit}" CPUAccounting=yes MemoryAccounting=yes TasksAccounting=yes
+snapshot 'After activating resource accounting through PID1'
 sudo systemctl restart "${manager_unit}"
 systemctl cat "${manager_unit}"
 for attempt in {1..50}; do
