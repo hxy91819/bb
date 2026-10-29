@@ -18,6 +18,7 @@ import {
   listThreadAncestors,
   listThreadDescendants,
   searchThreadsWithPendingInteractionState,
+  searchThreadMessages,
   updateThread,
   type ThreadSearchResultGroup as DbThreadSearchResultGroup,
   type UpdateThreadInput,
@@ -370,6 +371,32 @@ export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
           limitPerGroup,
         }),
       }) satisfies ThreadSearchResponse,
+    );
+  });
+
+  get(routes.searchMessages, (context, query) => {
+    const thread = requirePublicThread(deps.db, context.req.param("id"));
+    const limit = Number(query.limit ?? 50);
+    const offset = Number(query.offset ?? 0);
+    if (
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      !Number.isSafeInteger(offset)
+    ) {
+      throw new ApiError(
+        400,
+        "invalid_request",
+        "limit must be 1-100 and offset must be a non-negative safe integer",
+      );
+    }
+    return context.json(
+      searchThreadMessages(deps.db, {
+        threadId: thread.id,
+        query: query.query,
+        limit,
+        offset,
+      }),
     );
   });
 
