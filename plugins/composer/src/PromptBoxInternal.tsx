@@ -2488,6 +2488,21 @@ export function PromptBoxInternal({
       const currentEditor = editorRef.current;
       if (!currentEditor || activeTrigger === null) return;
       if (activeTrigger.kind !== "command") return;
+      if (commandSearch.experimental_select?.(item) === true) {
+        triggerKeyRef.current = "";
+        dismissedTriggerRef.current = {
+          start: activeTrigger.from,
+          end: activeTrigger.to,
+          hasLeftRange: false,
+        };
+        setComposerMenu(null);
+        currentEditor
+          .chain()
+          .focus()
+          .deleteRange({ from: activeTrigger.from, to: activeTrigger.to })
+          .run();
+        return;
+      }
 
       const trailingText = mentionPillTrailingText(
         currentEditor.state.doc,
@@ -2509,7 +2524,7 @@ export function PromptBoxInternal({
         },
       });
     },
-    [activeTrigger, insertPromptMentionPill],
+    [activeTrigger, commandSearch, insertPromptMentionPill, setComposerMenu],
   );
 
   const applyTrigger = useCallback(
