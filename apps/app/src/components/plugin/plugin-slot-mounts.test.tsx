@@ -569,7 +569,7 @@ describe("useComposer", () => {
     });
     fireEvent.click(screen.getByText("t-quote"));
     expect(screen.getByTestId("draft-text").textContent).toBe(
-      "> picked text\n",
+      "> picked text\n\n",
     );
     expect(focusRequests).toBe(1);
     unsubscribe();
