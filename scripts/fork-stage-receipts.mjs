@@ -334,11 +334,64 @@ function roots(cwd, install) {
   ].sort();
 }
 
+function fileSignature(stat) {
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.mode}`;
+}
+
+function directoryIdentity(stat) {
+  return `${stat.dev}:${stat.ino}:${stat.mode}:${stat.uid}:${stat.gid}`;
+}
+
+function vitestCache(path, depth = 0) {
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+  if (depth === 3) return stat.isFile() && stat.nlink === 1;
+  if (!stat.isDirectory()) return false;
+  return readdirSync(path).every((name) => {
+    const known =
+      depth === 0
+        ? name === "vitest"
+        : depth === 1
+          ? /^[a-f0-9]{40}$/.test(name)
+          : name === "results.json";
+    return known && vitestCache(join(path, name), depth + 1);
+  });
+}
+
+function installationCaches(cwd, selected) {
+  return new Set(
+    selected
+      .map((root) => join(root, ".vite"))
+      .filter((relative) => vitestCache(resolve(cwd, relative))),
+  );
+}
+
+function cacheLink(relative, selected) {
+  return selected.some((root) => {
+    const prefix = join(root, ".vite");
+    return relative === prefix || relative.startsWith(`${prefix}/`);
+  });
+}
+
+function cacheTarget(path, caches) {
+  return caches.some((root) => path === root || path.startsWith(`${root}/`));
+}
+
 export function receipt(cwd, install, cache = {}, selectedRoots) {
   const selected = selectedRoots ?? roots(cwd, install);
+  const installation = install && !selectedRoots;
+  const ignored = installation ? installationCaches(cwd, selected) : new Set();
+  const ignoredTargets = [...ignored].map((relative) =>
+    realpathSync(resolve(cwd, relative)),
+  );
   const files = {
     $receipt: {
-      version: install && !selectedRoots ? 3 : 2,
+      version: installation ? 4 : 2,
       kind: selectedRoots ? "explicit" : install ? "install" : "outputs",
       roots: selected,
     },
@@ -354,21 +407,29 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
       return;
     }
     if (stat.isSymbolicLink()) {
+      const target = existsSync(path) ? realpathSync(path) : null;
       files[relative] = {
         link: readlinkSync(path),
-        external:
-          !existsSync(path) ||
-          !realpathSync(path).startsWith(`${resolve(cwd)}/`),
+        external: target === null || !target.startsWith(`${resolve(cwd)}/`),
+        ...(installation &&
+        (cacheLink(relative, selected) ||
+          (target !== null && cacheTarget(target, ignoredTargets)))
+          ? { cacheLink: true }
+          : {}),
+        ...(installation ? { signature: fileSignature(stat) } : {}),
       };
     } else if (stat.isDirectory()) {
       files[`${relative}/`] = {
         directory: true,
-        children: readdirSync(path).sort(),
+        children: readdirSync(path)
+          .filter((name) => !ignored.has(join(relative, name)))
+          .sort(),
+        ...(installation ? { identity: directoryIdentity(stat) } : {}),
       };
       for (const name of files[`${relative}/`].children)
         visit(join(relative, name));
     } else if (stat.isFile()) {
-      const signature = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.mode}`;
+      const signature = fileSignature(stat);
       const previous = cache[relative];
       files[relative] = {
         signature,
@@ -389,9 +450,10 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
 }
 
 export function validReceipt(cwd, files) {
-  if (!files?.$receipt || ![2, 3].includes(files.$receipt.version))
+  if (!files?.$receipt || ![2, 3, 4].includes(files.$receipt.version))
     return false;
-  const signaturesOnly = files.$receipt.version === 3;
+  const signaturesOnly = files.$receipt.version >= 3;
+  const cacheAware = files.$receipt.version === 4;
   if (signaturesOnly && files.$receipt.kind !== "install") return false;
   if (
     files.$receipt.kind !== "explicit" &&
@@ -399,6 +461,17 @@ export function validReceipt(cwd, files) {
       JSON.stringify(files.$receipt.roots)
   )
     return false;
+  let ignored, ignoredTargets;
+  try {
+    ignored = cacheAware
+      ? installationCaches(cwd, files.$receipt.roots)
+      : new Set();
+    ignoredTargets = [...ignored].map((relative) =>
+      realpathSync(resolve(cwd, relative)),
+    );
+  } catch {
+    return false;
+  }
   for (const [name, expected] of Object.entries(files)) {
     if (name === "$receipt") continue;
     const path = resolve(cwd, name);
@@ -414,21 +487,30 @@ export function validReceipt(cwd, files) {
       if (expected.directory) {
         if (
           !stat.isDirectory() ||
-          JSON.stringify(readdirSync(path).sort()) !==
-            JSON.stringify(expected.children)
+          (cacheAware && directoryIdentity(stat) !== expected.identity) ||
+          JSON.stringify(
+            readdirSync(path)
+              .filter((child) => !ignored.has(join(name, child)))
+              .sort(),
+          ) !== JSON.stringify(expected.children)
         )
           return false;
       } else if (expected.link) {
         if (
           expected.external ||
+          expected.cacheLink ||
           !stat.isSymbolicLink() ||
           readlinkSync(path) !== expected.link ||
-          !existsSync(path)
+          !existsSync(path) ||
+          (cacheAware &&
+            (fileSignature(stat) !== expected.signature ||
+              cacheLink(name, files.$receipt.roots) ||
+              cacheTarget(realpathSync(path), ignoredTargets)))
         )
           return false;
       } else {
         if (!stat.isFile() || stat.mode !== expected.mode) return false;
-        const signature = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.mode}`;
+        const signature = fileSignature(stat);
         if (
           signature !== expected.signature &&
           (signaturesOnly || digest(readFileSync(path)) !== expected.hash)

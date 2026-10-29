@@ -111,7 +111,7 @@ function fixture() {
   }).trim();
   writeFileSync(
     join(microbin, "systemd-run"),
-    `#!/bin/sh\nfor arg do\n  case "$arg" in RuntimeMaxSec=*|RuntimeMaxUSec=*) exec '${systemdRun}' "$@";; esac\ndone\nexec '${systemdRun}' --property=RuntimeMaxSec=20s "$@"\n`,
+    `#!/bin/sh\nfor arg do\n  case "$arg" in OOMPolicy=*) printf 'Unknown assignment: %s\\n' "$arg" >&2; exit 1;; esac\ndone\nfor arg do\n  case "$arg" in RuntimeMaxSec=*|RuntimeMaxUSec=*) exec '${systemdRun}' "$@";; esac\ndone\nexec '${systemdRun}' --property=RuntimeMaxSec=20s "$@"\n`,
   );
   chmodSync(join(microbin, "systemd-run"), 0o755);
   env.PATH = `${microbin}:${env.PATH}`;
@@ -1776,6 +1776,177 @@ test("installation signatures reject restored mtimes, atomic replacement and top
     assert.equal(validReceipt(f.root, output), true);
     writeFileSync(file, 'module.exports="good"');
     assert.equal(validReceipt(f.root, output), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("real Vitest cache creation, updates and removal reuse stages while dependency and parent changes reinstall and cascade", async () => {
+  const f = fixture();
+  try {
+    mkdirSync(join(f.root, "packages/a"), { recursive: true });
+    writeFileSync(
+      join(f.root, "packages/a/package.json"),
+      JSON.stringify({ name: "workspace-a" }),
+    );
+    writeFileSync(
+      join(f.root, "pnpm-lock.yaml"),
+      "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  packages/a: {}\n",
+    );
+    writeFileSync(
+      join(f.root, "cache-probe.test.js"),
+      'test("cache", () => expect(1).toBe(1));',
+    );
+    const config = join(f.root, ".git/vitest.config.mjs");
+    writeFileSync(
+      config,
+      'export default { test: { globals: true, include: ["cache-probe.test.js"], maxWorkers: 1 } };',
+    );
+    f.commit("real cache fixture");
+    const state = join(f.root, ".git/state.json");
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    const install = [
+      process.execPath,
+      "-e",
+      "const f=require('node:fs');for(const v of ['good','evil']){const p='node_modules/.pnpm/'+v+'/node_modules/dep';f.mkdirSync(p,{recursive:true});f.writeFileSync(p+'/index.js','module.exports='+JSON.stringify(v))}f.writeFileSync('node_modules/.modules.yaml','installed');f.mkdirSync('packages/a/node_modules',{recursive:true});f.rmSync('packages/a/node_modules/dep',{force:true,recursive:true});f.symlinkSync('../../../node_modules/.pnpm/good/node_modules/dep','packages/a/node_modules/dep');f.appendFileSync('.git/cache-installs','x')",
+    ];
+    const check = [
+      process.execPath,
+      "-e",
+      "const f=require('node:fs');if(require('./packages/a/node_modules/dep')!=='good')process.exit(9);f.mkdirSync('dist',{recursive:true});f.writeFileSync('dist/value','good');f.appendFileSync('.git/cache-checks','x')",
+    ];
+    let runs = 0;
+    const verify = async (reuse) => {
+      await runStage(state, "install", f.root, install);
+      assert.equal(
+        JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+        reuse ? "reused" : "completed",
+      );
+      await runStage(state, "tests", f.root, check);
+      assert.equal(
+        JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+        reuse ? "reused" : "completed",
+      );
+      if (!reuse) runs++;
+      assert.equal(
+        readFileSync(join(f.root, ".git/cache-installs"), "utf8"),
+        "x".repeat(runs),
+      );
+      assert.equal(
+        readFileSync(join(f.root, ".git/cache-checks"), "utf8"),
+        "x".repeat(runs),
+      );
+    };
+    await verify(false);
+    const vitest =
+      process.env.BB_FLOW_VITEST_ENTRY ??
+      new URL("../node_modules/vitest/vitest.mjs", import.meta.url).pathname;
+    const runVitest = () => {
+      const child = spawnSync(
+        process.execPath,
+        [
+          vitest,
+          "run",
+          "--config",
+          config,
+          "--configLoader",
+          "native",
+          "--root",
+          f.root,
+          "--maxWorkers",
+          "1",
+        ],
+        { cwd: f.root, env: f.env, encoding: "utf8", timeout: 20000 },
+      );
+      assert.equal(child.status, 0, child.stderr);
+    };
+    runVitest();
+    const cache = join(f.root, "node_modules/.vite");
+    const ids = readdirSync(join(cache, "vitest"));
+    assert.ok(ids.some((id) => /^[a-f0-9]{40}$/.test(id)));
+    const result = join(cache, "vitest", ids[0], "results.json");
+    assert.ok(Array.isArray(JSON.parse(readFileSync(result, "utf8")).results));
+    await verify(true);
+    runVitest();
+    await verify(true);
+    rmSync(cache, { recursive: true });
+    await verify(true);
+    mkdirSync(cache);
+    await verify(true);
+    const dep = join(
+      f.root,
+      "node_modules/.pnpm/good/node_modules/dep/index.js",
+    );
+    for (const mutate of [
+      () => writeFileSync(join(f.root, "node_modules/real-dependency"), "new"),
+      () => rmSync(join(f.root, "node_modules/real-dependency")),
+      () => utimesSync(dep, new Date(), new Date(Date.now() + 10000)),
+      () => chmodSync(join(f.root, "node_modules"), 0o700),
+      () => {
+        rmSync(join(f.root, "packages/a/node_modules/dep"));
+        symlinkSync(
+          "../../../node_modules/.pnpm/evil/node_modules/dep",
+          join(f.root, "packages/a/node_modules/dep"),
+        );
+      },
+      () => {
+        rmSync(join(f.root, "packages/a/node_modules/dep"));
+        symlinkSync(
+          "../../../node_modules/.pnpm/good/node_modules/dep",
+          join(f.root, "packages/a/node_modules/dep"),
+        );
+      },
+      () => {
+        mkdirSync(join(f.root, "node_modules/.cache"));
+        writeFileSync(
+          join(f.root, "node_modules/.cache/results.json"),
+          "unknown cache",
+        );
+      },
+      () => writeFileSync(join(cache, "unknown-dependency.js"), "unknown"),
+    ]) {
+      mutate();
+      await verify(false);
+    }
+    writeFileSync(join(f.root, "dist/value"), "polluted");
+    await runStage(state, "tests", f.root, check);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "completed",
+    );
+    assert.equal(readFileSync(join(f.root, "dist/value"), "utf8"), "good");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("Vitest cache exclusion rejects symlinks and dependency links targeting the excluded cache", () => {
+  const f = fixture();
+  try {
+    const cache = join(f.root, "node_modules/.vite");
+    const hash = "a".repeat(40);
+    const results = join(cache, "vitest", hash, "results.json");
+    mkdirSync(join(cache, "vitest", hash), { recursive: true });
+    writeFileSync(results, "{}");
+    const safe = receipt(f.root, true);
+    assert.equal(validReceipt(f.root, safe), true);
+    symlinkSync(
+      `.vite/vitest/${hash}`,
+      join(f.root, "node_modules/dependency"),
+    );
+    assert.equal(validReceipt(f.root, safe), false);
+    assert.equal(validReceipt(f.root, receipt(f.root, true)), false);
+    rmSync(join(f.root, "node_modules/dependency"));
+    rmSync(results);
+    writeFileSync(join(f.root, ".git/secret"), "not a cache");
+    symlinkSync(join(f.root, ".git/secret"), results);
+    assert.equal(validReceipt(f.root, safe), false);
+    assert.equal(validReceipt(f.root, receipt(f.root, true)), false);
+    rmSync(cache, { recursive: true });
+    mkdirSync(join(f.root, ".git/real-cache"));
+    symlinkSync("../.git/real-cache", cache);
+    assert.equal(validReceipt(f.root, safe), false);
+    assert.equal(validReceipt(f.root, receipt(f.root, true)), false);
   } finally {
     f.cleanup();
   }

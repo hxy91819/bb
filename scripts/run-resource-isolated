@@ -140,7 +140,6 @@ exec systemd-run --user --scope --collect --quiet "${slice_args[@]}" \
   -p "MemoryHigh=${memory_high}" \
   -p "MemoryMax=${memory_max}" \
   -p MemorySwapMax=0 \
-  -p OOMPolicy=continue \
   -p "CPUQuota=${cpu_quota}%" \
   -p "TasksMax=${tasks_max}" \
   env BB_RESOURCE_SCOPE_ACTIVE=1 \
