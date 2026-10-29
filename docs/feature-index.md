@@ -2,6 +2,8 @@
 
 修改功能或排查问题时，先按关键词找到维护仓库，再读该目录的 `AGENTS.md`、README 和实际源码。表中列的是维护边界，不是版本清单；插件成员以集合的 `.bb/plugins.json` 为准，核心活跃分支以本仓库 `.fork/branches` 为准。新增功能、改变职责、插件 ID 或迁仓时，在同一任务中同步本索引；当前版本和安装路径从目标实例实时读取。
 
+本波近期修复的统一发布、安装验收与耗时复盘见[管家工作簿](steward/bb-consolidated-delivery.md)。
+
 ## 按功能找维护位置
 
 本次迁出的五个业务插件统一在 [hxy91819/bb-plugins](https://github.com/hxy91819/bb-plugins)，升级续跑在 [hxy91819/bb-plugin-upgrade-resume](https://github.com/hxy91819/bb-plugin-upgrade-resume)；已有的 Account Limits 和 Usage 继续使用各自仓库。BB 本体、公共 SDK 与仍随 BB 打包的插件在 [hxy91819/bb](https://github.com/hxy91819/bb)。旧团队、书签、图标仓库保留历史，当前实现使用集合仓库。
