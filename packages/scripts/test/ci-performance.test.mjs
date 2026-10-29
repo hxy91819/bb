@@ -62,7 +62,13 @@ it("isolates failed cache restores while preserving healthy caches through a rea
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(
     join(root, "package.json"),
-    '{"name":"cache-fixture","private":true}',
+    JSON.stringify({
+      name: "cache-fixture",
+      private: true,
+      packageManager: JSON.parse(
+        readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+      ).packageManager,
+    }),
   );
   const env = {
     ...process.env,
