@@ -38,6 +38,13 @@ export function convertLegacyStoredThreadEvent(
   scope: StoredThreadEventConversionScope = { turnId: null },
 ): StoredThreadEventShape {
   switch (stored.type) {
+    case "client/turn/requested":
+      return stored.data.systemMessageKind === "environment-switched"
+        ? {
+            type: stored.type,
+            data: { ...stored.data, systemMessageKind: "unlabeled" },
+          }
+        : stored;
     case "item/started":
     case "item/completed":
     case "item/backgroundTask/progress":
