@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  account,
   CONNECT_SESSION_EXPIRES_IN_SECONDS,
   CONNECT_SESSION_UPDATE_AGE_SECONDS,
   labelClaim,
@@ -18,6 +19,7 @@ import {
   session,
   sha256Hex,
   user,
+  verification,
 } from "@bb/connect-db";
 
 import {
@@ -397,7 +399,7 @@ describe("account session refresh", () => {
       baseURL,
       database: drizzleAdapter(db, {
         provider: "sqlite",
-        schema: { session, user },
+        schema: { account, session, user, verification },
       }),
       session: {
         expiresIn: CONNECT_SESSION_EXPIRES_IN_SECONDS,
