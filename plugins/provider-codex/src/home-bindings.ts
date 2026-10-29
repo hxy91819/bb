@@ -16,6 +16,7 @@ export const codexHomeBindingsSchema = z
         id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,57}$/),
         displayName: z.string().trim().min(1).max(128),
         codexHome: codexHomeExpressionSchema,
+        command: codexHomeExpressionSchema.optional(),
       })
       .strict(),
   )
