@@ -32,6 +32,17 @@ for (;;) {
 NODE
 }
 
+diagnose_failure() {
+  local status=$?
+  trap - ERR
+  systemctl show "${manager_unit}" -p Result -p ExecMainCode -p ExecMainStatus -p StatusErrno -p ActiveState -p SubState || true
+  sudo systemctl status --no-pager -l "${manager_unit}" || true
+  sudo journalctl --no-pager -b -u "${manager_unit}" -n 100 || true
+  snapshot "Failed preparation" || true
+  exit "${status}"
+}
+trap diagnose_failure ERR
+
 systemctl --version
 cat /etc/os-release
 systemctl cat "${manager_unit}"
