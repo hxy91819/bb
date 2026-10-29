@@ -1,3 +1,4 @@
+import type { ContractTagDeclarations } from "@bb/domain";
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
@@ -1061,7 +1062,7 @@ function validateProviderFallbackModels(
           `provider "${providerId}" ${field}.supportedReasoningEfforts must be a non-empty array`,
         );
       }
-      const levels = new Set<PluginProviderReasoningLevel>();
+      const levels = new Set<string>();
       const supportedReasoningEfforts = efforts.map(
         (
           effort,
@@ -1076,18 +1077,12 @@ function validateProviderFallbackModels(
               `provider "${providerId}" ${field}.supportedReasoningEfforts[${effortIndex}] must be { reasoningEffort, description }`,
             );
           }
-          const reasoningEffort = Reflect.get(effort, "reasoningEffort");
-          if (
-            typeof reasoningEffort !== "string" ||
-            !(
-              PLUGIN_PROVIDER_REASONING_LEVEL_VALUES as readonly string[]
-            ).includes(reasoningEffort)
-          ) {
-            throw new Error(
-              `provider "${providerId}" ${field}.supportedReasoningEfforts[${effortIndex}].reasoningEffort must be one of ${PLUGIN_PROVIDER_REASONING_LEVEL_VALUES.join(", ")}`,
-            );
-          }
-          const level = reasoningEffort as PluginProviderReasoningLevel;
+          const level = requireNonBlankString({
+            providerId,
+            field: `${field}.supportedReasoningEfforts[${effortIndex}].reasoningEffort`,
+            value: Reflect.get(effort, "reasoningEffort"),
+          });
+          const label: unknown = Reflect.get(effort, "label");
           if (levels.has(level)) {
             throw new Error(
               `provider "${providerId}" ${field}.supportedReasoningEfforts repeats ${JSON.stringify(level)}`,
@@ -1096,6 +1091,15 @@ function validateProviderFallbackModels(
           levels.add(level);
           return Object.freeze({
             reasoningEffort: level,
+            ...(label === undefined
+              ? {}
+              : {
+                  label: requireNonBlankString({
+                    providerId,
+                    field: `${field}.supportedReasoningEfforts[${effortIndex}].label`,
+                    value: label,
+                  }),
+                }),
             description: requireNonBlankString({
               providerId,
               field: `${field}.supportedReasoningEfforts[${effortIndex}].description`,
@@ -1107,7 +1111,7 @@ function validateProviderFallbackModels(
       const defaultReasoningEffort = record.defaultReasoningEffort;
       if (
         typeof defaultReasoningEffort !== "string" ||
-        !levels.has(defaultReasoningEffort as PluginProviderReasoningLevel)
+        !levels.has(defaultReasoningEffort)
       ) {
         throw new Error(
           `provider "${providerId}" ${field}.defaultReasoningEffort must be one of its supportedReasoningEfforts`,
@@ -1124,8 +1128,7 @@ function validateProviderFallbackModels(
         displayName,
         description,
         supportedReasoningEfforts: Object.freeze(supportedReasoningEfforts),
-        defaultReasoningEffort:
-          defaultReasoningEffort as PluginProviderReasoningLevel,
+        defaultReasoningEffort,
         isDefault: record.isDefault,
       });
     },
@@ -1701,9 +1704,21 @@ function readRpcMethodContract(
   const description = rpcDescriptionSchema.parse(
     Reflect.get(value, "experimental_description"),
   );
-  return description === null
-    ? { input, output }
-    : { input, output, experimental_description: description };
+  const declarations: ContractTagDeclarations<unknown, unknown> = {};
+  for (const name of ["tags", "keyTags", "invalidates"] as const) {
+    const declaration = Reflect.get(value, name);
+    if (declaration !== undefined) {
+      if (typeof declaration !== "function")
+        throw new Error(`rpc ${method} ${name} must be a function`);
+      Reflect.set(declarations, name, declaration);
+    }
+  }
+  return {
+    input,
+    output,
+    ...declarations,
+    ...(description === null ? {} : { experimental_description: description }),
+  };
 }
 
 export function readRpcPublicationOptions(value: unknown) {
@@ -2406,9 +2421,7 @@ export interface NormalizedPluginEnvironmentProvider {
     PluginEnvironmentProviderDeclaration["experimental_existingPath"]
   > | null;
   create: PluginEnvironmentProviderDeclaration["create"];
-  restore: NonNullable<
-    PluginEnvironmentProviderDeclaration["restore"]
-  > | null;
+  restore: NonNullable<PluginEnvironmentProviderDeclaration["restore"]> | null;
   remove: PluginEnvironmentProviderDeclaration["remove"];
   policy: import("../environment-provider.js").PluginEnvironmentProviderPolicy;
 }
@@ -2870,6 +2883,7 @@ export function normalizeWebSocketRouteRegistration(
 }
 
 type RpcRegistrationRecord = {
+  declarations: ContractTagDeclarations<unknown, unknown>;
   publication: ReturnType<typeof publishRpcMethod>;
   inputSchema: StandardSchemaV1;
   outputSchema: StandardSchemaV1;
@@ -2928,6 +2942,7 @@ export function normalizeRpcRegistration(
       name,
       {
         publication: publishRpcMethod(name, methodContract, publicationOptions),
+        declarations: methodContract,
         inputSchema: methodContract.input,
         outputSchema: methodContract.output,
         handler,
@@ -3593,6 +3608,30 @@ function normalizeRpcIssues(
       ...(path !== undefined ? { path } : {}),
     };
   });
+}
+
+const rpcRefusalSchema = z.object({
+  code: z.enum(["forbidden", "not_found", "conflict", "invalid"]),
+  message: z.string(),
+  issues: z
+    .array(
+      z.object({
+        message: z.string(),
+        path: z.array(z.union([z.string(), z.number()])).optional(),
+      }),
+    )
+    .optional(),
+});
+
+export function readPluginRpcRefusal(error: unknown): PluginRpcError | null {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    Reflect.get(error, Symbol.for("@get-bb/plugin-sdk/rpc-refusal")) !== true
+  )
+    return null;
+  const parsed = rpcRefusalSchema.safeParse(error);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function validateRpcValue(

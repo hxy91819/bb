@@ -1,19 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   experimental_THREAD_ACTION_GROUPS,
-  useRealtime,
-  useRealtimeConnectionState,
-  useRpc,
+  experimental_useRpcKeyedQuery,
+  experimental_useRpcMutation,
   useSettings,
   type PluginThreadActionDataInput,
   type PluginThreadActionRegistration,
 } from "@get-bb/plugin-sdk/app";
-import {
-  THREAD_NOTIFICATIONS_CHANNEL,
-  THREAD_NOTIFICATIONS_LIST_MAX_IDS,
-  threadNotificationsUpdateSchema,
-  type pushNotificationsRpcContract,
-} from "./contract.js";
+import { pushNotificationsRpcContract } from "./contract.js";
 import {
   NOTIFICATION_LEVEL_LABELS,
   notificationLevelSchema,
@@ -30,6 +24,9 @@ import {
 export interface ThreadNotificationsData {
   levels: ReadonlyMap<string, ThreadNotificationInputs>;
   defaults: NotificationDefaults | null;
+  error: string | null;
+  unloadedThreadIds: ReadonlySet<string> | null;
+  retry(): Promise<void>;
   setLevel(threadId: string, level: OwnNotificationLevel): Promise<void>;
 }
 
@@ -42,129 +39,64 @@ function parseDefaults(
   return { defaultLevel: defaultLevel.data, childLevel: childLevel.data };
 }
 
-function chunk(ids: readonly string[]): string[][] {
-  const chunks: string[][] = [];
-  for (
-    let start = 0;
-    start < ids.length;
-    start += THREAD_NOTIFICATIONS_LIST_MAX_IDS
-  ) {
-    chunks.push(ids.slice(start, start + THREAD_NOTIFICATIONS_LIST_MAX_IDS));
-  }
-  return chunks;
-}
-
-function cachedLevel(
-  stored: ThreadNotificationInputs,
-): ThreadNotificationInputs | null {
-  return stored.own === "inherit" && stored.ancestorCap === null
-    ? null
-    : stored;
-}
-
-function withLevel(
-  levels: ReadonlyMap<string, ThreadNotificationInputs>,
-  threadId: string,
-  stored: ThreadNotificationInputs | null,
-): ReadonlyMap<string, ThreadNotificationInputs> {
-  const next = new Map(levels);
-  if (stored === null) next.delete(threadId);
-  else next.set(threadId, stored);
-  return next;
+function selectNotificationRows(
+  rows: Record<string, ThreadNotificationInputs>,
+) {
+  return {
+    levels: Object.fromEntries(
+      Object.entries(rows).filter(
+        ([, value]) => value.own !== "inherit" || value.ancestorCap !== null,
+      ),
+    ),
+    loaded: Object.fromEntries(Object.keys(rows).map((key) => [key, true])),
+  };
 }
 
 function useThreadNotificationsData({
   threadIds,
 }: PluginThreadActionDataInput): ThreadNotificationsData {
-  const rpc = useRpc<typeof pushNotificationsRpcContract>();
-  const { values } = useSettings();
-  const connection = useRealtimeConnectionState();
-  const previousConnection = useRef(connection);
-  const latestThreadIds = useRef(threadIds);
-  const requested = useRef(new Set<string>());
-  const [levels, setLevels] = useState<
-    ReadonlyMap<string, ThreadNotificationInputs>
-  >(() => new Map());
-
-  const fetchLevels = useCallback(
-    (ids: readonly string[], replace: boolean) => {
-      for (const id of ids) requested.current.add(id);
-      for (const batch of chunk(ids)) {
-        void rpc
-          .call("threadNotifications.list", { threadIds: batch })
-          .then(({ threads }) => {
-            setLevels((current) => {
-              const changed = batch.filter((id) =>
-                replace
-                  ? current.get(id) !== threads[id]
-                  : threads[id] !== undefined && !current.has(id),
-              );
-              if (changed.length === 0) return current;
-              const next = new Map(current);
-              for (const id of changed) {
-                const stored = threads[id];
-                if (stored === undefined) next.delete(id);
-                else next.set(id, stored);
-              }
-              return next;
-            });
-          })
-          .catch(() => {
-            for (const id of batch) requested.current.delete(id);
-          });
-      }
+  const { mutate: saveLevel } = experimental_useRpcMutation({
+    contract: pushNotificationsRpcContract,
+    method: "threadNotifications.set",
+    optimistic: ({ threadId, level }, cache) => {
+      cache.updateKey("threadNotifications.keyed", threadId, (current) => ({
+        ...current,
+        own: level,
+      }));
     },
-    [rpc],
-  );
-
-  useEffect(() => {
-    latestThreadIds.current = threadIds;
-    const missing = threadIds.filter((id) => !requested.current.has(id));
-    if (missing.length > 0) fetchLevels(missing, false);
-  }, [fetchLevels, threadIds]);
-
-  useEffect(() => {
-    const previous = previousConnection.current;
-    previousConnection.current = connection;
-    if (previous !== "reconnecting" || connection !== "connected") return;
-    requested.current = new Set();
-    const shown = new Set(latestThreadIds.current);
-    setLevels((current) => {
-      const next = new Map([...current].filter(([id]) => shown.has(id)));
-      return next.size === current.size ? current : next;
-    });
-    if (latestThreadIds.current.length > 0) {
-      fetchLevels(latestThreadIds.current, true);
-    }
-  }, [connection, fetchLevels]);
-
-  useRealtime(THREAD_NOTIFICATIONS_CHANNEL, (payload) => {
-    const update = threadNotificationsUpdateSchema.safeParse(payload);
-    if (!update.success) return;
-    const { threadId, notifications } = update.data;
-    setLevels((current) => withLevel(current, threadId, notifications));
   });
-
+  const { values } = useSettings();
+  const query = experimental_useRpcKeyedQuery({
+    contract: pushNotificationsRpcContract,
+    method: "threadNotifications.keyed",
+    keys: threadIds,
+    select: selectNotificationRows,
+  });
+  const retry = query.refetch;
+  const error = query.error?.message ?? null;
+  const unloadedThreadIds = useMemo(
+    () =>
+      error === null
+        ? null
+        : new Set(threadIds.filter((id) => query.data?.loaded[id] !== true)),
+    [error, query.data, threadIds],
+  );
+  const levels = useMemo(
+    () => new Map(Object.entries(query.data?.levels ?? {})),
+    [query.data?.levels],
+  );
   const setLevel = useCallback(
     async (threadId: string, level: OwnNotificationLevel) => {
-      const stored = await rpc.call("threadNotifications.set", {
-        threadId,
-        level,
-      });
-      setLevels((current) => withLevel(current, threadId, cachedLevel(stored)));
+      await saveLevel({ threadId, level });
     },
-    [rpc],
+    [saveLevel],
   );
 
-  const defaultsKey = JSON.stringify(parseDefaults(values));
-  const defaults = useMemo(
-    () => JSON.parse(defaultsKey) as NotificationDefaults | null,
-    [defaultsKey],
-  );
+  const defaults = useMemo(() => parseDefaults(values), [values]);
 
   return useMemo(
-    () => ({ levels, defaults, setLevel }),
-    [defaults, levels, setLevel],
+    () => ({ levels, defaults, setLevel, error, unloadedThreadIds, retry }),
+    [defaults, levels, setLevel, error, unloadedThreadIds, retry],
   );
 }
 
@@ -185,7 +117,8 @@ export const notificationsThreadAction: PluginThreadActionRegistration<ThreadNot
     id: "notifications",
     title: "Notifications",
     icon: "BellDot",
-    group: experimental_THREAD_ACTION_GROUPS.settings,
+    group: experimental_THREAD_ACTION_GROUPS.state,
+    order: 50,
     useData: useThreadNotificationsData,
     item: ({ thread, data }) => {
       if (thread.archivedAt !== null) return null;
@@ -193,38 +126,40 @@ export const notificationsThreadAction: PluginThreadActionRegistration<ThreadNot
       const resolved =
         data.defaults === null
           ? null
-          : {
-              row: resolveThreadNotifications(
-                stored,
-                { parentThreadId: thread.parentThreadId },
-                data.defaults,
-              ),
-              fallback: resolveThreadNotifications(
-                UNSET_THREAD_NOTIFICATIONS,
-                { parentThreadId: thread.parentThreadId },
-                data.defaults,
-              ).effective,
-            };
-      const hint = resolved === null ? undefined : capHint(resolved.row);
+          : resolveThreadNotifications(
+              stored,
+              { parentThreadId: thread.parentThreadId },
+              data.defaults,
+            );
+      const unavailable = data.unloadedThreadIds?.has(thread.id) ?? false;
+      const hint =
+        data.error ?? (resolved === null ? undefined : capHint(resolved));
       return {
         label: "Notifications",
-        ...(resolved === null
-          ? {}
-          : { detail: NOTIFICATION_LEVEL_LABELS[resolved.row.effective] }),
-        icon:
-          resolved === null ? "BellDot" : LEVEL_ICONS[resolved.row.effective],
+        ...(unavailable
+          ? { detail: "Notifications unavailable" }
+          : resolved === null
+            ? {}
+            : { detail: NOTIFICATION_LEVEL_LABELS[resolved.effective] }),
+        icon: resolved === null ? "BellDot" : LEVEL_ICONS[resolved.effective],
         choices: {
           ...(hint === undefined ? {} : { hint }),
-          items: ownNotificationLevelSchema.options.map((id) => ({
-            id,
-            label:
-              id === "inherit" && resolved !== null
-                ? `${NOTIFICATION_LEVEL_LABELS.inherit} (${NOTIFICATION_LEVEL_LABELS[resolved.fallback]})`
-                : NOTIFICATION_LEVEL_LABELS[id],
-            selected: id === stored.own,
-          })),
+          items: [
+            ...(unavailable
+              ? []
+              : ownNotificationLevelSchema.options.map((id) => ({
+                  id,
+                  label: NOTIFICATION_LEVEL_LABELS[id],
+                  selected: id === stored.own,
+                }))),
+            ...(data.error === null ? [] : [{ id: "retry", label: "Retry" }]),
+          ],
         },
         run: async ({ value }) => {
+          if (value === "retry") {
+            await data.retry();
+            return;
+          }
           const level = ownNotificationLevelSchema.safeParse(value);
           if (!level.success) return;
           await data.setLevel(thread.id, level.data);

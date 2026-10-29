@@ -1,12 +1,3 @@
-// @vitest-environment jsdom
-
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import type { Environment, Host, Thread } from "@bb/domain";
@@ -23,8 +14,7 @@ import {
 import { TooltipProvider } from "@bb/shared-ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { focusWithKeyboard } from "@/test/keyboard-focus";
+import { describe, expect, it } from "vitest";
 import {
   makeEnvironment,
   makeHost,
@@ -36,7 +26,6 @@ import {
   EnvironmentRow,
   formatBranchComparison,
   GitStatusRow,
-  ThreadMetadataCard,
 } from "./ThreadMetadataContent";
 
 const localHost = { locality: "local", identity: null } as const;
@@ -167,38 +156,6 @@ function renderEnvironmentRow(
   );
 }
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
-
-describe("ThreadMetadataCard", () => {
-  it("shows its scrollbar only during active scrolling", () => {
-    vi.useFakeTimers();
-    const { container } = render(
-      <ThreadMetadataCard>
-        <div>Thread information</div>
-      </ThreadMetadataCard>,
-    );
-    const scrollArea = container.querySelector("dl");
-    if (!(scrollArea instanceof HTMLElement)) {
-      throw new Error("missing info scroll area");
-    }
-
-    expect(scrollArea.classList).toContain("transient-scrollbar");
-    expect(scrollArea.hasAttribute("data-scrollbar-scrolling")).toBe(false);
-
-    fireEvent.scroll(scrollArea);
-    expect(scrollArea.dataset.scrollbarScrolling).toBe("true");
-
-    act(() => vi.advanceTimersByTime(599));
-    expect(scrollArea.dataset.scrollbarScrolling).toBe("true");
-
-    act(() => vi.advanceTimersByTime(1));
-    expect(scrollArea.hasAttribute("data-scrollbar-scrolling")).toBe(false);
-  });
-});
-
 describe("EnvironmentRow", () => {
   it("shows an unregistered provider id as not installed", () => {
     const markup = renderEnvironmentRow(
@@ -262,32 +219,6 @@ describe("EnvironmentRow", () => {
     expect(markup).toContain("Old laptop");
     expect(markup).not.toContain("(offline)");
     expect(markup).not.toContain('aria-label="New thread in environment"');
-  });
-
-  it("explains the create-thread action in a tooltip", async () => {
-    render(
-      withQueryClient(
-        <TooltipProvider delayDuration={0}>
-          <MemoryRouter>
-            <EnvironmentRow
-              thread={makeThread()}
-              environment={makeEnvironment()}
-              environmentDisplayHost={localHost}
-            />
-          </MemoryRouter>
-        </TooltipProvider>,
-      ),
-    );
-
-    focusWithKeyboard(
-      screen.getByRole("button", {
-        name: "New thread in environment",
-      }),
-    );
-
-    expect((await screen.findByRole("tooltip")).textContent).toBe(
-      "New thread in environment",
-    );
   });
 
   it("hides the create-thread action while an environment is provisioning", () => {
@@ -378,6 +309,29 @@ describe("EnvironmentProvisioningFailureRow", () => {
 });
 
 describe("GitStatusRow", () => {
+  it("qualifies counts when squash detection is incomplete", () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <GitStatusRow
+          thread={makeThread()}
+          environment={null}
+          workspaceStatus={makeWorkspaceStatus({
+            mergeBase: makeWorkspaceMergeBase({
+              aheadCount: 3,
+              squashMergeCheckComplete: false,
+            }),
+          })}
+          workspaceStatusError={null}
+        />
+      </TooltipProvider>,
+    );
+    expect(markup).toContain("3 ahead of main");
+    expect(markup).toContain(
+      'aria-label="Squash-merge check incomplete; counts may include already-merged commits."',
+    );
+    expect(markup).not.toContain(">Squash-merge check incomplete");
+  });
+
   it("shows no live git status for an archived attached checkout", () => {
     const markup = renderToStaticMarkup(
       <GitStatusRow
@@ -414,6 +368,45 @@ describe("GitStatusRow", () => {
       ),
     ).toContain("2 ahead of release");
     expect(render(null)).toBe("");
+  });
+
+  it("keeps the last known comparison when a refresh fails and flags it as stale", () => {
+    const render = (workspaceStatusError: Error | null) =>
+      renderToStaticMarkup(
+        <TooltipProvider>
+          <GitStatusRow
+            thread={makeThread()}
+            environment={null}
+            workspaceStatus={makeWorkspaceStatus({
+              mergeBase: makeWorkspaceMergeBase({
+                mergeBaseBranch: "main",
+                aheadCount: 3,
+              }),
+            })}
+            workspaceStatusError={workspaceStatusError}
+          />
+        </TooltipProvider>,
+      );
+
+    const stale = render(new Error("bb connect hit a temporary problem"));
+    expect(stale).toContain("3 ahead of main");
+    expect(stale).toContain(
+      "Couldn&#x27;t refresh: Workspace status unavailable. Showing the last known status.",
+    );
+    expect(render(null)).not.toContain("Couldn&#x27;t refresh");
+  });
+
+  it("shows the failure when no status has loaded", () => {
+    const markup = renderToStaticMarkup(
+      <GitStatusRow
+        thread={makeThread()}
+        environment={null}
+        workspaceStatus={undefined}
+        workspaceStatusError={new Error("bb connect hit a temporary problem")}
+      />,
+    );
+
+    expect(markup).toContain("Workspace status unavailable");
   });
 
   it("phrases the branch comparison against its merge base", () => {

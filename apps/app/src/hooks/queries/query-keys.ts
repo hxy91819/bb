@@ -45,12 +45,12 @@ const THREAD_HOST_FILE_PREVIEW_QUERY_KEY = "threadHostFilePreview";
 const HOST_FILE_PREVIEW_QUERY_KEY = "hostFilePreview";
 const ENVIRONMENT_QUERY_KEY = "environment";
 export const ENVIRONMENT_WORK_STATUS_QUERY_KEY = "environmentWorkStatus";
-const ENVIRONMENT_PULL_REQUEST_QUERY_KEY = "environmentPullRequest";
 export const ENVIRONMENT_MERGE_BASE_BRANCHES_QUERY_KEY =
   "environmentMergeBaseBranches";
 export const ENVIRONMENT_DIFF_FILES_QUERY_KEY = "environmentDiffFiles";
 const ENVIRONMENT_DIFF_PATCH_QUERY_KEY = "environmentDiffPatch";
 const ENVIRONMENT_DIFF_FILE_QUERY_KEY = "environmentDiffFile";
+const ENVIRONMENT_DIFF_VIEWED_QUERY_KEY = "environmentDiffViewed";
 const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
@@ -66,6 +66,7 @@ const UI_PREFERENCES_QUERY_KEY = "uiPreferences";
 const SYSTEM_THEME_QUERY_KEY = "systemTheme";
 export const SYSTEM_EXECUTION_OPTIONS_QUERY_KEY = "systemExecutionOptions";
 const SYSTEM_CLI_SKILLS_QUERY_KEY = "systemCliSkills";
+const SYSTEM_CLI_COMMAND_QUERY_KEY = "systemCliCommand";
 const SYSTEM_VERSION_QUERY_KEY = "systemVersion";
 const SYSTEM_APP_UPDATE_QUERY_KEY = "systemAppUpdate";
 const SERVER_MOVE_STATUS_QUERY_KEY = "serverMoveStatus";
@@ -333,10 +334,6 @@ type EnvironmentWorkStatusQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_WORK_STATUS_QUERY_KEY,
   string,
 ];
-type EnvironmentPullRequestQueryKey = readonly [
-  typeof ENVIRONMENT_PULL_REQUEST_QUERY_KEY,
-  string | null | undefined,
-];
 type EnvironmentMergeBaseBranchesQueryKeyRootPrefix = readonly [
   typeof ENVIRONMENT_MERGE_BASE_BRANCHES_QUERY_KEY,
 ];
@@ -401,6 +398,7 @@ type EnvironmentDiffFilesQueryKey = readonly [
   string,
   string | null,
   string | null,
+  boolean,
 ];
 type EnvironmentDiffFilesQueryKeyRootPrefix = readonly [
   typeof ENVIRONMENT_DIFF_FILES_QUERY_KEY,
@@ -414,6 +412,7 @@ type EnvironmentDiffPatchQueryKey = readonly [
   string,
   string | null,
   string | null,
+  boolean,
   string,
 ];
 type EnvironmentDiffPatchQueryKeyRootPrefix = readonly [
@@ -421,6 +420,17 @@ type EnvironmentDiffPatchQueryKeyRootPrefix = readonly [
 ];
 type EnvironmentDiffPatchQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_DIFF_PATCH_QUERY_KEY,
+  string,
+];
+type EnvironmentDiffViewedQueryKey = readonly [
+  typeof ENVIRONMENT_DIFF_VIEWED_QUERY_KEY,
+  string,
+  string | null,
+  string | null,
+  (readonly string[])?,
+];
+type EnvironmentDiffViewedQueryKeyPrefix = readonly [
+  typeof ENVIRONMENT_DIFF_VIEWED_QUERY_KEY,
   string,
 ];
 type EnvironmentDiffFileQueryKey = readonly [
@@ -484,6 +494,7 @@ type UiPreferencesQueryKey = readonly [typeof UI_PREFERENCES_QUERY_KEY];
 type SystemThemeQueryKey = readonly [typeof SYSTEM_THEME_QUERY_KEY, string];
 type AllSystemThemesQueryKeyPrefix = readonly [typeof SYSTEM_THEME_QUERY_KEY];
 type SystemCliSkillsQueryKey = readonly [typeof SYSTEM_CLI_SKILLS_QUERY_KEY];
+type SystemCliCommandQueryKey = readonly [typeof SYSTEM_CLI_COMMAND_QUERY_KEY];
 type SystemVersionQueryKey = readonly [typeof SYSTEM_VERSION_QUERY_KEY];
 type SystemAppUpdateQueryKey = readonly [typeof SYSTEM_APP_UPDATE_QUERY_KEY];
 type ServerMoveStatusQueryKey = readonly [typeof SERVER_MOVE_STATUS_QUERY_KEY];
@@ -498,6 +509,7 @@ type SystemProviderStatesQueryKey = readonly [
 ];
 type SystemExecutionOptionsQueryKey = readonly [
   typeof SYSTEM_EXECUTION_OPTIONS_QUERY_KEY,
+  string | null,
   string | null,
   string | null,
   string | null,
@@ -930,12 +942,6 @@ export function environmentWorkStatusQueryKeyPrefix(
   return [ENVIRONMENT_WORK_STATUS_QUERY_KEY, environmentId];
 }
 
-export function environmentPullRequestQueryKey(
-  environmentId: string | null | undefined,
-): EnvironmentPullRequestQueryKey {
-  return [ENVIRONMENT_PULL_REQUEST_QUERY_KEY, environmentId];
-}
-
 export function environmentMergeBaseBranchesQueryKey(
   environmentId: string,
   query = "",
@@ -1041,12 +1047,14 @@ export function environmentDiffFilesQueryKey(
   environmentId: string,
   targetType: string | null,
   targetKey: string | null,
+  ignoreWhitespace: boolean,
 ): EnvironmentDiffFilesQueryKey {
   return [
     ENVIRONMENT_DIFF_FILES_QUERY_KEY,
     environmentId,
     targetType,
     targetKey,
+    ignoreWhitespace,
   ];
 }
 
@@ -1064,6 +1072,7 @@ export function environmentDiffPatchQueryKey(
   environmentId: string,
   targetType: string | null,
   targetKey: string | null,
+  ignoreWhitespace: boolean,
   path: string,
 ): EnvironmentDiffPatchQueryKey {
   return [
@@ -1071,6 +1080,7 @@ export function environmentDiffPatchQueryKey(
     environmentId,
     targetType,
     targetKey,
+    ignoreWhitespace,
     path,
   ];
 }
@@ -1083,6 +1093,27 @@ export function environmentDiffPatchQueryKeyPrefix(
   environmentId: string,
 ): EnvironmentDiffPatchQueryKeyPrefix {
   return [ENVIRONMENT_DIFF_PATCH_QUERY_KEY, environmentId];
+}
+
+export function environmentDiffViewedQueryKey(
+  environmentId: string,
+  targetType: string | null,
+  targetKey: string | null,
+  paths?: readonly string[],
+): EnvironmentDiffViewedQueryKey {
+  const prefix = [
+    ENVIRONMENT_DIFF_VIEWED_QUERY_KEY,
+    environmentId,
+    targetType,
+    targetKey,
+  ] as const;
+  return paths === undefined ? prefix : [...prefix, paths];
+}
+
+export function environmentDiffViewedQueryKeyPrefix(
+  environmentId: string,
+): EnvironmentDiffViewedQueryKeyPrefix {
+  return [ENVIRONMENT_DIFF_VIEWED_QUERY_KEY, environmentId];
 }
 
 export function environmentDiffFileQueryKey(
@@ -1163,6 +1194,10 @@ export function systemCliSkillsQueryKey(): SystemCliSkillsQueryKey {
   return [SYSTEM_CLI_SKILLS_QUERY_KEY];
 }
 
+export function systemCliCommandQueryKey(): SystemCliCommandQueryKey {
+  return [SYSTEM_CLI_COMMAND_QUERY_KEY];
+}
+
 export function systemConfigQueryKey(): SystemConfigQueryKey {
   return [SYSTEM_CONFIG_QUERY_KEY];
 }
@@ -1211,18 +1246,21 @@ interface SystemExecutionOptionsQueryKeyArgs {
   environmentId: string | null;
   hostId: string | null;
   providerId: string | null;
+  projectId?: string | null;
 }
 
 export function systemExecutionOptionsQueryKey({
   environmentId,
   hostId,
   providerId,
+  projectId = null,
 }: SystemExecutionOptionsQueryKeyArgs): SystemExecutionOptionsQueryKey {
   return [
     SYSTEM_EXECUTION_OPTIONS_QUERY_KEY,
     environmentId,
     hostId,
     providerId,
+    projectId,
   ];
 }
 

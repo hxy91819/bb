@@ -1,9 +1,15 @@
 import { hostCommandMayWake } from "./wake-policy.js";
 import { isHostCleanupAllowed } from "./cleanup-context.js";
 import { assertMachineLifecycleAdmission } from "../machines/lifecycle.js";
-import { getHost, getLatestSessionForHost, getThread } from "@bb/db";
+import {
+  getHost,
+  getLatestSessionForHost,
+  getSessionById,
+  getThread,
+} from "@bb/db";
 import { randomUUID } from "node:crypto";
 import {
+  hostDaemonSupportsEnvironmentCleanupInspection,
   type HostDaemonOnlineRpcResponseMessage,
   type HostDaemonOnlineRpcResultForCommand,
   type HostDaemonRetryableOnlineRpcCommand,
@@ -14,6 +20,7 @@ import {
 import { ApiError } from "../../errors.js";
 import type { WorkSessionDeps } from "../../types.js";
 import {
+  HostOnlineRpcCancelledError,
   HostOnlineRpcTimeoutError,
   HostOnlineRpcUnavailableError,
 } from "../../ws/hub.js";
@@ -29,6 +36,7 @@ const HOST_DAEMON_RECONNECT_WAIT_MS = 5_000;
 interface CallHostOnlineRpcArgs<TCommand extends HostDaemonRpcCommand> {
   command: TCommand;
   hostId: string;
+  signal?: AbortSignal;
   timeoutMs: number;
 }
 
@@ -37,6 +45,7 @@ interface CallHostRetryableOnlineRpcArgs<
 > {
   command: TCommand;
   hostId: string;
+  signal?: AbortSignal;
   timeoutMs: number;
 }
 
@@ -130,6 +139,7 @@ function assertHostActiveForRead(
     args.command.type === "thread.stop" ||
     args.command.type === "thread.storage.delete" ||
     args.command.type === "environment.hook.cancel" ||
+    args.command.type === "environment.inspect_cleanup" ||
     args.command.type === "plugin.host.cancel" ||
     args.command.type === "plugin.host.dispose"
   ) {
@@ -321,9 +331,24 @@ export function isHostUnavailableApiError(error: unknown): boolean {
 }
 
 function requestHostOnlineRpcResponse(
-  deps: Pick<WorkSessionDeps, "hub">,
+  deps: Pick<WorkSessionDeps, "hub" | "db">,
   args: CallHostOnlineRpcArgs<HostDaemonRpcCommand>,
 ): Promise<HostDaemonOnlineRpcResponseMessage> {
+  if (args.command.type === "environment.inspect_cleanup") {
+    const sessionId = deps.hub.getDaemonSessionIdForHost(args.hostId);
+    const session = sessionId ? getSessionById(deps.db, { sessionId }) : null;
+    if (
+      session &&
+      !hostDaemonSupportsEnvironmentCleanupInspection(session.protocolVersion)
+    )
+      return Promise.reject(
+        new ApiError(
+          409,
+          "environment_cleanup_upgrade_required",
+          "Update this machine before recovering environment cleanup",
+        ),
+      );
+  }
   return traceTurnRpc(args.command.type, () =>
     deps.hub.requestHostOnlineRpc({
       hostId: args.hostId,
@@ -332,6 +357,7 @@ function requestHostOnlineRpcResponse(
         requestId: randomUUID(),
         command: args.command,
       },
+      ...(args.signal ? { signal: args.signal } : {}),
       timeoutMs: args.timeoutMs,
     }),
   );
@@ -348,6 +374,15 @@ export function hostCommandTimeoutError(): ApiError {
 function throwOnlineRpcError(error: unknown): never {
   if (error instanceof HostOnlineRpcTimeoutError) {
     throw hostCommandTimeoutError();
+  }
+
+  if (error instanceof HostOnlineRpcCancelledError) {
+    throw new ApiError(
+      408,
+      "request_cancelled",
+      "Request was cancelled by the client",
+      false,
+    );
   }
 
   if (error instanceof HostOnlineRpcUnavailableError) {

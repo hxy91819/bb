@@ -5,6 +5,7 @@ import { DEFAULTS } from "@bb/config/defaults";
 import type { ServerConfig } from "@bb/config/server";
 import { readOrCreateSecretFile } from "@bb/secret-storage";
 import type { AppSurface, RequestAppSurface } from "@bb/config/app-surface";
+import type { RecordTelemetryEventRequest } from "@bb/server-contract";
 import type { ServerLogger } from "../../types.js";
 
 const POSTHOG_INGESTION_URL = "https://us.i.posthog.com/capture/";
@@ -12,7 +13,36 @@ const TELEMETRY_ID_FILE_NAME = "telemetry-id";
 
 const telemetryAppSurfaceStorage = new AsyncLocalStorage<RequestAppSurface>();
 
+export type TelemetryInitiator =
+  | "user"
+  | "agent"
+  | "automation"
+  | "plugin"
+  | "system";
+
+export type TurnFinishedOutcome = "succeeded" | "failed" | "stopped";
+export type TurnErrorCategory =
+  | "none"
+  | "auth"
+  | "billing"
+  | "rate_limit"
+  | "limit_reached"
+  | "provider_unavailable"
+  | "start_failed"
+  | "process_exited"
+  | "host_lost"
+  | "other";
+
 export type TelemetryEvent =
+  | {
+      name: "turn_finished";
+      properties: {
+        outcome: TurnFinishedOutcome;
+        error_category: TurnErrorCategory;
+        provider: string;
+        install_turn_number: number;
+      };
+    }
   | { name: "app_started" }
   | { name: "telemetry_disabled" }
   | {
@@ -20,6 +50,7 @@ export type TelemetryEvent =
       properties: {
         is_child_thread: boolean;
         provider: string;
+        initiator?: TelemetryInitiator;
       };
     }
   | {
@@ -28,6 +59,7 @@ export type TelemetryEvent =
         is_child_thread: boolean;
         message_source: "queued_message" | "thread_create" | "thread_send";
         provider: string;
+        initiator?: TelemetryInitiator;
       };
     }
   | {
@@ -38,11 +70,13 @@ export type TelemetryEvent =
         marketplace: string | null;
         source_kind: "builtin" | "git" | "npm" | "path";
       };
-    };
+    }
+  | RecordTelemetryEventRequest;
 
 export interface TelemetryService {
   capture(event: TelemetryEvent): void;
   setEnabled(enabled: boolean): void;
+  isEnabled(): boolean;
 }
 
 interface CreateTelemetryServiceArgs {
@@ -57,6 +91,7 @@ interface CreateTelemetryServiceArgs {
 }
 
 const noopTelemetryService: TelemetryService = {
+  isEnabled: () => false,
   capture: () => {},
   setEnabled: () => {},
 };
@@ -138,6 +173,7 @@ export async function createTelemetryService(
     platform: process.platform,
   };
   return {
+    isEnabled: () => telemetryEnabled,
     setEnabled(enabled: boolean): void {
       telemetryEnabled = enabled;
     },

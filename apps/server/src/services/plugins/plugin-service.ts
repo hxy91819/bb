@@ -1,3 +1,4 @@
+import { rpcResponseTags } from "@get-bb/plugin-sdk/internal/rpc-tags";
 import type {
   PluginRpcDiscoveryQuery,
   PublishedPluginRpcMethod,
@@ -34,18 +35,16 @@ import {
   enforcePluginCliOutputLimit,
   normalizePluginAgentConfiguration,
   normalizeRpcJsonResult,
+  readPluginRpcRefusal,
   RESERVED_AGENT_TOOL_NAMES,
   adoptHttpRouteResponse,
   validatePluginProviderEnvEntries,
   validateRpcValue,
   validateSettingsUpdate,
 } from "@get-bb/plugin-sdk/internal/host-policy";
-import {
-  buildPluginApp,
-  buildPluginHost,
-  createPluginDevLoop,
-} from "@bb/plugin-build";
+import { buildPluginApp, createPluginDevLoop } from "@bb/plugin-build";
 import { getPluginBuildToolchain } from "./build-toolchain.js";
+import { buildMutablePluginHost } from "./mutable-plugin-artifacts.js";
 import {
   marketplacePublisherLabel,
   pluginPublisherLabel,
@@ -64,12 +63,14 @@ import {
 } from "@bb/server-contract";
 import {
   claimPluginScheduledRun,
+  deleteAllPluginKvValues,
   deleteAllPluginSettings,
   deleteInstalledPlugin,
   deletePluginSchedules,
   forgetPluginProviders,
   getDisabledPluginProviderCatalog,
   getInstalledPlugin,
+  getInstalledPluginRegistration,
   getPluginSafeMode,
   getThread,
   getLatestThreadSequence,
@@ -81,8 +82,11 @@ import {
   listThreadPluginMetadataRows,
   markInstalledPluginRemoved,
   recordPluginScheduleResult,
+  restoreRemovedInstalledPlugin,
   setDisabledPluginProviderCatalog,
+  getPluginSettingsValues,
   setInstalledPluginEnabled,
+  setPluginSettingsValues,
   setPluginSafeMode,
   type InstalledPluginRow,
   type PluginMarketplaceRow,
@@ -117,7 +121,10 @@ import {
   removeUnusedPluginArtifacts,
 } from "./plugin-artifact-gc.js";
 import { readPluginManifest, type PluginManifest } from "./manifest.js";
-import { listBundledPluginRegistrations } from "./builtin-registry.js";
+import {
+  RETIRED_BUNDLED_PLUGINS,
+  listBundledPluginRegistrations,
+} from "./builtin-registry.js";
 import {
   type BbPluginApi,
   type PluginAgentConfigurationContext,
@@ -134,7 +141,7 @@ import {
   syncPluginCommandsSkill,
   type PluginCliContribution,
 } from "./plugin-commands-skill.js";
-import { readPluginLogTail } from "./plugin-log.js";
+import { logPluginBuildWarnings, readPluginLogTail } from "./plugin-log.js";
 import {
   buildPluginSettingsView,
   pluginSecretsDir,
@@ -589,6 +596,8 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
   }
   const bundledPlugins =
     deps.bundledPlugins ?? listBundledPluginRegistrations();
+  const retiredBundledPlugins =
+    deps.retiredBundledPlugins ?? RETIRED_BUNDLED_PLUGINS;
   function isOrphanedBuiltinRow(row: InstalledPluginRow): boolean {
     return (
       row.sourceKind === "builtin" &&
@@ -1272,6 +1281,44 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     });
   }
 
+  async function handOverRetiredBuiltins(): Promise<void> {
+    for (const retired of retiredBundledPlugins) {
+      const row = getInstalledPlugin(deps.db, retired.pluginId);
+      if (row === undefined || !isOrphanedBuiltinRow(row)) continue;
+      if (row.enabled) {
+        const stored = getPluginSettingsValues(deps.db, row.id);
+        const carried = Object.fromEntries(
+          retired.carriedSettings.flatMap((key) =>
+            Object.hasOwn(stored, key) ? [[key, stored[key]]] : [],
+          ),
+        );
+        if (Object.keys(carried).length > 0) {
+          setPluginSettingsValues(deps.db, retired.successorPluginId, carried);
+        }
+        const successor = getInstalledPluginRegistration(
+          deps.db,
+          retired.successorPluginId,
+        );
+        if (
+          successor?.removedAt !== null &&
+          successor?.removedAt !== undefined
+        ) {
+          restoreRemovedInstalledPlugin(deps.db, successor.id);
+        } else if (successor !== undefined && !successor.enabled) {
+          setInstalledPluginEnabled(deps.db, successor.id, true);
+        }
+      }
+      await deleteRemovedPluginData(row, new Set());
+      deleteAllPluginKvValues(deps.db, row.id);
+      deleteInstalledPlugin(deps.db, row.id);
+      logger.info(
+        row.enabled
+          ? `plugin ${row.id} retired; its settings moved to ${retired.successorPluginId}, which is now enabled`
+          : `plugin ${row.id} retired because bb no longer bundles ${row.source}`,
+      );
+    }
+  }
+
   async function removeUnbundledBuiltins(): Promise<void> {
     for (const row of listInstalledPlugins(deps.db)) {
       if (!isOrphanedBuiltinRow(row)) continue;
@@ -1377,6 +1424,12 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           thread: buildThreadDto(thread),
         }));
       },
+      emitThreadParentChanged(thread, previousParentThreadId) {
+        emitThreadEvent("experimental_thread.parentChanged", () => ({
+          thread: buildThreadDto(thread),
+          previousParentThreadId,
+        }));
+      },
       emitThreadDeleted(thread) {
         emitThreadEvent("thread.deleted", () => ({
           thread: buildThreadDto(thread),
@@ -1446,6 +1499,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           }
           await recoverIncompletePluginRollbacks();
         });
+        await handOverRetiredBuiltins();
         await reconcileBundled();
         await removeUnbundledBuiltins();
         await loadAll();
@@ -1475,11 +1529,17 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
             },
             buildApp: async () => {
               try {
-                await buildPluginApp(
+                const app = await buildPluginApp(
                   bundled.rootDir,
                   deps.appVersion,
                   await getPluginBuildToolchain(deps),
                 );
+                logPluginBuildWarnings({
+                  dataDir: deps.dataDir,
+                  logger,
+                  pluginId: row.id,
+                  warnings: app.migrationWarnings,
+                });
                 setDevBuildProblem(row.id, "frontend", null);
                 notifyPluginsChanged();
               } catch (error) {
@@ -1494,11 +1554,13 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
             },
             buildHost: async () => {
               try {
-                await buildPluginHost(
-                  bundled.rootDir,
-                  deps.appVersion,
-                  await getPluginBuildToolchain(deps),
-                );
+                await buildMutablePluginHost({
+                  dataDir: deps.dataDir,
+                  pluginId: row.id,
+                  rootDir: bundled.rootDir,
+                  bbVersion: deps.appVersion,
+                  toolchain: await getPluginBuildToolchain(deps),
+                });
                 setDevBuildProblem(row.id, "host", null);
                 notifyPluginsChanged();
               } catch (error) {
@@ -1719,33 +1781,42 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
 
     async setEnabled(id, enabled) {
       return withPluginOperationLock(REGISTRATION_MUTATION_KEY, async () => {
-        const plugin = loaded.get(id);
-        if (!enabled && plugin !== undefined) {
-          setDisabledPluginProviderCatalog(
-            deps.db,
-            id,
-            plugin.handle
-              .listProviderDeclarations()
-              .map(({ id, displayName }) => ({ id, displayName })),
-          );
-        }
-        if (!setInstalledPluginEnabled(deps.db, id, enabled)) return undefined;
-        if (enabled) {
-          const row = getInstalledPlugin(deps.db, id);
-          if (row) {
-            await withLifecycleLock(id, () => loadOne(row));
+        const applyEnabled = async (
+          pluginId: string,
+          nextEnabled: boolean,
+        ): Promise<boolean> => {
+          const plugin = loaded.get(pluginId);
+          if (!nextEnabled && plugin !== undefined) {
+            setDisabledPluginProviderCatalog(
+              deps.db,
+              pluginId,
+              plugin.handle
+                .listProviderDeclarations()
+                .map(({ id, displayName }) => ({ id, displayName })),
+            );
           }
-        } else {
-          await withLifecycleLock(id, async () => {
-            await disposeOne(id);
-            if ((hungServices.get(id)?.size ?? 0) === 0) {
-              setStatus(id, "disabled");
+          if (!setInstalledPluginEnabled(deps.db, pluginId, nextEnabled)) {
+            return false;
+          }
+          if (nextEnabled) {
+            const row = getInstalledPlugin(deps.db, pluginId);
+            if (row) {
+              await withLifecycleLock(pluginId, () => loadOne(row));
             }
-          });
-        }
-        if (!enabled) {
-          deps.onPluginUnregistered?.(id);
-        }
+          } else {
+            await withLifecycleLock(pluginId, async () => {
+              await disposeOne(pluginId);
+              if ((hungServices.get(pluginId)?.size ?? 0) === 0) {
+                setStatus(pluginId, "disabled");
+              }
+            });
+            deps.onPluginUnregistered?.(pluginId);
+          }
+          return true;
+        };
+
+        if (getInstalledPlugin(deps.db, id) === undefined) return undefined;
+        if (!(await applyEnabled(id, enabled))) return undefined;
         await syncCliSkill();
         notifyPluginsChanged();
         return list().find((p) => p.id === id);
@@ -2076,18 +2147,36 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           "input",
           throwRpcBoundaryError,
         );
-        const result = await handler.handler(parsedInput, {
-          experimental_caller: caller,
-        });
+        let result: unknown;
+        try {
+          result = await handler.handler(parsedInput, {
+            experimental_caller: caller,
+          });
+        } catch (error) {
+          const refusal = readPluginRpcRefusal(error);
+          if (refusal === null) throw error;
+          return { ok: false as const, error: refusal };
+        }
         const parsedOutput = await validateRpcValue(
           handler.outputSchema,
           result,
           "output",
           throwRpcBoundaryError,
         );
-        return normalizeRpcJsonResult(parsedOutput, throwRpcBoundaryError);
+        const resultValue = normalizeRpcJsonResult(
+          parsedOutput,
+          throwRpcBoundaryError,
+        );
+        const { invalidated } = rpcResponseTags(
+          handler.declarations,
+          parsedInput,
+          parsedOutput,
+        );
+        if (invalidated.length > 0)
+          deps.hub.notifyPluginChanged(id, invalidated);
+        return { ok: true as const, result: resultValue };
       });
-      if (outcome.ok) return { ok: true, result: outcome.value };
+      if (outcome.ok) return outcome.value;
       if (outcome.cause instanceof PluginRpcBoundaryError) {
         return { ok: false, error: outcome.cause.rpcError };
       }

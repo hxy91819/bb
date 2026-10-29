@@ -68,6 +68,42 @@ describe("plugin app runtime shim", () => {
     await expect(bundle("addedLater")).resolves.toContain("addedLater");
   });
 
+  it("still builds a plugin that imports a retired SDK hook and warns with the replacement", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-plugin-retired-"));
+    tempDirs.push(dir);
+    const facadePath = join(dir, "app-facade.mjs");
+    await writeFile(facadePath, "export const first = 1;\n");
+    const entry = join(dir, "app.tsx");
+    await writeFile(
+      entry,
+      `import {\n  first,\n  experimental_useSidebarThreadPullRequest as useRowPullRequest,\n} from "@get-bb/plugin-sdk/app";\nexport { first, useRowPullRequest };\n`,
+    );
+
+    const result = await build({
+      entryPoints: [entry],
+      bundle: true,
+      format: "esm",
+      platform: "browser",
+      write: false,
+      logLevel: "silent",
+      plugins: [runtimeShimPlugin(pathToFileURL(facadePath).href)],
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.outputFiles[0]?.text).toContain(
+      "experimental_useSidebarThreadPullRequest",
+    );
+    expect(result.warnings).toMatchObject([
+      {
+        pluginName: "bb-plugin-runtime-shims",
+        location: expect.objectContaining({ line: 4 }),
+        text: expect.stringMatching(
+          /^experimental_useSidebarThreadPullRequest is retired from @get-bb\/plugin-sdk\/app\. Existing plugins remain supported\. Read pull requests from the GitHub PR Status plugin instead: experimental_useRpcKeyedQuery\(\{ pluginId: "bb--github-pr-status"/,
+        ),
+      },
+    ]);
+  });
+
   it("has an export-manifest entry for every non-SDK slot", () => {
     for (const specifier of Object.keys(RUNTIME_SLOT_BY_SPECIFIER)) {
       if (specifier.endsWith("/plugin-sdk/app")) continue;
@@ -286,7 +322,7 @@ describe("plugin app runtime shim", () => {
     await writeFile(
       join(dir, "app.ts"),
       'import "./app.css";\n' +
-        'export const utilityClass = "flex-col";\n' +
+        'export const utilityClass = "flex-col hover:underline has-[:focus]:opacity-50 group-has-[input:checked]/host:opacity-50 hover:group-has-[input:checked]/host:opacity-50 group-has-[input:checked]/host:[&>svg]:hidden space-y-3 [[data-scope-host]_&]:opacity-50 [[data-scope-host]~&]:opacity-50";\n' +
         'export const siblingClass = "[&~*]:hidden";\n',
     );
     await writeFile(
@@ -310,12 +346,84 @@ describe("plugin app runtime shim", () => {
     expect(css).toContain(`${scope} ${sibling}`);
     expect(css).not.toContain(`${scope}${sibling}`);
     expect(css).not.toContain("@scope");
+    expect(css).not.toContain(String.raw`:is(${scope} .hover\:underline`);
+    expect(css).toContain(`${scope}.space-y-3`);
+    expect(css).not.toContain(String.raw`:is(${scope} .group-has`);
+    expect(css).toContain(
+      String.raw`${scope}.group-has-\[input\:checked\]\/host\:opacity-50:is(:where(.group\/host):has(:is(input:checked)) *)`,
+    );
+    expect(css).toContain(
+      String.raw`.hover\:group-has-\[input\:checked\]\/host\:opacity-50:hover`,
+    );
+    expect(css).toContain(
+      String.raw`${scope}.group-has-\[input\:checked\]\/host\:\[\&\>svg\]\:hidden:is(:where(.group\/host):has(:is(input:checked)) *)>svg`,
+    );
+    expect(css).toContain(`[data-scope-host] ${scope}`);
+    expect(css).toContain(`[data-scope-host]~${scope}`);
+    expect(css).toContain(String.raw`${scope} .hover\:underline:hover`);
+    expect(css).toContain(
+      String.raw`${scope}.has-\[\:focus\]\:opacity-50:has(:focus)`,
+    );
     expect(css).not.toContain(`${scope} .bb71-authored-decoration`);
     expect(css).not.toContain(`${scope}.bb71-authored-decoration`);
     expect(css.indexOf(".bb71-authored-decoration{")).toBeGreaterThan(
       css.lastIndexOf("@layer utilities{"),
     );
     expect(css).toContain("@keyframes bb71-authored-pulse");
+  });
+
+  it("builds retired tab registrations alongside retired hooks and returns migration warnings", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-plugin-legacy-tabs-"));
+    tempDirs.push(dir);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "bb-plugin-legacy-tabs-fixture",
+        version: "0.0.0",
+        bb: {
+          name: "Legacy tabs",
+          description: "Published API compatibility",
+          branding: { icon: "Info" },
+          server: "./server.ts",
+          app: "./app.ts",
+        },
+      }),
+    );
+    await writeFile(
+      join(dir, "server.ts"),
+      "export default function plugin() {}\n",
+    );
+    await writeFile(
+      join(dir, "app.ts"),
+      `import { definePluginApp, experimental_useSidebarThreadPullRequest } from "@get-bb/plugin-sdk/app";
+      const component = () => experimental_useSidebarThreadPullRequest("thread").pullRequest;
+      export default definePluginApp((app) => {
+        app.slots.threadPanelAction({ id: "legacy", title: "Legacy", component });
+        app.slots.navPanel({ id: "board", title: "Board", icon: "Info", path: "board", component, fixedTabs: [{ id: "fixed", title: "Fixed", icon: "Info", component }] });
+      });`,
+    );
+    const result = await buildPluginApp(
+      dir,
+      "0.9.0-test",
+      await testToolchain(),
+      { minify: true },
+    );
+    const warnings = result.migrationWarnings;
+    expect(await readFile(result.jsPath, "utf8")).toContain(
+      "threadPanelAction",
+    );
+    expect(warnings).toHaveLength(3);
+    expect(warnings.join("\n")).toContain(
+      "experimental_useSidebarThreadPullRequest",
+    );
+    expect(warnings.join("\n")).toContain("experimental_useRpcKeyedQuery");
+    expect(warnings.join("\n")).toContain('availability: "action"');
+    expect(warnings.join("\n")).toContain('availability: "fixed"');
+    expect(
+      warnings.filter((warning) =>
+        warning.includes("frontend-registration.md#tab-api-migration"),
+      ).length,
+    ).toBe(2);
   });
 
   it("minifies app.js and app.css unless the caller asks for readable output", async () => {

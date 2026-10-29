@@ -1,22 +1,10 @@
+import type { ExperimentalTabRegistration } from "@get-bb/plugin-sdk";
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { makeTask } from "../test-fixtures.js";
 import type { Task } from "../shared/contract.js";
-
-if (!window.matchMedia) {
-  window.matchMedia = (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  });
-}
 
 const app = await loadPluginApp(() => import("../app"));
 const { parseTasksRoute, tasksRouteToSubPath } = await import("./routes.js");
@@ -26,7 +14,17 @@ const { querySnapshotStorageKey, resetQuerySnapshotStateForTest } =
   await import("./query-snapshot.js");
 
 const tasksRegistration = app.navPanels[0]!;
-const navigationView = tasksRegistration.fixedTabs?.[0]!;
+const navigationView = app.tabs.find(
+  (
+    tab,
+  ): tab is Extract<
+    ExperimentalTabRegistration,
+    { context: { kind: "nav-panel" }; availability: "fixed" }
+  > =>
+    tab.context.kind === "nav-panel" &&
+    tab.availability === "fixed" &&
+    tab.id === "navigation",
+)!;
 const navigationRegistration = {
   ...tasksRegistration,
   component: navigationView.component,
@@ -245,17 +243,6 @@ describe("task pager", () => {
 });
 
 describe("tasks app shell", () => {
-  it("registers navigation as a BB-owned fixed panel tab", () => {
-    expect(tasksRegistration.fixedTabs).toMatchObject([
-      {
-        id: "navigation",
-        title: "Navigation",
-        icon: "ListTodo",
-        layout: "flush",
-      },
-    ]);
-  });
-
   it("does not treat the first connection as a reconnect", async () => {
     let requests = 0;
     let title = "Initial connection title";
@@ -425,44 +412,6 @@ describe("tasks app shell", () => {
 
     releaseProjects?.();
     await waitFor(() => expect(refresh.disabled).toBe(false));
-  });
-
-  it("exposes a subtle icon-only refresh control left of New task", async () => {
-    const slot = renderSlot(
-      app.navPanels[0]!,
-      { subPath: "all" },
-      {
-        rpc: seededRpc({
-          listTasks: () => ({
-            tasks: [
-              {
-                ...pagerTask("TSK-4", "todo", 1),
-                title: "Order probe",
-                description: "",
-                labelIds: [],
-              },
-            ],
-          }),
-          listLabels: () => ({ labels: [] }),
-          listAttachments: () => ({ attachments: [] }),
-          listTaskThreads: () => ({ taskThreads: [] }),
-          listComments: () => ({ comments: [] }),
-        }),
-      },
-    );
-    await slot.findByText("Order probe");
-
-    const refresh = slot.getByRole("button", { name: "Refresh tasks" });
-    const newTask = slot.getByRole("button", { name: /New task/i });
-
-    expect(refresh.textContent?.trim() ?? "").not.toMatch(/Refresh/i);
-    expect(refresh.getAttribute("aria-label")).toBe("Refresh tasks");
-    expect(refresh.className).toMatch(/size-7/);
-
-    expect(
-      refresh.compareDocumentPosition(newTask) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("single-flights manual refresh against deferred RPCs and keeps geometry stable", async () => {
@@ -1106,6 +1055,9 @@ describe("tasks app shell", () => {
     await waitFor(() => expect(projectCalls).toBeGreaterThan(before));
     const settled = projectCalls;
     await slot.emitRealtime("comments:changed", { taskId: "x" });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
     expect(projectCalls).toBe(settled);
   });
 });

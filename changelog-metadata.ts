@@ -4,6 +4,15 @@ type ReleaseMeta = {
 };
 
 export const RELEASE_META: Record<string, ReleaseMeta> = {
+  "0.47.0": {
+    date: "October 23, 2026",
+    headline:
+      "Customizable navigation, new and improved ACP support, and diff review",
+  },
+  "0.46.1": {
+    date: "October 15, 2026",
+    headline: "MCP server, bb CLI install, and Settings search",
+  },
   "0.46.0": {
     date: "October 9, 2026",
     headline: "Navigation rail, reusable prompts, and notification controls",

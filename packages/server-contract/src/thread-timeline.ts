@@ -654,48 +654,10 @@ export const timelineDeltaSchema = z.object({
 });
 export type TimelineDelta = z.infer<typeof timelineDeltaSchema>;
 
-export function computeTimelineRowDelta(
-  prevRows: readonly TimelineRow[],
-  currentRows: readonly TimelineRow[],
-): TimelineDelta {
-  const prevById = new Map<string, string>();
-  for (const row of prevRows) {
-    prevById.set(row.id, JSON.stringify(row));
-  }
-  const upsertRows: TimelineRow[] = [];
-  const rowOrder: string[] = [];
-  let orderChanged = prevRows.length !== currentRows.length;
-  for (const row of currentRows) {
-    rowOrder.push(row.id);
-    if (prevRows[rowOrder.length - 1]?.id !== row.id) {
-      orderChanged = true;
-    }
-    if (prevById.get(row.id) !== JSON.stringify(row)) {
-      upsertRows.push(row);
-    }
-  }
-  return orderChanged ? { upsertRows, rowOrder } : { upsertRows };
-}
-
-export function applyTimelineDelta(
-  prevRows: readonly TimelineRow[],
-  delta: TimelineDelta,
-): TimelineRow[] | null {
-  const byId = new Map<string, TimelineRow>();
-  for (const row of prevRows) {
-    byId.set(row.id, row);
-  }
-  for (const row of delta.upsertRows) {
-    byId.set(row.id, row);
-  }
-  const result: TimelineRow[] = [];
-  const rowOrder = delta.rowOrder ?? prevRows.map((row) => row.id);
-  for (const id of rowOrder) {
-    const row = byId.get(id);
-    if (row === undefined) {
-      return null;
-    }
-    result.push(row);
-  }
-  return result;
-}
+export {
+  timelineRowChildren,
+  withTimelineRowChildren,
+  mapTimelineRowTree,
+  computeTimelineRowDelta,
+  applyTimelineDelta,
+} from "./thread-timeline-operations.js";

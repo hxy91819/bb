@@ -1,5 +1,4 @@
 import {
-  parseThreadEventRow,
   type PromptInput,
   type PendingInteraction,
   type PendingInteractionResolution,
@@ -45,6 +44,7 @@ import type {
   ThreadResponse,
   PluginThreadMetadataListResponse,
   ThreadAncestorsListResponse,
+  ThreadDescendantsListResponse,
   ThreadPluginMetadataResponse,
   ThreadSearchResponse,
   ThreadStorageFileListResponse,
@@ -102,6 +102,12 @@ export interface ThreadListArgs {
   projectId?: string;
   signal?: AbortSignal;
   sourceThreadId?: string;
+  /**
+   * Only threads with these IDs, at most 200 per call. The other filters still
+   * apply, unknown and deleted IDs are left out, and an empty list matches no
+   * threads.
+   */
+  threadIds?: readonly string[];
   unsectioned?: boolean;
 }
 
@@ -176,6 +182,7 @@ export type ThreadMutationResult = ThreadResponse;
 export type ThreadPluginMetadataResult = ThreadPluginMetadataResponse;
 export type PluginThreadMetadataListResult = PluginThreadMetadataListResponse;
 export type ThreadAncestorsListResult = ThreadAncestorsListResponse;
+export type ThreadDescendantsListResult = ThreadDescendantsListResponse;
 export type ThreadSpawnResult = ThreadResponse;
 export type ThreadForkResult = ThreadResponse;
 export type ThreadInteractionGetResult = PendingInteraction;
@@ -220,8 +227,7 @@ export type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 export type ThreadStorageLocationResult = ThreadStorageLocationResponse;
 export type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
-export type ThreadDefaultExecutionOptionsResult =
-  ResolvedThreadExecutionOptions | null;
+export type ThreadDefaultExecutionOptionsResult = ResolvedThreadExecutionOptions | null;
 export type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
 export type ThreadTimelineTurnSummaryDetailsResult =
   TimelineTurnSummaryDetailsResponse;
@@ -271,6 +277,12 @@ export interface PluginThreadMetadataListArgs {
 }
 export interface ThreadAncestorsListArgs {
   threadIds: readonly string[];
+  signal?: AbortSignal;
+}
+export interface ThreadDescendantsListArgs {
+  threadIds: readonly string[];
+  includeArchived?: boolean;
+  includeHidden?: boolean;
   signal?: AbortSignal;
 }
 export interface ThreadPluginMetadataUpdateArgs {
@@ -626,6 +638,17 @@ export interface ThreadsArea {
   experimental_listAncestors(
     args: ThreadAncestorsListArgs,
   ): Promise<ThreadAncestorsListResult>;
+  /**
+   * Each of `threadIds` (1–200 per request) that exists and is not deleted,
+   * with `descendantIds` for every thread below it, children first (empty
+   * for a leaf). Archived and hidden descendants are omitted unless
+   * `includeArchived` / `includeHidden` is true; threads below them are still
+   * returned. Deleted threads and unknown ids are always omitted.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_listDescendants(
+    args: ThreadDescendantsListArgs,
+  ): Promise<ThreadDescendantsListResult>;
   updatePluginMetadata(
     args: ThreadPluginMetadataUpdateArgs,
   ): Promise<ThreadPluginMetadataResult>;
@@ -701,6 +724,9 @@ function listQuery(args: ThreadListArgs | undefined): ThreadListQuery {
     ...(args?.sectionId ? { sectionId: args.sectionId } : {}),
     ...(args?.originKind ? { originKind: args.originKind } : {}),
     ...(args?.originPluginId ? { originPluginId: args.originPluginId } : {}),
+    ...(args?.threadIds === undefined
+      ? {}
+      : { threadIds: args.threadIds.join(",") }),
     ...(args?.archived === undefined
       ? {}
       : { archived: args.archived ? "true" : "false" }),
@@ -738,7 +764,9 @@ function updateJson(args: ThreadUpdateArgs): UpdateThreadRequest {
     parentThreadId: args.parentThreadId,
     model: args.model,
     reasoningLevel: args.reasoningLevel,
+    sessionOptions: args.sessionOptions,
     visibility: args.visibility,
+    parentNotifications: args.parentNotifications,
   };
 }
 
@@ -750,12 +778,14 @@ function sendJson(args: ThreadSendArgs): SendMessageRequest {
     permissionMode: args.permissionMode,
     reasoningLevel: args.reasoningLevel,
     senderThreadId: args.senderThreadId,
+    originPluginId: args.originPluginId,
     serviceTier: args.serviceTier,
     pluginSubmission: args.pluginSubmission,
     executionInputSources: args.executionInputSources,
     // Present ⇒ the message joins the queue waiting for the clock instead
     // of attempting now; the response reports `delivery: "queued"`.
     sendAt: args.sendAt,
+    compactFirst: args.compactFirst,
   };
 }
 
@@ -979,6 +1009,7 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       if (statusCode === 204) {
         return null;
       }
+      const { parseThreadEventRow } = await import("./thread-event-parser.js");
       return parseThreadEventRow(await response.json());
     },
   };
@@ -1261,6 +1292,24 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return transport.readJson(
         transport.api.v1.threads.ancestors.$post(
           { json: { threadIds: [...input.threadIds] } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async experimental_listDescendants(input) {
+      return transport.readJson(
+        transport.api.v1.threads.descendants.$post(
+          {
+            json: {
+              threadIds: [...input.threadIds],
+              ...(input.includeArchived === undefined
+                ? {}
+                : { includeArchived: input.includeArchived }),
+              ...(input.includeHidden === undefined
+                ? {}
+                : { includeHidden: input.includeHidden }),
+            },
+          },
           ...signalRequestArgs(input.signal),
         ),
       );

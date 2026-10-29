@@ -1,7 +1,9 @@
 export { collectOptionalFieldPaths } from "./collect-optional-field-paths.js";
 export { createDeferredPromise } from "./deferred-promise.js";
 export type { DeferredPromise } from "./deferred-promise.js";
+export { initRepo } from "./git-repo.js";
 export {
+  LIVE_TEST_PROVIDER_ID,
   listPreferredTestModels,
   resolvePreferredTestModel,
 } from "./provider-models.js";
@@ -23,3 +25,5 @@ export {
   resolveProviderCorpusDir,
 } from "./provider-corpus.js";
 export type { CorpusThread } from "./provider-corpus.js";
+export { makeTempDir, makeTempDirSync } from "./temp-dir.js";
+export { createMemoryStorage } from "./memory-storage.js";

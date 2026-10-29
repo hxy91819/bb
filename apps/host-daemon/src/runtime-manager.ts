@@ -264,6 +264,10 @@ export class RuntimeManager {
   private shellEnvGeneration = 0;
   private readonly entries = new Map<string, RuntimeEntry>();
   private readonly pendingEntries = new Map<string, Promise<RuntimeEntry>>();
+  private readonly pendingEnvironmentEnsures = new Map<
+    string,
+    Promise<RuntimeEntry>
+  >();
   private readonly pendingCatalogHashes = new Map<string, string>();
   private readonly pendingEnvironmentProvisions = new Map<
     string,
@@ -315,6 +319,10 @@ export class RuntimeManager {
 
   get(environmentId: string): RuntimeEntry | undefined {
     return this.entries.get(environmentId);
+  }
+
+  hasPendingEnvironmentProvision(environmentId: string): boolean {
+    return this.pendingEnvironmentProvisions.has(environmentId);
   }
 
   async getOrAwait(environmentId: string): Promise<RuntimeEntry | undefined> {
@@ -872,6 +880,24 @@ export class RuntimeManager {
   }
 
   async ensureEnvironment(args: EnsureEnvironmentArgs): Promise<RuntimeEntry> {
+    const pending = this.pendingEnvironmentEnsures.get(args.environmentId);
+    if (pending) {
+      await pending;
+      return this.ensureEnvironment(args);
+    }
+
+    const ensure = this.ensureEnvironmentOnce(args).finally(() => {
+      if (this.pendingEnvironmentEnsures.get(args.environmentId) === ensure) {
+        this.pendingEnvironmentEnsures.delete(args.environmentId);
+      }
+    });
+    this.pendingEnvironmentEnsures.set(args.environmentId, ensure);
+    return ensure;
+  }
+
+  private async ensureEnvironmentOnce(
+    args: EnsureEnvironmentArgs,
+  ): Promise<RuntimeEntry> {
     const skillConfig = await this.resolveRuntimeSkillConfig(args);
     const existing = this.entries.get(args.environmentId);
     if (existing) {

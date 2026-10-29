@@ -117,7 +117,7 @@ const AGENT_OPTIONS = {
   provider: {
     type: "string",
     placeholder: "id",
-    description: "Provider id, for example claude or codex",
+    description: "Provider id, for example claude-code or codex",
   },
   model: {
     type: "string",
@@ -125,9 +125,10 @@ const AGENT_OPTIONS = {
     description: "Model id the provider accepts",
   },
   reasoning: {
-    type: "enum",
-    values: reasoningLevelSchema.options,
-    description: "Reasoning level; new automations default to medium",
+    type: "string",
+    placeholder: "level",
+    description:
+      "Reasoning level id the model lists, for example low, medium, or high; new automations default to medium",
   },
   "service-tier": {
     type: "string",
@@ -1067,13 +1068,40 @@ export function registerAutomationCli(args: {
       }),
       commands: {
         list: cliCommand({
-          summary: "List automations for a project",
-          options: { project: PROJECT_OPTION, json: JSON_OPTION },
+          summary: "List automations for a project or a target thread",
+          options: {
+            project: {
+              type: "string",
+              placeholder: "id",
+              description:
+                "Project whose automations to list; required unless --target-thread is given",
+            },
+            "target-thread": {
+              type: "string",
+              placeholder: "thread-id",
+              description:
+                "List automations in any project that re-prompt this thread",
+            },
+            json: JSON_OPTION,
+          },
+          constraints: [
+            { kind: "at-most-one", options: ["project", "target-thread"] },
+          ],
           run: (input, ctx) =>
             attempt(async () => {
-              const result = service.list({
-                projectId: requireProjectId(input.options.project, ctx),
-              });
+              const targetThreadId = input.options["target-thread"];
+              const result = service.list(
+                targetThreadId === undefined
+                  ? {
+                      projectId: requireProjectId(input.options.project, ctx),
+                    }
+                  : {
+                      targetThreadId: requireOptionValue(
+                        "target-thread",
+                        targetThreadId,
+                      ),
+                    },
+              );
               return {
                 exitCode: 0,
                 stdout: input.options.json

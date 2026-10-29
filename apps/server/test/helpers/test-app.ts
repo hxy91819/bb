@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import type { AddressInfo } from "node:net";
 import {
-  createConnection,
+  ensurePersonalProject,
   getAppSettings,
   getDisabledProviderIds,
   listRunningThreads,
@@ -16,7 +16,7 @@ import {
   type DbConnection,
 } from "@bb/db";
 import { defaultFeatureFlags } from "@bb/domain";
-import { initDb } from "../../src/db.js";
+import { createMigratedConnection } from "@bb/db/testing";
 import { createApp } from "../../src/server.js";
 import { PendingInteractionLifecycle } from "../../src/services/interactions/pending-interactions.js";
 import { createMachineAuthService } from "../../src/services/machine-auth.js";
@@ -33,6 +33,10 @@ import {
   createAppUpdateService,
   type AppUpdateService,
 } from "../../src/services/system/app-update.js";
+import {
+  createCliCommandService,
+  type CliCommandService,
+} from "../../src/services/system/cli-command.js";
 import {
   createAppVersionService,
   type AppVersionService,
@@ -90,11 +94,13 @@ export async function installTestBuiltinPlugin(
 export type TestAppHarnessConfigOverrides = Partial<ServerRuntimeConfig> & {
   appUpdateService?: AppUpdateService;
   appVersionService?: AppVersionService;
+  cliCommandService?: CliCommandService;
   terminalAttachTimeoutMs?: number;
   terminalCloseTimeoutMs?: number;
   terminalOpenTimeoutMs?: number;
   nativeRootsClock?: () => number;
   seedFirstPartyProviders?: boolean;
+  tunnelIngressNow?: () => number;
   extraProviders?: readonly {
     declaration: PluginProviderDeclaration;
     pluginId: string;
@@ -142,13 +148,10 @@ export function createTestDaemonHostKey(
   });
 }
 
-let migratedTemplate: Buffer | null = null;
-
 export function createTestDb(): DbConnection {
-  if (migratedTemplate === null) {
-    migratedTemplate = initDb(":memory:").$client.serialize();
-  }
-  return createConnection(migratedTemplate);
+  const db = createMigratedConnection();
+  ensurePersonalProject(db);
+  return db;
 }
 
 export async function createTestAppHarness(
@@ -157,11 +160,13 @@ export async function createTestAppHarness(
   const {
     appUpdateService,
     appVersionService,
+    cliCommandService,
     terminalAttachTimeoutMs = TEST_TERMINAL_RPC_TIMEOUT_MS,
     terminalCloseTimeoutMs,
     terminalOpenTimeoutMs = TEST_TERMINAL_RPC_TIMEOUT_MS,
     nativeRootsClock,
     seedFirstPartyProviders = true,
+    tunnelIngressNow: _tunnelIngressNow,
     ...configOverrides
   } = overrides;
   const logger = createTestLogger();
@@ -236,6 +241,7 @@ export async function createTestAppHarness(
     performanceDiagnosticsAvailable: false,
     hostDaemonPort: 3001,
     marketplaceUrl: "https://marketplace.invalid/marketplace.json",
+    connectGateKeysUrl: "https://gate-keys.invalid/bb-connect-gate-keys.json",
     inheritedSkillsRootPaths: [],
     isDevelopment: true,
     serverPort: 3334,
@@ -303,6 +309,18 @@ export async function createTestAppHarness(
     appUpdate,
     appVersion,
     bbAppManagedConfig,
+    cliCommand:
+      cliCommandService ??
+      createCliCommandService({
+        env: {},
+        homeDir: dataDir,
+        launcherPath: null,
+        platform: process.platform,
+        windowsUserPath: {
+          read: () => Promise.reject(new Error("no Windows PATH in tests")),
+          write: () => Promise.reject(new Error("no Windows PATH in tests")),
+        },
+      }),
     config,
     db,
     hub,
@@ -382,8 +400,19 @@ export async function startTestServer(
 ): Promise<RunningTestServer> {
   const harness = await createTestAppHarness(overrides);
   let addressInfo: AddressInfo | null = null;
-  const { app, closeWebSockets, injectWebSocket, pluginService, serverMove } =
-    createApp(harness.deps);
+  const {
+    app,
+    closeWebSockets,
+    injectWebSocket,
+    pluginService,
+    serverMove,
+    tunnelIngress,
+  } = createApp(
+    harness.deps,
+    overrides.tunnelIngressNow === undefined
+      ? undefined
+      : { tunnelIngressNow: overrides.tunnelIngressNow },
+  );
   const server = serve(
     {
       hostname: TEST_SERVER_HOST,
@@ -418,6 +447,7 @@ export async function startTestServer(
           resolve();
         });
       });
+      await tunnelIngress.closeAll();
       await closeWebSockets();
       await closeServer;
       await harness.cleanup();

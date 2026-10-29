@@ -11,7 +11,7 @@ import { useThreadActions } from "@/components/thread/ThreadActionsProvider";
 import { useRouteState } from "@/hooks/useRouteState";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
 import { showMutationErrorToast } from "@/lib/mutation-errors";
-import { resolveThread } from "@/lib/plugin-sidebar-hooks";
+import { resolveThread } from "@/lib/cached-thread";
 import { getThreadRoutePath } from "@/lib/route-paths";
 import { countPanes, listPanes } from "@/lib/split-layout";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
@@ -40,7 +40,9 @@ function useSplitAvailability(): SplitAvailability {
   const layout = useAtomValue(splitLayoutAtom);
   const { threadId } = useRouteState();
   const panes =
-    layout !== null && countPanes(layout.root) > 1 ? listPanes(layout.root) : [];
+    layout !== null && countPanes(layout.root) > 1
+      ? listPanes(layout.root)
+      : [];
   const focusedPane = panes.find(
     (pane) => pane.paneId === layout?.focusedPaneId,
   );
@@ -121,6 +123,7 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     coreThreadAction({
       id: "split",
       group: GROUPS.open,
+      order: 10,
       title: "Open in split",
       icon: "Columns2",
       useData: useSplitAvailability,
@@ -137,8 +140,8 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     }),
     coreThreadAction({
       id: "newThreadInEnvironment",
-      group: GROUPS.organize,
-      order: 10,
+      group: GROUPS.open,
+      order: 30,
       title: "New thread in environment",
       icon: "MessageSquarePlus",
       useData: useIsCompactViewport,
@@ -165,12 +168,12 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     }),
     coreThreadAction({
       id: "copyLink",
-      group: GROUPS.organize,
+      group: GROUPS.open,
       order: 20,
-      title: "Copy thread link",
+      title: "Copy link",
       icon: "Copy",
       item: ({ thread }) => ({
-        label: "Copy thread link",
+        label: "Copy link",
         icon: "Copy",
         run: () =>
           copyToClipboardWithToast(getThreadUrl(thread), {
@@ -181,7 +184,7 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     }),
     coreThreadAction({
       id: "read",
-      group: GROUPS.organize,
+      group: GROUPS.state,
       order: 30,
       title: "Mark read / unread",
       icon: "MailOpen",
@@ -208,8 +211,8 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     }),
     coreThreadAction({
       id: "pin",
-      group: GROUPS.organize,
-      order: 40,
+      group: GROUPS.state,
+      order: 20,
       title: "Pin",
       icon: "Pin",
       item: ({ thread, sdk }) => {
@@ -239,7 +242,7 @@ export const CORE_THREAD_ACTIONS: readonly PluginThreadActionRegistration<unknow
     coreThreadAction({
       id: "rename",
       group: GROUPS.organize,
-      order: 60,
+      order: 10,
       title: "Rename",
       icon: "Edit",
       item: ({ thread }) => ({

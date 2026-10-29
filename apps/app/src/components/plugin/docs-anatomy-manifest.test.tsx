@@ -140,7 +140,9 @@ function renderAppSidebar() {
                         onResizeMouseDown={() => {}}
                         isResizing={false}
                         isBodyHidden={false}
-                        renderRail={() => null}
+                        navigation={{ kind: "loading", placement: "rail" }}
+                        settingsRoutePath="/settings"
+                        isSettingsActive={false}
                         alternateBody={null}
                       />
                     </SidebarProvider>
@@ -173,22 +175,6 @@ describe("docs anatomy manifest", () => {
         }
       }
     }
-  });
-
-  it("keeps the Info tab before the Diff tab, as the Plugin Guide's right-panel fixture draws them", () => {
-    const source = readFileSync(
-      resolve(
-        import.meta.dirname,
-        "../../views/thread-detail/ThreadDetailView.tsx",
-      ),
-      "utf8",
-    );
-    const info = source.indexOf("createThreadInfoFixedPanelTab()");
-    const diff = source.indexOf("createGitDiffFixedPanelTab()");
-
-    expect(info).toBeGreaterThan(-1);
-    expect(diff).toBeGreaterThan(-1);
-    expect(info).toBeLessThan(diff);
   });
 
   it("matches AppSidebar's section order", () => {

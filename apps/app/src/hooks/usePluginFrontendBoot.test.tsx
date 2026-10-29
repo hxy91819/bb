@@ -14,11 +14,17 @@ import {
 
 const mocks = vi.hoisted(() => ({
   bootPluginFrontends: vi.fn(async () => {}),
+  releaseSplitPreloads: vi.fn(),
   systemConfigData: undefined as unknown,
+}));
+
+vi.mock("@/lib/split-prefetch", () => ({
+  holdSplitPreloads: () => mocks.releaseSplitPreloads,
 }));
 
 vi.mock("@/lib/plugin-frontend-lazy", () => ({
   bootPluginFrontends: mocks.bootPluginFrontends,
+  whenPriorityPluginFrontendsLoaded: () => new Promise(() => {}),
 }));
 
 vi.mock("@/hooks/queries/system-queries", () => ({
@@ -42,37 +48,13 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  mocks.bootPluginFrontends.mockClear();
+  mocks.bootPluginFrontends.mockReset();
+  mocks.bootPluginFrontends.mockImplementation(async () => {});
+  mocks.releaseSplitPreloads.mockClear();
   resetPluginFrontendBootStateForTest();
 });
 
 describe("usePluginFrontendBoot", () => {
-  it("does not boot on system config alone; boots after route paint plus idle", async () => {
-    renderHook(() => usePluginFrontendBoot());
-    await flushMicrotasks();
-    expect(mocks.bootPluginFrontends).not.toHaveBeenCalled();
-
-    await act(async () => {
-      markRouteContentPainted();
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(50);
-    });
-    expect(mocks.bootPluginFrontends).toHaveBeenCalledTimes(1);
-  });
-
-  it("boots at the 1.5 s timeout when the route never paints", async () => {
-    renderHook(() => usePluginFrontendBoot());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_400);
-    });
-    expect(mocks.bootPluginFrontends).not.toHaveBeenCalled();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
-    });
-    expect(mocks.bootPluginFrontends).toHaveBeenCalledTimes(1);
-  });
-
   it("boots immediately on a plugin panel route: the plugin is the page", async () => {
     window.history.replaceState(null, "", "/plugins/tasks/board");
     renderHook(() => usePluginFrontendBoot());
@@ -131,5 +113,20 @@ describe("usePluginFrontendBoot", () => {
       finishBoot();
     });
     expect(result.current).toBe(true);
+  });
+
+  it("holds split preloads until every plugin frontend has loaded", async () => {
+    let finishBoot: () => void = () => {};
+    mocks.bootPluginFrontends.mockImplementation(
+      () => new Promise<void>((resolve) => (finishBoot = resolve)),
+    );
+    window.history.replaceState(null, "", "/plugins/tasks/board");
+    renderHook(() => usePluginFrontendBoot());
+    await flushMicrotasks();
+    expect(mocks.bootPluginFrontends).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseSplitPreloads).not.toHaveBeenCalled();
+
+    await act(async () => finishBoot());
+    expect(mocks.releaseSplitPreloads).toHaveBeenCalled();
   });
 });

@@ -111,6 +111,54 @@ describe("marketing download", () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
+  it("restarts a resume whose If-Range no longer matches the installer", async () => {
+    const fetchMock = stubReleaseFetch(["bb-0.0.27-arm64.dmg"], () => {
+      const ranged = fetchMock.mock.calls.at(-1)?.[1] !== undefined;
+      return ranged
+        ? new Response("tail", {
+            headers: { "content-range": "bytes 100-103/104", etag: '"new"' },
+            status: 206,
+          })
+        : new Response("whole-new-file", { headers: { etag: '"new"' } });
+    });
+
+    const response = await handleDownload(
+      "macos",
+      new Request("https://getbb.app/download/macos", {
+        headers: { range: "bytes=100-", "if-range": '"old"' },
+      }),
+      {},
+      vi.fn(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Range")).toBeNull();
+    expect(await response.text()).toBe("whole-new-file");
+  });
+
+  it("keeps the partial response when If-Range still matches", async () => {
+    stubReleaseFetch(
+      ["bb-0.0.27-arm64.dmg"],
+      () =>
+        new Response("tail", {
+          headers: { "content-range": "bytes 100-103/104", etag: '"same"' },
+          status: 206,
+        }),
+    );
+
+    const response = await handleDownload(
+      "macos",
+      new Request("https://getbb.app/download/macos", {
+        headers: { range: "bytes=100-", "if-range": '"same"' },
+      }),
+      {},
+      vi.fn(),
+    );
+
+    expect(response.status).toBe(206);
+    expect(await response.text()).toBe("tail");
+  });
+
   it("falls back to the release page when the installer fetch fails", async () => {
     stubReleaseFetch(
       ["bb-0.0.26-arm64.dmg"],
@@ -126,6 +174,29 @@ describe("marketing download", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe(DOWNLOAD_FALLBACK_URL);
+  });
+
+  it("serves the Windows installer from the Windows feed", async () => {
+    const fetchMock = stubReleaseFetch(
+      ["bb-0.45.0-x64.exe", "bb-0.45.0-x64.exe.blockmap"],
+      () => new Response("exe-bytes"),
+    );
+
+    const response = await handleDownload(
+      "windows",
+      new Request("https://getbb.app/download/windows?placement=hero"),
+      {},
+      vi.fn(),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      DESKTOP_DOWNLOADS.windows.versionFeedUrl,
+      { headers: { accept: "application/json" } },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="bb-0.45.0-x64.exe"',
+    );
   });
 
   it("never serves a macOS installer for a Linux request", async () => {
@@ -155,34 +226,71 @@ describe("marketing download", () => {
     expect(response.headers.get("Location")).toBe(DOWNLOAD_FALLBACK_URL);
   });
 
-  it("tracks the click through waitUntil when a PostHog key is set", async () => {
-    const fetchMock = vi.fn(
-      async (..._args: Parameters<typeof fetch>) => new Response("{}"),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const waitUntil = vi.fn<(promise: Promise<void>) => void>();
+  it.each([undefined, "1"])(
+    "tracks downloads while respecting Sec-GPC %s",
+    async (gpc) => {
+      const fetchMock = vi.fn(
+        async (..._args: Parameters<typeof fetch>) => new Response("{}"),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const waitUntil = vi.fn<(promise: Promise<void>) => void>();
 
-    await handleDownload(
-      "linux",
-      new Request("https://getbb.app/download/linux?placement=nav"),
-      { LANDING_POSTHOG_KEY: "phc_test" },
-      waitUntil,
-    );
+      await handleDownload(
+        "linux",
+        new Request(
+          "https://getbb.app/download/linux?placement=nav&utm_campaign=x&gclid=abc&gbraid=gb&wbraid=wb",
+          {
+            headers: {
+              referer:
+                "https://getbb.app/?utm_source=google&gclid=ref&gbraid=ref-gb&wbraid=ref-wb",
+              ...(gpc ? { "Sec-GPC": gpc } : {}),
+            },
+          },
+        ),
+        { LANDING_POSTHOG_KEY: "phc_test" },
+        waitUntil,
+      );
 
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    await waitUntil.mock.calls[0]?.[0];
-    const captureCall = fetchMock.mock.calls.find(
-      ([url]) => typeof url === "string" && url.includes("posthog"),
-    );
-    expect(captureCall).toBeTruthy();
-    const body = JSON.parse(String(captureCall?.[1]?.body)) as {
-      event: string;
-      properties: { download_target: string; placement: string };
-    };
-    expect(body.event).toBe("landing_download_linux_clicked");
-    expect(body.properties.download_target).toBe("linux");
-    expect(body.properties.placement).toBe("nav");
-  });
+      expect(waitUntil).toHaveBeenCalledTimes(1);
+      await waitUntil.mock.calls[0]?.[0];
+      const captureCall = fetchMock.mock.calls.find(
+        ([url]) => typeof url === "string" && url.includes("posthog"),
+      );
+      expect(captureCall).toBeTruthy();
+      const body = JSON.parse(String(captureCall?.[1]?.body)) as {
+        event: string;
+        properties: {
+          download_target: string;
+          placement: string;
+          utm_campaign?: string;
+          gclid?: string;
+          gbraid?: string;
+          wbraid?: string;
+          utm_source?: string;
+          $current_url: string;
+          $referrer?: string;
+        };
+      };
+      expect(body.event).toBe("landing_download_linux_clicked");
+      expect(body.properties.download_target).toBe("linux");
+      expect(body.properties.placement).toBe("nav");
+      expect(body.properties.utm_campaign).toBe("x");
+      expect(body.properties.utm_source).toBe("google");
+      for (const [name, value, referrerValue] of [
+        ["gclid", "abc", "ref"],
+        ["gbraid", "gb", "ref-gb"],
+        ["wbraid", "wb", "ref-wb"],
+      ] as const) {
+        expect(body.properties[name]).toBe(gpc === "1" ? undefined : value);
+        expect(
+          new URL(body.properties.$current_url).searchParams.get(name),
+        ).toBe(gpc === "1" ? null : value);
+        expect(
+          new URL(body.properties.$referrer ?? "").searchParams.get(name),
+        ).toBe(gpc === "1" ? null : referrerValue);
+      }
+    },
+  );
 });
 
 describe("marketing subscribe endpoint", () => {

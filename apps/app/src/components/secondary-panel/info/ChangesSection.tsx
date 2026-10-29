@@ -7,6 +7,7 @@ import {
   DiffStatsTally,
 } from "@/components/ui/diff-stats-tally.js";
 import {
+  formatOmittedChangedFilesLabel,
   selectWorkspaceChangedFilesSections,
   toChangeTally,
   type WorkspaceChangedFileSelection,
@@ -15,7 +16,6 @@ import {
 import { getFileNameFromPath } from "../rightPanelFileVisuals";
 import { FILE_STATUS_GLYPHS } from "./file-status-glyphs";
 import { InfoList, InfoListRow, InfoSection } from "./info-list";
-import { useInfoSectionCollapse } from "./useInfoSectionCollapse";
 
 function toFolderHint(path: string): string | null {
   const folderPath = directoryFromPath(path);
@@ -60,19 +60,27 @@ export function ChangedFilesList({
   onChangedFileClick,
   onOpenChangedFile,
 }: ChangedFilesHandlers & { section: WorkspaceChangedFilesSection }) {
+  const omittedFilesLabel = formatOmittedChangedFilesLabel(section.stats);
   return (
-    <InfoList
-      items={section.files}
-      getKey={(file) => `${file.status}:${file.path}`}
-      renderItem={(file) => (
-        <ChangedFileRow
-          file={file}
-          section={section}
-          onChangedFileClick={onChangedFileClick}
-          onOpenChangedFile={onOpenChangedFile}
-        />
-      )}
-    />
+    <>
+      <InfoList
+        items={section.files}
+        getKey={(file) => `${file.status}:${file.path}`}
+        renderItem={(file) => (
+          <ChangedFileRow
+            file={file}
+            section={section}
+            onChangedFileClick={onChangedFileClick}
+            onOpenChangedFile={onOpenChangedFile}
+          />
+        )}
+      />
+      {omittedFilesLabel ? (
+        <p className="m-0 text-2xs leading-6 text-subtle-foreground">
+          {omittedFilesLabel}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -81,14 +89,12 @@ export function UncommittedChangesSection({
   onChangedFileClick,
   onOpenChangedFile,
 }: ChangedFilesHandlers & { workspaceStatus: WorkspaceStatus | undefined }) {
-  const collapse = useInfoSectionCollapse("uncommittedChanges");
   const section = selectChangedFilesSection(workspaceStatus, "uncommitted");
   if (section === undefined) return null;
   return (
     <InfoSection
       label="Uncommitted files"
-      count={section.files.length}
-      collapse={collapse}
+      count={section.stats.fileCount}
       trailing={<ChangedFilesTally section={section} />}
     >
       <ChangedFilesList

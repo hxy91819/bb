@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { OverflowFade } from "@/components/ui/overflow-fade";
-import { COMPOSER_EDITOR_AVAILABLE_HEIGHT_PROPERTY } from "@/components/promptbox/ComposerEditorSlot";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { OverflowFade } from "@bb/shared-ui/overflow-fade";
+import { ComposerMaxHeightContext } from "@/components/promptbox/composer-max-height";
+import { composerRootWithin } from "@/lib/pane-composer-focus";
 import {
   MOBILE_RECENT_LABEL_HEIGHT_PX,
   MOBILE_RECENT_ROW_HEIGHT_PX,
@@ -9,15 +10,11 @@ import {
 const COMPACT_HOME_CHROME_OFFSET_PX = 56;
 const COMPACT_HOME_COLUMN_CLASS = "mx-auto w-full max-w-[760px] px-4";
 const COMPACT_HOME_REST_VISIBLE_ROWS = 4.5;
-const COMPACT_HOME_SCROLLED_VISIBLE_ROWS = 5.5;
-const COMPACT_HOME_SCROLLED_BAND_PX =
-  COMPACT_HOME_SCROLLED_VISIBLE_ROWS * MOBILE_RECENT_ROW_HEIGHT_PX +
+const COMPACT_HOME_REST_BAND_PX =
+  COMPACT_HOME_REST_VISIBLE_ROWS * MOBILE_RECENT_ROW_HEIGHT_PX +
   MOBILE_RECENT_LABEL_HEIGHT_PX;
-const COMPACT_HOME_REST_OFFSET_PX =
-  (COMPACT_HOME_SCROLLED_VISIBLE_ROWS - COMPACT_HOME_REST_VISIBLE_ROWS) *
-  MOBILE_RECENT_ROW_HEIGHT_PX;
 
-export function getCompactHomeScrollViewportTop({
+export function getCompactHomeLeadingSpace({
   regionHeight,
   composerHeight,
 }: {
@@ -25,8 +22,11 @@ export function getCompactHomeScrollViewportTop({
   composerHeight: number;
 }): number {
   return Math.max(
-    COMPACT_HOME_CHROME_OFFSET_PX,
-    regionHeight - composerHeight - COMPACT_HOME_SCROLLED_BAND_PX,
+    MOBILE_RECENT_ROW_HEIGHT_PX,
+    regionHeight -
+      composerHeight -
+      COMPACT_HOME_REST_BAND_PX -
+      COMPACT_HOME_CHROME_OFFSET_PX,
   );
 }
 
@@ -40,14 +40,17 @@ function useCompactHomeMetrics() {
   const composerRef = useRef<HTMLDivElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const scrollContentRef = useRef<HTMLDivElement>(null);
+  const leadingSpacerRef = useRef<HTMLDivElement>(null);
   const bottomSpacerRef = useRef<HTMLDivElement>(null);
   const composerFadeRef = useRef<HTMLDivElement>(null);
+  const [composerMaxHeight, setComposerMaxHeight] = useState<number>();
 
   useLayoutEffect(() => {
     const region = regionRef.current;
     const composer = composerRef.current;
     const scrollViewport = scrollViewportRef.current;
     const scrollContent = scrollContentRef.current;
+    const leadingSpacer = leadingSpacerRef.current;
     const bottomSpacer = bottomSpacerRef.current;
     const composerFade = composerFadeRef.current;
     if (
@@ -55,24 +58,25 @@ function useCompactHomeMetrics() {
       !composer ||
       !scrollViewport ||
       !scrollContent ||
+      !leadingSpacer ||
       !bottomSpacer ||
       !composerFade
     ) {
       return;
     }
     const measure = () => {
-      const editor = composer.querySelector<HTMLElement>(
-        "[data-promptbox-editor-scroll]",
-      );
-      if (editor) {
-        const editorChromeHeight = composer.offsetHeight - editor.offsetHeight;
-        composer.style.setProperty(
-          COMPOSER_EDITOR_AVAILABLE_HEIGHT_PROPERTY,
-          `${region.offsetHeight - COMPACT_HOME_CHROME_OFFSET_PX - editorChromeHeight}px`,
+      const composerRoot = composerRootWithin(composer);
+      if (composerRoot) {
+        const surroundingHeight =
+          composer.offsetHeight - composerRoot.offsetHeight;
+        setComposerMaxHeight(
+          region.offsetHeight -
+            COMPACT_HOME_CHROME_OFFSET_PX -
+            surroundingHeight,
         );
       }
       const composerHeight = composer.offsetHeight;
-      scrollViewport.style.top = `${getCompactHomeScrollViewportTop({
+      leadingSpacer.style.height = `${getCompactHomeLeadingSpace({
         regionHeight: region.offsetHeight,
         composerHeight,
       })}px`;
@@ -94,8 +98,10 @@ function useCompactHomeMetrics() {
     composerRef,
     scrollViewportRef,
     scrollContentRef,
+    leadingSpacerRef,
     bottomSpacerRef,
     composerFadeRef,
+    composerMaxHeight,
   };
 }
 
@@ -108,8 +114,10 @@ export function RootComposeCompactHome({
     composerRef,
     scrollViewportRef,
     scrollContentRef,
+    leadingSpacerRef,
     bottomSpacerRef,
     composerFadeRef,
+    composerMaxHeight,
   } = useCompactHomeMetrics();
 
   return (
@@ -131,9 +139,9 @@ export function RootComposeCompactHome({
           className="flex min-h-full flex-col justify-end"
         >
           <div
+            ref={leadingSpacerRef}
             aria-hidden
-            data-testid="root-compose-compact-recents-offset"
-            style={{ height: COMPACT_HOME_REST_OFFSET_PX }}
+            data-testid="root-compose-compact-leading-spacer"
           />
           <div className={COMPACT_HOME_COLUMN_CLASS}>{children}</div>
           <div
@@ -152,7 +160,11 @@ export function RootComposeCompactHome({
           <OverflowFade placement="above" tone="background" size="lg" />
         </div>
         <div className="bg-background pb-4">
-          <div className={COMPACT_HOME_COLUMN_CLASS}>{composer}</div>
+          <div className={COMPACT_HOME_COLUMN_CLASS}>
+            <ComposerMaxHeightContext.Provider value={composerMaxHeight}>
+              {composer}
+            </ComposerMaxHeightContext.Provider>
+          </div>
         </div>
       </div>
     </div>
