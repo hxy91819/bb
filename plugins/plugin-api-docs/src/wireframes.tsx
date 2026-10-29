@@ -550,12 +550,18 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
   "thread-list": () => (
     <RegionMark
       id="thread-list"
-      label="The thread list, replaceable by one plugin"
+      label="Thread grouping and row contributions, or one replacement list"
       className="mx-1.5 flex-1 px-1.5 py-1.5"
       showChip={false}
     >
       <span className="block px-2 pb-1 pt-1.5 text-xs text-subtle-foreground/75">
         Pinned
+      </span>
+      <span
+        data-guide-thread-group=""
+        className="block px-2 text-xs text-muted-foreground"
+      >
+        Plugin group
       </span>
       {SIDEBAR_THREADS.map((thread) => (
         <span
@@ -563,6 +569,14 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
           className="flex h-6.5 items-center gap-2 rounded-md px-2"
         >
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+          <span
+            data-guide-thread-decoration=""
+            role="img"
+            aria-label="Plugin row information"
+            className="text-xs text-muted-foreground"
+          >
+            Label
+          </span>
           {thread.glyph === "spin" ? (
             <Mark
               id="thread-row-status"
@@ -1008,7 +1022,7 @@ export function AppShellWireframe({
           />
           <MeasuredBadge
             id="thread-list"
-            label="The thread list, replaceable by one plugin"
+            label="Thread grouping and row contributions, or one replacement list"
             anchor='[data-guide-region="thread-list"]'
             at="start"
           />
