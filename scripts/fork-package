@@ -134,9 +134,17 @@ while IFS= read -r filter; do
   [ -z "$filter" ] || test_filters+=("$filter")
 done < <(node "$state_tool" field "$state" filters)
 iso="$wt/scripts/run-resource-isolated"
+
 printf '固定输入：base=%s source=%s previous=%s\n接续命令：%s --resume %s\n' "$base" "$result" "$previous" "$0" "$result"
 
 node "$state_tool" begin "$state" "$verify_only" "$build" "$release"
+step "选择资源预算"
+if ! BB_RESOURCE_BUDGET="$(node "$here/resource-runtime.mjs" select package)"; then
+  node "$state_tool" result "$state" verification failed
+  exit 1
+fi
+export BB_RESOURCE_BUDGET
+printf '%s\n' "$BB_RESOURCE_BUDGET" > "$run_record.resources.json"
 step "安装依赖"
 CI=true NODE_ENV=development npm_config_production=false run_stage install "$iso" --profile package -- pnpm -C "$wt" install --frozen-lockfile --prod=false
 

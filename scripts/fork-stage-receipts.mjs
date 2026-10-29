@@ -187,6 +187,8 @@ export function executionIdentity(cwd, command) {
       "package.json",
       "turbo.json",
       "scripts/run-resource-isolated",
+      "scripts/resource-profile.mjs",
+      "scripts/resource-runtime.mjs",
     ].map((name) => fileIdentity(resolve(cwd, name))),
   };
 }

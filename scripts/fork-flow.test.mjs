@@ -477,7 +477,7 @@ test("package entry synchronizes once and seals its snapshot before a missing bu
     assert.ok(recordPath, result.stdout);
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
     assert.equal(record.status, "failed");
-    assert.equal(record.result.delivery.verification, "failed");
+    assert.equal(record.result.delivery.verification, "failed", result.stderr);
     assert.equal(record.result.delivery.promotion, "skipped");
     const inputs = JSON.parse(readFileSync(record.result.snapshot, "utf8"));
     assert.equal(inputs.baseSha, f.base);
@@ -1347,27 +1347,34 @@ test("same-named replacement units are not claimed or killed as the old executio
   }
 });
 
+function microResourceWrapper(f) {
+  mkdirSync(join(f.root, "scripts"));
+  const wrapper = join(f.root, "scripts/run-resource-isolated");
+  const unit = `bb-fork-${randomUUID()}`;
+  const actual = readFileSync(
+    new URL("./run-resource-isolated", import.meta.url),
+    "utf8",
+  );
+  assert.ok(actual.includes("unit_name='bb-local-verification'"));
+  writeFileSync(
+    wrapper,
+    actual.replace("unit_name='bb-local-verification'", `unit_name='${unit}'`),
+  );
+  for (const name of ["resource-profile.mjs", "resource-runtime.mjs"])
+    writeFileSync(
+      join(f.root, "scripts", name),
+      readFileSync(new URL(`./${name}`, import.meta.url)),
+    );
+  chmodSync(wrapper, 0o755);
+  return { wrapper, unit };
+}
+
 test("the actual resource wrapper preserves Slice ownership and refuses a recursively populated micro scope", async () => {
   const f = fixture();
   const state = join(f.root, ".git/state.json");
   let task;
   try {
-    mkdirSync(join(f.root, "scripts"));
-    const wrapper = join(f.root, "scripts/run-resource-isolated");
-    const unit = `bb-fork-${randomUUID()}`;
-    const actual = readFileSync(
-      new URL("./run-resource-isolated", import.meta.url),
-      "utf8",
-    );
-    assert.ok(actual.includes("unit_name='bb-local-verification'"));
-    writeFileSync(
-      wrapper,
-      actual.replace(
-        "unit_name='bb-local-verification'",
-        `unit_name='${unit}'`,
-      ),
-    );
-    chmodSync(wrapper, 0o755);
+    const { wrapper, unit } = microResourceWrapper(f);
     f.commit("isolated resource wrapper");
     writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
     const child =
@@ -1427,6 +1434,112 @@ test("the actual resource wrapper preserves Slice ownership and refuses a recurs
   } finally {
     writeFileSync(join(f.root, ".git/release"), "release");
     await task?.catch(() => {});
+    f.cleanup();
+  }
+});
+
+test("nested resource calls inherit a frozen budget and refuse profile upgrades without touching the writer", () => {
+  const f = fixture();
+  try {
+    const { wrapper } = microResourceWrapper(f);
+    const env = {
+      ...managerEnv(f.env),
+      BB_RESOURCE_MEMORY_MAX_BYTES: String(1024 ** 3),
+      BB_RESOURCE_MEMORY_HIGH_BYTES: String(768 * 1024 ** 2),
+      BB_RESOURCE_CPU_QUOTA_PERCENT: "100",
+      BB_RESOURCE_VITEST_WORKERS: "1",
+    };
+    delete env.BB_RESOURCE_BUDGET;
+    const script = `const c=require('node:child_process'); const before=process.env.BB_RESOURCE_BUDGET; const nested=c.spawnSync(${JSON.stringify(wrapper)},['--profile','verification','--',process.execPath,'-e','process.stdout.write(process.env.BB_RESOURCE_BUDGET)'],{env:{...process.env,BB_RESOURCE_MEMORY_MAX_BYTES:'1',BB_RESOURCE_CPU_QUOTA_PERCENT:'999999'},encoding:'utf8'}); if(nested.status!==0) throw Error(nested.stderr); if(nested.stdout!==before) throw Error('budget drift'); process.stdout.write(before)`;
+    const result = spawnSync(
+      wrapper,
+      ["--profile", "package", "--", process.execPath, "-e", script],
+      { cwd: f.root, env, encoding: "utf8", timeout: 15000 },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).selected.memoryMaxBytes, 1024 ** 3);
+    const upgrade = spawnSync(
+      wrapper,
+      [
+        "--",
+        wrapper,
+        "--profile",
+        "package",
+        "--",
+        "touch",
+        ".git/should-not-run",
+      ],
+      { cwd: f.root, env, encoding: "utf8", timeout: 15000 },
+    );
+    assert.notEqual(upgrade.status, 0);
+    assert.match(upgrade.stderr, /Cannot upgrade/);
+    assert.equal(existsSync(join(f.root, ".git/should-not-run")), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("selected resource changes invalidate stage success and malformed budgets leave failed state", () => {
+  const f = fixture();
+  try {
+    const { wrapper } = microResourceWrapper(f);
+    f.commit("budget fixture");
+    const state = join(f.root, ".git/state.json");
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    const tool = new URL("./resource-runtime.mjs", import.meta.url).pathname;
+    const env = {
+      ...managerEnv(f.env),
+      BB_RESOURCE_MEMORY_MAX_BYTES: String(1024 ** 3),
+      BB_RESOURCE_MEMORY_HIGH_BYTES: String(768 * 1024 ** 2),
+      BB_RESOURCE_CPU_QUOTA_PERCENT: "100",
+      BB_RESOURCE_VITEST_WORKERS: "1",
+    };
+    delete env.BB_RESOURCE_BUDGET;
+    env.BB_RESOURCE_BUDGET = execFileSync(
+      process.execPath,
+      [tool, "select", "package"],
+      { env, encoding: "utf8" },
+    ).trim();
+    const args = [
+      stateTool,
+      "run",
+      state,
+      "tests",
+      f.root,
+      wrapper,
+      "--profile",
+      "package",
+      "--",
+      "true",
+    ];
+    const run = () =>
+      spawnSync(process.execPath, args, {
+        cwd: f.root,
+        env,
+        encoding: "utf8",
+        timeout: 15000,
+      });
+    assert.equal(run().status, 0);
+    assert.equal(run().status, 0);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "reused",
+    );
+    const budget = JSON.parse(env.BB_RESOURCE_BUDGET);
+    budget.selected.cpuQuotaPercent = 50;
+    env.BB_RESOURCE_BUDGET = JSON.stringify(budget);
+    const changed = run();
+    assert.equal(changed.status, 0, changed.stderr);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "completed",
+    );
+    env.BB_RESOURCE_BUDGET = "{}";
+    assert.notEqual(run().status, 0);
+    const failed = JSON.parse(readFileSync(state, "utf8"));
+    assert.equal(failed.events.at(-1).status, "failed");
+    assert.equal(failed.completed.tests, undefined);
+  } finally {
     f.cleanup();
   }
 });

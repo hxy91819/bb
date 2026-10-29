@@ -122,11 +122,11 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 安装或工具身份变化、产物丢失/损坏、覆盖变化、阶段失败均重跑，并使后续阶段失效；失败和中断不写成功回执。运行时构建与原生检查也纳入同一回执和 package 资源 scope。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。锁覆盖 Git 操作和全部阶段，嵌套入口继承父锁；阶段写入另持独占锁。锁使用内核 flock（没有 flock 命令时使用 Perl Fcntl），锁文件永久保留，只关闭自身描述符，不删除或显式解锁共享描述符。
 
-Linux 执行入口及阶段另由 Python3 subreaper 监督进程持锁并等待全部派生后代，覆盖 pnpm/Turbo/Node 默认 spawn 丢弃额外 FD 的路径和 detached writer；不能把环境映射或包装进程退出当成后代退出。TERM/INT/HUP 传到监督者，监督者校验进程身份及后代关系后经 pidfd 发信号，3 秒后升级到 SIGKILL，持续等待、回收后代；不按可能复用的 PGID 补杀。嵌套监督者保留到各自后代收口，避免上层先释放下层阶段锁。最后一个 writer 结束后可直接重跑或 resume，无需人工清锁。安全重新取得执行锁后，未收口的本轮记录标为 interrupted；阶段接续保留中断事件，重新完成必要检查后才写成功回执。
+Linux 执行入口和阶段为每次命令保留独立 systemd user Slice 的内核归属，记录 boot ID、InvocationID、ControlGroup 和目录设备/inode。准入检查递归 cgroup.events 的 populated；Node 默认 spawn 丢弃额外 FD、detached 后代、命令和包装器同时 SIGKILL、writer 通过 systemd-run 重归组时，仍按整个 Slice 判断。资源 scope 通过 --slice-inherit 留在执行 Slice 内。启动 payload 前验证实际归属，不以 PID、PGID 或环境 token 判断 writer 是否已经结束。元数据查询失败保留归属并拒绝恢复；同名新 unit 不当成旧实例。只有全部 writer 退出后才能自动恢复，无需人工清锁；并发恢复仍由内核文件锁串行准入，失败竞争者不会释放其他执行锁。
 
-当前监督方案仍有未闭合故障：单独 SIGKILL 监督者及直接命令、同时遗留丢弃 FD 的后代时，后代可能继续写入而锁已释放。因此不能把当前候选当作完整的异常恢复保证；需要先补内核持久的任务成员归属，再验收该边界。正常 TERM 与监督者存活时的 Node 后代回归通过，不替代这个要求。
+取消先传 TERM，3 秒后对身份验证且目录 FD 钉住的 cgroup 写 cgroup.kill；控制侧 7 秒后以失败结束等待。查询或清理失败保留归属，不能写成功回执。恢复取得锁后，未完成记录保留 interrupted，再完成必要验证。此路径需要 Linux、可用的 systemd user manager、cgroup v2 和可写 cgroup.kill；不再依赖 Python subreaper。轻量真实 scope 回归覆盖双 SIGKILL、忽略 TERM 后代、重归组、并发恢复和查询失败；不将这些结果扩展为非 Linux 平台保证。主动将 writer 迁出受管 Slice 的特权操作不属于本维护入口的派生契约。
 
-受监督阶段需要 Linux subreaper/pidfd 和提供这些标准库接口的 Python3；与既有 systemd package 资源流程同用，不新增或放宽资源 profile。Python 实际二进制/版本、内核和监督代码进入检查身份。独立 Git 入口在非 Linux 平台保留已有 FD 锁路径，不把 Linux 夹具结果当成该平台完整进程树恢复验收。
+资源预算不固定为旧的 5G/7G/300%。每轮按实际 affinity/祖先 CPU 限制、可用内存及祖先 headroom 选择，保留线上余量；查询失败拒绝执行。verification/package 两个显式 profile 继续接受，同轮预算冻结为 BB_RESOURCE_BUDGET，package 可嵌套 verification，反向升级拒绝。新一轮重新探测；嵌套不重新分配预算，并核验 scope 的实际 CPU、memory.high/max、swap 和 tasks 限额。实际选值及选择器实现进入阶段身份，选值变化使回执失效。runs/run.*.resources.json 与阶段 events 记录所选预算；环境中只传不含秘密的资源数字及策略摘要。BB_RESOURCE_VITEST_WORKERS 提供给测试配置消费，是否在每个 resolved project 生效需结合对应配置验证。资源策略、可用的显式覆盖及低容量拒绝见 [resource-profile.md](../scripts/resource-profile.md)。
 
 每轮结果分别记录验证、提升、运行时构建、tag；推送 tag 只表示已触发流水线，Release 和安装保留 `not-observed`，直到各自独立验收。`runs/run.*` 给出每段起止、耗时和失败状态；源码状态的 events 给出每次阶段执行/复用、耗时和失败/中断原因。
 

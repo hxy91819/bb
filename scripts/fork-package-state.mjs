@@ -1,3 +1,4 @@
+import { resourceBudget } from "./resource-runtime.mjs";
 import { spawnManaged } from "./fork-process.mjs";
 import { acquireLock } from "./fork-lock.mjs";
 import { randomUUID } from "node:crypto";
@@ -68,9 +69,39 @@ async function executeStage(path, name, cwd, command, lock) {
       .slice(0, Math.max(index, 0))
       .map((stage) => [stage, state.completed[stage]?.generation ?? null]),
   );
+  const resourceIndex = command.findIndex((part) =>
+    part.endsWith("/run-resource-isolated"),
+  );
+  const profileIndex = command.indexOf("--profile");
+  let resources;
+  try {
+    resources =
+      resourceIndex >= 0
+        ? resourceBudget(
+            profileIndex >= 0 ? command[profileIndex + 1] : "verification",
+          )
+        : null;
+  } catch (error) {
+    for (const stage of index < 0 ? [name] : order.slice(index))
+      delete state.completed[stage];
+    state.events.push({
+      name,
+      started: new Date(started).toISOString(),
+      ended: new Date().toISOString(),
+      seconds: (Date.now() - started) / 1000,
+      status: "failed",
+      cacheHit: false,
+      reason: error.message,
+    });
+    state.delivery ??= {};
+    state.delivery.verification = "failed";
+    save(path, state);
+    throw error;
+  }
   const hash = digest(
     JSON.stringify({
       command,
+      resources,
       cwd,
       source: state.source,
       base: state.base,
@@ -101,7 +132,12 @@ async function executeStage(path, name, cwd, command, lock) {
     }),
   );
   const previous = state.completed[name];
-  const event = { name, started: new Date(started).toISOString(), hash };
+  const event = {
+    name,
+    started: new Date(started).toISOString(),
+    hash,
+    resources,
+  };
   const installed =
     name !== "install" ||
     !existsSync(resolve(cwd, "pnpm-lock.yaml")) ||
@@ -130,6 +166,7 @@ async function executeStage(path, name, cwd, command, lock) {
   console.log(`开始 ${name}；日志：${log}`);
   const environment = { ...process.env, PWD: cwd };
   delete environment.OLDPWD;
+  if (resources) environment.BB_RESOURCE_BUDGET = JSON.stringify(resources);
   for (const key of [
     "BB_FORK_EXECUTION_TOKEN",
     "BB_FORK_EXECUTION_ACTIVE",

@@ -91,22 +91,17 @@ if [[ "${1:-}" == '--' ]]; then
 fi
 
 case "${profile}" in
-  verification)
-    memory_high='3G'
-    memory_max='4G'
-    memory_max_bytes="$((4 * 1024 * 1024 * 1024))"
-    ;;
-  package)
-    memory_high='5G'
-    memory_max='7G'
-    memory_max_bytes="$((7 * 1024 * 1024 * 1024))"
-    ;;
-  *)
-    printf 'Unknown resource profile: %s\n' "${profile}" >&2
-    usage >&2
-    exit 2
-    ;;
+  verification|package) ;;
+  *) printf 'Unknown resource profile: %s\n' "${profile}" >&2; exit 2 ;;
 esac
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+budget_tool="${here}/resource-runtime.mjs"
+export BB_RESOURCE_BUDGET="$(node "${budget_tool}" select "${profile}")"
+[[ -n "${BB_RESOURCE_BUDGET}" ]] || exit 1
+fields="$(node "${budget_tool}" fields "${profile}")"
+read -r memory_high memory_max cpu_quota workers tasks_max <<< "${fields}"
+export BB_RESOURCE_VITEST_WORKERS="${workers}"
 
 if (( $# == 0 )); then
   usage >&2
@@ -115,12 +110,9 @@ fi
 
 cgroup="$(current_cgroup)"
 case "${cgroup}" in
-  */"${unit_name}.scope")
-    active_memory_max="$(<"/sys/fs/cgroup${cgroup}/memory.max")"
-    if [[ "${active_memory_max}" == 'max' || "${active_memory_max}" -lt "${memory_max_bytes}" ]]; then
-      printf 'Active resource scope is smaller than the requested %s profile\n' "${profile}" >&2
-      exit 1
-    fi
+  */"${unit_name}.scope"|*/"${unit_name}.scope"/*)
+    scope_group="${cgroup%%/${unit_name}.scope*}/${unit_name}.scope"
+    node "${budget_tool}" verify "${profile}" "${scope_group}"
     exec "$@"
     ;;
 esac
@@ -148,8 +140,8 @@ exec systemd-run --user --scope --collect --quiet "${slice_args[@]}" \
   -p "MemoryMax=${memory_max}" \
   -p MemorySwapMax=0 \
   -p OOMPolicy=continue \
-  -p CPUQuota=300% \
-  -p TasksMax=1024 \
+  -p "CPUQuota=${cpu_quota}%" \
+  -p "TasksMax=${tasks_max}" \
   env BB_RESOURCE_SCOPE_ACTIVE=1 \
-  bash -c 'systemctl --user set-property --runtime "$1.scope" "MemoryHigh=$2" MemorySwapMax=0 || exit; shift 2; exec "$@"' \
-  bash "${unit_name}" "${memory_high}" "$@"
+  bash -c 'systemctl --user set-property --runtime "$1.scope" "MemoryHigh=$2" MemorySwapMax=0 || exit; shift 2; tool="$1"; profile="$2"; shift 2; group="$(awk -F: '"'"'$1 == "0" {print $3}'"'"' /proc/self/cgroup)"; node "$tool" verify "$profile" "$group" || exit; exec "$@"' \
+  bash "${unit_name}" "${memory_high}" "${budget_tool}" "${profile}" "$@"
