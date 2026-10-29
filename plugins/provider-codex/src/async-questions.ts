@@ -22,7 +22,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function registerAsyncQuestions(bb: BbPluginApi): void {
+export function registerAsyncQuestions(
+  bb: BbPluginApi,
+  providerIds: ReadonlySet<string> = new Set([CODEX_PROVIDER_ID]),
+): void {
   const threadWork = new Map<string, Promise<void>>();
 
   function enqueue(threadId: string, work: () => Promise<void>): void {
@@ -103,7 +106,7 @@ export function registerAsyncQuestions(bb: BbPluginApi): void {
   }
 
   bb.events.on("experimental_thread.events", ({ thread }) => {
-    if (thread.providerId !== CODEX_PROVIDER_ID) return;
+    if (!providerIds.has(thread.providerId)) return;
     enqueue(thread.id, async () => {
       for (const state of await readNewQuestions(thread.id)) {
         void ask(thread.id, state).catch((error: unknown) => {
