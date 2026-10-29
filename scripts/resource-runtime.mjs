@@ -10,18 +10,47 @@ const policy = createHash("sha256")
   .update(readFileSync(new URL("./resource-profile.mjs", import.meta.url)))
   .digest("hex");
 
+function requestedWorkers(limit) {
+  const requested = process.env.VITEST_MAX_WORKERS;
+  if (requested === undefined) return limit;
+  if (!/^[1-9]\d*$/.test(requested) || !Number.isSafeInteger(Number(requested)))
+    throw new Error("VITEST_MAX_WORKERS must be a positive integer");
+  return Math.min(Number(requested), limit);
+}
+
+function workerCapacity(selected) {
+  return Math.max(
+    1,
+    Math.min(
+      Math.floor(selected.cpuQuotaPercent / 100),
+      Math.floor(selected.memoryHighBytes / (2 * 1024 ** 3)),
+    ),
+  );
+}
+
 export function resourceBudget(
   profile,
   inherited = process.env.BB_RESOURCE_BUDGET,
 ) {
   if (!["verification", "package"].includes(profile))
     throw new Error("Unknown resource profile");
-  if (!inherited)
+  if (!inherited) {
+    const selected = selectResources(detectResources(), process.env);
+    const capacity =
+      process.env.BB_RESOURCE_VITEST_WORKERS === undefined
+        ? workerCapacity(selected)
+        : Math.min(workerCapacity(selected), selected.workers);
     return {
       policy,
       profile,
-      selected: selectResources(detectResources(), process.env),
+      selected,
+      workerCapacity: capacity,
+      vitestWorkers:
+        process.env.VITEST_MAX_WORKERS === undefined
+          ? Math.min(selected.workers, capacity)
+          : requestedWorkers(capacity),
     };
+  }
   const value = JSON.parse(inherited);
   if (
     value.policy !== policy ||
@@ -33,6 +62,15 @@ export function resourceBudget(
       "Cannot upgrade an inherited verification budget to package",
     );
   const s = value.selected;
+  if (
+    !Number.isSafeInteger(value.vitestWorkers) ||
+    value.vitestWorkers <= 0 ||
+    value.vitestWorkers > value.workerCapacity ||
+    !Number.isSafeInteger(value.workerCapacity) ||
+    value.workerCapacity <= 0 ||
+    value.workerCapacity > workerCapacity(s)
+  )
+    throw new Error("Invalid inherited Vitest worker budget");
   for (const key of [
     "cpuQuotaPercent",
     "memoryHighBytes",
@@ -50,7 +88,7 @@ export function resourceBudget(
     s.tasksMax !== 1024
   )
     throw new Error("Invalid inherited resource limits");
-  return value;
+  return { ...value, vitestWorkers: requestedWorkers(value.vitestWorkers) };
 }
 
 function verify(group, selected) {
@@ -102,6 +140,7 @@ if (
           budget.selected.cpuQuotaPercent,
           budget.selected.workers,
           budget.selected.tasksMax,
+          budget.vitestWorkers,
         ].join(" "),
       );
     else if (command === "verify") verify(group, budget.selected);

@@ -100,8 +100,9 @@ budget_tool="${here}/resource-runtime.mjs"
 export BB_RESOURCE_BUDGET="$(node "${budget_tool}" select "${profile}")"
 [[ -n "${BB_RESOURCE_BUDGET}" ]] || exit 1
 fields="$(node "${budget_tool}" fields "${profile}")"
-read -r memory_high memory_max cpu_quota workers tasks_max <<< "${fields}"
+read -r memory_high memory_max cpu_quota workers tasks_max vitest_workers <<< "${fields}"
 export BB_RESOURCE_VITEST_WORKERS="${workers}"
+export VITEST_MAX_WORKERS="${vitest_workers}"
 
 if (( $# == 0 )); then
   usage >&2
