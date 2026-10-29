@@ -53,6 +53,39 @@
         }
       ]
     },
+    "thread-list": {
+      "groupId": "app-shell",
+      "fidelity": "state",
+      "responsiveStrategy": "scale-together",
+      "requiredStates": ["anchor"],
+      "labels": {
+        "anchor": ["Pinned", "Plugin group", "Label"]
+      },
+      "fixtureClassAnchors": ["text-xs"],
+      "sources": [
+        {
+          "path": "plugins/thread-list/app/list/ProjectList.tsx",
+          "anchors": [
+            "ContributedModeSections",
+            "Grouping unavailable; showing Custom. Your selection is saved."
+          ]
+        },
+        {
+          "path": "plugins/thread-list/app/rows/ThreadRow.tsx",
+          "anchors": [
+            "data-sidebar-thread-decorations",
+            "decoration.accessibleLabel"
+          ]
+        },
+        {
+          "path": "apps/app/src/components/plugin/ThreadListContributions.tsx",
+          "anchors": [
+            "ThreadListContributionProvider",
+            "PluginContext.Provider"
+          ]
+        }
+      ]
+    },
     "composer-actions": {
       "groupId": "composer",
       "fidelity": "flow",

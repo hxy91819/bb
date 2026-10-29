@@ -42,6 +42,11 @@ export const sidebarCollapsedThreadSectionsAtom = createSyncedPreferenceAtom(
 );
 export const sidebarCollapsedMachinesAtom =
   createSyncedPreferenceAtom("collapsedMachines");
+export const sidebarContributionGroupOrderAtom = createSyncedPreferenceAtom(
+  "contributionGroupOrder",
+);
+export const sidebarCollapsedContributionGroupsAtom =
+  createSyncedPreferenceAtom("collapsedContributionGroups");
 
 export const sidebarThreadLifecyclesAtom =
   createSyncedPreferenceAtom("threadLifecycles");

@@ -1,6 +1,6 @@
 import {
-  Component,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -25,6 +25,12 @@ import { getActiveThreadPanelOpener } from "@/components/plugin/plugin-thread-pa
 import { useBbNavigate, useSdk } from "@/lib/plugin-navigation-hooks";
 import { compareGroupedPlacement } from "@/lib/grouped-placement";
 import { usePluginSlots } from "@/lib/plugin-slots";
+import {
+  ContributionCollectorBoundary,
+  ContributionDataCollector,
+  ThreadDemand,
+  ThreadListContributionVisibility,
+} from "@get-bb/plugin-sdk/internal/thread-contribution-runtime";
 
 export const CORE_THREAD_ACTION_OWNER = "bb--core";
 
@@ -111,69 +117,7 @@ function publishRecords(
   setSnapshot({ ...snapshot, records });
 }
 
-const subscribedThreadCounts = new Map<string, number>();
-let subscribedThreadIds: readonly string[] = [];
-const threadIdListeners = new Set<() => void>();
-
-function subscribeThreadIds(listener: () => void): () => void {
-  threadIdListeners.add(listener);
-  return () => {
-    threadIdListeners.delete(listener);
-  };
-}
-
-function getSubscribedThreadIds(): readonly string[] {
-  return subscribedThreadIds;
-}
-
-const THREAD_IDS_QUIET_MS = 32;
-const THREAD_IDS_MAX_WAIT_MS = 100;
-let threadIdsFlushTimer: ReturnType<typeof setTimeout> | null = null;
-let threadIdsPendingSince: number | null = null;
-
-function cancelThreadIdsFlush(): void {
-  if (threadIdsFlushTimer !== null) clearTimeout(threadIdsFlushTimer);
-  threadIdsFlushTimer = null;
-  threadIdsPendingSince = null;
-}
-
-function flushSubscribedThreadIds(): void {
-  cancelThreadIdsFlush();
-  const next = [...subscribedThreadCounts.keys()].sort();
-  if (
-    next.length === subscribedThreadIds.length &&
-    next.every((id, index) => id === subscribedThreadIds[index])
-  ) {
-    return;
-  }
-  subscribedThreadIds = next;
-  for (const listener of threadIdListeners) listener();
-}
-
-function scheduleSubscribedThreadIdsFlush(): void {
-  const now = performance.now();
-  threadIdsPendingSince ??= now;
-  if (threadIdsFlushTimer !== null) clearTimeout(threadIdsFlushTimer);
-  const remaining = THREAD_IDS_MAX_WAIT_MS - (now - threadIdsPendingSince);
-  threadIdsFlushTimer = setTimeout(
-    flushSubscribedThreadIds,
-    Math.max(0, Math.min(THREAD_IDS_QUIET_MS, remaining)),
-  );
-}
-
-function retainThreadId(threadId: string): () => void {
-  subscribedThreadCounts.set(
-    threadId,
-    (subscribedThreadCounts.get(threadId) ?? 0) + 1,
-  );
-  scheduleSubscribedThreadIdsFlush();
-  return () => {
-    const count = subscribedThreadCounts.get(threadId) ?? 0;
-    if (count <= 1) subscribedThreadCounts.delete(threadId);
-    else subscribedThreadCounts.set(threadId, count - 1);
-    scheduleSubscribedThreadIdsFlush();
-  };
-}
+let threadDemand = new ThreadDemand();
 
 const ThreadActionSurfaceVisibleContext = createContext(true);
 
@@ -186,16 +130,16 @@ export function ThreadActionSurfaceVisibility({
 }) {
   return (
     <ThreadActionSurfaceVisibleContext.Provider value={visible}>
-      {children}
+      <ThreadListContributionVisibility visible={visible}>
+        {children}
+      </ThreadListContributionVisibility>
     </ThreadActionSurfaceVisibleContext.Provider>
   );
 }
 
 export function resetThreadActionRegistryForTest(): void {
   reportedFailures.clear();
-  subscribedThreadCounts.clear();
-  subscribedThreadIds = [];
-  cancelThreadIdsFlush();
+  threadDemand = new ThreadDemand();
   setSnapshot({
     records: [],
     collected: new Map(),
@@ -240,38 +184,23 @@ function ThreadActionCollector({
 }: {
   record: ThreadActionRegistrationRecord;
 }) {
-  const threadIds = useSyncExternalStore(
-    subscribeThreadIds,
-    getSubscribedThreadIds,
-  );
-  const data = record.registration.useData?.({ threadIds });
   const sdk = useSdk();
   const navigate = useLatestNavigate(useBbNavigate(), record.pluginId);
-  useLayoutEffect(() => {
-    publishCollected(record.key, { data, sdk, navigate });
-  }, [data, navigate, record.key, sdk]);
-  useLayoutEffect(() => () => dropCollected(record.key), [record.key]);
-  return null;
-}
-
-class ThreadActionCollectorBoundary extends Component<
-  { registrationKey: string; children: ReactNode },
-  { crashed: boolean }
-> {
-  override state = { crashed: false };
-
-  static getDerivedStateFromError(): { crashed: boolean } {
-    return { crashed: true };
-  }
-
-  override componentDidCatch(error: Error): void {
-    reportFailure(this.props.registrationKey, "useData", error);
-    dropCollected(this.props.registrationKey);
-  }
-
-  override render(): ReactNode {
-    return this.state.crashed ? null : this.props.children;
-  }
+  const publish = useCallback(
+    (data: unknown) => {
+      publishCollected(record.key, { data, sdk, navigate });
+    },
+    [navigate, record.key, sdk],
+  );
+  const clear = useCallback(() => dropCollected(record.key), [record.key]);
+  return (
+    <ContributionDataCollector
+      useData={record.registration.useData}
+      demand={threadDemand}
+      publish={publish}
+      clear={clear}
+    />
+  );
 }
 
 function useThreadActionRecords(
@@ -331,9 +260,14 @@ export function ThreadActionCollectors({
   }, []);
   return records.map((record) => (
     <PluginContext.Provider key={record.instanceKey} value={record.pluginId}>
-      <ThreadActionCollectorBoundary registrationKey={record.key}>
+      <ContributionCollectorBoundary
+        onError={(error) => {
+          reportFailure(record.key, "useData", error);
+          dropCollected(record.key);
+        }}
+      >
         <ThreadActionCollector record={record} />
-      </ThreadActionCollectorBoundary>
+      </ContributionCollectorBoundary>
     </PluginContext.Provider>
   ));
 }
@@ -425,7 +359,7 @@ export function useThreadActionEntries(
   const registry = useSyncExternalStore(subscribe, getSnapshot);
   const surfaceVisible = useContext(ThreadActionSurfaceVisibleContext);
   useEffect(
-    () => (surfaceVisible ? retainThreadId(thread.id) : undefined),
+    () => (surfaceVisible ? threadDemand.retain([thread.id]) : undefined),
     [surfaceVisible, thread.id],
   );
   return evaluateThreadActions(registry, thread, options);
