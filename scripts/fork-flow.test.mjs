@@ -744,3 +744,95 @@ test("Perl kernel-lock fallback recovers after SIGKILL without losing inherited 
     f.cleanup();
   }
 });
+
+test("workspace dependency redirection and missing workspace installation roots force reinstall and observable revalidation", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  try {
+    mkdirSync(join(f.root, "packages/a"), { recursive: true });
+    writeFileSync(
+      join(f.root, "packages/a/package.json"),
+      JSON.stringify({ name: "workspace-a" }),
+    );
+    writeFileSync(
+      join(f.root, "pnpm-lock.yaml"),
+      "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  packages/a:\n    dependencies: {}\n",
+    );
+    f.commit("workspace layout");
+    const installCode =
+      "const f=require('node:fs');f.mkdirSync('node_modules',{recursive:true});f.writeFileSync('node_modules/.modules.yaml','installed');for(const value of ['good','bad']){const p='node_modules/.pnpm/'+value+'/node_modules/dep';f.mkdirSync(p,{recursive:true});f.writeFileSync(p+'/index.js','module.exports='+JSON.stringify(value))}f.mkdirSync('packages/a/node_modules',{recursive:true});f.rmSync('packages/a/node_modules/dep',{recursive:true,force:true});f.symlinkSync('../../../node_modules/.pnpm/good/node_modules/dep','packages/a/node_modules/dep');f.appendFileSync('.git/installs','x')";
+    const checkCode =
+      "const f=require('node:fs');f.appendFileSync('.git/checks','x');if(require('./packages/a/node_modules/dep')!=='good')process.exit(9)";
+    const install = [process.execPath, "-e", installCode];
+    const check = [process.execPath, "-e", checkCode];
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    await runStage(state, "install", f.root, install);
+    await runStage(state, "tests", f.root, check);
+    rmSync(join(f.root, "packages/a/node_modules/dep"));
+    symlinkSync(
+      "../../../node_modules/.pnpm/bad/node_modules/dep",
+      join(f.root, "packages/a/node_modules/dep"),
+    );
+    assert.equal(
+      spawnSync(process.execPath, ["-e", checkCode], { cwd: f.root }).status,
+      9,
+    );
+    await runStage(state, "install", f.root, install);
+    await runStage(state, "tests", f.root, check);
+    assert.equal(readFileSync(join(f.root, ".git/installs"), "utf8"), "xx");
+    assert.equal(readFileSync(join(f.root, ".git/checks"), "utf8"), "xxx");
+    rmSync(join(f.root, "packages/a/node_modules"), { recursive: true });
+    await runStage(state, "install", f.root, install);
+    await runStage(state, "tests", f.root, check);
+    assert.equal(readFileSync(join(f.root, ".git/installs"), "utf8"), "xxx");
+    assert.equal(readFileSync(join(f.root, ".git/checks"), "utf8"), "xxxx");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("declared bundled runtime changes and previously absent output roots invalidate stage receipts", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  try {
+    mkdirSync(join(f.root, "plugins/a"), { recursive: true });
+    writeFileSync(
+      join(f.root, "plugins/a/package.json"),
+      JSON.stringify({ name: "plugin-a" }),
+    );
+    writeFileSync(
+      join(f.root, "turbo.json"),
+      JSON.stringify({
+        tasks: {
+          build: { outputs: ["dist/**"] },
+          "prepare:bundled": { outputs: [".bundled-runtime/**"] },
+        },
+      }),
+    );
+    writeFileSync(
+      join(f.root, ".gitignore"),
+      ".worktrees/\nnode_modules/\ndist/\n.bundled-runtime/\n",
+    );
+    f.commit("declared outputs");
+    mkdirSync(join(f.root, "plugins/a/.bundled-runtime"));
+    writeFileSync(join(f.root, "plugins/a/.bundled-runtime/value"), "first");
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    const command = [
+      process.execPath,
+      "-e",
+      "const f=require('node:fs');f.mkdirSync('dist',{recursive:true});f.writeFileSync('dist/value',f.readFileSync('plugins/a/.bundled-runtime/value'));f.appendFileSync('.git/builds','x')",
+    ];
+    await runStage(state, "runtime", f.root, command);
+    await runStage(state, "runtime", f.root, command);
+    assert.equal(readFileSync(join(f.root, ".git/builds"), "utf8"), "x");
+    writeFileSync(join(f.root, "plugins/a/.bundled-runtime/value"), "second");
+    await runStage(state, "runtime", f.root, command);
+    assert.equal(readFileSync(join(f.root, "dist/value"), "utf8"), "second");
+    mkdirSync(join(f.root, "plugins/a/dist"));
+    writeFileSync(join(f.root, "plugins/a/dist/new"), "new root");
+    await runStage(state, "runtime", f.root, command);
+    assert.equal(readFileSync(join(f.root, ".git/builds"), "utf8"), "xxx");
+  } finally {
+    f.cleanup();
+  }
+});

@@ -187,8 +187,116 @@ export function executionIdentity(cwd, command) {
   };
 }
 
+function packageDirectories(cwd) {
+  const lock = resolve(cwd, "pnpm-lock.yaml");
+  if (existsSync(lock)) {
+    const block = readFileSync(lock, "utf8")
+      .split(/^importers:\s*$/m)[1]
+      ?.split(/^[^\s#]/m)[0];
+    if (!block)
+      throw new Error("pnpm lockfile 缺少 importers，不能复用安装回执");
+    return block.split("\n").flatMap((line) => {
+      const match = /^  ([^ ].*?):(?:\s*\{\})?\s*$/.exec(line);
+      if (!match) return [];
+      const path = match[1].replace(/^['"]|['"]$/g, "");
+      if (path.startsWith("/") || path.split("/").includes(".."))
+        throw new Error("无效的 workspace importer");
+      return [path];
+    });
+  }
+  const tracked = spawnSync("git", ["ls-files", "-z", "--", "*package.json"], {
+    cwd,
+    encoding: "utf8",
+  });
+  return [
+    ...new Set([
+      ".",
+      ...(tracked.status === 0
+        ? tracked.stdout
+            .split("\0")
+            .filter((path) => /(?:^|\/)package\.json$/.test(path))
+            .map(dirname)
+        : []),
+    ]),
+  ];
+}
+
+function readTurbo(path) {
+  const source = readFileSync(path, "utf8");
+  let text = "",
+    quoted = false,
+    escaped = false;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      text += char;
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') {
+      quoted = true;
+      text += char;
+    } else if (source.slice(i, i + 2) === "//") {
+      while (i < source.length && source[i] !== "\n") i++;
+      text += "\n";
+    } else if (source.slice(i, i + 2) === "/*") {
+      i = source.indexOf("*/", i + 2);
+      if (i < 0) throw new Error("无效的 Turbo 配置注释");
+      i++;
+    } else text += char;
+  }
+  return JSON.parse(text);
+}
+
+function declaredOutputs(cwd, directories) {
+  const config = resolve(cwd, "turbo.json");
+  const byName = new Map(
+    directories.flatMap((dir) => {
+      const manifest = resolve(cwd, dir, "package.json");
+      return existsSync(manifest)
+        ? [[JSON.parse(readFileSync(manifest, "utf8")).name, dir]]
+        : [];
+    }),
+  );
+  const result = [];
+  const add = (tasks, selected) => {
+    for (const [task, definition] of Object.entries(tasks ?? {})) {
+      const name = task.includes("#") ? task.split("#")[0] : null;
+      const targets =
+        name === "//"
+          ? ["."]
+          : name
+            ? byName.has(name)
+              ? [byName.get(name)]
+              : []
+            : selected;
+      for (const output of definition.outputs ?? []) {
+        if (output.startsWith("!")) continue;
+        const root = output.split(/[?*[{]/)[0].replace(/\/$/, "");
+        if (!root || root.startsWith("/") || root.split("/").includes(".."))
+          throw new Error(`无法记录 Turbo output: ${output}`);
+        for (const dir of targets) result.push(join(dir, root));
+      }
+    }
+  };
+  if (existsSync(config)) add(readTurbo(config).tasks, directories);
+  for (const dir of directories) {
+    const override = resolve(cwd, dir, "turbo.json");
+    if (dir !== "." && existsSync(override))
+      add(readTurbo(override).tasks, [dir]);
+  }
+  return result;
+}
+
 function roots(cwd, install) {
-  if (install) return ["node_modules"];
+  const directories = packageDirectories(cwd);
+  if (install)
+    return [
+      ...new Set([
+        "node_modules",
+        ...directories.map((dir) => join(dir, "node_modules")),
+      ]),
+    ].sort();
   const result = spawnSync(
     "git",
     [
@@ -201,31 +309,49 @@ function roots(cwd, install) {
     ],
     { cwd, encoding: "utf8" },
   );
-  if (result.status !== 0) {
-    if (existsSync(resolve(cwd, ".git")))
-      throw new Error(result.stderr?.trim() || "无法列出构建产物");
-    return [];
-  }
-  return result.stdout
-    .split("\0")
-    .filter((path) => /(?:^|\/)(?:dist|generated|bundled-types)\/$/.test(path));
+  if (result.status !== 0 && existsSync(resolve(cwd, ".git")))
+    throw new Error(result.stderr?.trim() || "无法列出构建产物");
+  const discovered =
+    result.status === 0
+      ? result.stdout
+          .split("\0")
+          .filter((path) =>
+            /(?:^|\/)(?:dist|generated|bundled-types|\.bundled-runtime)\/$/.test(
+              path,
+            ),
+          )
+          .map((path) => path.replace(/\/$/, ""))
+      : [];
+  return [
+    ...new Set([...declaredOutputs(cwd, directories), ...discovered]),
+  ].sort();
 }
 
-export function receipt(
-  cwd,
-  install,
-  cache = {},
-  selectedRoots = roots(cwd, install),
-) {
-  const files = {};
+export function receipt(cwd, install, cache = {}, selectedRoots) {
+  const selected = selectedRoots ?? roots(cwd, install);
+  const files = {
+    $receipt: {
+      version: 2,
+      kind: selectedRoots ? "explicit" : install ? "install" : "outputs",
+      roots: selected,
+    },
+  };
   const visit = (relative) => {
     const path = resolve(cwd, relative);
-    if (!existsSync(path)) return;
-    const stat = lstatSync(path);
+    let stat;
+    try {
+      stat = lstatSync(path);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      files[relative] = { missing: true };
+      return;
+    }
     if (stat.isSymbolicLink()) {
       files[relative] = {
         link: readlinkSync(path),
-        external: !realpathSync(path).startsWith(`${resolve(cwd)}/`),
+        external:
+          !existsSync(path) ||
+          !realpathSync(path).startsWith(`${resolve(cwd)}/`),
       };
     } else if (stat.isDirectory()) {
       files[`${relative}/`] = {
@@ -247,16 +373,30 @@ export function receipt(
       };
     }
   };
-  for (const root of selectedRoots) visit(root.replace(/\/$/, ""));
+  for (const root of selected) visit(root.replace(/\/$/, ""));
   return files;
 }
 
 export function validReceipt(cwd, files) {
-  if (!files) return false;
+  if (files?.$receipt?.version !== 2) return false;
+  if (
+    files.$receipt.kind !== "explicit" &&
+    JSON.stringify(roots(cwd, files.$receipt.kind === "install")) !==
+      JSON.stringify(files.$receipt.roots)
+  )
+    return false;
   for (const [name, expected] of Object.entries(files)) {
+    if (name === "$receipt") continue;
     const path = resolve(cwd, name);
     try {
-      const stat = lstatSync(path);
+      let stat;
+      try {
+        stat = lstatSync(path);
+      } catch (error) {
+        if (error.code === "ENOENT" && expected.missing) continue;
+        return false;
+      }
+      if (expected.missing) return false;
       if (expected.directory) {
         if (
           !stat.isDirectory() ||
