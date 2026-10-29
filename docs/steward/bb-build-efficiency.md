@@ -9,7 +9,7 @@
 - [ ] 流程内核任务归属、有界恢复及动态资源wrapper接入 ← 进行中 thr_9xtt8x754u
 - [x] SDK首轮真实检查与首审完成；局部收益伴随冷pack退化，另复现缓存污染和Windows启动P1。
 - [x] server六组实测808.8秒通过：362文件、3740通过/2跳过，峰值2.61GiB、high为零。
-- [ ] 本机原入口726.7秒通过（实际单worker）；补齐4worker配置 ← 进行中 thr_jbd45bshu9
+- [ ] 4worker真实配置已过；独立修复分支与Turbo依赖收口 ← 进行中 thr_jbd45bshu9
 - [ ] SDK真实输入验收已降至0.47秒，冷pack待实测 ← 排在 HTML标准构建 后：释放重型令，验证9c候选
 - [ ] HTML集合runner固定runtime Node/npm后重试冷安装及构建 ← 进行中 thr_7nf4nfsrb5
 - [ ] 整合性能对照、必要回归及唯一增量复审 ← 排在 修复与本机资源实测 后：冻结候选与真实验证
