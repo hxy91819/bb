@@ -64,6 +64,7 @@ const probeSource = `
   const root = "/sys/fs/cgroup" + cgroup;
   process.stdout.write(JSON.stringify({
     cgroup,
+    selected: JSON.parse(process.env.BB_RESOURCE_BUDGET).selected,
     cwd: process.cwd(),
     memoryHigh: fs.readFileSync(root + "/memory.high", "utf8").trim(),
     memoryMax: fs.readFileSync(root + "/memory.max", "utf8").trim(),
@@ -78,21 +79,25 @@ assert.match(
   /\/user\.slice\/.*\/bb-local-verification\.scope$/,
 );
 assert.equal(observed.cwd, repoRoot);
-assert.equal(observed.memoryHigh, String(3 * 1024 ** 3));
-assert.equal(observed.memoryMax, String(4 * 1024 ** 3));
+assert.equal(observed.memoryHigh, String(observed.selected.memoryHighBytes));
+assert.equal(observed.memoryMax, String(observed.selected.memoryMaxBytes));
 assert.equal(observed.memorySwapMax, "0");
 
 await waitFor(() => !unitIsActive());
 
 const nested = run(["--", runner, "--", process.execPath, "-e", probeSource]);
 assert.equal(nested.status, 0, nested.stderr);
-assert.equal(JSON.parse(nested.stdout).memoryMax, String(4 * 1024 ** 3));
+const nestedObserved = JSON.parse(nested.stdout);
+assert.equal(
+  nestedObserved.memoryMax,
+  String(nestedObserved.selected.memoryMaxBytes),
+);
 
 const nestedPackage = run(["--", runner, "--profile", "package", "--", "true"]);
 assert.notEqual(nestedPackage.status, 0);
 assert.match(
   nestedPackage.stderr,
-  /smaller than the requested package profile/,
+  /Cannot upgrade an inherited verification budget/,
 );
 
 await waitFor(() => !unitIsActive());
@@ -107,8 +112,14 @@ const packageProbe = run([
 ]);
 assert.equal(packageProbe.status, 0, packageProbe.stderr);
 const packageObserved = JSON.parse(packageProbe.stdout);
-assert.equal(packageObserved.memoryHigh, String(5 * 1024 ** 3));
-assert.equal(packageObserved.memoryMax, String(7 * 1024 ** 3));
+assert.equal(
+  packageObserved.memoryHigh,
+  String(packageObserved.selected.memoryHighBytes),
+);
+assert.equal(
+  packageObserved.memoryMax,
+  String(packageObserved.selected.memoryMaxBytes),
+);
 
 await waitFor(() => !unitIsActive());
 
@@ -116,16 +127,26 @@ const fixtureDir = mkdtempSync(join(tmpdir(), "bb-resource-isolation-"));
 const readyFile = join(fixtureDir, "ready");
 const holder = spawn(
   runner,
-  ["--", "sh", "-c", 'printf ready > "$1"; sleep 2', "sh", readyFile],
+  [
+    "--",
+    "sh",
+    "-c",
+    'printf "%s" "$BB_RESOURCE_BUDGET" > "$1"; sleep 2',
+    "sh",
+    readyFile,
+  ],
   { cwd: repoRoot, env, stdio: ["ignore", "pipe", "pipe"] },
 );
 try {
   await waitFor(() => existsSync(readyFile));
-  assert.equal(readFileSync(readyFile, "utf8"), "ready");
+  const heldBudget = JSON.parse(readFileSync(readyFile, "utf8"));
   const status = run(["--status"]);
   assert.equal(status.status, 0, status.stderr);
   assert.match(status.stdout, /ActiveState=active/);
-  assert.match(status.stdout, /MemoryMax=4294967296/);
+  assert.match(
+    status.stdout,
+    new RegExp(`^MemoryMax=${heldBudget.selected.memoryMaxBytes}$`, "m"),
+  );
   const concurrent = run(["--", "true"]);
   assert.notEqual(concurrent.status, 0);
   assert.match(

@@ -28,23 +28,34 @@ current_cgroup() {
 }
 
 release_idle_scope() {
-  local load_state active_state control_group procs
-  load_state="$(systemctl --user show "${unit_name}.scope" -p LoadState --value 2>/dev/null || true)"
-  [[ "${load_state}" == 'loaded' ]] || return 0
-  active_state="$(systemctl --user show "${unit_name}.scope" -p ActiveState --value)"
-  control_group="$(systemctl --user show "${unit_name}.scope" -p ControlGroup --value)"
-  procs=''
-  if [[ -n "${control_group}" && -r "/sys/fs/cgroup${control_group}/cgroup.procs" ]]; then
-    procs="$(<"/sys/fs/cgroup${control_group}/cgroup.procs")"
-  fi
-  if [[ -n "${procs}" ]]; then
-    printf 'Another %s job is still running (pids: %s); wait for it or stop it first\n' \
-      "${unit_name}" "$(tr '\n' ' ' <<<"${procs}")" >&2
-    exit 1
-  fi
-  printf 'Releasing idle %s.scope (%s)\n' "${unit_name}" "${active_state}" >&2
-  systemctl --user stop "${unit_name}.scope" >/dev/null 2>&1 || true
-  systemctl --user reset-failed "${unit_name}.scope" >/dev/null 2>&1 || true
+  local load_state active_state control_group populated attempts
+  attempts=0
+  while (( attempts < 40 )); do
+    load_state="$(systemctl --user show "${unit_name}.scope" -p LoadState --value)"
+    [[ "${load_state}" == 'not-found' ]] && return 0
+    [[ "${load_state}" == 'loaded' ]] || { printf 'Unknown resource unit state; preserving existing ownership\n' >&2; exit 1; }
+    active_state="$(systemctl --user show "${unit_name}.scope" -p ActiveState --value)"
+    control_group="$(systemctl --user show "${unit_name}.scope" -p ControlGroup --value)"
+    if [[ -n "${control_group}" ]]; then
+      [[ -r "/sys/fs/cgroup${control_group}/cgroup.events" ]] || { printf 'Resource cgroup metadata is unavailable; preserving existing ownership\n' >&2; exit 1; }
+      populated="$(awk '$1 == "populated" {print $2}' "/sys/fs/cgroup${control_group}/cgroup.events")"
+      case "${populated}" in
+        1) printf 'Another %s job is still running; wait for its complete cgroup to exit\n' "${unit_name}" >&2; exit 1 ;;
+        0) ;;
+        *) printf 'Resource cgroup populated state is unavailable; preserving existing ownership\n' >&2; exit 1 ;;
+      esac
+    elif [[ "${active_state}" != 'inactive' && "${active_state}" != 'failed' ]]; then
+      printf 'Resource unit has no verifiable cgroup; preserving existing ownership\n' >&2
+      exit 1
+    fi
+    if [[ "${active_state}" == 'failed' ]]; then
+      systemctl --user reset-failed "${unit_name}.scope"
+    fi
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+  printf 'Empty %s.scope has not been collected; retry after systemd completes its cleanup\n' "${unit_name}" >&2
+  exit 1
 }
 
 if [[ "${1:-}" == '--help' || "${1:-}" == '-h' ]]; then
@@ -80,22 +91,18 @@ if [[ "${1:-}" == '--' ]]; then
 fi
 
 case "${profile}" in
-  verification)
-    memory_high='3G'
-    memory_max='4G'
-    memory_max_bytes="$((4 * 1024 * 1024 * 1024))"
-    ;;
-  package)
-    memory_high='5G'
-    memory_max='7G'
-    memory_max_bytes="$((7 * 1024 * 1024 * 1024))"
-    ;;
-  *)
-    printf 'Unknown resource profile: %s\n' "${profile}" >&2
-    usage >&2
-    exit 2
-    ;;
+  verification|package) ;;
+  *) printf 'Unknown resource profile: %s\n' "${profile}" >&2; exit 2 ;;
 esac
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+budget_tool="${here}/resource-runtime.mjs"
+export BB_RESOURCE_BUDGET="$(node "${budget_tool}" select "${profile}")"
+[[ -n "${BB_RESOURCE_BUDGET}" ]] || exit 1
+fields="$(node "${budget_tool}" fields "${profile}")"
+read -r memory_high memory_max cpu_quota workers tasks_max vitest_workers <<< "${fields}"
+export BB_RESOURCE_VITEST_WORKERS="${workers}"
+export VITEST_MAX_WORKERS="${vitest_workers}"
 
 if (( $# == 0 )); then
   usage >&2
@@ -104,12 +111,9 @@ fi
 
 cgroup="$(current_cgroup)"
 case "${cgroup}" in
-  */"${unit_name}.scope")
-    active_memory_max="$(<"/sys/fs/cgroup${cgroup}/memory.max")"
-    if [[ "${active_memory_max}" == 'max' || "${active_memory_max}" -lt "${memory_max_bytes}" ]]; then
-      printf 'Active resource scope is smaller than the requested %s profile\n' "${profile}" >&2
-      exit 1
-    fi
+  */"${unit_name}.scope"|*/"${unit_name}.scope"/*)
+    scope_group="${cgroup%%/${unit_name}.scope*}/${unit_name}.scope"
+    node "${budget_tool}" verify "${profile}" "${scope_group}"
     exec "$@"
     ;;
 esac
@@ -124,7 +128,12 @@ release_idle_scope
 
 export TURBO_CACHE_DIR="${TURBO_CACHE_DIR:-${HOME}/.cache/bb-turbo}"
 
-exec systemd-run --user --scope --collect --quiet \
+slice_args=()
+if [[ -n "${BB_FORK_CGROUP_PLAN:-}" ]]; then
+  slice_args=(--slice-inherit)
+fi
+
+exec systemd-run --user --scope --collect --quiet "${slice_args[@]}" \
   --unit="${unit_name}" \
   --description='BB local verification resource boundary' \
   --nice=5 \
@@ -132,8 +141,8 @@ exec systemd-run --user --scope --collect --quiet \
   -p "MemoryMax=${memory_max}" \
   -p MemorySwapMax=0 \
   -p OOMPolicy=continue \
-  -p CPUQuota=300% \
-  -p TasksMax=1024 \
+  -p "CPUQuota=${cpu_quota}%" \
+  -p "TasksMax=${tasks_max}" \
   env BB_RESOURCE_SCOPE_ACTIVE=1 \
-  bash -c 'systemctl --user set-property --runtime "$1.scope" "MemoryHigh=$2" MemorySwapMax=0 || exit; shift 2; exec "$@"' \
-  bash "${unit_name}" "${memory_high}" "$@"
+  bash -c 'systemctl --user set-property --runtime "$1.scope" "MemoryHigh=$2" MemorySwapMax=0 || exit; shift 2; tool="$1"; profile="$2"; shift 2; group="$(awk -F: '"'"'$1 == "0" {print $3}'"'"' /proc/self/cgroup)"; node "$tool" verify "$profile" "$group" || exit; exec "$@"' \
+  bash "${unit_name}" "${memory_high}" "${budget_tool}" "${profile}" "$@"

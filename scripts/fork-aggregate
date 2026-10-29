@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+original_args=("$@")
 
 usage() {
   cat <<'USAGE'
@@ -36,6 +37,9 @@ done
 [ -z "$result_override" ] || { [ "$promote_only" = 1 ] && [[ "$result_override" =~ ^[a-f0-9]{40}$ ]]; } || { usage >&2; exit 2; }
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${BB_FORK_EXECUTION_ACTIVE:-}" != "$here/fork-aggregate" ]; then
+  exec node "$here/fork-execution.mjs" "$here/fork-aggregate" "${original_args[@]}"
+fi
 root="$(git rev-parse --path-format=absolute --git-common-dir)"
 root="$(dirname "$root")"
 cd "$root"
@@ -44,45 +48,22 @@ if [ "$promote" = 1 ] || [ "$promote_only" = 1 ]; then
   [ -z "$(git status --porcelain)" ] || { echo "根目录有未提交或未跟踪改动，停止提升" >&2; exit 1; }
 fi
 
-git fetch --quiet upstream "+refs/heads/main:refs/remotes/upstream/main" "refs/tags/desktop-v*:refs/tags/desktop-v*"
-git fetch --quiet --prune origin
-
-if git rev-parse --verify --quiet refs/heads/fork-tooling >/dev/null; then
-  list_ref=refs/heads/fork-tooling
-else
-  list_ref=refs/remotes/origin/fork-tooling
+if [ -z "${BB_FORK_INPUT_SNAPSHOT:-}" ]; then
+  git fetch --quiet upstream "+refs/heads/main:refs/remotes/upstream/main" "refs/tags/desktop-v*:refs/tags/desktop-v*"
+  git fetch --quiet --prune origin
+  snapshot_dir="$(git rev-parse --path-format=absolute --git-common-dir)/fork-inputs"
+  mkdir -p "$snapshot_dir"
+  BB_FORK_INPUT_SNAPSHOT="$(mktemp "$snapshot_dir/run.XXXXXX")"
+  export BB_FORK_INPUT_SNAPSHOT
+  node "$here/fork-inputs.mjs" snapshot "$root" "$base_override" "$BB_FORK_INPUT_SNAPSHOT"
 fi
-list="$(git show "$list_ref:.fork/branches" | sed -e 's/#.*//' -e '/^[[:space:]]*$/d')"
-
-base="${base_override:-$(printf '%s\n' "$list" | awk '$1 == "base" { print $2 }')}"
-git rev-parse --verify --quiet "refs/tags/$base" >/dev/null || { echo "找不到 tag $base" >&2; exit 1; }
-base_ref="refs/heads/fork-base/$base"
-if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
-  base_ref="refs/remotes/origin/fork-base/$base"
-  git rev-parse --verify --quiet "$base_ref" >/dev/null || {
-    echo "找不到 fork-base/$base；先运行 scripts/fork-base --base $base" >&2
-    exit 1
-  }
-fi
-# macOS 自带 Bash 3.2 没有 mapfile；发布 workflow 会在 darwin runner 上执行本脚本。
-branches=()
-while IFS= read -r branch; do
-  [ -n "$branch" ] && branches+=("$branch")
-done <<EOF
-$(printf '%s\n' "$list" | awk '$1 != "base" { print $1 }')
-EOF
-
-resolve_ref() {
-  local branch="$1" local_sha remote_sha
-  local_sha="$(git rev-parse --verify --quiet "refs/heads/$branch" || true)"
-  remote_sha="$(git rev-parse --verify --quiet "refs/remotes/origin/$branch" || true)"
-  if [ -n "$local_sha" ] && [ -n "$remote_sha" ] && [ "$local_sha" != "$remote_sha" ]; then
-    echo "警告：$branch 本地与 origin 不一致，使用本地（记得推送）" >&2
-  fi
-  if [ -n "$local_sha" ]; then echo "$local_sha"; elif [ -n "$remote_sha" ]; then echo "$remote_sha"; else
-    echo "找不到分支 $branch（本地或 origin）" >&2; return 1
-  fi
-}
+snapshot_shell="$(node "$here/fork-inputs.mjs" shell "$BB_FORK_INPUT_SNAPSHOT")"
+eval "$snapshot_shell"
+case "$snapshot_base_ref" in
+  "refs/heads/fork-base/$base"|"refs/remotes/origin/fork-base/$base") ;;
+  *) echo "找不到 fork-base/$base；先运行 scripts/fork-base --base $base" >&2; exit 1 ;;
+esac
+git merge-base --is-ancestor "$tag_ref" "$base_ref" || { echo "固定基线不含稳定 tag" >&2; exit 1; }
 
 promote_result() {
   local result="$1" remote_after
@@ -103,6 +84,7 @@ promote_result() {
 if [ "$promote_only" = 1 ]; then
   result="${result_override:-$(git rev-parse --verify --quiet refs/heads/aggregate-next)}" || { echo "没有 aggregate-next 分支，先运行一次聚合" >&2; exit 1; }
   git merge-base --is-ancestor "$base_ref" "$result" || { echo "aggregate-next=$result 不基于 $base_ref，停止" >&2; exit 1; }
+  [ -z "$security_ref" ] || git merge-base --is-ancestor "$security_ref" "$result"
   promote_result "$result"
   exit 0
 fi
@@ -125,11 +107,6 @@ else
   git worktree add --quiet -B aggregate-next "$wt" "$base_ref"
 fi
 
-refs=()
-for branch in "${branches[@]}"; do
-  refs+=("$(resolve_ref "$branch")")
-done
-previous_aggregate="$(git rev-parse --verify --quiet refs/remotes/origin/aggregate || true)"
 date_refs=("$base_ref" "${refs[@]}")
 [ -z "$previous_aggregate" ] || date_refs+=("$previous_aggregate")
 merge_date="$(git log -1 --format=%cI "${date_refs[@]}" | sort | tail -1)"
@@ -169,12 +146,12 @@ if [ -n "$previous_aggregate" ]; then
   if [ "$candidate_tree" = "$(git rev-parse "$previous_aggregate^{tree}")" ] && git merge-base --is-ancestor "$base_ref" "$previous_aggregate"; then
     git -C "$wt" reset --quiet --keep "$previous_aggregate"
   else
-    git -C "$wt" merge --quiet --no-ff --strategy=ours --no-edit -m "Retain previous aggregate history" "$previous_aggregate"
+    git -C "$wt" merge --no-autostash --quiet --no-ff --strategy=ours --no-edit -m "Retain previous aggregate history" "$previous_aggregate"
   fi
 fi
 
 result="$(git -C "$wt" rev-parse HEAD)"
-security_ref="$(resolve_ref security/baseline)"
+[ -n "$security_ref" ] || { echo "找不到 security/baseline" >&2; exit 1; }
 git merge-base --is-ancestor "$security_ref" "$result" || {
   echo "聚合结果不含 security/baseline；先运行 scripts/fork-base --base $base" >&2
   exit 1

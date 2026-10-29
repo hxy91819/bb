@@ -105,17 +105,32 @@ scripts/fork-aggregate --preflight         # 不改聚合 worktree，一次列�
 `fork-package` 把整个打包流程串成一条命令，每一步都在单个 `run-resource-isolated` scope 里串行执行，失败就停在原地；
 Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆开并行跑。它依次做：
 
+0. 持有 Git common directory 的执行锁，一轮只同步 upstream/origin 各一次，按 local 优先解析稳定 tag 对象、安全 tip、tooling 清单 blob、有序分支 tip 和 previous aggregate，保存本轮私有输入快照。后续基线、预检、真实 merge 和提升只消费固定 SHA；执行期间 refs 移动留到下轮，远端普通推送冲突则停止。
 1. `scripts/fork-base`：确保 `fork-base/<tag>` 已包含最新的 `security/baseline`；`fork-package` 会自动执行，单独聚合时需要先手动运行。
 2. `scripts/fork-aggregate`：先只读预检所有输入与 `fork-base/<tag>` 的冲突，集中报告；通过后从该分支开始依次 `merge --no-ff`，生成 `.worktrees/aggregate-next`，并在结束时断言 `security/baseline` 是结果的祖先。merge 提交的时间固定取基线、各分支 tip 和上一版 aggregate 中最新的提交时间。生成候选后用 ours merge 保留上一版 aggregate 为祖先，文件树仍完全取本次清单结果，使普通推送能够快进；文件树与上一版相同且基线已包含时复用上一版 SHA。相同输入得到同一个 SHA。
 3. 把 `aggregate-next` 改名为 `.worktrees/aggregate-deploy-<短 SHA>` 并 detach。之后的安装、验证、构建、服务切换都用这一个检出，不再第二次安装依赖。
-4. `pnpm install --frozen-lockfile` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
+4. 显式 `CI=true NODE_ENV=development npm_config_production=false pnpm install --frozen-lockfile --prod=false` 后先运行维护脚本测试与上面的两个契约检查，再运行全仓 `typecheck --concurrency=1` 和相关包 `test`。全仓检查带 `--continue`，一次收集失败。包测试默认只跑 `--filter='[<上一次 aggregate>]'`；即使显式覆盖包过滤器，也不跳过前置契约检查。
 5. `scripts/fork-aggregate --base <固定tag> --promote-only --result <已验证sha>`：把 `aggregate` 更新到已验证的提交并普通推送 origin，保留根目录 `main`，不依赖可能已被其他任务移动的 `aggregate-next`。
 6. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 7. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
 8. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `aggregate` 的那些。
 9. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
 
-修改分支后重新运行 `fork-package`，生成新 SHA；输入未变、只因进程中断或外部故障失败时，按输出的 `--resume <sha>` 接续。接续固定原来的基线、上次 aggregate、测试范围和部署检出，逐阶段保存成功结果、耗时与日志到 Git common directory 的 `fork-package/`，不写入产品 Git。失败阶段不会记为成功；SHA、执行命令、流水线实现或相关运行环境变化时重跑对应检查。安装目录丢失时重新安装并清除旧检查结果；运行时构建和原生模块检查每次执行并使用 Turbo 缓存恢复产物。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。
+修改分支后重新运行 `fork-package`，生成新候选并记录新的 previous 和测试范围；只有 `--resume <sha>` 保留原来的基线、输入快照、比较起点、测试范围和部署检出。Git common directory 的 `fork-package/` 保存阶段成功回执、日志和每轮 `runs/run.*` 记录，不写入产品 Git。旧格式缺少快照的记录须重新运行入口。
+
+回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁描述符映射、快照路径、systemd 自动 INVOCATION_ID、shell 层数和工作目录等执行元数据；INVOCATION_ID 仍用于归属校验，其余未知环境变量只存摘要并继续使回执失效，不保存环境值。安装回执按 pnpm-lock.yaml 的 importers 覆盖根目录及每个 workspace 的 node_modules，记录存在性、成员、权限、链接和内容；没有 lockfile 的维护夹具用 Git package manifests 取目录。检查及构建从当前 Turbo 根配置、包配置的 outputs 取得产物根，包含 .bundled-runtime、生成文件及 bb-app 包装目录，并补充已经出现的 ignored dist/generated/bundled-types 根。不存在的声明根也记录；复用时重新枚举根清单并检查目录完整性和内容，新增根、缺根、workspace 链接变化均使回执失效。文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
+
+安装或工具身份变化、产物丢失/损坏、覆盖变化、阶段失败均重跑，并使后续阶段失效；失败和中断不写成功回执。运行时构建与原生检查也纳入同一回执和 package 资源 scope。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。锁覆盖 Git 操作和全部阶段，嵌套入口继承父锁；阶段写入另持独占锁。锁使用内核 flock（没有 flock 命令时使用 Perl Fcntl），锁文件永久保留，只关闭自身描述符，不删除或显式解锁共享描述符。
+
+Linux 执行入口和阶段为每次命令保留独立 systemd user Slice 的内核归属，记录 boot ID、InvocationID、ControlGroup 和目录设备/inode。准入检查递归 cgroup.events 的 populated；Node 默认 spawn 丢弃额外 FD、detached 后代、命令和包装器同时 SIGKILL、writer 通过 systemd-run 重归组时，仍按整个 Slice 判断。资源 scope 通过 --slice-inherit 留在执行 Slice 内。启动 payload 前验证实际归属，不以 PID、PGID 或环境 token 判断 writer 是否已经结束。元数据查询失败保留归属并拒绝恢复；同名新 unit 不当成旧实例。只有全部 writer 退出后才能自动恢复，无需人工清锁；并发恢复仍由内核文件锁串行准入，失败竞争者不会释放其他执行锁。
+
+正常收尾只核验归属，不再对可复用 unit 名称执行 stop。scope 使用 --collect 随命令退出自然回收；空 Slice 可以仍为 active/populated=0，保留给 systemd 管理，不为删除空结构增加协议。新执行按记录的实例身份和实际成员判断恢复，不要求手工清锁或清空 Slice。
+
+取消先传 TERM，3 秒后对身份验证且目录 FD 钉住的 cgroup 写 cgroup.kill；控制侧 7 秒后以失败结束等待。查询或清理失败保留归属，不能写成功回执。恢复取得锁后，未完成记录保留 interrupted，再完成必要验证。此路径需要 Linux、可用的 systemd user manager、cgroup v2 和可写 cgroup.kill；不再依赖 Python subreaper。轻量真实 scope 回归覆盖双 SIGKILL、忽略 TERM 后代、重归组、并发恢复和查询失败；不将这些结果扩展为非 Linux 平台保证。主动将 writer 迁出受管 Slice 的特权操作不属于本维护入口的派生契约。
+
+资源预算不固定为旧的 5G/7G/300%。每轮按实际 affinity/祖先 CPU 限制、可用内存及祖先 headroom 选择，保留线上余量；查询失败拒绝执行。verification/package 两个显式 profile 继续接受，同轮预算冻结为 BB_RESOURCE_BUDGET，package 可嵌套 verification，反向升级拒绝。新一轮重新探测；嵌套不重新分配预算，并核验 scope 的实际 CPU、memory.high/max、swap 和 tasks 限额。实际选值及选择器实现进入阶段身份，选值变化使回执失效。runs/run.*.resources.json 与阶段 events 记录所选预算；环境中只传不含秘密的资源数字及策略摘要。BB_RESOURCE_VITEST_WORKERS 表示默认 worker 建议或显式预算覆盖，wrapper 将默认值桥接到 server/Turbo 已有的 VITEST_MAX_WORKERS。既有显式正整数请求保留到冻结 CPU/内存容量允许的上限；显式 BB_RESOURCE_VITEST_WORKERS 另作 worker 上限。嵌套只允许继续收紧，不重新探测容量或放宽已冻结值。实际传入值以预算的 vitestWorkers 字段记录。server worker 配置仍可按现场有效容量进一步收紧。`node scripts/resource-worker-check.mjs --server-repo <带 server-worker-budget 配置及依赖的检出>` 使用独立微型 scope 运行真实 createVitest，仅解析两个 project，不执行测试。资源策略、可用的显式覆盖及低容量拒绝见 [resource-profile.md](../scripts/resource-profile.md)。
+
+每轮结果分别记录验证、提升、运行时构建、tag；推送 tag 只表示已触发流水线，Release 和安装保留 `not-observed`，直到各自独立验收。`runs/run.*` 给出每段起止、耗时和失败状态；源码状态的 events 给出每次阶段执行/复用、耗时和失败/中断原因。
 
 普通发布在安装前检查根目录是否为干净的 `main`；根目录有并行工作时保留现场，使用独立干净 clone，或先用 `--verify-only` 验证。不要移动用户文件来绕过提升检查。
 
