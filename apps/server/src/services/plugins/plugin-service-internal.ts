@@ -1,3 +1,4 @@
+import type { TunnelIngressLease } from "../connect-next/tunnel-ingress.js";
 import type { EnvironmentRemoval } from "@bb/domain";
 import type { MachineEnrollmentService } from "../machines/machine-services.js";
 import type { AiServiceRegistry } from "../ai/ai-service-registry.js";
@@ -19,7 +20,10 @@ import type {
 import type { ServerLogger } from "../../types.js";
 import type { TelemetryService } from "../system/telemetry.js";
 import type { NotificationHub } from "../../ws/hub.js";
-import type { BundledPluginRegistration } from "./builtin-registry.js";
+import type {
+  BundledPluginRegistration,
+  RetiredBundledPlugin,
+} from "./builtin-registry.js";
 import type { PluginManifest } from "./manifest.js";
 import type {
   PluginApiHandle,
@@ -66,6 +70,9 @@ export interface PluginServiceDeps {
     | "validateSharedPortDeclaration"
     | "replaceDeclarationsForOwner"
     | "clearDeclarationsForOwner"
+    | "setNextTunnelConfig"
+    | "listNextTunnelStatuses"
+    | "onNextTunnelStatusChange"
   >;
   ensureSharedPortTunnel?: (
     hostId: string,
@@ -91,7 +98,11 @@ export interface PluginServiceDeps {
    * the `plugins-changed` system broadcast on lifecycle completion. */
   hub: Pick<
     NotificationHub,
-    "getDaemonSessionIdForHost" | "notifyPluginSignal" | "notifySystem"
+    | "getDaemonSessionIdForHost"
+    | "notifyPluginSignal"
+    | "notifySystem"
+    | "notifyPluginChanged"
+    | "onWatchedTargets"
   >;
   logger: ServerLogger;
   telemetry: TelemetryService;
@@ -105,6 +116,7 @@ export interface PluginServiceDeps {
   dataDir: string;
   appVersion: string;
   bundledPlugins?: readonly BundledPluginRegistration[];
+  retiredBundledPlugins?: readonly RetiredBundledPlugin[];
   watchBuiltinPluginSources?: boolean;
   loadTimeoutMs?: number;
   /** How long an install waits for `bb.onInstall` handlers. Defaults to 30s. */
@@ -149,6 +161,7 @@ export interface PluginServiceDeps {
     pluginId: string;
     generation: string;
   }) => Promise<void>;
+  openTunnelIngress?: (audience: string) => Promise<TunnelIngressLease>;
 }
 
 export interface PluginAgentToolContribution {
@@ -222,6 +235,10 @@ export interface PluginThreadEventEmitter {
   emitThreadFailed(thread: Thread): void;
   emitThreadArchived(thread: Thread): void;
   emitThreadUnarchived(thread: Thread): void;
+  emitThreadParentChanged(
+    thread: Thread,
+    previousParentThreadId: string | null,
+  ): void;
   emitThreadDeleted(thread: Thread): void;
   emitInteractionPending(thread: Thread, interaction: PendingInteraction): void;
   /**

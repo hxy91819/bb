@@ -244,6 +244,9 @@ type ExpectedRealtimeKey = "subscribe";
 
 type ExpectedEnvironmentsKey =
   | "experimental_cleanup"
+  | "experimental_clearDiffViewed"
+  | "experimental_diffViewed"
+  | "experimental_markDiffViewed"
   | "archiveThreads"
   | "commit"
   | "delete"
@@ -255,11 +258,7 @@ type ExpectedEnvironmentsKey =
   | "diffFiles"
   | "diffPatch"
   | "get"
-  | "markPullRequestDraft"
-  | "markPullRequestReady"
-  | "mergePullRequest"
   | "paths"
-  | "pullRequest"
   | "status"
   | "update";
 
@@ -383,6 +382,10 @@ type ExpectedSystemKey =
   | "config"
   | "executionOptions"
   | "installCliSkills"
+  | "experimental_cliCommand"
+  | "experimental_installCliCommand"
+  | "experimental_recordTelemetryEvent"
+  | "experimental_removeCliCommand"
   | "reloadConfig"
   | "setAiServiceSelection"
   | "testAiService"
@@ -403,6 +406,7 @@ type ExpectedThreadSectionsKey = "create" | "delete" | "list" | "update";
 
 type ExpectedThreadsKey =
   | "experimental_listAncestors"
+  | "experimental_listDescendants"
   | "experimental_listPluginMetadata"
   | "getPluginMetadata"
   | "updatePluginMetadata"

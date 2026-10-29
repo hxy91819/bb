@@ -14,6 +14,7 @@ export function makeWorkspaceWorkingTree(
     deletions: 0,
     lineStatsComplete: true,
     files: [],
+    fileCount: overrides.files?.length ?? 0,
     ...overrides,
   };
 }
@@ -26,9 +27,11 @@ export function makeWorkspaceMergeBase(
     baseRef: "main",
     aheadCount: 0,
     behindCount: 0,
+    squashMergeCheckComplete: true,
     hasCommittedUnmergedChanges: false,
     commits: [],
     files: [],
+    fileCount: overrides.files?.length ?? 0,
     insertions: 0,
     deletions: 0,
     lineStatsComplete: true,

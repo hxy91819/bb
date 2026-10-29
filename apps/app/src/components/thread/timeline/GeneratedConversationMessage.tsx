@@ -21,7 +21,7 @@ import { AUTOMATION_DETAIL_ROUTE_PATH } from "@/lib/route-paths";
 import type { MarkdownLinkRouting } from "@/components/ui/markdown-link-routing.js";
 import { buildMarkdownMessageLinkRouting } from "@/components/ui/markdown-message-link-routing";
 import { cn } from "@bb/shared-ui/lib/utils";
-import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
+import type { PromptMentionLinkResolver } from "@bb/client-core";
 import {
   ConversationAttachments,
   type ConversationAttachmentItems,
@@ -54,6 +54,7 @@ import {
 interface AutomationLink {
   automationId: string;
   projectId: string;
+  [parameter: string]: string;
 }
 
 interface GeneratedConversationMessageProps {
@@ -259,6 +260,10 @@ function systemMessageTitleSegments(
             verbSegment("result"),
           ]
         : SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+    case "environment-directory-updated":
+      return subject !== null && subject.kind === "directory"
+        ? [verbSegment("Continued in"), subjectSegment(subject.path, null)]
+        : SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
     case "unlabeled":
       return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
   }
@@ -332,7 +337,7 @@ function generatedConversationEmptyText(
 function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
   switch (systemMessageKind) {
     case "ownership-assigned":
-      return "UserRoundPlus";
+      return "ChildThread";
     case "ownership-removed":
       return "UserRound";
     case "child-needs-attention":
@@ -347,6 +352,8 @@ function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
       return "ListTodo";
     case "tool-result-delivered":
       return "Toolbox";
+    case "environment-directory-updated":
+      return "FolderOpen";
     case "unlabeled":
       return "Info";
   }
@@ -484,7 +491,8 @@ function systemMessageIsTitleOnly(
   }
   return (
     systemMessageKind === "ownership-assigned" ||
-    systemMessageKind === "ownership-removed"
+    systemMessageKind === "ownership-removed" ||
+    systemMessageKind === "environment-directory-updated"
   );
 }
 
@@ -603,6 +611,7 @@ export const GeneratedConversationMessage = memo(
       [],
     );
     const collapsedPreviewOverflowMeasurement = useOverflowMeasurement({
+      axis: "horizontal",
       elementRef: collapsedPreviewTextRef,
       enabled: !titleOnly && messageText.length > 0,
       measurementKey: messageText,

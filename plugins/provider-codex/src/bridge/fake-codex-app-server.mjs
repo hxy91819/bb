@@ -211,6 +211,15 @@ const scriptedTurns = script?.turns ?? null;
 const requestLogPath = script?.requestLogPath ?? null;
 const responseLogPath = script?.responseLogPath ?? null;
 const modelListFailOnceMarkerPath = script?.modelListFailOnceMarkerPath ?? null;
+if (script?.launchLogPath) {
+  appendFileSync(
+    script.launchLogPath,
+    `${JSON.stringify({
+      args: process.argv.slice(2),
+      poolToken: process.env.CODEX_POOL_AUTH_TOKEN ?? null,
+    })}\n`,
+  );
+}
 
 const archiveStatePath = script?.archiveStatePath ?? null;
 
@@ -433,7 +442,10 @@ async function handleRequest(message) {
         return;
       }
       if (script?.modelList) {
-        respond(id, script.modelList);
+        setTimeout(
+          () => respond(id, script.modelList),
+          script.modelListDelayMs ?? 0,
+        );
         return;
       }
       respond(id, {
@@ -500,9 +512,23 @@ async function handleRequest(message) {
       if (String(params.threadId).startsWith("usage-replay-")) {
         replayLastTurnUsage(params.threadId);
       }
-      respond(id, { thread: { id: params.threadId } });
+      respond(id, {
+        thread: {
+          id: params.threadId,
+          ...(script?.resumedDaybreakEnabled === undefined
+            ? {}
+            : { daybreakEnabled: script.resumedDaybreakEnabled }),
+        },
+      });
       return;
     }
+    case "thread/metadata/update":
+      if (script?.metadataUpdateError) {
+        respondError(id, -32603, "Thread metadata is unavailable");
+      } else {
+        respond(id, { thread: { id: params.threadId } });
+      }
+      return;
     case "thread/fork": {
       servesThread = true;
 

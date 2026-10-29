@@ -1,7 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useCallback } from "react";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
-import type { SidebarBootstrapResponse } from "@bb/server-contract";
+import {
+  publicApiRoutes,
+  type SidebarBootstrapResponse,
+} from "@bb/server-contract";
 import { listSidebarNavigationThreads } from "@/hooks/cache-owners/query-cache";
 import { apiClient } from "@/lib/api-server";
 import { request, requestOptions } from "@/lib/api";
@@ -14,6 +22,7 @@ import {
 import type { QueryOptions } from "./query-helpers";
 import { sidebarNavigationQueryKey } from "./query-keys";
 import { REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY } from "./query-policies";
+import { routeTaggedRead } from "./route-tags";
 import {
   readCachedSidebarBootstrap,
   writeCachedSidebarBootstrap,
@@ -27,7 +36,26 @@ function fetchSidebarNavigation(
   );
 }
 
+function sidebarNavigationReadOptions(
+  client: QueryClient,
+  read: (signal: AbortSignal) => Promise<SidebarBootstrapResponse>,
+) {
+  const queryKey = sidebarNavigationQueryKey();
+  return {
+    queryKey,
+    ...routeTaggedRead(
+      client,
+      queryKey,
+      publicApiRoutes.projects.sidebarBootstrap,
+      { params: {}, input: undefined },
+      read,
+    ),
+    ...REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY,
+  };
+}
+
 export function useSidebarNavigation(options?: QueryOptions) {
+  const client = useQueryClient();
   const enabled = options?.enabled ?? true;
   useEnvironmentListRealtimeSubscription({ enabled });
   useHostListRealtimeSubscription({ enabled });
@@ -35,14 +63,12 @@ export function useSidebarNavigation(options?: QueryOptions) {
   useThreadListRealtimeSubscription({ enabled });
 
   return useQuery<SidebarBootstrapResponse>({
-    queryKey: sidebarNavigationQueryKey(),
-    queryFn: async ({ signal }) => {
+    ...sidebarNavigationReadOptions(client, async (signal) => {
       const response = await fetchSidebarNavigation(signal);
       writeCachedSidebarBootstrap(response);
       return response;
-    },
+    }),
     enabled,
-    ...REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY,
     placeholderData: () => readCachedSidebarBootstrap() ?? undefined,
   });
 }
@@ -50,10 +76,9 @@ export function useSidebarNavigation(options?: QueryOptions) {
 export function useProjectDisplayName(
   projectId: string | undefined,
 ): string | undefined {
+  const client = useQueryClient();
   const { data } = useQuery<SidebarBootstrapResponse>({
-    queryKey: sidebarNavigationQueryKey(),
-    queryFn: ({ signal }) => fetchSidebarNavigation(signal),
-    ...REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY,
+    ...sidebarNavigationReadOptions(client, fetchSidebarNavigation),
     enabled: Boolean(projectId),
   });
   if (!data || !projectId) {
@@ -65,29 +90,48 @@ export function useProjectDisplayName(
   return data.projects.find((project) => project.id === projectId)?.name;
 }
 
-interface SidebarNavigationThreadSelection<T> {
+export interface SidebarNavigationThreadSelection<T> {
   data: T | undefined;
   isBootstrapPending: boolean;
 }
 
-export function useSidebarNavigationThreadSelection<T>(
-  select: (threads: ThreadListEntry[]) => T,
-): SidebarNavigationThreadSelection<T> {
-  const selectFromNavigation = useCallback(
-    (navigation: SidebarBootstrapResponse) =>
-      select(listSidebarNavigationThreads(navigation)),
-    [select],
-  );
-  const result = useQuery<SidebarBootstrapResponse, Error, T>({
-    queryKey: sidebarNavigationQueryKey(),
-    queryFn: ({ signal }) => fetchSidebarNavigation(signal),
-    ...REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY,
+export function sidebarNavigationThreadSelectionQueryOptions<T>(
+  client: QueryClient,
+  selectFromNavigation: (navigation: SidebarBootstrapResponse) => T,
+) {
+  return queryOptions<SidebarBootstrapResponse, Error, T>({
+    ...sidebarNavigationReadOptions(client, fetchSidebarNavigation),
     enabled: false,
     select: selectFromNavigation,
   });
+}
+
+export function toSidebarNavigationThreadSelection<T>(result: {
+  data: T | undefined;
+  isFetching: boolean;
+}): SidebarNavigationThreadSelection<T> {
   const data = result.data;
   return {
     data,
     isBootstrapPending: data === undefined && result.isFetching,
   };
+}
+
+export function useSidebarNavigationThreadSelection<T>(
+  select: (threads: ThreadListEntry[]) => T,
+): SidebarNavigationThreadSelection<T> {
+  const client = useQueryClient();
+  const selectFromNavigation = useCallback(
+    (navigation: SidebarBootstrapResponse) =>
+      select(listSidebarNavigationThreads(navigation)),
+    [select],
+  );
+  return toSidebarNavigationThreadSelection(
+    useQuery(
+      sidebarNavigationThreadSelectionQueryOptions(
+        client,
+        selectFromNavigation,
+      ),
+    ),
+  );
 }

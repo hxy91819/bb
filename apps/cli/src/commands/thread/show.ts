@@ -10,11 +10,16 @@ import {
   type Thread,
   type ThreadEventRow,
   type ThreadGitDiffResponse,
-  type ThreadPullRequest,
   type ThreadTimelinePendingTodos,
   type WorkspaceStatus,
 } from "@bb/domain";
 import { BbHttpError, type BbSdk } from "@bb/sdk";
+import {
+  environmentPullRequestSchema,
+  GITHUB_PR_STATUS_PLUGIN_ID,
+  type PullRequest,
+} from "bb-plugin-bb--github-pr-status/contract";
+import { z } from "zod";
 import type {
   EnvironmentDiffQuery,
   ThreadTimelineResponse,
@@ -84,7 +89,7 @@ interface ThreadShowJsonPayload extends ThreadStatusPayload {
 
 interface ThreadShowPullRequestPayload {
   status: "available" | "none" | "unavailable";
-  pullRequest: ThreadPullRequest | null;
+  pullRequest: PullRequest | null;
   message?: string;
 }
 
@@ -145,9 +150,13 @@ async function fetchPullRequest(args: {
   sdk: BbSdk;
 }): Promise<FetchedPullRequest> {
   try {
-    const response = await args.sdk.environments.pullRequest({
-      environmentId: args.environmentId,
+    const rows = await args.sdk.plugins.callRpc({
+      pluginId: GITHUB_PR_STATUS_PLUGIN_ID,
+      method: "pullRequests",
+      input: { keys: [args.environmentId] },
+      outputSchema: z.record(z.string(), environmentPullRequestSchema),
     });
+    const response = rows[args.environmentId] ?? { outcome: "absent" };
     if (response.outcome === "available") {
       return {
         status: "available",
@@ -360,7 +369,7 @@ export function registerShowCommand(
             if (ws.branch.currentBranch) {
               console.log(`  Branch:   ${ws.branch.currentBranch}`);
             }
-            console.log(`  Changed files: ${ws.workingTree.files.length}`);
+            console.log(`  Changed files: ${ws.workingTree.fileCount}`);
             if (ws.workingTree.lineStatsComplete) {
               console.log(`  Insertions:    +${ws.workingTree.insertions}`);
               console.log(`  Deletions:     -${ws.workingTree.deletions}`);
@@ -370,7 +379,7 @@ export function registerShowCommand(
             if (ws.mergeBase) {
               console.log(`  Merge base:   ${ws.mergeBase.mergeBaseBranch}`);
               console.log(
-                `  Ahead: ${ws.mergeBase.aheadCount}  Behind: ${ws.mergeBase.behindCount}`,
+                `  Ahead: ${ws.mergeBase.aheadCount}  Behind: ${ws.mergeBase.behindCount}${ws.mergeBase.squashMergeCheckComplete ? "" : " (squash-merge check incomplete)"}`,
               );
             }
           } else {
@@ -506,7 +515,7 @@ export function registerShowCommand(
           await sdk.threads.timeline(timelineQuery);
         let rows = timeline.rows;
         let page = timeline.timelinePage;
-        while (opts.all && page.hasOlderRows && page.olderCursor !== null) {
+        while (opts.all && page.olderCursor !== null) {
           const older: ThreadTimelineResponse = await sdk.threads.timeline({
             ...timelineQuery,
             beforeAnchorSeq: String(page.olderCursor.anchorSeq),
@@ -523,9 +532,10 @@ export function registerShowCommand(
           verbose: format === "verbose",
           color,
         });
-        const notice = page.hasOlderRows
-          ? `(Showing the newest ${page.returnedSegmentCount} user-message turns; older history omitted. Use --limit <n> (max ${THREAD_LOG_TIMELINE_SEGMENT_LIMIT_MAX}) or --all to see more.)`
-          : null;
+        const notice =
+          page.olderCursor !== null
+            ? `(Showing the newest ${page.returnedSegmentCount} user-message turns; older history omitted. Use --limit <n> (max ${THREAD_LOG_TIMELINE_SEGMENT_LIMIT_MAX}) or --all to see more.)`
+            : null;
         console.log(notice === null ? text : `${text}\n\n${notice}`);
       }),
     );
@@ -566,6 +576,7 @@ function printThreadStatus(
   console.log(`  Project: ${thread.projectId}`);
   if (thread.parentThreadId) {
     console.log(`  Parent: ${thread.parentThreadId}`);
+    console.log(`  Parent notifications: ${thread.parentNotifications}`);
   }
   if (thread.archivedAt !== null) {
     console.log(`  Archived: ${new Date(thread.archivedAt).toLocaleString()}`);

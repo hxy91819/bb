@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CLIENT_NOTIFICATION_CHANNEL,
   listPushSubscriptionsOutputSchema,
-  THREAD_NOTIFICATIONS_CHANNEL,
 } from "./contract.js";
 import {
   parseStoredNotificationLevel,
@@ -104,6 +103,20 @@ async function setup(options: SetupOptions = {}) {
   const interactions = new Map<string, PendingInteraction[]>();
   const metadata = new Map<string, Record<string, unknown>>();
   let nextId = 1;
+  const listAncestors = vi.fn(
+    async ({ threadIds }: { threadIds: readonly string[] }) => ({
+      threads: [...new Set(threadIds)].flatMap((threadId) => {
+        if (!threads.has(threadId)) return [];
+        const ancestorIds: string[] = [];
+        let parentId = threads.get(threadId)?.parentThreadId ?? null;
+        while (parentId !== null && threads.has(parentId)) {
+          ancestorIds.push(parentId);
+          parentId = threads.get(parentId)?.parentThreadId ?? null;
+        }
+        return [{ threadId, ancestorIds }];
+      }),
+    }),
+  );
   const fake = createFakePluginHost({
     pluginId: "push-notifications",
     ...(options.appUrl === undefined ? {} : { appUrl: options.appUrl }),
@@ -115,16 +128,29 @@ async function setup(options: SetupOptions = {}) {
           if (!thread) throw new Error("Thread not found");
           return thread;
         },
-        experimental_listAncestors: async ({ threadIds }) => ({
+        experimental_listAncestors: listAncestors,
+        experimental_listDescendants: async ({
+          threadIds,
+          includeArchived = false,
+          includeHidden = false,
+        }) => ({
           threads: [...new Set(threadIds)].flatMap((threadId) => {
             if (!threads.has(threadId)) return [];
-            const ancestorIds: string[] = [];
-            let parentId = threads.get(threadId)?.parentThreadId ?? null;
-            while (parentId !== null && threads.has(parentId)) {
-              ancestorIds.push(parentId);
-              parentId = threads.get(parentId)?.parentThreadId ?? null;
+            const walked: ThreadResponse[] = [];
+            for (let index = -1; index < walked.length; index += 1) {
+              const parentId = index < 0 ? threadId : walked[index]?.id;
+              for (const thread of threads.values()) {
+                if (thread.parentThreadId === parentId) walked.push(thread);
+              }
             }
-            return [{ threadId, ancestorIds }];
+            const descendantIds = walked
+              .filter(
+                (thread) =>
+                  (includeArchived || thread.archivedAt === null) &&
+                  (includeHidden || thread.visibility === "visible"),
+              )
+              .map((thread) => thread.id);
+            return [{ threadId, descendantIds }];
           }),
         }),
         getPluginMetadata: async ({ threadId }) => {
@@ -235,11 +261,10 @@ async function setup(options: SetupOptions = {}) {
     addSubscription,
     cleanup,
     clientSignals: () => signals(CLIENT_NOTIFICATION_CHANNEL),
-    levelUpdates: () =>
-      signals(THREAD_NOTIFICATIONS_CHANNEL).map((signal) => signal.payload),
     expo,
     getLevel,
     interactions,
+    listAncestors,
     listLevels,
     setLevel,
     setThread,
@@ -490,6 +515,59 @@ describe("push sender", () => {
       expect(host.expo.requests[0]?.[0]).toMatchObject({
         title: "Discord Dude",
         body: "“Fix scroll jumps” fixed #4793 as 9579549809; thr_8quy6y32b5 and snake_case_name remain. Then see “Compare bb in-app terminal against Mosh…”.",
+      });
+    } finally {
+      await host.cleanup();
+    }
+  });
+
+  it("skips directives, tables, and raw JSON in the preview", async () => {
+    const host = await setup();
+    try {
+      await host.addSubscription();
+      const previews = {
+        Directive: [
+          '::page{id="2d98aecf" version="e4d24dd2" display="inline"}',
+          "",
+          "Pick one icon and press Ship.",
+        ],
+        Table: [
+          "## Result",
+          "",
+          "| Step | Before | After |",
+          "|---|---|---|",
+          "| Template | Unset | Set |",
+          "The deployment did not change.",
+        ],
+        Json: [
+          "{",
+          '  "ok": true,',
+          '  "enrolled": 9',
+          "}",
+          "",
+          "All nine people are enrolled.",
+        ],
+        "Directive only": ['::page{id="2d98aecf" version="e4d24dd2"}'],
+      };
+      for (const [title, lines] of Object.entries(previews)) {
+        await host.harness.behavior.emitThreadEvent("thread.idle", {
+          thread: host.setThread({ title }),
+          lastAssistantText: lines.join("\n"),
+        });
+      }
+
+      await vi.waitFor(() => expect(host.expo.requests).toHaveLength(4));
+      const bodies = Object.fromEntries(
+        host.expo.requests.map((request) => [
+          request[0]?.title,
+          request[0]?.body,
+        ]),
+      );
+      expect(bodies).toEqual({
+        Directive: "Pick one icon and press Ship.",
+        Table: "The deployment did not change.",
+        Json: "All nine people are enrolled.",
+        "Directive only": "Finished and waiting for you",
       });
     } finally {
       await host.cleanup();
@@ -1002,7 +1080,80 @@ describe("thread notification levels", () => {
     }
   });
 
-  it("lists resolved levels in one call and publishes the written thread", async () => {
+  it("publishes a moved thread's subtree when its parent changes", async () => {
+    const host = await setup();
+    try {
+      const muted = host.setThread({ id: "muted" });
+      const worker = host.setThread({ id: "worker" });
+      const subWorker = host.setThread({
+        id: "sub-worker",
+        parentThreadId: worker.id,
+      });
+      host.setThread({ id: "other" });
+      await host.setLevel(muted.id, "muted");
+
+      host.moveThread(worker.id, muted.id);
+      await host.harness.behavior.emitThreadEvent(
+        "experimental_thread.parentChanged",
+        { thread: host.threads.get(worker.id)!, previousParentThreadId: null },
+      );
+      const capped = {
+        own: "inherit",
+        ancestorCap: { level: "muted", threadId: muted.id },
+      };
+      await expect(host.listLevels([worker.id, subWorker.id])).resolves.toEqual(
+        { threads: { [worker.id]: capped, [subWorker.id]: capped } },
+      );
+    } finally {
+      await host.cleanup();
+    }
+  });
+
+  it("publishes only live, visible descendants and republishes a thread when it is unarchived", async () => {
+    const host = await setup();
+    try {
+      const root = host.setThread({ id: "root" });
+      const archived = host.setThread({
+        id: "archived",
+        parentThreadId: root.id,
+        archivedAt: 1,
+      });
+      const worker = host.setThread({
+        id: "worker",
+        parentThreadId: archived.id,
+      });
+      host.setThread({
+        id: "hidden",
+        parentThreadId: root.id,
+        visibility: "hidden",
+      });
+      const capped = {
+        own: "inherit",
+        ancestorCap: { level: "muted", threadId: root.id },
+      };
+
+      await host.setLevel(root.id, "muted");
+      await expect(host.listLevels([root.id, worker.id])).resolves.toEqual({
+        threads: {
+          [root.id]: { own: "muted", ancestorCap: null },
+          [worker.id]: capped,
+        },
+      });
+
+      const unarchived = { ...archived, archivedAt: null };
+      host.threads.set(archived.id, unarchived);
+      await host.harness.behavior.emitThreadEvent("thread.unarchived", {
+        thread: unarchived,
+      });
+      await expect(host.listLevels([archived.id, worker.id])).resolves.toEqual({
+        threads: { [archived.id]: capped, [worker.id]: capped },
+      });
+    } finally {
+      await host.cleanup();
+    }
+  });
+
+  it("lists resolved levels in one call and publishes the written thread's subtree", async () => {
     const host = await setup();
     try {
       const root = host.setThread({ id: "root" });
@@ -1010,29 +1161,16 @@ describe("thread notification levels", () => {
       host.setThread({ id: "other" });
 
       await host.setLevel(root.id, "muted");
+      const capped = {
+        own: "inherit",
+        ancestorCap: { level: "muted", threadId: root.id },
+      };
       await expect(
         host.listLevels(["root", "child", "other"]),
       ).resolves.toEqual({
-        threads: {
-          root: { own: "muted", ancestorCap: null },
-          child: {
-            own: "inherit",
-            ancestorCap: { level: "muted", threadId: root.id },
-          },
-        },
+        threads: { root: { own: "muted", ancestorCap: null }, child: capped },
       });
-      expect(host.levelUpdates()).toEqual([
-        {
-          threadId: root.id,
-          notifications: { own: "muted", ancestorCap: null },
-        },
-      ]);
-
       await host.setLevel(root.id, "inherit");
-      expect(host.levelUpdates().at(-1)).toEqual({
-        threadId: root.id,
-        notifications: null,
-      });
       await expect(
         host.listLevels(["root", "child", "other"]),
       ).resolves.toEqual({ threads: {} });

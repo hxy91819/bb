@@ -69,6 +69,18 @@ describe("requireEnabledQueryArg", () => {
 });
 
 describe("isTransientReadError", () => {
+  it("retries coded transport errors but never HTTP failures", () => {
+    expect(
+      isTransientReadError({ code: "transport_error", message: "Offline" }),
+    ).toBe(true);
+    expect(
+      isTransientReadError({
+        code: "handler_error",
+        status: 500,
+        message: "Failed to fetch",
+      }),
+    ).toBe(false);
+  });
   it("matches browser transport failures but not HTTP responses", () => {
     expect(isTransientReadError(new TypeError("Failed to fetch"))).toBe(true);
     expect(isTransientReadError(new TypeError("Load failed"))).toBe(true);
@@ -179,11 +191,10 @@ function makeThreadTimelineResponse(
   return makeThreadTimelineResponseFixture({
     rows,
     timelinePage: {
-      kind: "latest",
-      segmentLimit: 20,
       returnedSegmentCount: rows.length > 0 ? 1 : 0,
-      hasOlderRows: false,
       olderCursor: null,
+      historySnapshot: "snapshot-1",
+      olderRowsSourceSeqEnd: null,
     },
   });
 }
@@ -449,7 +460,6 @@ describe("getEnvironmentWorkspaceStateInvalidationQueryKeys", () => {
 
     expect(queryKeys).toEqual([
       ["environmentWorkStatus", "env-1"],
-      ["environmentPullRequest", "env-1"],
       ["environmentDiffFiles", "env-1"],
       ["environmentFilePreview", "env-1"],
     ]);

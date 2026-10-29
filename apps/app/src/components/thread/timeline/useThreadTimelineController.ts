@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   useQueryClient,
+  type QueryClient,
   type QueryObserverResult,
 } from "@tanstack/react-query";
 import type { ThreadTimelineResponse, TimelineRow } from "@bb/server-contract";
@@ -17,7 +18,7 @@ import { hasThreadTimelineUnseenEvents } from "@/hooks/cache-owners/thread-timel
 import { useConnectionAwareQueryState } from "@/hooks/queries/connection-aware-query-state";
 import { threadTimelineQueryKey } from "@/hooks/queries/query-keys";
 import { isTransientReadError } from "@/hooks/queries/query-helpers";
-import { useThreadTimeline } from "@/hooks/queries/thread-queries";
+import { useThreadTimeline } from "@/hooks/queries/thread-panel-queries";
 import { BbHttpError, sdk } from "@/lib/sdk";
 
 type TimelineQueryResultProp =
@@ -47,6 +48,8 @@ export interface UseThreadTimelineControllerResult {
   contextBoundarySeq: ThreadTimelineResponse["contextBoundarySeq"];
   contextWindowUsage: ThreadTimelineResponse["contextWindowUsage"];
   goal: ThreadTimelineResponse["goal"];
+  providerCommands: ThreadTimelineResponse["providerCommands"];
+  sessionOptions: ThreadTimelineResponse["sessionOptions"];
   modelFallback: ThreadTimelineResponse["modelFallback"];
   hasOlderTimelineRows: boolean;
   isCatchingUpTimeline: boolean;
@@ -69,6 +72,37 @@ interface ReconcileLoadedTimelineArgs {
   surfaceKey: string;
 }
 
+const MAX_RETAINED_LOADED_TIMELINES = 8;
+const retainedLoadedTimelines = new WeakMap<
+  QueryClient,
+  Map<string, LoadedTimelineState>
+>();
+
+function retainedLoadedTimeline(
+  queryClient: QueryClient,
+  surfaceKey: string,
+): LoadedTimelineState | undefined {
+  return retainedLoadedTimelines.get(queryClient)?.get(surfaceKey);
+}
+
+function retainLoadedTimeline(
+  queryClient: QueryClient,
+  loaded: LoadedTimelineState,
+): void {
+  let retained = retainedLoadedTimelines.get(queryClient);
+  if (retained === undefined) {
+    retained = new Map();
+    retainedLoadedTimelines.set(queryClient, retained);
+  }
+  retained.delete(loaded.surfaceKey);
+  retained.set(loaded.surfaceKey, loaded);
+  while (retained.size > MAX_RETAINED_LOADED_TIMELINES) {
+    const oldest = retained.keys().next().value;
+    if (oldest === undefined) break;
+    retained.delete(oldest);
+  }
+}
+
 function isStaleTimelinePaginationCursorError(error: Error): boolean {
   return (
     error instanceof BbHttpError &&
@@ -81,6 +115,7 @@ function buildEmptyLoadedTimelineState(
   surfaceKey: string,
 ): LoadedTimelineState {
   return buildLoadedTimelineState({
+    historySnapshot: null,
     latestWindowEndSequence: null,
     latestRows: [],
     olderCursor: null,
@@ -137,7 +172,9 @@ export function useThreadTimelineController({
     useState<LoadedTimelineTracker>(() => ({
       latestTimeline,
       loaded: reconcileLoadedTimeline({
-        current: buildEmptyLoadedTimelineState(surfaceKey),
+        current:
+          retainedLoadedTimeline(queryClient, surfaceKey) ??
+          buildEmptyLoadedTimelineState(surfaceKey),
         latestTimeline,
         surfaceKey,
       }),
@@ -148,12 +185,18 @@ export function useThreadTimelineController({
     loadedTimeline.surfaceKey !== surfaceKey
   ) {
     loadedTimeline = reconcileLoadedTimeline({
-      current: loadedTimelineTracker.loaded,
+      current:
+        loadedTimeline.surfaceKey === surfaceKey
+          ? loadedTimeline
+          : (retainedLoadedTimeline(queryClient, surfaceKey) ?? loadedTimeline),
       latestTimeline,
       surfaceKey,
     });
     setLoadedTimelineTracker({ latestTimeline, loaded: loadedTimeline });
   }
+  useEffect(() => {
+    retainLoadedTimeline(queryClient, loadedTimeline);
+  }, [loadedTimeline, queryClient]);
   const updateLoadedTimeline = useCallback(
     (update: (current: LoadedTimelineState) => LoadedTimelineState) => {
       setLoadedTimelineTracker((current) => {
@@ -284,6 +327,8 @@ export function useThreadTimelineController({
     contextBoundarySeq: latestTimeline?.contextBoundarySeq ?? null,
     contextWindowUsage: latestTimeline?.contextWindowUsage,
     goal: latestTimeline?.goal ?? null,
+    providerCommands: latestTimeline?.providerCommands ?? null,
+    sessionOptions: latestTimeline?.sessionOptions ?? null,
     modelFallback: latestTimeline?.modelFallback ?? null,
     hasOlderTimelineRows,
     isCatchingUpTimeline,

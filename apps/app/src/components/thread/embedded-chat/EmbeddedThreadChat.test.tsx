@@ -93,13 +93,10 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
               ? composer.submitMode.reason
               : undefined
           }
-          hidden={
-            pendingInteraction !== undefined && pendingInteraction !== null
-          }
           value={composer.message}
           onChange={(event) => composer.onChangeMessage(event.target.value, [])}
         />
-        <button type="button" onClick={composer.onSubmit}>
+        <button type="button" onClick={() => composer.onSubmit()}>
           Send
         </button>
         <BottomHostDraftProbe host={pluginComposerHost ?? null} />
@@ -156,7 +153,7 @@ vi.mock("@/components/ui/bottom-anchored-scroll-body", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/overflow-fade", () => ({
+vi.mock("@bb/shared-ui/overflow-fade", () => ({
   OverflowFade: ({ tone }: { tone: string }) => (
     <div data-testid="embedded-chat-overflow-fade" data-tone={tone} />
   ),
@@ -215,26 +212,18 @@ vi.mock("@/hooks/useThreadCreationOptions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/usePromptMentions", () => ({
-  usePromptMentions: () => ({
-    triggers: [],
-    results: { groups: [], suggestions: [] },
-    isLoading: false,
-    isError: false,
-    setQuery: vi.fn(),
-  }),
-}));
+vi.mock("@/hooks/usePromptMentions", async () =>
+  (await import("@/test/fixtures/composer-search")).fakePromptMentionsModule(),
+);
 
-vi.mock("@/hooks/useCommandSuggestions", () => ({
-  useCommandSuggestions: () => ({
-    triggers: [],
-    suggestions: [],
-    isLoading: false,
-    isError: false,
-    hasMore: false,
-    isLoadingMore: false,
-    loadMore: vi.fn(),
-  }),
+vi.mock("@/hooks/useCommandSuggestions", async () =>
+  (
+    await import("@/test/fixtures/composer-search")
+  ).fakeCommandSuggestionsModule(),
+);
+
+vi.mock("@/hooks/queries/thread-panel-queries", () => ({
+  useThreadQueuedMessages: () => ({ data: mocks.queuedMessages }),
 }));
 
 vi.mock("@/hooks/queries/thread-queries", () => ({
@@ -250,7 +239,6 @@ vi.mock("@/hooks/queries/thread-queries", () => ({
           }
         : undefined,
   }),
-  useThreadQueuedMessages: () => ({ data: mocks.queuedMessages }),
   useThreadPendingInteractions: () => ({
     data: mocks.pendingInteractions,
     isError: mocks.pendingInteractionsIsError,
@@ -532,16 +520,6 @@ describe("EmbeddedThreadChat", () => {
     );
   });
 
-  it("keeps queued messages adjacent to the composer", () => {
-    mocks.queuedMessages = [{ id: "q1" }, { id: "q2" }];
-    renderEmbeddedChat();
-
-    const queue = screen.getByTestId("embedded-chat-queued-messages");
-    const composer = screen.getByTestId("embedded-chat-composer");
-    expect(queue.nextElementSibling).toBe(composer);
-    expect(screen.getByTestId("queued-count").textContent).toBe("2");
-  });
-
   it("steers a queued row once provisioning is ready", async () => {
     mocks.threadRuntimeDisplayStatus = "provisioning";
     mocks.queuedMessages = [{ id: "q1" }];
@@ -573,7 +551,6 @@ describe("EmbeddedThreadChat", () => {
     expect(screen.getByTestId("pending-interaction-banner").textContent).toBe(
       "thr_side_chat",
     );
-    expect(screen.getByTestId("embedded-chat-composer").hidden).toBe(true);
   });
 
   it("hides held messages while a pending side-chat question is answered", () => {
@@ -586,7 +563,6 @@ describe("EmbeddedThreadChat", () => {
 
     expect(screen.getByTestId("pending-interaction-banner")).toBeTruthy();
     expect(screen.queryByTestId("embedded-chat-queued-messages")).toBeNull();
-    expect(screen.getByTestId("embedded-chat-composer").hidden).toBe(true);
   });
 
   it("keeps the composer for a plugin-owned interaction", () => {
@@ -623,7 +599,6 @@ describe("EmbeddedThreadChat", () => {
     renderEmbeddedChat({ threadId: "thr_side_chat" });
 
     const composer = screen.getByTestId("embedded-chat-composer");
-    expect(composer.hidden).toBe(false);
     expect(composer.dataset.submitMode).toBe("ready");
     fireEvent.change(composer, { target: { value: "Keep this draft" } });
     expect(screen.getByDisplayValue("Keep this draft")).toBe(composer);
@@ -649,7 +624,6 @@ describe("EmbeddedThreadChat", () => {
     mocks.pendingInteractionsIsFetching = true;
     view.rerender(buildEmbeddedChat({ threadId: "thr_side_chat" }));
 
-    expect(composer.hidden).toBe(false);
     expect(composer.dataset.submitMode).toBe("ready");
     expect(screen.getByTestId("embedded-chat-queued-messages")).toBeTruthy();
     expect(queue.dataset.sendDisabled).toBeUndefined();
@@ -671,7 +645,6 @@ describe("EmbeddedThreadChat", () => {
     renderEmbeddedChat({ threadId: "thr_side_chat" });
 
     const composer = screen.getByTestId("embedded-chat-composer");
-    expect(composer.hidden).toBe(false);
     expect(composer.dataset.submitMode).toBe("ready");
     expect(screen.getByTestId("embedded-chat-queued-messages")).toBeTruthy();
   });

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { createMemoryStorage } from "@bb/test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { threadTabsSchema } from "@bb/server-contract";
 import {
   EMPTY_FIXED_PANEL_TABS_STATE,
@@ -16,9 +17,11 @@ import {
   createThreadStorageFilePreviewFixedPanelTab,
   createWorkspaceFilePreviewFixedPanelTab,
   ensureOpenFixedPanelHasActiveTab,
+  FIXED_PANEL_TABS_IDLE_EXPIRY_MS,
   getFixedPanelTabsStateStorageKey,
   isFixedPanelTabsStateStorageKey,
   parseFixedPanelTabsState,
+  pruneFixedPanelTabsStorage,
   serializeFixedPanelTabsState,
   FIXED_PANEL_TABS_STATE_STORAGE_VERSION,
   type FixedPanelTabsState,
@@ -40,6 +43,49 @@ function makeInitialState(): FixedPanelTabsState {
 }
 
 describe("fixed-panel-tabs-state", () => {
+  it.each(["git-diff:git-diff:none", "old-diff-id"])(
+    "converts a saved Diff entry %s without changing its order or selection",
+    (legacyId) => {
+      const terminal = createTerminalFixedPanelTab({ terminalId: "saved" });
+      const restored = parseFixedPanelTabsState({
+        initialValue: makeInitialState(),
+        now: NOW,
+        storedValue: JSON.stringify({
+          version: FIXED_PANEL_TABS_STATE_STORAGE_VERSION,
+          lastUsedAt: NOW,
+          secondary: {
+            isOpen: true,
+            activeTabId: legacyId,
+            tabs: [
+              terminal,
+              { id: legacyId, kind: "git-diff" },
+              { id: "thread-info:thread-info:none", kind: "thread-info" },
+            ],
+          },
+        }),
+      });
+      expect(restored.secondary).toEqual({
+        isOpen: true,
+        activeTabId: "plugin-fixed:core:diff",
+        tabs: [
+          terminal,
+          {
+            id: "plugin-fixed:core:diff",
+            kind: "plugin-fixed",
+            pluginId: "core",
+            tabId: "diff",
+          },
+          {
+            id: "plugin-fixed:core:info",
+            kind: "plugin-fixed",
+            pluginId: "core",
+            tabId: "info",
+          },
+        ],
+      });
+    },
+  );
+
   it("preserves native browser identities and detects a reconnected desktop generation", () => {
     const tab = {
       ...createBrowserFixedPanelTab({
@@ -646,5 +692,55 @@ describe("legacy side-chat tabs", () => {
     });
 
     expect(parsed.secondary.tabs).toEqual([browserTab]);
+  });
+});
+
+describe("pruneFixedPanelTabsStorage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("prunes expired and malformed blobs and keeps fresh ones", () => {
+    const localStorage = createMemoryStorage();
+    vi.stubGlobal("window", { localStorage });
+    const now = Date.now();
+    const freshKey = getFixedPanelTabsStateStorageKey({ threadId: "fresh" });
+    const expiredKey = getFixedPanelTabsStateStorageKey({
+      threadId: "expired",
+    });
+    const garbageKey = getFixedPanelTabsStateStorageKey({
+      threadId: "garbage",
+    });
+    const staleShapeKey = getFixedPanelTabsStateStorageKey({
+      threadId: "stale-shape",
+    });
+    localStorage.setItem(
+      freshKey,
+      serializeFixedPanelTabsState({
+        state: createEmptyFixedPanelTabsState({ lastUsedAt: now }),
+      }),
+    );
+    localStorage.setItem(
+      expiredKey,
+      serializeFixedPanelTabsState({
+        state: createEmptyFixedPanelTabsState({
+          lastUsedAt: now - FIXED_PANEL_TABS_IDLE_EXPIRY_MS - 1,
+        }),
+      }),
+    );
+    localStorage.setItem(garbageKey, "{not json");
+    localStorage.setItem(
+      staleShapeKey,
+      JSON.stringify({ lastUsedAt: now, secondary: "nope" }),
+    );
+    localStorage.setItem("unrelated", "keep");
+
+    pruneFixedPanelTabsStorage({ now });
+
+    expect(localStorage.getItem(freshKey)).not.toBeNull();
+    expect(localStorage.getItem(expiredKey)).toBeNull();
+    expect(localStorage.getItem(garbageKey)).toBeNull();
+    expect(localStorage.getItem(staleShapeKey)).toBeNull();
+    expect(localStorage.getItem("unrelated")).toBe("keep");
   });
 });

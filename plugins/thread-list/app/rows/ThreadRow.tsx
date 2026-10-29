@@ -1,6 +1,8 @@
 import {
   memo,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -42,7 +44,6 @@ import {
   experimental_THREAD_ACTION_GROUPS,
   experimental_useThreadActions,
   experimental_useSidebarThreadSplit,
-  experimental_useProviders,
   experimental_ProviderIcon as ProviderIcon,
   ThreadTitle,
   useSidebarSplitLayout,
@@ -54,6 +55,7 @@ import {
   type PluginThreadActionsInlineItem,
   type PluginThreadActionsTriggerProps,
   type PluginSidebarThreadRowStatus,
+  type PluginProvidersState,
 } from "@get-bb/plugin-sdk/app";
 import type { SidebarThread } from "../model/sidebar-thread.js";
 import {
@@ -65,7 +67,7 @@ import {
   sidebarShowProviderIconsAtom,
   threadRowActionsAtom,
 } from "../preferences/atoms.js";
-import { AppCommandShortcutPill } from "../ui/AppCommandShortcutPill.js";
+import { ShortcutPill } from "@/components/ui/shortcut-pill";
 import { SidebarStickyTier } from "../ui/sidebar.js";
 import {
   SIDEBAR_HOVER_ACTIONS_CLASS,
@@ -96,7 +98,7 @@ import type {
 } from "./sidebarThreadRowDroppable.js";
 import type { SidebarSortableDragBindings } from "@/components/ui/sortable-motion";
 import { SidebarThreadDragChip } from "../dnd/sidebarThreadDragChip.js";
-import { SplitPaneMiniMap } from "./SplitPaneMiniMap.js";
+import { SplitPaneMiniMap } from "@/components/ui/split-pane-mini-map";
 import { ThreadRowQuickActions } from "./ThreadRowQuickActions.js";
 import { toThreadActionTarget } from "./threadActionTarget.js";
 import { useOpenThreadInSplit } from "./threadRowNavigation.js";
@@ -112,6 +114,10 @@ import {
 } from "../list/ThreadRowActionsCustomize.js";
 
 const SIDEBAR_TITLE_DOUBLE_CLICK_MS = 400;
+
+export const SidebarProvidersContext = createContext<
+  PluginProvidersState["providers"]
+>([]);
 
 let lastSidebarTitleClick: { at: number; threadId: string } | null = null;
 
@@ -369,7 +375,7 @@ function ThreadRowComponent({
   const sdk = useSdk();
   const openThreadInSplit = useOpenThreadInSplit();
   const showProviderIcons = useAtomValue(sidebarShowProviderIconsAtom);
-  const { providers } = experimental_useProviders();
+  const providers = useContext(SidebarProvidersContext);
   const provider = showProviderIcons
     ? providers.find((candidate) => candidate.id === thread.providerId)
     : undefined;
@@ -443,7 +449,7 @@ function ThreadRowComponent({
             key: CUSTOMIZE_ROW_ACTIONS_KEY,
             group: experimental_THREAD_ACTION_GROUPS.settings,
             action: {
-              label: "Customize row actions",
+              label: "Customize actions",
               icon: "FilterHorizontal",
               run: () => {
                 const begin = () => customizeRowActions(thread.id);
@@ -776,7 +782,7 @@ function ThreadRowComponent({
             </span>
           </span>
         ) : shortcut ? (
-          <AppCommandShortcutPill shortcut={shortcut} />
+          <ShortcutPill shortcut={shortcut} />
         ) : (
           <span
             className={cn(

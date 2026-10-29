@@ -1804,6 +1804,46 @@ describe("Account Pool plugin", () => {
     expect(await resolveToken(fixture.host)).toBe(fixture.key);
   });
 
+  it("routes thread-less Codex model listing through the hub without recording a thread route", async () => {
+    const fixture = await createFixture({
+      upstreamUrl: "https://upstream.example",
+      provider: "codex",
+      source: "import",
+      options: {
+        codexUsageUrl: EMPTY_USAGE_URL,
+        importCodexCredentials: async () => ({
+          accessToken: "sk-codex",
+          refreshToken: "refresh",
+          idToken: null,
+          accountId: "model-list-codex-account",
+          email: null,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1_000,
+        }),
+        fetch: async () => Response.json({}),
+      },
+    });
+    await fixture.host.bb.storage.kv.delete("retry-route:thread-codex");
+
+    const entries = await fixture.host.harness.behavior.resolveProviderEnv(
+      "codex",
+      { threadId: null, projectId: null, hostId: "host-one" },
+    );
+
+    expect(entries.filter((entry) => entry.name.startsWith("CODEX_"))).toEqual([
+      {
+        name: "CODEX_OPENAI_BASE_URL",
+        value: { serverPath: "/api/v1/plugins/account-pool/http/v1" },
+        reason: "Routed through the Account Pooler hub",
+      },
+      {
+        name: "CODEX_POOL_AUTH_TOKEN",
+        value: fixture.key,
+        reason: "Account Pooler hub token for this machine",
+      },
+    ]);
+    expect(await fixture.host.bb.storage.kv.list("retry-route:")).toEqual([]);
+  });
+
   it("restores the 1-hour prompt cache only while a subscription account can serve Claude", async () => {
     const upstream = await startUpstream(async (request, response) => {
       await readRequestBody(request);
@@ -4002,6 +4042,75 @@ describe("Account Pool plugin", () => {
       },
     );
 
+    it.each([
+      { idleMinutes: 45, reload: false },
+      { idleMinutes: 45, reload: true },
+      { idleMinutes: 61, reload: false },
+      { idleMinutes: 61, reload: true },
+    ])(
+      "retains Claude session affinity after $idleMinutes idle minutes with reload=$reload",
+      async ({ idleMinutes, reload }) => {
+        let now = 1_800_000_000_000;
+        let outage = false;
+        const attempts: Array<string | null> = [];
+        const upstreamFetch: typeof fetch = async (_input, init) => {
+          const key = new Headers(init?.headers).get("x-api-key");
+          attempts.push(key);
+          return Response.json(
+            {},
+            { status: outage && key === "sk-first" ? 503 : 200 },
+          );
+        };
+        const fixture = await affinityFixture(
+          "claude",
+          upstreamFetch,
+          () => now,
+        );
+        let host = fixture.host;
+        const send = async (id: string) => {
+          const response = await host.harness.behavior.fetchHttp(
+            "POST",
+            "/v1/messages",
+            {
+              headers: authHeaders(fixture.key),
+              body: claudeBody(id),
+            },
+          );
+          expect(response.status).toBe(200);
+          await response.text();
+          return attempts.at(-1);
+        };
+        expect(await send("original")).toBe("sk-first");
+        outage = true;
+        expect(await send("fallback")).toBe("sk-second");
+        outage = false;
+        now += idleMinutes * 60 * 1_000;
+        if (reload) {
+          host = await host.harness.lifecycle.reload(
+            createAccountPoolPlugin({
+              fetch: upstreamFetch,
+              now: () => now,
+              usageUrl: EMPTY_USAGE_URL,
+            }),
+          );
+          const service = host.harness.behavior.runService("hub");
+          cleanups.push(async () => {
+            service.controller.abort();
+            await service.done;
+            await host.harness.lifecycle.dispose();
+          });
+          await vi.waitFor(async () => {
+            const status = statusSchema.parse(
+              await host.harness.behavior.callRpc("status.get", null),
+            );
+            expect(status.accepting).toBe(true);
+          });
+        }
+        expect(await send("original")).toBe("sk-first");
+        expect(await send("fresh")).toBe("sk-second");
+      },
+    );
+
     it.each(["claude", "codex"] as const)(
       "runs %s sequentially across conversations and keeps a recovered earlier account as backup",
       async (provider) => {
@@ -4638,7 +4747,7 @@ describe("Account Pool plugin", () => {
                     "account.disable",
                     { id: fixture.account.id },
                   );
-                if (reason === "expired") now += 31 * 60 * 1_000;
+                if (reason === "expired") now += 66 * 60 * 1_000;
                 const key =
                   reason === "other host"
                     ? provider === "claude"
@@ -4695,7 +4804,7 @@ describe("Account Pool plugin", () => {
             try {
               await movePoolToOtherAccount(fixture, provider);
               attempts.splice(1);
-              now += 29 * 60 * 1_000;
+              now += 64 * 60 * 1_000;
               await (await send("child-session", "parent-session")).text();
               now += 2 * 60 * 1_000;
               await (await send("parent-session", null)).text();
@@ -4871,11 +4980,11 @@ describe("Account Pool plugin", () => {
             id: fixture.account.id,
           });
           expect(await send(fixture.key, "{}", {})).toBe(keyFor("sk-second"));
-          now += 29 * 60 * 1_000;
+          now += 64 * 60 * 1_000;
           expect(await send(fixture.key, body)).toBe(keyFor("sk-first"));
           now += 2 * 60 * 1_000;
           expect(await send(fixture.key, body)).toBe(keyFor("sk-first"));
-          now += 31 * 60 * 1_000;
+          now += 66 * 60 * 1_000;
           expect(await send(fixture.key, body)).toBe(keyFor("sk-second"));
         } finally {
           await held.body?.cancel();

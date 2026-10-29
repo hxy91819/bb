@@ -12,7 +12,6 @@ import { Button } from "@bb/shared-ui/button";
 import { useAtomValue } from "jotai";
 import { COARSE_POINTER_TOOLBAR_ACTION_BUTTON_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { Icon } from "@bb/shared-ui/icon";
-import { Pill } from "@bb/shared-ui/pill";
 import { SplitButton } from "@/components/ui/split-button.js";
 import {
   AppPageHeader,
@@ -22,24 +21,29 @@ import {
 import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGitActionDialog";
 import {
   getBbDesktopInfo,
+  MACOS_TITLE_BAR_TRAILING_TOGGLE_CLASS,
   MACOS_WINDOW_NO_DRAG_CLASS,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
+import { useIsSidebarFramed } from "@/components/ui/sidebar.js";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
   useAppCommandHandler,
   useAppCommandShortcut,
 } from "@/components/commands/AppCommandProvider";
-import { AppCommandShortcutHint } from "@/components/commands/AppCommandShortcutHint";
 import { useSidebarRename } from "@/components/sidebar/SidebarInlineRename";
 import { useThreadActions } from "@/components/thread/ThreadActionsProvider";
 import { ThreadTitle } from "@/components/thread/ThreadTitleMentions";
 import { useDefaultRequestRename } from "@/lib/thread-actions/thread-action-registry";
 import { SecondaryPanelHostLayoutContext } from "@/components/secondary-panel/SecondaryPanelHostLayoutContext";
-import { RIGHT_PANEL_TOGGLE_ICON_NAME } from "@/components/secondary-panel/panelToggleControlState";
-import { useWindowTitleBarHostsRightPanelToggle } from "@/components/layout/WindowRightPanelToggle";
+import {
+  RIGHT_PANEL_TOGGLE_ICON_NAME,
+  RIGHT_PANEL_TOGGLE_SHORTCUT_HINT_CLASS,
+} from "@/components/secondary-panel/panelToggleControlState";
+import { AppCommandShortcutHint } from "@/components/commands/AppCommandShortcutHint";
 import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@bb/shared-ui/chrome-style-tokens";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import { dimInactiveSplitsAtom } from "@/lib/split-layout/atoms";
 import {
   CONTEXT_INACTIVE_TEXT_CLASS,
@@ -63,7 +67,6 @@ export interface ThreadDetailHeaderActionsMenuArgs {
 
 interface ThreadDetailHeaderProps {
   actionsMenu: ((args: ThreadDetailHeaderActionsMenuArgs) => ReactNode) | null;
-  childPillLabel: "child" | null;
   isSecondaryPanelOpen: boolean;
   onClosePane?: () => void;
   onOpenThreadGitAction: (target: ThreadGitActionDialogTarget) => void;
@@ -77,7 +80,6 @@ interface ThreadDetailHeaderProps {
 
 export function ThreadDetailHeader({
   actionsMenu,
-  childPillLabel,
   isSecondaryPanelOpen,
   onClosePane,
   onOpenThreadGitAction,
@@ -89,6 +91,7 @@ export function ThreadDetailHeader({
   workspaceOpenButton,
 }: ThreadDetailHeaderProps) {
   const isCompactViewport = useIsCompactViewport();
+  const isPointerCoarse = usePointerCoarse();
   const [primaryAction, ...secondaryActions] = threadHeaderGitActions;
   const { renameThreadAsync } = useThreadActions();
   const handleRename = useCallback(
@@ -105,11 +108,11 @@ export function ThreadDetailHeader({
   const requestRenameDialog = useDefaultRequestRename();
   const pendingMenuRename = useRef(false);
   const requestRename = (id: string) => {
-    if (isCompactViewport) requestRenameDialog(id);
+    if (isCompactViewport || isPointerCoarse) requestRenameDialog(id);
     else startEditing();
   };
   const requestRenameFromMenu = (id: string) => {
-    if (isCompactViewport) requestRenameDialog(id);
+    if (isCompactViewport || isPointerCoarse) requestRenameDialog(id);
     else pendingMenuRename.current = true;
   };
   const handleActionsMenuCloseAutoFocus = (event: Event) => {
@@ -122,6 +125,7 @@ export function ThreadDetailHeader({
   const dimsInactiveSplits = useAtomValue(dimInactiveSplitsAtom);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const isSidebarFramed = useIsSidebarFramed();
   const headerRef = useRef<HTMLElement>(null!);
   const {
     beginPaneDrag,
@@ -176,18 +180,15 @@ export function ThreadDetailHeader({
     if (isEditing) {
       return;
     }
-    startEditing();
+    if (isPointerCoarse) requestRenameDialog(threadId);
+    else startEditing();
   };
   const rightPanelLabel = isSecondaryPanelOpen
     ? "Hide right panel"
     : "Show right panel";
   const rightPanelIconName = RIGHT_PANEL_TOGGLE_ICON_NAME;
-  const titleBarHostsRightPanelToggle =
-    useWindowTitleBarHostsRightPanelToggle();
   const showRightPanelToggle =
-    !titleBarHostsRightPanelToggle &&
-    secondaryPanelHost === null &&
-    (!isSecondaryPanelOpen || isCompactViewport);
+    secondaryPanelHost === null && (!isSecondaryPanelOpen || isCompactViewport);
 
   const center = (
     <>
@@ -218,11 +219,6 @@ export function ThreadDetailHeader({
           {isEditing ? editor : <ThreadTitle title={threadTitle} />}
         </p>
       </div>
-      {childPillLabel ? (
-        <Pill variant="outline" size="sm">
-          {childPillLabel}
-        </Pill>
-      ) : null}
       {actionsMenu == null ? null : (
         <span
           className={cn(
@@ -301,36 +297,48 @@ export function ThreadDetailHeader({
           </Button>
         ) : null}
         {showRightPanelToggle ? (
-          <span className="inline-flex items-center gap-1.5">
-            <AppCommandShortcutHint shortcut={panelShortcut} />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                HEADER_ICON_BUTTON_CLASS,
-                CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
-              )}
-              aria-label={
-                panelShortcut
-                  ? `${rightPanelLabel} (${panelShortcut.label})`
-                  : rightPanelLabel
-              }
-              aria-keyshortcuts={panelShortcut?.ariaKeyshortcuts}
-              aria-expanded={isSecondaryPanelOpen}
-              onPointerEnter={preloadThreadSecondaryPanel}
-              onFocus={preloadThreadSecondaryPanel}
-              onPointerDown={preloadThreadSecondaryPanel}
-              onClick={onToggleSecondaryPanel}
-            >
-              <Icon name={rightPanelIconName} />
-            </Button>
-          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              HEADER_ICON_BUTTON_CLASS,
+              CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
+              "relative",
+              usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+              isTopRow &&
+                isSidebarFramed &&
+                MACOS_TITLE_BAR_TRAILING_TOGGLE_CLASS,
+            )}
+            aria-label={
+              panelShortcut
+                ? `${rightPanelLabel} (${panelShortcut.label})`
+                : rightPanelLabel
+            }
+            aria-keyshortcuts={panelShortcut?.ariaKeyshortcuts}
+            aria-expanded={isSecondaryPanelOpen}
+            onPointerEnter={preloadThreadSecondaryPanel}
+            onFocus={preloadThreadSecondaryPanel}
+            onPointerDown={preloadThreadSecondaryPanel}
+            onClick={onToggleSecondaryPanel}
+          >
+            <Icon name={rightPanelIconName} />
+            <AppCommandShortcutHint
+              shortcut={panelShortcut}
+              className={RIGHT_PANEL_TOGGLE_SHORTCUT_HINT_CLASS}
+            />
+          </Button>
         ) : null}
-        {reservesWindowPanelToggle &&
-        !isWindowPanelOpen &&
-        !titleBarHostsRightPanelToggle ? (
-          <span aria-hidden className={HEADER_ICON_BUTTON_CLASS} />
+        {reservesWindowPanelToggle && !isWindowPanelOpen ? (
+          <span
+            aria-hidden
+            className={cn(
+              HEADER_ICON_BUTTON_CLASS,
+              isTopRow &&
+                isSidebarFramed &&
+                MACOS_TITLE_BAR_TRAILING_TOGGLE_CLASS,
+            )}
+          />
         ) : null}
       </div>
     </>

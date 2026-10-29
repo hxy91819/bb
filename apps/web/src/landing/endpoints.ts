@@ -2,7 +2,8 @@ import {
   DESKTOP_DOWNLOADS,
   DOWNLOAD_FALLBACK_URL,
   DOWNLOAD_RELEASE_ASSET_BASE_URL,
-  UTM_PARAM_NAMES,
+  CAMPAIGN_PARAM_NAMES,
+  CLICK_ID_PARAM_NAMES,
 } from "./site";
 import type { CtaPlacement, DesktopPlatform } from "./site";
 
@@ -25,6 +26,8 @@ type DownloadEventProperties = {
   $current_url: string;
   $referrer?: string;
   download_target: DesktopPlatform;
+  gbraid?: string;
+  gclid?: string;
   placement: DownloadPlacement;
   tracking_source: typeof TRACKING_SOURCE;
   utm_campaign?: string;
@@ -32,6 +35,7 @@ type DownloadEventProperties = {
   utm_medium?: string;
   utm_source?: string;
   utm_term?: string;
+  wbraid?: string;
 };
 
 type PostHogCapturePayload = {
@@ -71,7 +75,7 @@ export async function handleDownload(
   if (!asset) {
     return redirectResponse(DOWNLOAD_FALLBACK_URL);
   }
-  return streamInstaller(asset, range);
+  return streamInstaller(asset, range, request.headers.get("if-range"));
 }
 
 type InstallerAsset = {
@@ -83,20 +87,46 @@ function isFirstByteRequest(range: string | null): boolean {
   return range === null || /^bytes=0-/.test(range.trim());
 }
 
-async function streamInstaller(
-  asset: InstallerAsset,
+async function fetchInstaller(
+  url: string,
   range: string | null,
-): Promise<Response> {
-  let upstream: Response;
+): Promise<Response | null> {
   try {
-    upstream = await fetch(
-      asset.url,
+    return await fetch(
+      url,
       range === null ? undefined : { headers: { range } },
     );
   } catch {
-    return redirectResponse(DOWNLOAD_FALLBACK_URL);
+    return null;
   }
-  if ((upstream.status !== 200 && upstream.status !== 206) || !upstream.body) {
+}
+
+function matchesValidator(headers: Headers, validator: string): boolean {
+  const trimmed = validator.trim();
+  return (
+    trimmed === headers.get("etag") || trimmed === headers.get("last-modified")
+  );
+}
+
+async function streamInstaller(
+  asset: InstallerAsset,
+  range: string | null,
+  ifRange: string | null,
+): Promise<Response> {
+  let upstream = await fetchInstaller(asset.url, range);
+  if (
+    upstream?.status === 206 &&
+    ifRange !== null &&
+    !matchesValidator(upstream.headers, ifRange)
+  ) {
+    await upstream.body?.cancel();
+    upstream = await fetchInstaller(asset.url, null);
+  }
+  if (
+    !upstream ||
+    (upstream.status !== 200 && upstream.status !== 206) ||
+    !upstream.body
+  ) {
     return redirectResponse(DOWNLOAD_FALLBACK_URL);
   }
 
@@ -302,10 +332,28 @@ type BuildDownloadEventPropertiesArgs = {
 function buildDownloadEventProperties(
   args: BuildDownloadEventPropertiesArgs,
 ): DownloadEventProperties {
-  const referrer = args.request.headers.get("referer");
+  const globalPrivacyControl = args.request.headers.get("Sec-GPC") === "1";
+  const requestUrl = new URL(args.requestUrl);
+  let referrer = args.request.headers.get("referer");
+  if (globalPrivacyControl) {
+    for (const name of CLICK_ID_PARAM_NAMES) {
+      requestUrl.searchParams.delete(name);
+    }
+    if (referrer) {
+      try {
+        const referrerUrl = new URL(referrer);
+        for (const name of CLICK_ID_PARAM_NAMES) {
+          referrerUrl.searchParams.delete(name);
+        }
+        referrer = referrerUrl.href;
+      } catch {
+        referrer = null;
+      }
+    }
+  }
   const referrerSearchParams = readReferrerSearchParams(referrer);
   const properties: DownloadEventProperties = {
-    $current_url: truncateProperty(args.requestUrl.href),
+    $current_url: truncateProperty(requestUrl.href),
     download_target: args.platform,
     placement: parseDownloadPlacement(args.requestUrl.searchParams),
     tracking_source: TRACKING_SOURCE,
@@ -318,7 +366,7 @@ function buildDownloadEventProperties(
   addUtmProperties({
     properties,
     referrerSearchParams,
-    requestSearchParams: args.requestUrl.searchParams,
+    requestSearchParams: requestUrl.searchParams,
   });
 
   return properties;
@@ -362,7 +410,7 @@ type AddUtmPropertiesArgs = {
 };
 
 function addUtmProperties(args: AddUtmPropertiesArgs): void {
-  for (const name of UTM_PARAM_NAMES) {
+  for (const name of CAMPAIGN_PARAM_NAMES) {
     const value = getTrackingParam({
       name,
       referrerSearchParams: args.referrerSearchParams,

@@ -103,10 +103,12 @@ import SquareIcon from "@hugeicons/core-free-icons/SquareIcon";
 import SquareUnlock02Icon from "@hugeicons/core-free-icons/SquareUnlock02Icon";
 import StarIcon from "@hugeicons/core-free-icons/StarIcon";
 import TestTube01Icon from "@hugeicons/core-free-icons/TestTube01Icon";
+import SpaceIcon from "@hugeicons/core-free-icons/SpaceIcon";
 import TextWrapIcon from "@hugeicons/core-free-icons/TextWrapIcon";
 import TimeScheduleIcon from "@hugeicons/core-free-icons/TimeScheduleIcon";
 import Unarchive03Icon from "@hugeicons/core-free-icons/Unarchive03Icon";
 import UserIcon from "@hugeicons/core-free-icons/UserIcon";
+import UserMultiple02Icon from "@hugeicons/core-free-icons/UserMultiple02Icon";
 import ViewIcon from "@hugeicons/core-free-icons/ViewIcon";
 import ViewOffIcon from "@hugeicons/core-free-icons/ViewOffIcon";
 import ZoomInAreaIcon from "@hugeicons/core-free-icons/ZoomInAreaIcon";
@@ -253,6 +255,7 @@ export const EXTENDED_ICON_MAP: ExtendedIconMap = {
   ChevronUp: ArrowUp01Icon,
   ChevronsDown: ArrowDownDoubleIcon,
   ChevronsUp: ArrowUpDoubleIcon,
+  ChildThread: UserMultiple02Icon,
   CircleArrowShrink: CircleArrowShrink01Icon,
   Clean: CleanIcon,
   Clock: Clock01Icon,
@@ -336,6 +339,7 @@ export const EXTENDED_ICON_MAP: ExtendedIconMap = {
   SortingZA01: SortingZA01Icon,
   SortingOneNine: SortingOneNineIcon,
   SortingNineOne: SortingNineOneIcon,
+  Space: SpaceIcon,
   Square: SquareIcon,
   SquareUnlock02: SquareUnlock02Icon,
   Star: StarIcon,

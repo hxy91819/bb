@@ -52,8 +52,8 @@ import {
   allThreadQueryKeyPrefix,
   allTerminalsQueryKeyPrefix,
   environmentDiffFilesQueryKeyPrefix,
+  environmentDiffViewedQueryKeyPrefix,
   environmentFilePreviewQueryKeyPrefix,
-  environmentPullRequestQueryKey,
   environmentWorkStatusQueryKeyPrefix,
   hostsQueryKey,
   serverMoveStatusQueryKey,
@@ -63,7 +63,6 @@ import {
   sidebarNavigationQueryKey,
   systemAiServicesQueryKey,
   systemConfigQueryKey,
-  uiPreferencesQueryKey,
   allSystemProvidersQueryKeyPrefix,
   threadDefaultExecutionOptionsQueryKey,
   threadQueryKey,
@@ -93,6 +92,7 @@ import {
   getThreadCompactedHistoryInvalidationQueryKeys,
   getThreadTimelineWindowInvalidationQueryKeys,
 } from "./cache-invalidation-groups";
+import { isCachedThreadTimelinePushEnabled } from "./thread-timeline-push-owner";
 
 interface CollectCachedThreadIdsForEnvironmentArgs {
   environmentId: string;
@@ -355,8 +355,7 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
       dirtyThreadListQueriesForBackgroundActivity,
       dirtyThreadDetailQueriesForBackgroundActivity,
       dirtyThreadSearchQueriesForCompletedTurn,
-      dirtyThreadTimelineQueries,
-      dirtyThreadPullRequestQueryForCompletedTurn,
+      dirtyThreadTimelineQueriesForAppendedEvents,
       dirtyThreadTurnRequestQueries,
     ],
   },
@@ -427,7 +426,7 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
   },
   "read-state-changed": {
     flush: "debounced",
-    dirty: [markThreadDetailQueryStale, markThreadListQueriesStale],
+    dirty: [markThreadDetailQueryStale, dirtyActiveThreadListQueries],
   },
   "tabs-changed": {
     flush: "immediate",
@@ -481,6 +480,9 @@ export const REALTIME_ENVIRONMENT_CHANGE_REGISTRY = {
   },
   "thread-storage-changed": {
     dirty: [dirtyThreadStorageQueriesForEnvironment],
+  },
+  "diff-viewed-changed": {
+    dirty: [dirtyEnvironmentDiffViewedQueries],
   },
 } satisfies EnvironmentChangeRegistry;
 
@@ -562,9 +564,6 @@ export const REALTIME_SYSTEM_CHANGE_REGISTRY = {
   },
   "environment-availability-changed": {
     dirty: [dirtyEnvironmentProviderQueries],
-  },
-  "ui-preferences-changed": {
-    dirty: [dirtyUiPreferencesQueries],
   },
   "server-move-changed": {
     dirty: [dirtyServerMoveStatusQueries],
@@ -921,6 +920,37 @@ function dirtyThreadTimelineQueries({
   }
 }
 
+function dirtyThreadTimelineQueriesForAppendedEvents(
+  context: ThreadRealtimeDirtyContext,
+): void {
+  const { eventTypes, queryClient, threadId, timelineSequence } = context;
+  if (
+    threadId === undefined ||
+    !isCachedThreadTimelinePushEnabled(queryClient) ||
+    !hasActiveQueries(queryClient, threadTimelineQueryKeyPrefix(threadId))
+  ) {
+    dirtyThreadTimelineQueries(context);
+    return;
+  }
+  if (timelineSequence !== undefined) {
+    markThreadTimelineUnseenEvents(queryClient, threadId, timelineSequence);
+  }
+  const outlineQueryKeys = getThreadConversationOutlineInvalidationQueryKeys({
+    threadId,
+  });
+  if (eventTypes === undefined) {
+    invalidateQueryKeysWithoutCancelingActiveFetches({
+      queryClient,
+      queryKeys: outlineQueryKeys,
+    });
+  } else if (eventTypes.includes("turn/completed")) {
+    invalidateTerminalTimelineQueryKeys({
+      queryClient,
+      queryKeys: outlineQueryKeys,
+    });
+  }
+}
+
 function dirtyThreadTurnRequestQueries({
   eventTypes,
   queryClient,
@@ -935,22 +965,20 @@ function dirtyThreadTurnRequestQueries({
   ];
 }
 
-function dirtyThreadPullRequestQueryForCompletedTurn({
-  eventTypes,
+export function getCachedThreadEnvironmentId({
   queryClient,
   threadId,
-}: ThreadRealtimeDirtyContext): QueryKey[] {
-  if (!threadId || !eventTypes?.includes("turn/completed")) {
-    return [];
-  }
+}: {
+  queryClient: QueryClient;
+  threadId: string;
+}): string | null {
   const cachedThread =
     queryClient.getQueryData<ThreadWithRuntime>(threadQueryKey(threadId)) ??
     getCachedThreadListPlaceholder(queryClient, threadId) ??
     getCachedSidebarNavigationThreads(queryClient).find(
       (thread) => thread.id === threadId,
     );
-  const environmentId = cachedThread?.environmentId;
-  return environmentId ? [environmentPullRequestQueryKey(environmentId)] : [];
+  return cachedThread?.environmentId ?? null;
 }
 
 function dirtyThreadTerminalQueries({
@@ -992,41 +1020,6 @@ function markThreadDetailQueryStale({
     queryKey: threadQueryKey(threadId),
     refetchType: "none",
   });
-}
-
-function markThreadListQueriesStale({
-  projectId,
-  queryClient,
-}: ThreadRealtimeDirtyContext): void {
-  queryClient.invalidateQueries({
-    queryKey: sidebarNavigationQueryKey(),
-    refetchType: "none",
-  });
-  if (!projectId) {
-    queryClient.invalidateQueries({
-      queryKey: threadsQueryKey(),
-      refetchType: "none",
-    });
-    return;
-  }
-  for (const queryKey of getCachedProjectThreadListInvalidationQueryKeys({
-    projectId,
-    queryClient,
-  })) {
-    queryClient.invalidateQueries({
-      queryKey,
-      refetchType: "none",
-    });
-  }
-  for (const queryKey of getCachedGlobalThreadListInvalidationQueryKeys({
-    queryClient,
-  })) {
-    queryClient.invalidateQueries({
-      exact: true,
-      queryKey,
-      refetchType: "none",
-    });
-  }
 }
 
 function patchThreadListPendingInteractionState({
@@ -1155,6 +1148,12 @@ function dirtyEnvironmentThreadListQueries({
   return queryKeys;
 }
 
+function dirtyEnvironmentDiffViewedQueries({
+  environmentId,
+}: EnvironmentRealtimeDirtyContext): QueryKey[] {
+  return [environmentDiffViewedQueryKeyPrefix(environmentId)];
+}
+
 function dirtyThreadStorageQueriesForEnvironment({
   getCachedThreadIdsForEnvironment,
 }: EnvironmentRealtimeDirtyContext): QueryKey[] {
@@ -1197,15 +1196,6 @@ function dirtyMachineEnvironmentQueries({
   invalidateQueryKeysWithoutCancelingActiveFetches({
     queryClient,
     queryKeys: [allMachineEnvironmentQueryKeyPrefix()],
-  });
-}
-
-function dirtyUiPreferencesQueries({
-  queryClient,
-}: RealtimeDirtyContext): void {
-  invalidateQueryKeysWithoutCancelingActiveFetches({
-    queryClient,
-    queryKeys: [uiPreferencesQueryKey()],
   });
 }
 

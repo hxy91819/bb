@@ -1,6 +1,12 @@
 import { drizzle } from "drizzle-orm/d1";
 import { escapeHtmlText } from "@bb/text-utils";
 import {
+  GATE_OAUTH_AUTH_KIND,
+  GATE_OAUTH_CLIENT_HEADER,
+  GATE_OAUTH_GRANT_HEADER,
+  GATE_OAUTH_SCOPE_HEADER,
+  MCP_LOCAL_PATH,
+  MCP_PUBLIC_PATH,
   RESERVED_HANDLES,
   handleAppLinkAssociationRequest,
   parseVisitorHost,
@@ -68,7 +74,28 @@ import {
   workerHeldResponsesEnabled,
 } from "./relay.js";
 import { responseHeadTimeoutMs } from "./response-head-timeout.js";
+import {
+  authorizeMcpToken,
+  isMcpLocalPath,
+  isMcpProtectedResourceMetadataPath,
+  mcpChallengeResponse,
+  mcpProtectedResourceMetadataResponse,
+  readBearerToken,
+  type McpForwardAuth,
+} from "./mcp-gate.js";
 import { readTunnelLiveness, type TunnelLiveness } from "./tunnel-liveness.js";
+import {
+  handleGatePresence,
+  handleGatePresenceBatch,
+  handleGateResolve,
+  handleGateResolveBatch,
+} from "./gate-api.js";
+import {
+  GATE_PRESENCE_BATCH_PATH,
+  GATE_PRESENCE_PATH,
+  GATE_RESOLVE_BATCH_PATH,
+  GATE_RESOLVE_PATH,
+} from "@bb/tunnel-contract/next";
 
 export { TunnelDO };
 
@@ -338,11 +365,15 @@ async function fetchTunnelDo(
 export function requestForTunnelDo(
   request: Request,
   target: string | null,
-  authKind?: "machine" | "session",
+  authKind?: "machine" | "session" | typeof GATE_OAUTH_AUTH_KIND,
   machineId?: string,
+  oauth?: McpForwardAuth,
 ): Request {
   const headers = new Headers(request.headers);
   stripPlatformCookies(headers);
+  headers.delete(GATE_OAUTH_SCOPE_HEADER);
+  headers.delete(GATE_OAUTH_GRANT_HEADER);
+  headers.delete(GATE_OAUTH_CLIENT_HEADER);
   headers.delete(TUNNEL_TARGET_HEADER);
   headers.delete(MACHINE_CREDENTIAL_HEADER);
   headers.delete(GATE_AUTH_HEADER);
@@ -362,7 +393,29 @@ export function requestForTunnelDo(
   if (machineId !== undefined) {
     headers.set(GATE_MACHINE_ID_HEADER, machineId);
   }
+  if (oauth !== undefined) {
+    headers.delete("authorization");
+    headers.delete("cookie");
+    headers.set(GATE_OAUTH_SCOPE_HEADER, oauth.scope);
+    headers.set(GATE_OAUTH_GRANT_HEADER, oauth.grantId);
+    headers.set(GATE_OAUTH_CLIENT_HEADER, oauth.clientName);
+  }
   return new Request(request, { headers });
+}
+
+export function mcpRequestForTunnelDo(
+  request: Request,
+  oauth: McpForwardAuth,
+): Request {
+  const forward = new URL(request.url);
+  forward.pathname = MCP_LOCAL_PATH;
+  return requestForTunnelDo(
+    new Request(forward, request),
+    null,
+    GATE_OAUTH_AUTH_KIND,
+    undefined,
+    oauth,
+  );
 }
 
 function isHostManagementMutation(request: Request, pathname: string): boolean {
@@ -421,6 +474,23 @@ const gate = {
     const url = resolveConnectRequestUrl(request.url, request.headers, runtime);
     const host = resolveConnectRequestHost(request.headers, runtime);
     const parsed = parseVisitorHost(host, env.BASE_DOMAIN);
+    if (
+      parsed === null ||
+      (parsed.target === null && RESERVED_HANDLES.has(parsed.handle))
+    ) {
+      if (url.pathname === GATE_RESOLVE_PATH) {
+        return handleGateResolve(request, env, ctx);
+      }
+      if (url.pathname === GATE_PRESENCE_PATH) {
+        return handleGatePresence(request, env);
+      }
+      if (url.pathname === GATE_RESOLVE_BATCH_PATH) {
+        return handleGateResolveBatch(request, env, ctx);
+      }
+      if (url.pathname === GATE_PRESENCE_BATCH_PATH) {
+        return handleGatePresenceBatch(request, env);
+      }
+    }
     if (parsed === null || parsed.target === null) {
       if (url.pathname === "/api/connect/servers") {
         return handleListAccountServers(request, env);
@@ -521,6 +591,45 @@ const gate = {
 
     if (resolved.kind === "machine" && target === null) {
       return machinePage(label, resolved.accountHandle, runtime);
+    }
+
+    if (resolved.kind === "server" && target === null) {
+      if (isMcpLocalPath(url.pathname)) {
+        return text("bb connect: not found\n", 404);
+      }
+      if (isMcpProtectedResourceMetadataPath(url.pathname)) {
+        if (resolved.server.revokedAt != null) {
+          return text("bb connect: not found\n", 404);
+        }
+        if (request.method === "GET" || request.method === "HEAD") {
+          return mcpProtectedResourceMetadataResponse(
+            url.origin,
+            runtime.accountAppUrl,
+          );
+        }
+      }
+      if (url.pathname === MCP_PUBLIC_PATH) {
+        const token = readBearerToken(request.headers);
+        if (token === null) return mcpChallengeResponse(url.origin, null);
+        const authorization = await authorizeMcpToken(token, {
+          origin: url.origin,
+          userId: resolved.userId,
+          server: resolved.server,
+          secret: env.BETTER_AUTH_SECRET,
+          db,
+        });
+        if (authorization === null) {
+          return mcpChallengeResponse(url.origin, "invalid_token");
+        }
+        if (authorization.recordUse !== null) {
+          ctx.waitUntil(authorization.recordUse());
+        }
+        return responseForVisitor(
+          await tunnelDo(mcpRequestForTunnelDo(request, authorization.forward)),
+          null,
+          [],
+        );
+      }
     }
 
     const isPublicInstallPath =
@@ -748,7 +857,7 @@ export default {
       console.error("bb connect: request failed", {
         method: request.method,
         path: new URL(request.url).pathname,
-        error,
+        error: String(error),
       });
       return gateErrorResponse(request);
     }

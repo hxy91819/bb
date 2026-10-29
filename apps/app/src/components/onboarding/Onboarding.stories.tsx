@@ -312,6 +312,7 @@ function AgentFrame({
   onRecheck?: () => void;
 }) {
   const ready = anyReady(states);
+  const blocked = !loading && !ready;
   return (
     <OnboardingLayout
       step="agent"
@@ -319,11 +320,11 @@ function AgentFrame({
       title="Connect a coding agent"
       description="bb runs the agents you already use. You need one that is installed and signed in on this computer."
       footerNote={
-        ready ? null : "Threads can't start until one agent is ready."
+        blocked ? "Threads can't start until one agent is ready." : null
       }
       primaryLabel="Continue"
-      primaryDisabled={!ready}
-      secondaryLabel={ready ? undefined : "Skip for now"}
+      primaryDisabled={loading || !ready}
+      secondaryLabel={blocked ? "Skip for now" : undefined}
       onPrimary={chrome.onPrimary ?? noop}
       onSecondary={chrome.onSecondary ?? noop}
       onSelectStep={chrome.onSelectStep ?? noop}
@@ -895,6 +896,14 @@ export function Step3Plugins() {
       >
         <StoryWindow>
           <PluginsFrame />
+        </StoryWindow>
+      </Captioned>
+      <Captioned
+        label="Compact plugins"
+        hint="Full descriptions in a single column, with compact setup navigation."
+      >
+        <StoryWindow compact>
+          <PluginsFrame compact />
         </StoryWindow>
       </Captioned>
       <Captioned

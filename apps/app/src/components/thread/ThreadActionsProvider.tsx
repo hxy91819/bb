@@ -53,7 +53,7 @@ import { getThreadReadToggleAction } from "@bb/client-core";
 import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
 import { getDesktopBrowserApi } from "@/lib/bb-desktop";
 import { useRouteNavigate } from "@/components/ui/app-route-anchor";
-import { resolveThread } from "@/lib/plugin-sidebar-hooks";
+import { resolveThread } from "@/lib/cached-thread";
 import { CORE_THREAD_ACTIONS } from "@/lib/thread-actions/core-thread-actions";
 import { ThreadActionCollectors } from "@/lib/thread-actions/thread-action-registry";
 
@@ -494,7 +494,7 @@ export function ThreadActionsProvider({
           closeDialog?.();
           showMutationErrorToast({
             error,
-            fallbackMessage: "Failed to archive thread and children",
+            fallbackMessage: "Failed to archive thread and its child threads",
             lifecycleOperation: "archive_thread",
           });
         },
