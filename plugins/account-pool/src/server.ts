@@ -3,6 +3,7 @@ import {
   retryAvailabilityMethod,
   type RetryAvailability,
 } from "./retry-contract.js";
+import { registerPoolAiService } from "./ai-service.js";
 import { modelFamily } from "./quota.js";
 import { modelFamilySchema } from "./contracts.js";
 import { registerUsageSource } from "./usage-source.js";
@@ -287,6 +288,7 @@ export function createAccountPoolPlugin(
       }
       return operations.hasUsableEnabledAccount(provider);
     };
+    registerPoolAiService(bb, hub, hubTokens, () => canServe("codex"));
     const markerEntries = (token: string): PoolEnvEntry[] => [
       {
         name: PARENT_URL_ENV,
