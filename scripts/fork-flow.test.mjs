@@ -1286,6 +1286,11 @@ test("same-named replacement units are not claimed or killed as the old executio
     );
     slice = record.name;
     scope = plans[0].name;
+    const stopped = spawnSync("systemctl", ["--user", "stop", slice], {
+      env: managerEnv(f.env),
+      encoding: "utf8",
+    });
+    assert.equal(stopped.status, 0, stopped.stderr);
     const code =
       "const f=require('node:fs');f.writeFileSync('.git/foreign-ready','yes');setInterval(()=>f.appendFileSync('.git/foreign-writes','x'),20)";
     foreign = spawn(
@@ -1539,6 +1544,176 @@ test("selected resource changes invalidate stage success and malformed budgets l
     const failed = JSON.parse(readFileSync(state, "utf8"));
     assert.equal(failed.events.at(-1).status, "failed");
     assert.equal(failed.completed.tests, undefined);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("empty ownership cleanup cannot terminate a replacement created after its final check", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  let slice;
+  const scope = `bb-fork-${randomUUID()}.scope`;
+  try {
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    await runStage(state, "tests", f.root, [
+      process.execPath,
+      "-e",
+      "process.exit(0)",
+    ]);
+    const { owner } = ownedPlans(state);
+    const entry = inspectOwner(owner).entries.find((value) => value.invocation);
+    slice = entry.name;
+    const unitsAfterExit = queryUnits([slice, ownedPlans(state).plans[0].name]);
+    const empty = unitsAfterExit.get(slice);
+    console.log(
+      JSON.stringify({
+        emptySlice: {
+          load: empty.LoadState,
+          active: empty.ActiveState,
+          populated: readFileSync(
+            `/sys/fs/cgroup${empty.ControlGroup}/cgroup.events`,
+            "utf8",
+          ).match(/^populated (\d)$/m)?.[1],
+        },
+        exitedScope: unitsAfterExit.get(ownedPlans(state).plans[0].name)
+          .LoadState,
+      }),
+    );
+    const realSystemctl = execFileSync("bash", ["-c", "command -v systemctl"], {
+      encoding: "utf8",
+    }).trim();
+    const replace = join(f.root, ".git/replace.sh");
+    const marker = join(f.root, ".git/replaced");
+    const ready = join(f.root, ".git/new-writes");
+    const writer = `require('node:fs').appendFileSync(${JSON.stringify(ready)},'x');setInterval(()=>require('node:fs').appendFileSync(${JSON.stringify(ready)},'x'),20)`;
+    writeFileSync(
+      replace,
+      `#!/bin/bash\nset -eu\n[ ! -f '${marker}' ] || exit 0\ntouch '${marker}'\n'${realSystemctl}' --user stop '${slice}'\nsystemd-run --user --scope --collect --quiet --slice='${slice}' --unit='${scope}' -p RuntimeMaxSec=20s -p TimeoutStopSec=1s -- '${process.execPath}' -e ${JSON.stringify(writer)} >/dev/null 2>&1 &\nfor ((i=0;i<300;i++)); do [ ! -s '${ready}' ] || exit 0; sleep .01; done\nexit 1\n`,
+    );
+    const shim = join(f.root, ".git/microbin/systemctl");
+    writeFileSync(
+      shim,
+      `#!/bin/bash\nfor arg do if [ "$arg" = stop ]; then bash '${replace}' || exit; break; fi; done\nexec '${realSystemctl}' "$@"\n`,
+    );
+    chmodSync(shim, 0o755);
+    const module = new URL("./fork-cgroup.mjs", import.meta.url).pathname;
+    const code = `import {readOwner,cleanupEmpty} from ${JSON.stringify(module)};import {execFileSync} from 'node:child_process';cleanupEmpty(readOwner(${JSON.stringify(`${state}.lock`)}));execFileSync('bash',[${JSON.stringify(replace)}]);`;
+    const result = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", code],
+      { cwd: f.root, env: managerEnv(f.env), encoding: "utf8", timeout: 10000 },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const replacement = queryUnits([slice]).get(slice);
+    assert.notEqual(replacement.InvocationID, entry.invocation);
+    assert.equal(queryUnits([scope]).get(scope).ActiveState, "active");
+    const before = readFileSync(ready, "utf8").length;
+    await waitFor(() => readFileSync(ready, "utf8").length > before);
+    assert.equal(queryUnits([scope]).get(scope).ActiveState, "active");
+    const saved = readFileSync(`${state}.lock.owner.json`, "utf8");
+    const failure = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", code],
+      {
+        cwd: f.root,
+        env: {
+          ...managerEnv(f.env),
+          XDG_RUNTIME_DIR: join(f.root, ".git/no-bus"),
+          DBUS_SESSION_BUS_ADDRESS: `unix:path=${f.root}/.git/no-bus/bus`,
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(failure.status, 1);
+    assert.match(failure.stderr, /保留记录|归属查询/);
+    assert.equal(readFileSync(`${state}.lock.owner.json`, "utf8"), saved);
+    assert.equal(queryUnits([scope]).get(scope).ActiveState, "active");
+  } finally {
+    const real = execFileSync("bash", ["-c", "command -v systemctl"], {
+      encoding: "utf8",
+    }).trim();
+    for (const name of [scope, slice].filter(Boolean))
+      spawnSync(real, ["--user", "stop", name], {
+        env: managerEnv(),
+        stdio: "ignore",
+      });
+    rmSync(join(f.root, ".git/microbin/systemctl"), { force: true });
+    f.cleanup();
+  }
+});
+
+test("independent execution scopes reuse one state while source, configuration, budget and unknown environment still invalidate", () => {
+  const f = fixture();
+  try {
+    const state = join(f.root, ".git/state.json");
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    const shell = join(f.root, ".git/invoke.sh");
+    const program =
+      "require('node:fs').appendFileSync('.git/execution-count','x')";
+    writeFileSync(
+      shell,
+      `#!/bin/bash\nprintf '%s\\n' "$INVOCATION_ID" >> '${f.root}/.git/invocations'\nexec '${process.execPath}' '${stateTool}' run '${state}' tests '${f.root}' '${process.execPath}' -e '${program}'\n`.replace(
+        `'${program}'`,
+        JSON.stringify(program),
+      ),
+    );
+    const budgetTool = new URL("./resource-runtime.mjs", import.meta.url)
+      .pathname;
+    const environment = {
+      ...f.env,
+      BB_RESOURCE_CPU_QUOTA_PERCENT: "100",
+      BB_RESOURCE_MEMORY_MAX_BYTES: String(1024 ** 3),
+      BB_RESOURCE_MEMORY_HIGH_BYTES: String(768 * 1024 ** 2),
+    };
+    delete environment.BB_RESOURCE_BUDGET;
+    environment.BB_RESOURCE_BUDGET = execFileSync(
+      process.execPath,
+      [budgetTool, "select", "package"],
+      { env: environment, encoding: "utf8" },
+    ).trim();
+    const run = () => {
+      const result = spawnSync(process.execPath, [execution, shell], {
+        cwd: f.root,
+        env: environment,
+        encoding: "utf8",
+        timeout: 15000,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(readFileSync(state, "utf8")).events.at(-1).status;
+    };
+    assert.equal(run(), "completed");
+    assert.equal(run(), "reused");
+    assert.equal(
+      readFileSync(join(f.root, ".git/execution-count"), "utf8"),
+      "x",
+    );
+    const ids = readFileSync(join(f.root, ".git/invocations"), "utf8")
+      .trim()
+      .split("\n");
+    assert.match(ids[0], /^[a-f0-9]{32}$/);
+    assert.notEqual(ids[0], ids[1]);
+    const changed = JSON.parse(readFileSync(state, "utf8"));
+    writeFileSync(join(f.root, "file"), "changed source\n");
+    changed.source = f.commit("changed source");
+    writeFileSync(state, JSON.stringify(changed));
+    assert.equal(run(), "completed");
+    writeFileSync(
+      join(f.root, "package.json"),
+      JSON.stringify({ name: "changed", private: true }),
+    );
+    assert.equal(run(), "completed");
+    const budget = JSON.parse(environment.BB_RESOURCE_BUDGET);
+    budget.selected.cpuQuotaPercent = 50;
+    environment.BB_RESOURCE_BUDGET = JSON.stringify(budget);
+    assert.equal(run(), "completed");
+    environment.FLOW_REAL_SETTING = "changed";
+    assert.equal(run(), "completed");
+    assert.equal(run(), "reused");
+    assert.equal(
+      readFileSync(join(f.root, ".git/execution-count"), "utf8"),
+      "xxxxx",
+    );
   } finally {
     f.cleanup();
   }

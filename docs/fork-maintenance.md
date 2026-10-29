@@ -118,11 +118,13 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 修改分支后重新运行 `fork-package`，生成新候选并记录新的 previous 和测试范围；只有 `--resume <sha>` 保留原来的基线、输入快照、比较起点、测试范围和部署检出。Git common directory 的 `fork-package/` 保存阶段成功回执、日志和每轮 `runs/run.*` 记录，不写入产品 Git。旧格式缺少快照的记录须重新运行入口。
 
-回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁描述符映射、快照路径、shell 层数和工作目录等执行元数据；其余未知环境变量仍只存摘要并保守失效，不保存环境值。安装回执按 pnpm-lock.yaml 的 importers 覆盖根目录及每个 workspace 的 node_modules，记录存在性、成员、权限、链接和内容；没有 lockfile 的维护夹具用 Git package manifests 取目录。检查及构建从当前 Turbo 根配置、包配置的 outputs 取得产物根，包含 .bundled-runtime、生成文件及 bb-app 包装目录，并补充已经出现的 ignored dist/generated/bundled-types 根。不存在的声明根也记录；复用时重新枚举根清单并检查目录完整性和内容，新增根、缺根、workspace 链接变化均使回执失效。文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
+回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁描述符映射、快照路径、systemd 自动 INVOCATION_ID、shell 层数和工作目录等执行元数据；INVOCATION_ID 仍用于归属校验，其余未知环境变量只存摘要并继续使回执失效，不保存环境值。安装回执按 pnpm-lock.yaml 的 importers 覆盖根目录及每个 workspace 的 node_modules，记录存在性、成员、权限、链接和内容；没有 lockfile 的维护夹具用 Git package manifests 取目录。检查及构建从当前 Turbo 根配置、包配置的 outputs 取得产物根，包含 .bundled-runtime、生成文件及 bb-app 包装目录，并补充已经出现的 ignored dist/generated/bundled-types 根。不存在的声明根也记录；复用时重新枚举根清单并检查目录完整性和内容，新增根、缺根、workspace 链接变化均使回执失效。文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
 
 安装或工具身份变化、产物丢失/损坏、覆盖变化、阶段失败均重跑，并使后续阶段失效；失败和中断不写成功回执。运行时构建与原生检查也纳入同一回执和 package 资源 scope。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。锁覆盖 Git 操作和全部阶段，嵌套入口继承父锁；阶段写入另持独占锁。锁使用内核 flock（没有 flock 命令时使用 Perl Fcntl），锁文件永久保留，只关闭自身描述符，不删除或显式解锁共享描述符。
 
 Linux 执行入口和阶段为每次命令保留独立 systemd user Slice 的内核归属，记录 boot ID、InvocationID、ControlGroup 和目录设备/inode。准入检查递归 cgroup.events 的 populated；Node 默认 spawn 丢弃额外 FD、detached 后代、命令和包装器同时 SIGKILL、writer 通过 systemd-run 重归组时，仍按整个 Slice 判断。资源 scope 通过 --slice-inherit 留在执行 Slice 内。启动 payload 前验证实际归属，不以 PID、PGID 或环境 token 判断 writer 是否已经结束。元数据查询失败保留归属并拒绝恢复；同名新 unit 不当成旧实例。只有全部 writer 退出后才能自动恢复，无需人工清锁；并发恢复仍由内核文件锁串行准入，失败竞争者不会释放其他执行锁。
+
+正常收尾只核验归属，不再对可复用 unit 名称执行 stop。scope 使用 --collect 随命令退出自然回收；空 Slice 可以仍为 active/populated=0，保留给 systemd 管理，不为删除空结构增加协议。新执行按记录的实例身份和实际成员判断恢复，不要求手工清锁或清空 Slice。
 
 取消先传 TERM，3 秒后对身份验证且目录 FD 钉住的 cgroup 写 cgroup.kill；控制侧 7 秒后以失败结束等待。查询或清理失败保留归属，不能写成功回执。恢复取得锁后，未完成记录保留 interrupted，再完成必要验证。此路径需要 Linux、可用的 systemd user manager、cgroup v2 和可写 cgroup.kill；不再依赖 Python subreaper。轻量真实 scope 回归覆盖双 SIGKILL、忽略 TERM 后代、重归组、并发恢复和查询失败；不将这些结果扩展为非 Linux 平台保证。主动将 writer 迁出受管 Slice 的特权操作不属于本维护入口的派生契约。
 

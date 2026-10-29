@@ -148,6 +148,7 @@ export function executionIdentity(cwd, command) {
             "BB_FORK_CGROUP_PLAN",
             "BB_FORK_EXECUTION_ACTIVE",
             "BB_FORK_INPUT_SNAPSHOT",
+            "INVOCATION_ID",
             "SHLVL",
             "_",
             "PWD",

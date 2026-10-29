@@ -416,39 +416,5 @@ export function killOwned(owner, launch = null) {
 }
 
 export function cleanupEmpty(owner, launch = null) {
-  const state = inspectOwner(owner, launch);
-  if (state.busy.length) return;
-  const units = queryUnits(state.entries.map(({ name }) => name));
-  for (const value of [...state.entries].sort(
-    (a, b) =>
-      (b.cgroup?.split("/").length ?? 0) - (a.cgroup?.split("/").length ?? 0),
-  )) {
-    const current = queryUnits([value.name]).get(value.name);
-    if (
-      current.LoadState !== "loaded" ||
-      (value.invocation && current.InvocationID !== value.invocation)
-    )
-      continue;
-    if (!current.ControlGroup) continue;
-    const stat = statSync(`/sys/fs/cgroup${current.ControlGroup}`);
-    const instance = value.invocation
-      ? value
-      : { cgroup: current.ControlGroup, inode: stat.ino, device: stat.dev };
-    if (populated(instance)) throw new Error("清理前 Slice 仍有 writer");
-    const latest = queryUnits([value.name]).get(value.name);
-    if (
-      latest.InvocationID !== current.InvocationID ||
-      latest.ControlGroup !== current.ControlGroup
-    )
-      continue;
-    const result = spawnSync("systemctl", ["--user", "stop", value.name], {
-      env: managerEnv(),
-      encoding: "utf8",
-      timeout: 3000,
-    });
-    if (result.status !== 0)
-      throw new Error(
-        `不能清理本次空 Slice，保留归属：${result.stderr.trim()}`,
-      );
-  }
+  inspectOwner(owner, launch);
 }

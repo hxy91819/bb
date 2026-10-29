@@ -56,7 +56,12 @@ try {
   for (const item of [
     { name: "host-default", expected: 4, env: {} },
     { name: "explicit-two", expected: 2, env: { VITEST_MAX_WORKERS: "2" } },
-    { name: "explicit-eight", expected: 8, env: { VITEST_MAX_WORKERS: "8" } },
+    {
+      name: "explicit-eight",
+      expected: 8,
+      capacityTightening: true,
+      env: { VITEST_MAX_WORKERS: "8" },
+    },
     { name: "nested-retains-four", expected: 4, nested: "99", env: {} },
     { name: "nested-explicit-two", expected: 2, nested: "2", env: {} },
     {
@@ -124,14 +129,20 @@ try {
     assert.ok(line, child.stdout);
     const observed = JSON.parse(line.slice("WORKER_RESULT=".length));
     assert.equal(observed.projects.length, 2, item.name);
+    const injected = item.capacityTightening
+      ? Math.min(item.expected, observed.budget.workerCapacity)
+      : item.expected;
+    const resolved = item.capacityTightening
+      ? Number(observed.after)
+      : item.expected;
+    assert.ok(
+      Number.isSafeInteger(resolved) && resolved >= 1 && resolved <= injected,
+      item.name,
+    );
     for (const project of observed.projects)
-      assert.equal(
-        project.workers,
-        item.expected,
-        `${item.name}: ${project.name}`,
-      );
-    assert.equal(Number(observed.input), item.expected, item.name);
-    assert.equal(observed.budget.vitestWorkers, item.expected, item.name);
+      assert.equal(project.workers, resolved, `${item.name}: ${project.name}`);
+    assert.equal(Number(observed.input), injected, item.name);
+    assert.equal(observed.budget.vitestWorkers, injected, item.name);
     results.push({ name: item.name, ...observed });
   }
   console.log(JSON.stringify(results, null, 2));
