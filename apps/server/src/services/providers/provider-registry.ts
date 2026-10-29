@@ -43,10 +43,12 @@ export interface ProviderRegistration {
   visibility: "always" | "installed";
   pluginId: string;
   fallbackModels: readonly AvailableModel[];
+  cacheModels: boolean;
   envPassthrough: readonly string[];
   nativeSkillRoots: ProviderNativeRoots;
   nativeCommandRoots: ProviderNativeRoots;
   resolvesNativeRoots: boolean;
+  deriveHostOptions?: (hostId: string) => Readonly<Record<string, JsonValue>>;
   deriveProviderOptions: (
     context: Omit<PluginProviderOptionsContext, "settings">,
   ) => Readonly<Record<string, JsonValue>>;

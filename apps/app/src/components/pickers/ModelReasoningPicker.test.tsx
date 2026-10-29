@@ -296,6 +296,59 @@ afterEach(() => {
 describe("ModelReasoningPicker", () => {
   beforeAll(() => ModelReasoningMenu.preload());
 
+  it.each([false, true])(
+    "shows selectable names for multiple providers from one plugin (compact=%s)",
+    async (compact) => {
+      await vi.mocked(sdk.system.executionOptions).withImplementation(
+        async () =>
+          executionOptions({
+            models: [
+              availableModel({
+                value: "bound-model",
+                label: "Bound model",
+                isDefault: true,
+              }),
+            ],
+          }),
+        async () => {
+          const { onSelectedProviderChange } = renderPicker({
+            compact,
+            selectedProviderId: "codex-personal",
+            pickerProviderOptions: [
+              { value: "codex", label: "Codex", pluginId: "provider-codex" },
+              {
+                value: "codex-personal",
+                label: "Codex · Personal",
+                pluginId: "provider-codex",
+              },
+              {
+                value: "codex-work",
+                label: "Codex · Work",
+                pluginId: "provider-codex",
+              },
+            ],
+          });
+          const trigger = screen.getByRole("button", {
+            name: "Provider, model and reasoning",
+          });
+          expect(trigger.textContent).toContain("Codex · Personal");
+          fireEvent.click(trigger);
+          const work = await screen.findByRole("button", {
+            name: "Codex · Work",
+          });
+          expect(work.textContent).toContain("Codex · Work");
+          expect(
+            screen.getByRole("button", { name: "Codex · Personal" })
+              .textContent,
+          ).toContain("Codex · Personal");
+          fireEvent.click(work);
+          expect(onSelectedProviderChange).toHaveBeenCalledWith("codex-work");
+          await act(async () => {});
+        },
+      );
+    },
+  );
+
   it.each([
     ["ArrowRight", "medium", "high"],
     ["ArrowLeft", "high", "medium"],
@@ -413,7 +466,7 @@ describe("ModelReasoningPicker", () => {
       screen.getByRole("button", { name: "Provider, model and reasoning" }),
     );
 
-    expect(screen.getByTitle("Codex")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Codex" })).not.toBeNull();
     expect(screen.getByText("Could not load models for Codex.")).not.toBeNull();
     expect(screen.getByText("Provider plugin failed to load")).not.toBeNull();
   });
@@ -682,7 +735,9 @@ describe("ModelReasoningPicker", () => {
     fireEvent.change(search, { target: { value: "o4" } });
     fireEvent.keyDown(search, { key: "ArrowDown" });
 
-    const claudeTab = screen.getByTitle("Claude Code");
+    const claudeTab = screen.getByRole("button", {
+      name: "Claude Code",
+    });
     if (fireEvent.mouseDown(claudeTab)) claudeTab.focus();
     fireEvent.click(claudeTab);
 
@@ -796,7 +851,7 @@ describe("ModelReasoningPicker", () => {
     );
     expect(screen.getAllByText("5.5")).toHaveLength(2);
 
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
 
     expect(onSelectedProviderChange).toHaveBeenCalledWith("claude-code");
     expect(await screen.findByText("Opus 4.7")).not.toBeNull();
@@ -867,7 +922,7 @@ describe("ModelReasoningPicker", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Handoff to new thread" }),
     );
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
 
     expect(screen.queryByText("Fallback model")).toBeNull();
     act(() => {
@@ -917,7 +972,7 @@ describe("ModelReasoningPicker", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Handoff to new thread" }),
       );
-      fireEvent.click(screen.getByTitle("Claude Code"));
+      fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
       await screen.findByText("Opus 4.7");
       act(() => {
         commandHandlers.get(command)?.({ target: document.body });
@@ -965,12 +1020,16 @@ describe("ModelReasoningPicker", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Handoff to new thread" }),
       );
-      fireEvent.click(screen.getByTitle("Claude Code"));
+      fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
       await screen.findByText("Opus 4.7");
       act(() => {
         commandHandlers.get(command)?.({ target: document.body });
       });
-      expect(screen.getByTitle("Codex (current thread)")).not.toBeNull();
+      expect(
+        screen.getByRole("button", {
+          name: "Codex (current thread)",
+        }),
+      ).not.toBeNull();
       fireEvent.click(screen.getByText("Opus 4.7"));
       expect(onSelect).toHaveBeenCalledExactlyOnceWith({
         providerId: "claude-code",
@@ -999,7 +1058,11 @@ describe("ModelReasoningPicker", () => {
       name: "Provider, model and reasoning",
     });
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByTitle("Codex (current thread)"));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Codex (current thread)",
+      }),
+    );
     expect(onExit).not.toHaveBeenCalled();
     expect(onSelectedProviderChange).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Exit handoff" })).not.toBeNull();
@@ -1057,7 +1120,7 @@ describe("ModelReasoningPicker", () => {
         name: "Provider, model and reasoning",
       }),
     );
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
 
     expect(await screen.findByText("Opus 4.7")).not.toBeNull();
   });
@@ -1613,7 +1676,7 @@ describe("ModelReasoningPicker service tiers", () => {
     openPicker();
     expect(screen.getByRole("radiogroup", { name: "Speed" })).toBeTruthy();
 
-    fireEvent.click(screen.getByTitle("Claude Code"));
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }));
 
     expect(
       await screen.findByRole("switch", { name: "Turbo mode" }),
