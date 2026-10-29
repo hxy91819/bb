@@ -6,6 +6,8 @@ import {
   type ThreadListEntry,
 } from "@bb/domain";
 import type { PullRequest } from "bb-plugin-bb--github-pr-status/contract";
+import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
+import { useRouteState } from "@/hooks/useRouteState";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import type {
   PluginSdkApp,
@@ -45,7 +47,10 @@ import {
 import { useRouteNavigate } from "@/components/ui/app-route-anchor";
 import { toPluginSidebarThread } from "./plugin-sidebar-threads";
 import { useSidebarThreadEntries } from "./sidebar-thread-entries";
-import { useSetRootComposeProjectId } from "./root-compose-selection";
+import {
+  useLastSelectedProjectId,
+  useSetRootComposeProjectId,
+} from "./root-compose-selection";
 import { openThreadInSplit } from "./split-layout/openThreadInSplit";
 import {
   getProjectComposeRoutePath,
@@ -216,6 +221,9 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
   const store = useStore();
   const isCompact = useIsCompactViewport();
   const setRootComposeProjectId = useSetRootComposeProjectId();
+  const rememberedProjectId = useLastSelectedProjectId();
+  const { data: navigation } = useSidebarNavigation();
+  const { projectId: routeProjectId } = useRouteState();
   const hostActions = useThreadActions();
   const entriesById = useSidebarThreadEntries();
   const { mutateAsync: pinThreadAsync } = usePinThread();
@@ -254,10 +262,17 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
         navigate(getThreadRoutePath({ projectId, threadId }));
       },
       openNewThread(options) {
-        const projectId = options?.projectId;
-        if (projectId !== undefined) {
-          setRootComposeProjectId(projectId);
-        }
+        const projectId =
+          options?.projectId ??
+          resolveSidebarNewThreadProjectId({
+            availableProjectIds: navigation?.projects.map(
+              (project) => project.id,
+            ),
+            recentThreads: [...entriesById.values()],
+            rememberedProjectId,
+            routeProjectId,
+          });
+        setRootComposeProjectId(projectId);
         const state = {
           placement: options?.experimental_placement ?? {
             sectionId: options?.sectionId ?? null,
@@ -313,8 +328,11 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
       hostActions,
       isCompact,
       navigate,
+      navigation,
       pinThreadAsync,
       requireEntry,
+      rememberedProjectId,
+      routeProjectId,
       setRootComposeProjectId,
       store,
       unpinThreadAsync,
