@@ -1,0 +1,41 @@
+{
+  "name": "bb-plugin-steward",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.42",
+    "bbPluginSdk": ">=0.6.53 <0.7"
+  },
+  "bb": {
+    "name": "管家",
+    "description": "管家工作簿、要求帐与按需检查",
+    "branding": {
+      "icon": "Bot"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "host": "./host.ts"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "@bb/plugin-build": "workspace:*",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
+    "vitest": "^4.1.1",
+    "jsdom": "^29.0.1",
+    "react-dom": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsrs --noEmit",
+    "prepare:bundled": "bb-plugin-build prepare-bundled",
+    "test": "vitest run --config vitest.config.ts",
+    "lint": "oxlint ."
+  }
+}
