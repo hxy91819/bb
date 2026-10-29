@@ -19,6 +19,77 @@ import {
   makeThreadResponse,
 } from "../index.js";
 
+describe("thread creation preparation host", () => {
+  it("validates present context, permits absent inheritance, and rejects disposed late output", async () => {
+    const { bb, harness } = createFakePluginHost();
+    let finish!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let pendingSignal: AbortSignal | undefined;
+    const registration = bb.experimental_threadCreationContext.register({
+      input: z.object({ memberId: z.string() }).strict(),
+      async prepare({ context, parentMetadata, signal }) {
+        if (context.present && context.value.memberId === "wait") {
+          pendingSignal = signal;
+          await wait;
+        }
+        return context.present
+          ? { memberId: context.value.memberId }
+          : parentMetadata;
+      },
+    });
+    const args = {
+      creation: {
+        projectId: "proj_context",
+        origin: "sdk" as const,
+        originPluginId: null,
+        originKind: null,
+        parentThreadId: "thr_parent",
+        sourceThreadId: null,
+        startedOnBehalfOf: null,
+      },
+      legacySeed: null,
+      parentMetadata: { memberId: "parent" },
+      sourceMetadata: null,
+    };
+    expect(
+      await harness.experimental_prepareThreadCreationContext({
+        ...args,
+        context: { present: false },
+      }),
+    ).toEqual({ memberId: "parent" });
+    await expect(
+      harness.experimental_prepareThreadCreationContext({
+        ...args,
+        context: { present: true, value: { memberId: 4 } },
+      }),
+    ).rejects.toThrow("plugin_context_invalid_input");
+    expect(
+      await harness.experimental_prepareThreadCreationContext({
+        ...args,
+        context: { present: true, value: { memberId: "B" } },
+      }),
+    ).toEqual({ memberId: "B" });
+    const pending = harness.experimental_prepareThreadCreationContext({
+      ...args,
+      context: { present: true, value: { memberId: "wait" } },
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    registration.dispose();
+    await expect(pending).rejects.toThrow("plugin_context_changed");
+    expect(pendingSignal?.aborted).toBe(true);
+    finish();
+    await expect(
+      harness.experimental_prepareThreadCreationContext({
+        ...args,
+        context: { present: false },
+      }),
+    ).rejects.toThrow("plugin_context_unavailable");
+    await harness.dispose();
+  });
+});
+
 describe("fixtures", () => {
   it("builds complete host responses with targeted overrides", () => {
     expect(makeHostResponse({ id: "host-target", name: "Target" })).toEqual({

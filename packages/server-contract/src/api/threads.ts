@@ -8,6 +8,7 @@ import {
   jsonValueSchema,
   pluginIdSchema,
   pluginMetadataSchema,
+  experimental_pluginContextSchema,
   pendingInteractionResolutionSchema,
   pendingInteractionSchema,
   threadTimelineSubscriptionTargetSchema,
@@ -133,6 +134,7 @@ export const createThreadRequestSchema = z
     origin: threadCreateOriginSchema,
     originPluginId: z.string().min(1).optional(),
     pluginMetadata: pluginMetadataSchema.optional(),
+    experimental_pluginContext: experimental_pluginContextSchema.optional(),
     lifecycleOwnerThreadId: z.string().min(1).optional(),
     visibility: threadVisibilitySchema.optional(),
     title: z.string().min(1).optional(),
@@ -237,6 +239,7 @@ export const forkThreadRequestSchema = z
     origin: threadCreateOriginSchema.default("sdk"),
     originPluginId: z.string().min(1).optional(),
     pluginMetadata: pluginMetadataSchema.optional(),
+    experimental_pluginContext: experimental_pluginContextSchema.optional(),
     lifecycleOwnerThreadId: z.string().min(1).optional(),
   })
   .strict()
