@@ -37,10 +37,8 @@ function createFixture(): { binDir: string; dataDir: string; homeDir: string } {
   mkdirSync(homeDir, { recursive: true });
   writeFileSync(join(root, "package.json"), '{"type":"commonjs"}\n');
   symlinkSync(process.execPath, join(binDir, "node"));
-  writeExecutable(
-    join(binDir, "sleep"),
-    '#!/bin/sh\ncase "$1" in 1) exec /bin/sleep 0.1 ;; *) exec /bin/sleep "$@" ;; esac\n',
-  );
+  writeExecutable(join(binDir, "systemctl"), "#!/bin/sh\nexit 1\n");
+  writeExecutable(join(binDir, "loginctl"), "#!/bin/sh\nexit 1\n");
   return { binDir, dataDir, homeDir };
 }
 
@@ -59,6 +57,7 @@ function createScriptEnv(
     ...process.env,
     BB_DATA_DIR: fixture.dataDir,
     BB_ENROLLMENT: bootstrapBundle(),
+    BB_INSTALL_SKIP_SERVICE: "0",
     HOME: fixture.homeDir,
     PATH: [fixture.binDir, "/usr/bin", "/bin"].join(delimiter),
     ...env,
@@ -348,6 +347,7 @@ exec '${process.execPath}' "$@"
       writeExecutable(join(fixture.binDir, "id"), `#!/bin/sh\necho ${uid}\n`);
       writeCurlArtifactMock(fixture, 404);
       const result = runScript(BOOTSTRAP_ARGS, fixture, {
+        BB_INSTALL_SKIP_SERVICE: "1",
         HOME: unset ? undefined : fixture.homeDir,
       });
       expect(result.status).not.toBe(0);
@@ -601,6 +601,7 @@ exec '${process.execPath}' "$@"
     const result = runScript(
       [...BOOTSTRAP_ARGS, "--host-daemon-port", "0"],
       fixture,
+      { BB_INSTALL_SKIP_SERVICE: "1" },
     );
 
     expect(result.status).toBe(2);
@@ -1160,6 +1161,7 @@ fs.writeFileSync(path.join(process.env.BB_DATA_DIR, "config.json"), JSON.stringi
     writeServerInstallTools(fixture, 200);
     const missingDir = join(fixture.homeDir, "elsewhere");
     const result = runScript(BOOTSTRAP_ARGS, fixture, {
+      BB_INSTALL_SKIP_SERVICE: "1",
       BB_DATA_DIR: "",
       BB_ENROLLMENT: JSON.stringify({
         ...JSON.parse(bootstrapBundle()),
@@ -1292,7 +1294,7 @@ fi
     const result = runScript(
       ["--adopt", "--data-dir", fixture.dataDir],
       fixture,
-      { BB_ENROLLMENT: undefined },
+      { BB_ENROLLMENT: undefined, BB_INSTALL_SKIP_SERVICE: "1" },
     );
 
     expect(result.status).toBe(1);
@@ -1633,6 +1635,7 @@ printf '%s\n' "$*" >>"${join(fixture.dataDir, "launchctl.log")}"
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     writeExecutable(
       join(fixture.binDir, "systemctl"),
       `#!/bin/sh
@@ -1684,6 +1687,7 @@ fi
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     const runtimeDir = join(fixture.homeDir, "runtime");
     mkdirSync(runtimeDir);
     writeExecutable(
@@ -1713,7 +1717,7 @@ fi
 
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(join(fixture.dataDir, "loginctl.log"), "utf8")).toBe(
-      `show-user ${process.getuid?.()} --property=RuntimePath --value\n`,
+      "show-user 1000 --property=RuntimePath --value\n",
     );
     expect(
       readFileSync(join(fixture.dataDir, "systemctl.log"), "utf8"),
@@ -1868,6 +1872,7 @@ fi
     writeJoinedState(fixture);
     writeServerInstallTools(fixture, 200);
     writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
+    writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
     const serviceDir = join(fixture.homeDir, ".config/systemd/user");
     mkdirSync(serviceDir, { recursive: true });
     const legacyServiceFile = join(

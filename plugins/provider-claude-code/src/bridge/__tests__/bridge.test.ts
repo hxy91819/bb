@@ -680,6 +680,9 @@ async function forwardAskUserQuestion({
 
 describe("bridge", () => {
   beforeEach(() => {
+    if (process.getuid) {
+      vi.spyOn(process, "getuid").mockReturnValue(1000);
+    }
     vi.clearAllMocks();
     contextQueryMock.mockImplementation(() => createControlledClaudeQuery());
     forkSessionMock.mockResolvedValue({ sessionId: "forked-session-1" });
@@ -721,6 +724,7 @@ describe("bridge", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
