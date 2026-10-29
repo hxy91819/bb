@@ -1,0 +1,16 @@
+{
+  "service": {
+    "systemdUnit": "<systemd-unit-name>",
+    "systemdDropInPath": "/etc/systemd/system/<systemd-unit-name>.d/local-aggregate.conf",
+    "repoPath": "/absolute/path/to/bb",
+    "dataDir": "/absolute/path/to/bb-data",
+    "nodeExecutable": "/absolute/path/to/node-v22/bin/node",
+    "bindHost": "127.0.0.1",
+    "serverPort": 38886,
+    "hostDaemonPort": 38887
+  },
+  "tailscale": {
+    "serveUrl": "https://<machine>.<tailnet>.ts.net",
+    "serveTarget": "http://127.0.0.1:38886"
+  }
+}
