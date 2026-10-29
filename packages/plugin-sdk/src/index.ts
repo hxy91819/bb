@@ -28,3 +28,9 @@ export type {
 } from "@bb/sdk";
 
 export type * from "./machine-bootstrap.js";
+
+export type {
+  ExperimentalThreadActivityArgs,
+  ExperimentalThreadActivityResult,
+} from "@bb/sdk";
+export type { ExperimentalActivityEvidence } from "@bb/server-contract";
