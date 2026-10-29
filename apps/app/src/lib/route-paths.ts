@@ -71,6 +71,7 @@ export {
   getAutomationsRoutePath,
   getAutomationDetailRoutePath,
   getAutomationEditRoutePath,
+  getMessageLinkPath,
   getPluginPanelRoutePath,
   getThreadRoutePath,
 } from "@bb/client-core";
