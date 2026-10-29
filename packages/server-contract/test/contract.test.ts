@@ -63,13 +63,16 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      "Older parent notices have no per-child outcomes. New notices omit interruption details for completed, failed, or unclassified turns; a recorded host-connection-loss cause is optional even when the interruption reason is known.",
+      "Older parent notices have no per-child outcomes and no direct-user-input marker. New notices omit interruption details for completed, failed, or unclassified turns; a recorded host-connection-loss cause is optional even when the interruption reason is known.",
     fields: [
       "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes",
+      "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes.directUserInput",
       "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes.interruption",
       "threadTimelineResponseSchema.delta.upsertRows.systemMessageSubject.outcomes.interruption.cause",
       "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes",
+      "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes.directUserInput",
       "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes",
+      "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes.directUserInput",
       "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes.interruption",
       "threadTimelineResponseSchema.timelinePage.olderRowUpdates.systemMessageSubject.outcomes.interruption",
       "threadTimelineResponseSchema.rows.systemMessageSubject.outcomes.interruption.cause",
