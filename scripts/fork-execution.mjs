@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   readdirSync,
@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { spawnManaged } from "./fork-process.mjs";
-import { acquireLock, lockInvocation } from "./fork-lock.mjs";
+import { acquireLock } from "./fork-lock.mjs";
 
 const [script, ...args] = process.argv.slice(2);
 const common = spawnSync(
@@ -64,14 +64,7 @@ const invocation = {
   stdio: ["inherit", "inherit", "inherit"],
   env: { ...process.env, BB_FORK_EXECUTION_ACTIVE: script },
 };
-const child =
-  process.platform === "linux"
-    ? spawnManaged(lock, ["bash", script, ...args], invocation)
-    : spawn(
-        "bash",
-        [script, ...args],
-        lockInvocation(lock, invocation.stdio, invocation.env),
-      );
+const child = spawnManaged(lock, ["bash", script, ...args], invocation);
 let interrupted = false;
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"])
   process.on(signal, () => {

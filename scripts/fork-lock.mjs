@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, statSync } from "node:fs";
+import { prepareOwner, readOwner } from "./fork-cgroup.mjs";
 import { dirname, resolve } from "node:path";
 
-function inheritedLocks() {
+export function inheritedLocks() {
   let entries;
   try {
     entries = JSON.parse(process.env.BB_FORK_LOCKS ?? "[]");
@@ -60,7 +61,17 @@ export function acquireLock(path, allowInherited) {
         "需要 flock 或 Perl Fcntl 提供内核文件锁",
     );
   }
+  let owner;
+  try {
+    owner = inherited ? readOwner(path) : prepareOwner(path);
+    if (!owner || (inherited && inherited.generation !== owner.generation))
+      throw new Error("继承内核归属已改变");
+  } catch (error) {
+    if (!inherited) closeSync(fd);
+    throw error;
+  }
   return {
+    ...owner,
     path,
     fd,
     inherited: Boolean(inherited),
@@ -79,8 +90,10 @@ export function lockInvocation(lock, stdio, env) {
     env: {
       ...env,
       BB_FORK_LOCKS: JSON.stringify(
-        descriptors.map(({ path }, index) => ({
+        descriptors.map(({ path, generation, boot }, index) => ({
           path,
+          generation,
+          boot,
           fd: index + stdio.length,
         })),
       ),

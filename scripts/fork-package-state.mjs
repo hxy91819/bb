@@ -78,7 +78,11 @@ async function executeStage(path, name, cwd, command, lock) {
       filters: state.filters,
       dependencies,
       runner: readFileSync(new URL(import.meta.url), "utf8"),
-      supervision: ["fork-process.mjs", "fork-supervise.py"].map((name) =>
+      supervision: [
+        "fork-process.mjs",
+        "fork-cgroup.mjs",
+        "fork-cgroup-enter.mjs",
+      ].map((name) =>
         readFileSync(new URL(`./${name}`, import.meta.url), "utf8"),
       ),
       locking: readFileSync(
@@ -132,30 +136,31 @@ async function executeStage(path, name, cwd, command, lock) {
     "BB_FORK_INPUT_SNAPSHOT",
   ])
     delete environment[key];
-  const child = spawnManaged(lock, command, {
-    cwd,
-    env: environment,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
   let interrupted;
-  const stop = (signal) => {
-    interrupted = signal;
-    if (child.exitCode === null && child.signalCode === null)
-      child.kill(signal);
-  };
-  const handlers = new Map(
-    ["SIGINT", "SIGTERM", "SIGHUP"].map((signal) => [
-      signal,
-      () => stop(signal),
-    ]),
-  );
-  for (const [signal, handler] of handlers) process.on(signal, handler);
-  for (const stream of [child.stdout, child.stderr])
-    stream.on("data", (data) => {
-      appendFileSync(log, data);
-      (stream === child.stdout ? process.stdout : process.stderr).write(data);
-    });
+  let handlers = new Map();
   try {
+    const child = spawnManaged(lock, command, {
+      cwd,
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stop = (signal) => {
+      interrupted = signal;
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill(signal);
+    };
+    handlers = new Map(
+      ["SIGINT", "SIGTERM", "SIGHUP"].map((signal) => [
+        signal,
+        () => stop(signal),
+      ]),
+    );
+    for (const [signal, handler] of handlers) process.on(signal, handler);
+    for (const stream of [child.stdout, child.stderr])
+      stream.on("data", (data) => {
+        appendFileSync(log, data);
+        (stream === child.stdout ? process.stdout : process.stderr).write(data);
+      });
     const code = await new Promise((accept, reject) => {
       child.once("error", reject);
       child.once("close", (status, signal) =>

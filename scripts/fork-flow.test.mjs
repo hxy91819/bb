@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -8,12 +9,22 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { snapshot, preflight } from "./fork-inputs.mjs";
+import {
+  cleanupEmpty,
+  inspectOwner,
+  killOwned,
+  managerEnv,
+  ownerDirectory,
+  queryUnits,
+  readOwner,
+} from "./fork-cgroup.mjs";
 import { runStage } from "./fork-package-state.mjs";
 
 const aggregate = new URL("./fork-aggregate", import.meta.url).pathname;
@@ -86,6 +97,17 @@ function fixture() {
       env,
       encoding: "utf8",
     });
+  const microbin = join(root, ".git/microbin");
+  mkdirSync(microbin);
+  const systemdRun = execFileSync("bash", ["-c", "command -v systemd-run"], {
+    encoding: "utf8",
+  }).trim();
+  writeFileSync(
+    join(microbin, "systemd-run"),
+    `#!/bin/sh\nfor arg do\n  case "$arg" in RuntimeMaxSec=*|RuntimeMaxUSec=*) exec '${systemdRun}' "$@";; esac\ndone\nexec '${systemdRun}' --property=RuntimeMaxSec=20s "$@"\n`,
+  );
+  chmodSync(join(microbin, "systemd-run"), 0o755);
+  env.PATH = `${microbin}:${env.PATH}`;
   return {
     root,
     env,
@@ -93,7 +115,16 @@ function fixture() {
     commit,
     base,
     run,
-    cleanup: () => rmSync(root, { recursive: true, force: true }),
+    cleanup: () => {
+      for (const file of readdirSync(join(root, ".git")).filter((name) =>
+        name.endsWith(".lock.owner.json"),
+      )) {
+        const owner = readOwner(join(root, ".git", file.slice(0, -11)));
+        killOwned(owner);
+        cleanupEmpty(owner);
+      }
+      rmSync(root, { recursive: true, force: true });
+    },
   };
 }
 
@@ -694,7 +725,14 @@ test("Perl kernel-lock fallback recovers after SIGKILL without losing inherited 
   try {
     const utilities = join(f.root, ".git/utilities");
     mkdirSync(utilities);
-    for (const name of ["git", "bash", "perl", "sleep", "python3"]) {
+    for (const name of [
+      "git",
+      "bash",
+      "perl",
+      "sleep",
+      "systemctl",
+      "systemd-run",
+    ]) {
       const binary =
         name === "python3"
           ? execFileSync(
@@ -1019,6 +1057,376 @@ test("declared bundled runtime changes and previously absent output roots invali
     await runStage(state, "runtime", f.root, command);
     assert.equal(readFileSync(join(f.root, ".git/builds"), "utf8"), "xxx");
   } finally {
+    f.cleanup();
+  }
+});
+
+function ownedPlans(path) {
+  const owner = readOwner(`${path}.lock`);
+  return {
+    owner,
+    plans: readdirSync(ownerDirectory(owner))
+      .filter((name) => name.endsWith(".plan"))
+      .map((name) =>
+        JSON.parse(readFileSync(join(ownerDirectory(owner), name), "utf8")),
+      ),
+  };
+}
+
+function boundMicroScopes(path) {
+  for (const plan of ownedPlans(path).plans) {
+    const unit = queryUnits([plan.name]).get(plan.name);
+    if (unit.LoadState === "loaded" && unit.ActiveState === "active") {
+      const result = spawnSync(
+        "systemctl",
+        ["--user", "show", plan.name, "-p", "RuntimeMaxUSec", "--value"],
+        { env: managerEnv(), encoding: "utf8" },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout.trim(), /20s/);
+    }
+  }
+}
+
+function retryStage(
+  f,
+  state,
+  code = "require('node:fs').writeFileSync('.git/recovered','yes')",
+  env = f.env,
+) {
+  return spawnSync(
+    process.execPath,
+    [stateTool, "run", state, "tests", f.root, process.execPath, "-e", code],
+    { cwd: f.root, env, encoding: "utf8" },
+  );
+}
+
+test("kernel Slice retains orphaned Node writers after all controllers die, fails closed on bus errors and serializes recovery", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  const writerPath = join(f.root, ".git/native-writer.cjs");
+  const pids = [];
+  let runner;
+  const contenders = [];
+  try {
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    writeFileSync(
+      writerPath,
+      "const f=require('node:fs');f.writeFileSync('.git/writer',String(process.pid));setInterval(()=>f.appendFileSync('.git/writes','x'),20)",
+    );
+    const wrapper = `const f=require('node:fs');f.writeFileSync('.git/launcher',String(process.ppid));f.writeFileSync('.git/command',String(process.pid));require('node:child_process').spawn(process.execPath,[${JSON.stringify(writerPath)}],{stdio:'ignore',detached:true});setInterval(()=>{},1000)`;
+    runner = spawn(
+      process.execPath,
+      [
+        stateTool,
+        "run",
+        state,
+        "tests",
+        f.root,
+        process.execPath,
+        "-e",
+        wrapper,
+      ],
+      { cwd: f.root, env: f.env, stdio: "ignore" },
+    );
+    const dead = completed(runner);
+    await waitFor(() => existsSync(join(f.root, ".git/writes")));
+    boundMicroScopes(state);
+    for (const name of ["launcher", "command", "writer"])
+      pids.push(Number(readFileSync(join(f.root, `.git/${name}`), "utf8")));
+    const { owner } = ownedPlans(state);
+    const original = readFileSync(`${state}.lock.owner.json`, "utf8");
+    runner.kill("SIGKILL");
+    await dead;
+    process.kill(pids[0], "SIGKILL");
+    process.kill(pids[1], "SIGKILL");
+    await waitFor(() => !alive(pids[0]) && !alive(pids[1]));
+    assert.equal(alive(pids[2]), true);
+    const before = readFileSync(join(f.root, ".git/writes"), "utf8").length;
+    const unavailable = retryStage(f, state, "process.exit(0)", {
+      ...f.env,
+      XDG_RUNTIME_DIR: `${f.root}/.git/no-runtime`,
+      DBUS_SESSION_BUS_ADDRESS: `unix:path=${f.root}/.git/no-bus`,
+    });
+    assert.equal(unavailable.status, 1);
+    assert.match(unavailable.stderr, /保留记录|归属查询/);
+    assert.equal(readFileSync(`${state}.lock.owner.json`, "utf8"), original);
+    const blocked = retryStage(f, state);
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /内核 writer/);
+    assert.ok(
+      readFileSync(join(f.root, ".git/writes"), "utf8").length > before,
+    );
+    assert.ok(inspectOwner(owner).busy.length > 0);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).completed.tests,
+      undefined,
+    );
+    process.kill(pids[2], "SIGTERM");
+    await waitFor(() => !alive(pids[2]));
+    const ready = join(f.root, ".git/recovery-ready");
+    const program =
+      "const f=require('node:fs');f.appendFileSync('.git/recovery-count','x');f.writeFileSync('.git/recovery-ready','yes');const t=setInterval(()=>{if(f.existsSync('.git/release')){clearInterval(t)}},20)";
+    const exits = [];
+    for (let i = 0; i < 2; i++) {
+      const child = spawn(
+        process.execPath,
+        [
+          stateTool,
+          "run",
+          state,
+          "tests",
+          f.root,
+          process.execPath,
+          "-e",
+          program,
+        ],
+        { cwd: f.root, env: f.env, stdio: "ignore" },
+      );
+      contenders.push(child);
+      exits.push(completed(child));
+    }
+    await waitFor(() => existsSync(ready));
+    boundMicroScopes(state);
+    assert.equal((await Promise.race(exits)).code, 1);
+    assert.equal(
+      readFileSync(join(f.root, ".git/recovery-count"), "utf8"),
+      "x",
+    );
+    assert.equal(retryStage(f, state).status, 1);
+    writeFileSync(join(f.root, ".git/release"), "release");
+    assert.deepEqual(
+      (await Promise.all(exits)).map(({ code }) => code).sort(),
+      [0, 1],
+    );
+    const final = JSON.parse(readFileSync(state, "utf8"));
+    assert.equal(final.events.at(-2).status, "interrupted");
+    assert.equal(final.events.at(-1).status, "completed");
+  } finally {
+    runner?.kill("SIGKILL");
+    for (const child of contenders) child.kill("SIGKILL");
+    for (const pid of pids) if (alive(pid)) process.kill(pid, "SIGKILL");
+    f.cleanup();
+  }
+});
+
+test("a writer regrouped into another real scope remains in its execution Slice after the origin scope and controllers exit", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  const mover = join(f.root, ".git/move.sh");
+  const payload = join(f.root, ".git/moved.cjs");
+  const writerPath = join(f.root, ".git/writer.cjs");
+  const enter = new URL("./fork-cgroup-enter.mjs", import.meta.url).pathname;
+  const unit = `bb-fork-${randomUUID()}.scope`;
+  const pids = [];
+  let runner;
+  try {
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    writeFileSync(
+      writerPath,
+      "const f=require('node:fs');f.writeFileSync('.git/writer',String(process.pid));setInterval(()=>f.appendFileSync('.git/writes','x'),20)",
+    );
+    writeFileSync(
+      payload,
+      `const f=require('node:fs');f.writeFileSync('.git/new-launcher',String(process.ppid));f.writeFileSync('.git/command',String(process.pid));require('node:child_process').spawn(process.execPath,[${JSON.stringify(writerPath)}],{stdio:'ignore',detached:true});setInterval(()=>{},1000)`,
+    );
+    writeFileSync(
+      mover,
+      `#!/bin/bash\necho "$PPID" > '${f.root}/.git/old-launcher'\nexec systemd-run --user --scope --collect --quiet --slice-inherit --unit='${unit}' -p RuntimeMaxSec=20s -p TimeoutStopSec=3s -- '${process.execPath}' '${enter}' resource "$BB_FORK_CGROUP_PLAN" -- '${process.execPath}' '${payload}'\n`,
+    );
+    runner = spawn(
+      process.execPath,
+      [stateTool, "run", state, "tests", f.root, "bash", mover],
+      { cwd: f.root, env: f.env, stdio: "ignore" },
+    );
+    const dead = completed(runner);
+    await waitFor(() => existsSync(join(f.root, ".git/writes")));
+    boundMicroScopes(state);
+    const originalScope = ownedPlans(state).plans[0].name;
+    for (const name of ["old-launcher", "new-launcher", "command", "writer"])
+      pids.push(Number(readFileSync(join(f.root, `.git/${name}`), "utf8")));
+    runner.kill("SIGKILL");
+    await dead;
+    for (const pid of pids.slice(0, 3)) process.kill(pid, "SIGKILL");
+    await waitFor(() => pids.slice(0, 3).every((pid) => !alive(pid)));
+    const units = queryUnits([originalScope, unit]);
+    assert.equal(units.get(originalScope).ActiveState, "inactive");
+    assert.equal(units.get(unit).ActiveState, "active");
+    assert.equal(alive(pids[3]), true);
+    const blocked = retryStage(f, state);
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /内核 writer/);
+    process.kill(pids[3], "SIGTERM");
+    await waitFor(() => !alive(pids[3]));
+    const recovered = retryStage(f, state);
+    assert.equal(recovered.status, 0, recovered.stderr);
+  } finally {
+    runner?.kill("SIGKILL");
+    for (const pid of pids) if (alive(pid)) process.kill(pid, "SIGKILL");
+    f.cleanup();
+  }
+});
+
+test("same-named replacement units are not claimed or killed as the old execution instance", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  let foreign;
+  let slice;
+  let scope;
+  try {
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    await runStage(state, "tests", f.root, [
+      process.execPath,
+      "-e",
+      "process.exit(0)",
+    ]);
+    const { owner, plans } = ownedPlans(state);
+    const record = inspectOwner(owner).entries.find(
+      (entry) => entry.invocation,
+    );
+    slice = record.name;
+    scope = plans[0].name;
+    const code =
+      "const f=require('node:fs');f.writeFileSync('.git/foreign-ready','yes');setInterval(()=>f.appendFileSync('.git/foreign-writes','x'),20)";
+    foreign = spawn(
+      "systemd-run",
+      [
+        "--user",
+        "--scope",
+        "--collect",
+        "--quiet",
+        `--unit=${scope}`,
+        `--slice=${slice}`,
+        "-p",
+        "RuntimeMaxSec=20s",
+        "--",
+        process.execPath,
+        "-e",
+        code,
+      ],
+      { cwd: f.root, env: managerEnv(f.env), stdio: "ignore" },
+    );
+    const dead = completed(foreign);
+    await waitFor(() => existsSync(join(f.root, ".git/foreign-writes")));
+    const replacement = queryUnits([slice]).get(slice);
+    assert.notEqual(replacement.InvocationID, record.invocation);
+    const recovered = retryStage(f, state);
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.equal(
+      queryUnits([slice]).get(slice).InvocationID,
+      replacement.InvocationID,
+    );
+    const before = readFileSync(
+      join(f.root, ".git/foreign-writes"),
+      "utf8",
+    ).length;
+    await waitFor(
+      () =>
+        readFileSync(join(f.root, ".git/foreign-writes"), "utf8").length >
+        before,
+    );
+    const result = spawnSync("systemctl", ["--user", "stop", scope], {
+      env: managerEnv(),
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    await dead;
+  } finally {
+    if (scope)
+      spawnSync("systemctl", ["--user", "stop", scope], {
+        env: managerEnv(),
+        encoding: "utf8",
+      });
+    if (slice)
+      spawnSync("systemctl", ["--user", "stop", slice], {
+        env: managerEnv(),
+        encoding: "utf8",
+      });
+    foreign?.kill("SIGKILL");
+    f.cleanup();
+  }
+});
+
+test("the actual resource wrapper preserves Slice ownership and refuses a recursively populated micro scope", async () => {
+  const f = fixture();
+  const state = join(f.root, ".git/state.json");
+  let task;
+  try {
+    mkdirSync(join(f.root, "scripts"));
+    const wrapper = join(f.root, "scripts/run-resource-isolated");
+    const unit = `bb-fork-${randomUUID()}`;
+    const actual = readFileSync(
+      new URL("./run-resource-isolated", import.meta.url),
+      "utf8",
+    );
+    assert.ok(actual.includes("unit_name='bb-local-verification'"));
+    writeFileSync(
+      wrapper,
+      actual.replace(
+        "unit_name='bb-local-verification'",
+        `unit_name='${unit}'`,
+      ),
+    );
+    chmodSync(wrapper, 0o755);
+    f.commit("isolated resource wrapper");
+    writeFileSync(state, JSON.stringify({ source: f.base, completed: {} }));
+    const child =
+      "const f=require('node:fs');f.writeFileSync(process.argv[1]+'/cgroup.procs',String(process.pid));f.writeFileSync('.git/child-ready','yes');const t=setInterval(()=>{f.appendFileSync('.git/child-writes','x');if(f.existsSync('.git/release'))clearInterval(t)},20)";
+    const program = `const f=require('node:fs');const group=f.readFileSync('/proc/self/cgroup','utf8').trim().split(':').at(-1);f.writeFileSync('.git/resource',JSON.stringify({group,memoryMax:f.readFileSync('/sys/fs/cgroup'+group+'/memory.max','utf8').trim(),cpuMax:f.readFileSync('/sys/fs/cgroup'+group+'/cpu.max','utf8').trim()}));const path='/sys/fs/cgroup'+group+'/bb-fork-micro-child';f.mkdirSync(path);require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(child)},path],{stdio:'ignore',detached:true}).unref()`;
+    task = runStage(state, "tests", f.root, [
+      wrapper,
+      "--profile",
+      "package",
+      "--",
+      process.execPath,
+      "-e",
+      program,
+    ]);
+    task.catch(() => {});
+    await waitFor(() => existsSync(join(f.root, ".git/child-writes")));
+    const observed = JSON.parse(
+      readFileSync(join(f.root, ".git/resource"), "utf8"),
+    );
+    await waitFor(
+      () =>
+        readFileSync(
+          `/sys/fs/cgroup${observed.group}/cgroup.procs`,
+          "utf8",
+        ).trim() === "",
+    );
+    const owner = ownedPlans(state).owner;
+    const entry = inspectOwner(owner).entries.find((item) => item.invocation);
+    assert.ok(observed.group.startsWith(`${entry.cgroup}/`));
+    assert.ok(observed.group.endsWith(`/${unit}.scope`));
+    assert.notEqual(observed.memoryMax, "max");
+    assert.notEqual(observed.cpuMax.split(" ")[0], "max");
+    const before = queryUnits([`${unit}.scope`]).get(
+      `${unit}.scope`,
+    ).InvocationID;
+    const refused = spawnSync(wrapper, ["--profile", "package", "--", "true"], {
+      cwd: f.root,
+      env: managerEnv(f.env),
+      encoding: "utf8",
+    });
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /Another .* job is still running/);
+    assert.equal(
+      queryUnits([`${unit}.scope`]).get(`${unit}.scope`).InvocationID,
+      before,
+    );
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).completed.tests,
+      undefined,
+    );
+    writeFileSync(join(f.root, ".git/release"), "release");
+    await task;
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "completed",
+    );
+  } finally {
+    writeFileSync(join(f.root, ".git/release"), "release");
+    await task?.catch(() => {});
     f.cleanup();
   }
 });

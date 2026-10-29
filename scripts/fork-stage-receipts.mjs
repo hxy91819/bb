@@ -88,6 +88,8 @@ export function executionIdentity(cwd, command) {
       "node",
       "bash",
       "git",
+      "systemctl",
+      "systemd-run",
       ...(command.includes("pnpm") ? ["pnpm"] : []),
     ].filter(Boolean),
   );
@@ -133,16 +135,6 @@ export function executionIdentity(cwd, command) {
     : null;
   const payload =
     version?.status === 0 ? pnpmPayload(pnpm, version.stdout.trim()) : null;
-  const python = spawnSync(
-    "python3",
-    ["-c", "import json,sys; print(json.dumps([sys.executable,sys.version]))"],
-    { cwd, encoding: "utf8", timeout: 10000 },
-  );
-  let pythonIdentity = null;
-  if (python.status === 0) {
-    const [path, version] = JSON.parse(python.stdout);
-    pythonIdentity = { ...fileIdentity(path), version };
-  }
   const libc =
     process.report?.getReport().header.glibcVersionRuntime ??
     (process.platform === "linux" ? "unknown" : process.platform);
@@ -153,6 +145,7 @@ export function executionIdentity(cwd, command) {
           ![
             "BB_FORK_EXECUTION_TOKEN",
             "BB_FORK_LOCKS",
+            "BB_FORK_CGROUP_PLAN",
             "BB_FORK_EXECUTION_ACTIVE",
             "BB_FORK_INPUT_SNAPSHOT",
             "SHLVL",
@@ -167,7 +160,6 @@ export function executionIdentity(cwd, command) {
     tools,
     nodeTargets,
     pnpmPayload: payload,
-    python: pythonIdentity,
     kernel: release(),
     pnpm:
       version?.status === 0
@@ -178,8 +170,7 @@ export function executionIdentity(cwd, command) {
     nonce:
       (command.includes("pnpm") &&
         (!version || version.status !== 0 || !payload)) ||
-      libc === "unknown" ||
-      !pythonIdentity
+      libc === "unknown"
         ? `${Date.now()}-${Math.random()}`
         : null,
     node: fileIdentity(process.execPath),
