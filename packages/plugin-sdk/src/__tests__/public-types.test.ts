@@ -26,6 +26,7 @@ type ExpectedBbPluginApiKey =
   | "experimental_machines"
   | "onInstall"
   | "experimental_serverAccess"
+  | "experimental_threadCreationContext"
   | "hosts"
   | "http"
   | "log"
@@ -43,6 +44,9 @@ type ExpectedBbPluginApiKey =
 
 const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "BbPluginApi",
+  "experimental_ThreadCreationContext",
+  "experimental_ThreadCreationDescriptor",
+  "experimental_ThreadCreationPrepareArgs",
   "MessageDispatchHookContext",
   "MessageDispatchHookDecision",
   "PluginAgents",
