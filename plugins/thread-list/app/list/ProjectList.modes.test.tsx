@@ -39,7 +39,10 @@ import {
   sidebarOrganizationModeAtom,
   sidebarSectionOrderAtom,
 } from "../preferences/atoms.js";
-import type { OrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
+import type {
+  BuiltInOrganizationMode,
+  OrganizationMode as SidebarOrganizationMode,
+} from "../../shared/preferences.js";
 import {
   makeSidebarThread,
   sdkResult,
@@ -63,7 +66,7 @@ const { useSidebarModeSectionOrder } =
 
 const mockBuildMachineThreadGroups = vi.mocked(buildMachineThreadGroups);
 
-function getModeOrderProbeConfig(mode: SidebarOrganizationMode): {
+function getModeOrderProbeConfig(mode: BuiltInOrganizationMode): {
   entitySectionIds: SidebarSectionId[];
   hasThreadsSection?: boolean;
 } {
@@ -77,7 +80,7 @@ function getModeOrderProbeConfig(mode: SidebarOrganizationMode): {
   }
 }
 
-function ModeOrderProbe({ mode }: { mode: SidebarOrganizationMode }) {
+function ModeOrderProbe({ mode }: { mode: BuiltInOrganizationMode }) {
   const config = getModeOrderProbeConfig(mode);
   const { order } = useSidebarModeSectionOrder({
     mode,
