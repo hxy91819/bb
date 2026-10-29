@@ -33,6 +33,8 @@ jobs:
         run: pnpm install --frozen-lockfile --prod=false
       - name: Prepare user systemd for maintenance regressions
         run: bash scripts/fork-release/prepare-user-systemd.sh
+      - name: Repeat prepared user systemd setup
+        run: bash scripts/fork-release/prepare-user-systemd.sh
       - name: Verify kernel resource limits
         run: scripts/run-resource-isolated --profile package -- node scripts/fork-release/verify-resource-scope.mjs
       - name: Test fork maintenance

@@ -79,6 +79,9 @@ function pnpmPayload(path, version) {
 }
 
 export function executionIdentity(cwd, command) {
+  const usesPnpm =
+    command.includes("pnpm") ||
+    command.some((arg) => arg.endsWith("/fork-install.mjs"));
   const separator = command.indexOf("--");
   const target = separator >= 0 ? command[separator + 1] : command[0];
   const names = new Set(
@@ -90,7 +93,7 @@ export function executionIdentity(cwd, command) {
       "git",
       "systemctl",
       "systemd-run",
-      ...(command.includes("pnpm") ? ["pnpm"] : []),
+      ...(usesPnpm ? ["pnpm"] : []),
     ].filter(Boolean),
   );
   for (const arg of command)
@@ -129,7 +132,7 @@ export function executionIdentity(cwd, command) {
           result.status === 0 ? result.stdout.trim() : `${Date.now()}-unknown`,
       };
     });
-  const pnpm = command.includes("pnpm") ? executable("pnpm", cwd) : null;
+  const pnpm = usesPnpm ? executable("pnpm", cwd) : null;
   const version = pnpm
     ? spawnSync(pnpm, ["--version"], { cwd, encoding: "utf8", timeout: 15000 })
     : null;
@@ -169,8 +172,7 @@ export function executionIdentity(cwd, command) {
           ? "unknown"
           : "unused",
     nonce:
-      (command.includes("pnpm") &&
-        (!version || version.status !== 0 || !payload)) ||
+      (usesPnpm && (!version || version.status !== 0 || !payload)) ||
       libc === "unknown"
         ? `${Date.now()}-${Math.random()}`
         : null,
@@ -190,6 +192,7 @@ export function executionIdentity(cwd, command) {
       "scripts/run-resource-isolated",
       "scripts/resource-profile.mjs",
       "scripts/resource-runtime.mjs",
+      "scripts/ensure-native-modules.mjs",
     ].map((name) => fileIdentity(resolve(cwd, name))),
   };
 }
@@ -366,15 +369,28 @@ function vitestCache(path, depth = 0) {
 function installationCaches(cwd, selected) {
   return new Set(
     selected
-      .map((root) => join(root, ".vite"))
-      .filter((relative) => vitestCache(resolve(cwd, relative))),
+      .flatMap((root) => [join(root, ".vite"), join(root, ".vite-temp")])
+      .filter((relative) => {
+        const path = resolve(cwd, relative);
+        if (relative.endsWith("/.vite")) return vitestCache(path);
+        try {
+          return (
+            lstatSync(path).isDirectory() && readdirSync(path).length === 0
+          );
+        } catch (error) {
+          if (error.code === "ENOENT") return false;
+          throw error;
+        }
+      }),
   );
 }
 
 function cacheLink(relative, selected) {
   return selected.some((root) => {
-    const prefix = join(root, ".vite");
-    return relative === prefix || relative.startsWith(`${prefix}/`);
+    return [".vite", ".vite-temp"].some((name) => {
+      const prefix = join(root, name);
+      return relative === prefix || relative.startsWith(`${prefix}/`);
+    });
   });
 }
 
@@ -391,7 +407,7 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
   );
   const files = {
     $receipt: {
-      version: installation ? 4 : 2,
+      version: installation ? 5 : 2,
       kind: selectedRoots ? "explicit" : install ? "install" : "outputs",
       roots: selected,
     },
@@ -450,10 +466,10 @@ export function receipt(cwd, install, cache = {}, selectedRoots) {
 }
 
 export function validReceipt(cwd, files) {
-  if (!files?.$receipt || ![2, 3, 4].includes(files.$receipt.version))
+  if (!files?.$receipt || ![2, 3, 4, 5].includes(files.$receipt.version))
     return false;
   const signaturesOnly = files.$receipt.version >= 3;
-  const cacheAware = files.$receipt.version === 4;
+  const cacheAware = files.$receipt.version >= 4;
   if (signaturesOnly && files.$receipt.kind !== "install") return false;
   if (
     files.$receipt.kind !== "explicit" &&

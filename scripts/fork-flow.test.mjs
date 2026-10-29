@@ -1951,3 +1951,102 @@ test("Vitest cache exclusion rejects symlinks and dependency links targeting the
     f.cleanup();
   }
 });
+
+test("empty Vite temporary containers permit reuse while nonempty, links and dependencies invalidate", async () => {
+  const f = fixture();
+  try {
+    const temp = join(f.root, "node_modules/.vite-temp");
+    mkdirSync(join(f.root, "node_modules"));
+    const initial = receipt(f.root, true);
+    mkdirSync(temp);
+    assert.equal(validReceipt(f.root, initial), true);
+    const empty = receipt(f.root, true);
+    writeFileSync(join(temp, "config.mjs"), "temporary configuration");
+    assert.equal(validReceipt(f.root, empty), false);
+    const nonempty = receipt(f.root, true);
+    rmSync(join(temp, "config.mjs"));
+    assert.equal(validReceipt(f.root, nonempty), false);
+    assert.equal(validReceipt(f.root, empty), true);
+    rmSync(temp, { recursive: true });
+    assert.equal(validReceipt(f.root, empty), true);
+    mkdirSync(join(f.root, ".git/temp"));
+    symlinkSync("../.git/temp", temp);
+    assert.equal(validReceipt(f.root, empty), false);
+    assert.equal(validReceipt(f.root, receipt(f.root, true)), false);
+    rmSync(temp);
+    mkdirSync(temp);
+    symlinkSync(".vite-temp", join(f.root, "node_modules/dependency"));
+    assert.equal(validReceipt(f.root, receipt(f.root, true)), false);
+    rmSync(join(f.root, "node_modules/dependency"));
+    writeFileSync(join(f.root, "node_modules/dependency"), "real dependency");
+    assert.equal(validReceipt(f.root, empty), false);
+    const installed = receipt(f.root, true);
+    chmodSync(join(f.root, "node_modules/dependency"), 0o700);
+    assert.equal(validReceipt(f.root, installed), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("install receipt is written after native preparation and failed native repair invalidates dependents", () => {
+  const f = fixture();
+  try {
+    mkdirSync(join(f.root, "scripts"));
+    mkdirSync(join(f.root, ".git/bin"));
+    writeFileSync(
+      join(f.root, ".git/bin/pnpm"),
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 9.15.0; fi\nexit 0\n',
+      {
+        mode: 0o755,
+      },
+    );
+    writeFileSync(
+      join(f.root, "scripts/ensure-native-modules.mjs"),
+      `import * as f from 'node:fs';f.mkdirSync('node_modules',{recursive:true});if(f.existsSync('.git/fail-native'))throw Error('native repair failed');f.writeFileSync('node_modules/native.node','prepared ABI');`,
+    );
+    const state = join(f.root, ".git/stages.json");
+    writeFileSync(
+      state,
+      JSON.stringify({ source: "source", base: "base", completed: {} }),
+    );
+    writeFileSync(
+      join(f.root, ".git/bin/package.json"),
+      JSON.stringify({ name: "pnpm" }),
+    );
+    const env = { ...f.env, PATH: `${join(f.root, ".git/bin")}:${f.env.PATH}` };
+    const helper = new URL("./fork-install.mjs", import.meta.url).pathname;
+    const run = (stage, command) =>
+      spawnSync(
+        process.execPath,
+        [stateTool, "run", state, stage, f.root, ...command],
+        { cwd: f.root, env, encoding: "utf8" },
+      );
+    const install = [process.execPath, helper, f.root];
+    assert.equal(run("install", install).status, 0);
+    let saved = JSON.parse(readFileSync(state, "utf8"));
+    assert.ok(saved.completed.install.outputs["node_modules/native.node"]);
+    assert.equal(run("install", install).status, 0);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "reused",
+    );
+    assert.equal(run("tests", [process.execPath, "-e", "0"]).status, 0);
+    writeFileSync(join(f.root, "node_modules/native.node"), "polluted ABI");
+    writeFileSync(join(f.root, ".git/fail-native"), "1");
+    const failed = run("install", install);
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /native repair failed/);
+    saved = JSON.parse(readFileSync(state, "utf8"));
+    assert.equal(saved.events.at(-1).status, "failed");
+    assert.equal(saved.completed.install, undefined);
+    assert.equal(saved.completed.tests, undefined);
+    rmSync(join(f.root, ".git/fail-native"));
+    assert.equal(run("install", install).status, 0);
+    assert.equal(
+      JSON.parse(readFileSync(state, "utf8")).events.at(-1).status,
+      "completed",
+    );
+  } finally {
+    f.cleanup();
+  }
+});
