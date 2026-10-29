@@ -2,6 +2,8 @@
 
 修改功能或排查问题时，先按关键词找到维护仓库，再读该目录的 `AGENTS.md`、README 和实际源码。表中列的是维护边界，不是版本清单；插件成员以集合的 `.bb/plugins.json` 为准，核心活跃分支以本仓库 `.fork/branches` 为准。新增功能、改变职责、插件 ID 或迁仓时，在同一任务中同步本索引；当前版本和安装路径从目标实例实时读取。
 
+构建链路重构、缓存及验证提效见[管家工作簿](steward/bb-build-efficiency.md)。
+
 本波近期修复的统一发布、安装验收与耗时复盘见[管家工作簿](steward/bb-consolidated-delivery.md)。
 
 ## 按功能找维护位置

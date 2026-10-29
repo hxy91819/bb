@@ -7,6 +7,8 @@
 - 本仓库是用户自行管理的 fork。整项任务的最终交付按下方「Fork 维护」完成提交、推送及适用的发布收尾；只提交本任务文件，保留他人的工作。验证、推送或发布实际受阻时明确报告未完成的步骤与原因。
 - Read the linked guidance when its topic applies to the task.
 
+聚合、验证、缓存或发布流程提效先读 [构建重构工作簿](docs/steward/bb-build-efficiency.md)，存在时先核对路线与用户取舍。
+
 本波修复汇总、聚合发布、本机安装或耗时复盘先读 [管家工作簿](docs/steward/bb-consolidated-delivery.md)，只报未完成的用户待办。
 
 修改功能、排查问题、调整插件或升级 BB 环境前，先读 [功能维护与插件更新索引](docs/feature-index.md)，按维护边界进入对应仓库。新增功能、改变职责、插件 ID 或迁仓时同步索引；环境升级须执行其中的外置插件更新与验收流程。
