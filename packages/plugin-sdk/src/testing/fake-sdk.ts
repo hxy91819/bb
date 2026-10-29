@@ -117,6 +117,26 @@ function normalizeCallArgs(
     case "threads.spawn":
     case "threads.fork":
       return withThreadAttribution(pluginId, args);
+    case "threads.experimental_activity": {
+      const [input, ...rest] = args;
+      if (
+        typeof input !== "object" ||
+        input === null ||
+        !("metadata" in input) ||
+        typeof input.metadata !== "object" ||
+        input.metadata === null
+      )
+        return args;
+      const target =
+        "pluginId" in input.metadata ? input.metadata.pluginId : undefined;
+      return [
+        {
+          ...input,
+          metadata: { ...input.metadata, pluginId: target ?? pluginId },
+        },
+        ...rest,
+      ];
+    }
     case "threads.getPluginMetadata":
     case "threads.experimental_listPluginMetadata":
       return withPluginMetadataTarget(pluginId, args, false);
