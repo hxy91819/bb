@@ -1,4 +1,4 @@
-import { hasQueuedRetryOfTurnRequest } from "@bb/db";
+import { getQueuedRetryOfTurnRequest } from "@bb/db";
 import { permissionModeSchema } from "@bb/domain";
 import type {
   ClientTurnRequestId,
@@ -34,10 +34,12 @@ function hasQueuedRetryFor(
   deps: Pick<TurnRetryDeps, "db">,
   args: { threadId: string; originalRequestId: string },
 ): boolean {
-  return hasQueuedRetryOfTurnRequest(deps.db, {
-    threadId: args.threadId,
-    retryOfTurnRequestId: args.originalRequestId,
-  });
+  return (
+    getQueuedRetryOfTurnRequest(deps.db, {
+      threadId: args.threadId,
+      retryOfTurnRequestId: args.originalRequestId,
+    }) !== null
+  );
 }
 
 /**
