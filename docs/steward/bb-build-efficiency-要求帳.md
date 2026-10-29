@@ -4,7 +4,7 @@
 
 | 日期 | 要求 | 狀態 | 結果 | 材料 |
 | --- | --- | --- | --- | --- |
-| 10-29 | 整体检查并重构构建流程，提高常规上游更新与少量冲突场景的效率 | 進行中 | 49项流程回归及根2项真实定向复验通过，已合入并推送tooling；worker c996已推/登记，SDK退化候选排除；DSH正跑正常聚合发布与resume实测 | [工作簿](bb-build-efficiency.md)；[流程报告（本机）](/data/output/bb-build-efficiency-20261029/implementation-flow.md)；[根定向复验（本机）](/data/output/bb-build-efficiency-20261029/root-flow-final-probes.log) |
+| 10-29 | 整体检查并重构构建流程，提高常规上游更新与少量冲突场景的效率 | 進行中 | 真实整链首轮暴露fixture继承和安装回执成本；已补齐隔离、改完整signature失效，package scope内50项/7场景通过，同树扫描94–102→3.8–4.2秒；新快照整链待验收 | [工作簿](bb-build-efficiency.md)；[流程当前报告（本机）](/data/output/bb-build-efficiency-20261029/implementation-flow.md)；[首轮阻塞（本机）](/data/output/bb-build-efficiency-20261029/blocker-maintenance-env.md) |
 | 10-29 | 保持现有 fork 维护的效果 | 進行中 | 独立分支/唯一清单/安全main与完整覆盖保留，不采用六组；维护器09336de已合入本机，根实证来源10文件/缓存3文件和7定向回归通过；真实整链恢复仍待验收 | [维护流程](../fork-maintenance.md)；[维护器边界（本机）](/data/output/bb-build-efficiency-20261029/maintenance-tooling-boundary.md)；[根回归（本机）](/data/output/bb-build-efficiency-20261029/root-maintenance-boundary-tests.log) |
 | 10-29 | 优化完成后给出实际结果 | 進行中 | 相同预算下单worker726.7秒、真实4worker315.8秒收齐全部用例，峰值9.48GiB，缓存/宿主差异单列；SDK冷pack慢25.87%已排除，整链仍待测 | [4worker实测（本机）](/data/output/bb-build-efficiency-20261029/server-four-worker-result.md)；[SDK排除依据（本机）](/data/output/bb-build-efficiency-20261029/implementation-sdk.md) |
 | 10-29 | 任何明显牺牲须提前确认 | 採納 | 明显降低覆盖、隔离或维护能力的方案先交用户选择；其余已授权实现继续推进 | 會話回覆 2026-10-29；[工作簿](bb-build-efficiency.md) |
