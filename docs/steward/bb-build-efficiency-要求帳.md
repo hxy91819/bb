@@ -8,4 +8,6 @@
 | 10-29 | 保持现有 fork 维护的效果 | 進行中 | 本地/CI、冷安装、类型检查和资源边界保持；六组完整实验已通过、全部用例保留，但跨组污染检测有损失，默认入口未改 | [维护流程](../fork-maintenance.md)；[分组结果（本机）](/data/output/bb-build-efficiency-20261029/server-grouping-result.md) |
 | 10-29 | 优化完成后给出实际结果 | 進行中 | SDK单次对照：build＋pack100.53→91.47秒、恢复51.27→8.16秒、冷pack52.90→66.58秒；冷路径退化未采纳，整链仍待测 | [SDK真实报告（本机）](/data/output/bb-build-efficiency-20261029/implementation-sdk.md) |
 | 10-29 | 任何明显牺牲须提前确认 | 採納 | 明显降低覆盖、隔离或维护能力的方案先交用户选择；其余已授权实现继续推进 | 會話回覆 2026-10-29；[工作簿](bb-build-efficiency.md) |
-| 10-29 | 确认server六组正式采用时的污染检测取舍 | 待使用者 | 六组808.8秒通过、峰值2.61GiB，全部362文件/3742用例保留；推荐采用且保留原入口诊断，等待用户确认后才改默认 | [分组实测（本机）](/data/output/bb-build-efficiency-20261029/server-grouping-result.md)；會話提问 2026-10-29 |
+| 10-29 | 确认server六组正式采用时的污染检测取舍 | 被覆蓋 | 被下一项“按当前环境配置开放构建资源和并发”取代；先验证原完整入口，六组保留实验，不再把默认采用分组作为前提 | [分组实测（本机）](/data/output/bb-build-efficiency-20261029/server-grouping-result.md)；會話回覆 2026-10-29 |
+| 10-29 | 按当前环境配置开放构建资源和并发，旧配置来自低配机器 | 進行中 | 已实测32逻辑CPU/62GiB、约42GiB可用；先试16核、24/32GiB及4测试worker，动态探测模块与原入口全量验证已派发 | [工作簿](bb-build-efficiency.md)；會話回覆 2026-10-29 |
+| 10-29 | 为HTML等文件增加Download，优先插件、不足再考虑内核 | 進行中 | 已创建独立插件工作树并派发能力调查/实现，要求下载原始字节及文件名，保持既有认证与文件授权 | [实现任务（本机）](/data/output/bb-build-efficiency-20261029/html-download-task.txt) |
