@@ -118,7 +118,9 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 
 修改分支后重新运行 `fork-package`，生成新候选并记录新的 previous 和测试范围；只有 `--resume <sha>` 保留原来的基线、输入快照、比较起点、测试范围和部署检出。Git common directory 的 `fork-package/` 保存阶段成功回执、日志和每轮 `runs/run.*` 记录，不写入产品 Git。旧格式缺少快照的记录须重新运行入口。
 
-回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁描述符映射、快照路径、systemd 自动 INVOCATION_ID、shell 层数和工作目录等执行元数据；INVOCATION_ID 仍用于归属校验，其余未知环境变量只存摘要并继续使回执失效，不保存环境值。安装回执按 pnpm-lock.yaml 的 importers 覆盖根目录及每个 workspace 的 node_modules，以版本4回执记录存在性、成员、权限、链接和完整文件signature（dev/ino/size/mtime/ctime/mode），安装目录首次不再全读内容计算SHA；任何signature变化直接重装并使后续阶段失效，即使内容相同也不复用。此规则保持既有signature完全相同时不重读内容的边界，不接受mtime单字段或marker；没有 lockfile 的维护夹具用 Git package manifests 取目录。安装回执只排除各安装根下实际普通目录 `.vite/vitest/<40位小写十六进制>/results.json` 的封闭缓存布局及其空容器；目录中出现未知文件、其他层级或异常链接时不套用排除，`.cache` 等其他目录仍完整检查。目录成员仅扣除已确认的这一个缓存子树，父目录继续记录设备/inode、mode、uid/gid；不使用会随缓存增删变化的目录mtime/ctime/大小/nlink。普通依赖文件和链接继续核对完整signature，目录的其他成员增删、权限或身份变化仍重装并级联。缓存中的符号链接及依赖链接指向被排除缓存的情况不复用。此排除仅适用于安装回执，产物回执仍保留完整SHA。检查及构建从当前 Turbo 根配置、包配置的 outputs 取得产物根，包含 .bundled-runtime、生成文件及 bb-app 包装目录，并补充已经出现的 ignored dist/generated/bundled-types 根。不存在的声明根也记录；复用时重新枚举根清单并检查目录完整性和内容，新增根、缺根、workspace 链接变化均使回执失效。文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
+回执身份包含源码、精确命令和过滤器、阶段依赖、实际 Node 文件内容/版本/ABI、pnpm 版本及入口内容、平台/libc、锁文件/工作区配置、资源脚本与流水线实现。只排除本轮锁描述符映射、快照路径、systemd 自动 INVOCATION_ID、shell 层数和工作目录等执行元数据；INVOCATION_ID 仍用于归属校验，其余未知环境变量只存摘要并继续使回执失效，不保存环境值。安装回执按 pnpm-lock.yaml 的 importers 覆盖根目录及每个 workspace 的 node_modules，以版本5回执记录存在性、成员、权限、链接和完整文件signature（dev/ino/size/mtime/ctime/mode），安装目录首次不再全读内容计算SHA；任何signature变化直接重装并使后续阶段失效，即使内容相同也不复用。此规则保持既有signature完全相同时不重读内容的边界，不接受mtime单字段或marker；没有 lockfile 的维护夹具用 Git package manifests 取目录。安装回执只排除各安装根下实际普通目录 `.vite/vitest/<40位小写十六进制>/results.json` 的封闭缓存布局及其空容器，以及真实安装根下普通、完全为空的 `.vite-temp` 目录；目录中出现未知文件、其他层级或异常链接时不套用排除，`.cache` 等其他目录仍完整检查。目录成员仅扣除已确认的工具缓存子树，父目录继续记录设备/inode、mode、uid/gid；不使用会随缓存增删变化的目录mtime/ctime/大小/nlink。普通依赖文件和链接继续核对完整signature，目录的其他成员增删、权限或身份变化仍重装并级联。缓存中的符号链接及依赖链接指向被排除缓存的情况不复用。此排除仅适用于安装回执，产物回执仍保留完整SHA。检查及构建从当前 Turbo 根配置、包配置的 outputs 取得产物根，包含 .bundled-runtime、生成文件及 bb-app 包装目录，并补充已经出现的 ignored dist/generated/bundled-types 根。不存在的声明根也记录；复用时重新枚举根清单并检查目录完整性和内容，新增根、缺根、workspace 链接变化均使回执失效。文件元信息未变时复用已计算的内容摘要；外部未知目录链接保守重跑。回执检查本身也计入阶段耗时，需结合真实仓库 benchmark 评估开销。
+
+安装阶段先执行 frozen development 安装，再以该 Node 执行现有 ensure-native-modules 准备当前 ABI、分离 hardlink，全部成功后才写安装回执。后续 native 检查不更新安装基线；native 文件仍逐项核对完整 signature，不列入缓存例外。配置的运行时若使用另一 ABI，原生检查仍会失败，不能将不同 ABI 的部分结果视为可复用。
 
 安装或工具身份变化、产物丢失/损坏、覆盖变化、阶段失败均重跑，并使后续阶段失效；失败和中断不写成功回执。运行时构建与原生检查也纳入同一回执和 package 资源 scope。接续要求检出仍为该 SHA 且干净，不支持手工在聚合顶端追加修复后跳过验证。锁覆盖 Git 操作和全部阶段，嵌套入口继承父锁；阶段写入另持独占锁。锁使用内核 flock（没有 flock 命令时使用 Perl Fcntl），锁文件永久保留，只关闭自身描述符，不删除或显式解锁共享描述符。
 
@@ -127,6 +129,8 @@ Linux 执行入口和阶段为每次命令保留独立 systemd user Slice 的内
 正常收尾只核验归属，不再对可复用 unit 名称执行 stop。scope 使用 --collect 随命令退出自然回收；空 Slice 可以仍为 active/populated=0，保留给 systemd 管理，不为删除空结构增加协议。新执行按记录的实例身份和实际成员判断恢复，不要求手工清锁或清空 Slice。
 
 取消先传 TERM，3 秒后对身份验证且目录 FD 钉住的 cgroup 写 cgroup.kill；控制侧 7 秒后以失败结束等待。查询或清理失败保留归属，不能写成功回执。恢复取得锁后，未完成记录保留 interrupted，再完成必要验证。此路径需要 Linux、可用的 systemd user manager、cgroup v2 和可写 cgroup.kill；不再依赖 Python subreaper。轻量真实 scope 回归覆盖双 SIGKILL、忽略 TERM 后代、重归组、并发恢复和查询失败；不将这些结果扩展为非 Linux 平台保证。主动将 writer 迁出受管 Slice 的特权操作不属于本维护入口的派生契约。
+
+托管 Ubuntu CI 的共享准备脚本给准确 user service 写入运行时 Delegate=cpu memory pids，使用 PID1 支持的资源 Accounting 属性开启祖先传播，再原位 daemon-reexec user manager；不 restart 后向已启用子控制器的委派根重新挂接进程。首次与重复准备均由非发布分支 workflow 验证实际 scope CPU/memory/pids 限额。准备失败保留 unit Result、ExecMainStatus、status 和 journal。该脚本只用于临时 GitHub Actions runner，不用于本机线上 manager。
 
 资源scope不设置仅适用于service的 OOMPolicy；部署service的 OOMPolicy=continue drop-in保留。CI兼容回归在透明systemd-run夹具中拒绝scope的该属性，其余调用转发到真实systemd。
 

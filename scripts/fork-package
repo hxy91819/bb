@@ -146,7 +146,7 @@ fi
 export BB_RESOURCE_BUDGET
 printf '%s\n' "$BB_RESOURCE_BUDGET" > "$run_record.resources.json"
 step "安装依赖"
-CI=true NODE_ENV=development npm_config_production=false run_stage install "$iso" --profile package -- "$node_exe" "$here/fork-install.mjs" "$wt"
+CI=true NODE_ENV=development npm_config_production=false run_stage install "$iso" --profile package -- node "$here/fork-install.mjs" "$wt"
 
 step "维护脚本与边界契约"
 run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs" "$wt/scripts/fork-flow.test.mjs"
