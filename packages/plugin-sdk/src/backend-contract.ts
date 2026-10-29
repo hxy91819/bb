@@ -6,6 +6,7 @@ import type * as z from "zod";
 import type {
   Environment,
   Host,
+  JsonObject,
   PermissionMode,
   PendingInteraction,
   Project,
@@ -17,6 +18,8 @@ import type {
   ReasoningLevel,
   ServiceTier,
   ThreadCreateOrigin,
+  ThreadOriginKind,
+  StartedOnBehalfOf,
   ThreadQueuedMessage,
   ThreadTurnInitiator,
   WorkspaceProvisionType,
@@ -2208,6 +2211,53 @@ export type PluginBbSdk = Omit<BbSdk, "threads"> & {
   };
 };
 
+export interface experimental_ThreadCreationDescriptor {
+  projectId: string;
+  origin: ThreadCreateOrigin | null;
+  originPluginId: string | null;
+  originKind: ThreadOriginKind | null;
+  parentThreadId: string | null;
+  sourceThreadId: string | null;
+  startedOnBehalfOf: StartedOnBehalfOf | null;
+}
+
+export interface experimental_ThreadCreationPrepareArgs<T> {
+  /** Only this plugin's context, validated by the registered input schema when present. */
+  context: { present: true; value: T } | { present: false };
+  creation: Readonly<experimental_ThreadCreationDescriptor>;
+  /** This plugin's legacy pluginMetadata seed, or null. */
+  legacySeed: JsonObject | null;
+  /** Only this plugin's metadata on the parent; core does not inherit it automatically. */
+  parentMetadata: JsonObject | null;
+  /** Only this plugin's metadata on the fork or handoff source, or null. */
+  sourceMetadata: JsonObject | null;
+  signal: AbortSignal;
+}
+
+export interface experimental_ThreadCreationContext {
+  /**
+   * Register one handler per plugin generation, with a host-bound namespace.
+   * Enabled handlers prepare even when their context is absent. Explicit context
+   * for an unknown or disabled handler rejects creation. Handlers run in parallel
+   * outside the core transaction, under plugin invocation isolation and a 10s
+   * timeout. Disposal aborts the signal and late results cannot create a thread.
+   * Return your namespace's strict JSON object or null, without persistent side
+   * effects. Results may add keys to the legacy seed, but duplicate top-level
+   * keys fail rather than overwrite. Metadata is limited to 256 KiB per namespace
+   * and new contributions to 1 MiB total. All results and the thread commit in one
+   * transaction, independently of origin; legacy seeds still require plugin
+   * origin. Invalid input/output, preparation errors, timeout, and unload reject
+   * creation before any thread row is written. Starting or retrying an existing
+   * thread does not prepare again. The returned object disposes the handler early.
+   */
+  register<Input, Output>(registration: {
+    input: StandardSchemaV1<Input, Output>;
+    prepare(
+      args: experimental_ThreadCreationPrepareArgs<Output>,
+    ): JsonObject | null | Promise<JsonObject | null>;
+  }): { dispose(): void };
+}
+
 /**
  * The API object handed to a plugin's factory (design §4). Implemented by
  * the BB server; this contract is what plugin `server.ts` files compile
@@ -2250,6 +2300,7 @@ export interface BbPluginApi {
    * reason, or refuse.
    */
   readonly experimental_hooks: PluginHooks;
+  readonly experimental_threadCreationContext: experimental_ThreadCreationContext;
   /**
    * Environment targets: places a thread can run that this plugin
    * provisions (plans/plugin-environment-providers.md). Experimental: see
