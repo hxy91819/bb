@@ -50,6 +50,7 @@ feature/plugin-pinned-thread-panels           needs-feedback                    
 fix/child-question-notifications             needs-feedback                                             # 插件异步提问接入父线程求助通知，提供表单回答入口与 Codex 回传格式
 feature/steward                             fork-only                                                  # 用户指定仓库内管家插件与自动登记；独立 path 安装，不进入官方目录
 feature/thread-content-search                needs-feedback                                             # 会话内用户/助手消息全文搜索、片段高亮、分页计数，SDK/CLI 共用；界面在集合 thread-search 插件
+fix/thread-message-reveal                    needs-feedback                                             # 精确消息锚点展开惰性详情并自动加载更早活动，插件与原生消息链接共用
 fix/tunnel-contract-buffer-types              pr-open         https://github.com/get-bb/bb/pull/6430             # tunnel-contract 分片重组断言不再使用未声明的 Buffer；关联 https://github.com/get-bb/bb/issues/6432；准入检查已自动关闭 PR，待维护者重开
 fix/interaction-submit-cache                needs-feedback                                             # 插件交互确认提交或取消后立即更新缓存，实时通知缺失时关闭等待卡片
 fix/retry-parent-notifications              needs-feedback                                             # 自动重试排队期间不报父线程失败；核心等待插件决定，保留最终结果与取消通知，固定截止时间并避免耗尽行删除重复通知
