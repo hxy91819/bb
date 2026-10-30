@@ -62,11 +62,18 @@ if(args[0]==='api') {
  for(let i=0;i<args.length;i++)if(args[i]==='--pattern')fs.copyFileSync(path.join(from,args[++i]),path.join(to,args[i]));
 } else if(args[1]==='create'){fs.mkdirSync(alias,{recursive:true})}
 else if(args[1]==='upload'){
+ if(process.env.FIXTURE_FAIL_MANIFEST==='1'&&args.some(a=>a.endsWith('/bb-fork-windows.json')))process.exit(1);
  for(const arg of args.slice(3))if(fs.existsSync(arg)&&fs.statSync(arg).isFile())fs.copyFileSync(arg,path.join(alias,path.basename(arg)));
 }
 `;
 
-for (const scenario of ["publish", "newer", "network-error", "different-bytes"])
+for (const scenario of [
+  "publish",
+  "newer",
+  "network-error",
+  "different-bytes",
+  "wrong-immutable-source",
+])
   test(`Windows update promotion: ${scenario}`, async () => {
     const root = await mkdtemp(join(tmpdir(), "bb-windows-publish-"));
     try {
@@ -81,11 +88,12 @@ for (const scenario of ["publish", "newer", "network-error", "different-bytes"])
           "b".repeat(40),
         );
       if (scenario === "different-bytes") {
-        const p = join(root, "immutable", "bb-fork-windows.json");
-        const data = JSON.parse(await readFile(p, "utf8"));
-        data.extra = "different published manifest";
-        await writeFile(p, JSON.stringify(data));
+        writeDesktopFixture(join(root, "immutable"), tag, source, {
+          installer: "original published installer",
+        });
       }
+      if (scenario === "wrong-immutable-source")
+        writeDesktopFixture(join(root, "immutable"), tag, "b".repeat(40));
       const result = spawnSync(
         process.execPath,
         [
@@ -109,12 +117,19 @@ for (const scenario of ["publish", "newer", "network-error", "different-bytes"])
         .trim()
         .split("\n")
         .map(JSON.parse);
-      if (scenario === "publish") {
+      if (["publish", "different-bytes"].includes(scenario)) {
         assert.equal(result.status, 0, result.stderr);
         await verifyDesktopArtifacts(join(root, "alias"), tag, source);
+        assert.deepEqual(
+          await readFile(join(root, "alias", "bb-fork-windows.json")),
+          await readFile(join(root, "immutable", "bb-fork-windows.json")),
+        );
         const uploads = calls.filter((a) => a[1] === "upload");
-        assert.equal(uploads.length, 3);
-        assert.ok(uploads[0].some((a) => a.endsWith(".exe")));
+        assert.equal(uploads.length, 4);
+        assert.ok(
+          uploads[0].some((a) => a.endsWith("bb-fork-windows-watermark.json")),
+        );
+        assert.ok(uploads[1].some((a) => a.endsWith(".exe")));
         assert.ok(
           uploads.at(-1).some((a) => a.endsWith("bb-fork-windows.json")),
         );
@@ -132,3 +147,62 @@ for (const scenario of ["publish", "newer", "network-error", "different-bytes"])
       await rm(root, { recursive: true, force: true });
     }
   });
+
+test("an interrupted metadata promotion reserves its version against an older job", async () => {
+  const root = await mkdtemp(join(tmpdir(), "bb-windows-interrupted-"));
+  try {
+    await mkdir(join(root, "bin"));
+    await writeFile(join(root, "bin/gh"), ghFixture, { mode: 0o755 });
+    writeDesktopFixture(join(root, "alias"), "fork-v1.0.0-20261030.1", source);
+    const invoke = (revision, fail) => {
+      const next = `fork-v1.0.0-20261030.${revision}`;
+      writeDesktopFixture(join(root, "local"), next, source);
+      writeDesktopFixture(join(root, "immutable"), next, source);
+      return spawnSync(
+        process.execPath,
+        [
+          resolve("scripts/fork-release/publish-windows-feed.mjs"),
+          join(root, "local"),
+          next,
+          source,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: join(root, "bin") + ":" + process.env.PATH,
+            GH_REPO: "example/fork",
+            FIXTURE_ROOT: root,
+            ...(fail ? { FIXTURE_FAIL_MANIFEST: "1" } : {}),
+          },
+        },
+      );
+    };
+    assert.equal(invoke(3, true).status, 1);
+    const readVersion = async (name) =>
+      JSON.parse(await readFile(join(root, "alias", name), "utf8")).version;
+    assert.equal(
+      await readVersion("desktop-version-windows.json"),
+      "1.0.0-fork.20261030.3",
+    );
+    assert.equal(
+      await readVersion("bb-fork-windows.json"),
+      "1.0.0-fork.20261030.1",
+    );
+    const older = invoke(2, false);
+    assert.equal(older.status, 0, older.stderr);
+    assert.equal(
+      await readVersion("desktop-version-windows.json"),
+      "1.0.0-fork.20261030.3",
+    );
+    const retry = invoke(3, false);
+    assert.equal(retry.status, 0, retry.stderr);
+    await verifyDesktopArtifacts(
+      join(root, "alias"),
+      "fork-v1.0.0-20261030.3",
+      source,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

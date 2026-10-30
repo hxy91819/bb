@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   desktopManifestName,
+  desktopVersion,
   compareDesktopVersions,
   verifyDesktopArtifacts,
 } from "./windows-desktop.mjs";
@@ -13,7 +14,7 @@ const [directoryArg, tag, source] = process.argv.slice(2);
 const repo = process.env.GH_REPO;
 assert.match(repo ?? "", /^[\w.-]+\/[\w.-]+$/u);
 const directory = resolve(directoryArg);
-const { manifest, assets } = await verifyDesktopArtifacts(
+const { assets: expectedAssets } = await verifyDesktopArtifacts(
   directory,
   tag,
   source,
@@ -35,14 +36,14 @@ async function publish() {
       repo,
       "--dir",
       exact,
-      ...assets.flatMap((name) => ["--pattern", name]),
+      ...expectedAssets.flatMap((name) => ["--pattern", name]),
     ]);
-    await verifyDesktopArtifacts(exact, tag, source);
-    assert.deepEqual(
-      await readFile(join(exact, desktopManifestName)),
-      await readFile(join(directory, desktopManifestName)),
-      "Published Windows bytes differ from this build; keep published assets unchanged",
+    const { manifest, assets } = await verifyDesktopArtifacts(
+      exact,
+      tag,
+      source,
     );
+    const watermarkName = "bb-fork-windows-watermark.json";
     const alias = "fork-desktop-latest";
     const response = spawnSync(
       "gh",
@@ -64,12 +65,14 @@ async function publish() {
         throw new Error("Ambiguous Windows feed release lookup");
     }
     if (existing) {
-      const currentAsset = existing.assets.find(
-        (asset) => asset.name === desktopManifestName,
+      const checkpoints = [watermarkName, desktopManifestName].filter((name) =>
+        existing.assets.some((asset) => asset.name === name),
       );
-      if (!currentAsset && !existing.draft)
-        throw new Error("Published Windows feed has no provenance");
-      if (currentAsset) {
+      if (checkpoints.length === 0 && !existing.draft)
+        throw new Error(
+          "Published Windows feed has no provenance or version watermark",
+        );
+      if (checkpoints.length) {
         const currentDir = join(temp, "current");
         gh([
           "release",
@@ -79,26 +82,31 @@ async function publish() {
           repo,
           "--dir",
           currentDir,
-          "--pattern",
-          desktopManifestName,
+          ...checkpoints.flatMap((name) => ["--pattern", name]),
         ]);
-        const current = JSON.parse(
-          await readFile(join(currentDir, desktopManifestName), "utf8"),
-        );
-        const comparison = compareDesktopVersions(
-          current.version,
-          manifest.version,
-        );
-        if (comparison > 0) {
-          console.log("Windows update feed is already newer; keeping it.");
-          return;
-        }
-        if (comparison === 0)
-          assert.equal(
-            current.source,
-            source,
-            "Same Windows version has a different source",
+        for (const name of checkpoints) {
+          const current = JSON.parse(
+            await readFile(join(currentDir, name), "utf8"),
           );
+          assert.equal(current.version, desktopVersion(current.tag));
+          assert.match(current.source, /^[a-f0-9]{40}$/u);
+          const comparison = compareDesktopVersions(
+            current.version,
+            manifest.version,
+          );
+          if (comparison > 0) {
+            console.log(
+              "Windows update feed has a newer published or reserved version; keeping it.",
+            );
+            return;
+          }
+          if (comparison === 0)
+            assert.equal(
+              current.source,
+              source,
+              "Same Windows version has a different source",
+            );
+        }
       }
     } else {
       gh([
@@ -116,10 +124,16 @@ async function publish() {
         `Windows update channel. Immutable release: ${tag}; source ${source}.`,
       ]);
     }
+    const watermark = { tag, source, version: manifest.version };
+    await writeFile(
+      join(exact, watermarkName),
+      JSON.stringify(watermark) + "\n",
+    );
     const binaries = assets.filter(
       (name) => !metadata(name) && name !== desktopManifestName,
     );
     for (const names of [
+      [watermarkName],
       binaries,
       ["latest.yml", "desktop-version-windows.json"],
       [desktopManifestName],
@@ -130,7 +144,7 @@ async function publish() {
         alias,
         "--repo",
         repo,
-        ...names.map((name) => join(directory, name)),
+        ...names.map((name) => join(exact, name)),
         "--clobber",
       ]);
     }
@@ -154,12 +168,16 @@ async function publish() {
       repo,
       "--dir",
       readback,
-      ...assets.flatMap((name) => ["--pattern", name]),
+      ...[...assets, watermarkName].flatMap((name) => ["--pattern", name]),
     ]);
     await verifyDesktopArtifacts(readback, tag, source);
     assert.deepEqual(
       await readFile(join(readback, desktopManifestName)),
-      await readFile(join(directory, desktopManifestName)),
+      await readFile(join(exact, desktopManifestName)),
+    );
+    assert.deepEqual(
+      JSON.parse(await readFile(join(readback, watermarkName), "utf8")),
+      watermark,
     );
     console.log(
       `Verified Windows update channel: https://github.com/${repo}/releases/tag/${alias}`,

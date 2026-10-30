@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-export function writeDesktopFixture(directory, tag, source) {
+export function writeDesktopFixture(directory, tag, source, options = {}) {
   const version = tag
     .replace(/^fork-v/u, "")
     .replace(/-(\d{8})\.(\d+)$/u, "-fork.$1.$2");
   const executable = `bb-${version}-x64.exe`;
-  const bytes = Buffer.from("installer fixture");
+  const bytes = Buffer.from(options.installer ?? "installer fixture");
   const hash = (b, alg = "sha256", encoding = "hex") =>
     createHash(alg).update(b).digest(encoding);
   const metadata = {
