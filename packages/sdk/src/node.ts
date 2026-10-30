@@ -99,6 +99,10 @@ export {
   type PluginMutationResponse,
 } from "./areas/plugins.js";
 export { createBuiltinPlanCommandTextInput } from "./core.js";
+export {
+  buildVsCodeRemoteUrl,
+  type VsCodeRemoteUrlArgs,
+} from "./vscode-remote-url.js";
 export { createGuideArea } from "./areas/guide.js";
 export {
   DEFAULT_THREAD_WAIT_POLL_INTERVAL_MS,
