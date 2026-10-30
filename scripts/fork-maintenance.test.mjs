@@ -476,7 +476,7 @@ test("release publication requires SDK identity and completes drafts without ove
   const { copyFileSync, chmodSync, readdirSync, symlinkSync } =
     await import("node:fs");
   const root = mkdtempSync(join(tmpdir(), "bb-sdk-publish-"));
-  const tag = "fork-v1-test";
+  const tag = "fork-v1.0.0-20261030.1";
   const source = "a".repeat(40);
   const digest = (file) =>
     createHash("sha256").update(readFileSync(file)).digest("hex");
@@ -486,11 +486,23 @@ test("release publication requires SDK identity and completes drafts without ove
     mkdirSync(join(root, "package"));
     mkdirSync(join(root, "release"));
     mkdirSync(join(root, "bin"));
-    for (const file of ["sdk-artifact.mjs", "verify-sdk.mjs", "publish.sh"])
+    for (const file of [
+      "sdk-artifact.mjs",
+      "verify-sdk.mjs",
+      "publish.sh",
+      "windows-desktop.mjs",
+    ])
       copyFileSync(
         new URL(`./fork-release/${file}`, import.meta.url),
         join(root, "scripts/fork-release", file),
       );
+    const { writeDesktopFixture } =
+      await import("./test-fixtures/windows-desktop.mjs");
+    writeDesktopFixture(join(root, "release"), tag, source);
+    writeFileSync(
+      join(root, "scripts/fork-release/publish-windows-feed.mjs"),
+      "",
+    );
     const pkg = { name: "@get-bb/plugin-sdk", version: "1.0.0" };
     for (const path of [
       "packages/plugin-sdk/package.json",

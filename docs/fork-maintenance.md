@@ -221,13 +221,18 @@ git ls-remote origin 'refs/tags/fork-v0.44.0-20261001.1^{}'
 
 workflow 接受以 `fork-v` 和数字开头、后续只含字母、数字、点、下划线或连字符的 tag。新增发布使用新 tag；源码里的上游 package version 保持原值，包内 `release.json` 另行记录 fork tag、聚合 SHA、平台和 Node 版本。
 
-在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。默认只为本机自部署构建 Linux x64，不等待 macOS、ARM 或桌面客户端。Linux x64 使用 GitHub 托管 runner 构建、检查 launcher、运行已有 tarball 集成验证，再把最终独立包解压，验证 CLI、server/host-daemon 健康和内置插件加载。通用 Plugin SDK 在独立 job 中从同一个 tag/SHA 构建声明与 runtime，按现有 prepack 契约打包并冷安装检查全部 exports 的 runtime/types。只有 Linux x64 与 SDK 全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
+在 [fork 的 Actions](https://github.com/hxy91819/bb/actions) 查看 `Release fork aggregate`。默认构建 Linux x64 自部署包、Windows x64 桌面安装器和通用 Plugin SDK。Linux 使用 GitHub 托管 runner 构建、检查 launcher、运行 tarball 集成验证，再解压验证 CLI、server/host-daemon 健康和内置插件。Windows 使用原生 Windows runner，复用上游 NSIS 打包与真实 Electron 启动验证。SDK 从同一个 tag/SHA 构建并冷安装检查全部 exports 的 runtime/types。三项全部通过才发布 [GitHub Release](https://github.com/hxy91819/bb/releases)。
 
 | 包名后缀           | 目标机器                                              |
 | ------------------ | ----------------------------------------------------- |
 | `linux-x64.tar.gz` | Linux x86_64，glibc ≥ 2.35（Ubuntu 22.04 或同等系统） |
+| `.exe`             | Windows x64，按用户安装的 Electron 桌面版             |
 
-这是后台服务及 CLI 的包，不是 Electron 桌面安装包。每个包包含 Node 24.15.0、生产依赖（含对应平台的原生模块）、网页、服务端、host daemon、CLI、SDK 和内置插件；目标机器不用安装 Node、pnpm，也不用编译源码。Provider CLI 和它们的登录仍由目标机器配置。
+Linux 包包含 Node 24.15.0、生产依赖、网页、服务端、host daemon、CLI、SDK 和内置插件。Windows 安装器使用 Electron 自带运行时，包含同一聚合的界面和后台组件。两者均无需目标机器安装 Node、pnpm 或编译源码；Provider CLI 和登录仍由目标机器配置。
+
+Windows 构建将桌面应用版本映射为 `<上游版本>-fork.<日期>.<序号>`，例如 `0.47.0-fork.20261030.2`，只在 CI 检出中生成，不修改仓库版本或 SDK 版本。安装器、blockmap、两种更新 metadata、SHA-256 和 `bb-fork-windows.json` 来源记录一起发布；来源记录绑定不可变 fork tag、完整 source SHA 和逐文件哈希。下载后校验 `.exe.sha256` 再安装。未配置 `WINDOWS_CERTIFICATE_PFX` / `WINDOWS_CERTIFICATE_PASSWORD` 时沿用上游无签名构建；两项必须同时配置或同时留空。
+
+Windows 自动更新使用本 fork 的独立 `fork-desktop-latest` Release，构建时固定 `BB_DESKTOP_UPDATE_BASE_URL`，不会拉取上游安装包。CI 在不可变 fork Release 发布并回读 Windows 字节后，串行更新该频道：先上传带版本名的二进制，后更新 feeds 和来源记录，保留旧二进制；旧版本任务不能回退频道。该频道是更新指针，实际发布来源以其 `bb-fork-windows.json` 指向的不可变 fork tag 为准。
 
 流程仅使用 GitHub 自带的 `GITHUB_TOKEN`，发布 job 获得 `contents: write`；无需 npm token、Apple 签名证书或上游的 Blacksmith runner。Fork 的 Actions 需已启用。
 
@@ -291,7 +296,7 @@ tar -xzf "$asset" -C "$HOME/.local/opt/bb"
 
 构建或验证失败时修复所属分支，重新聚合后使用新 tag 发布。纯网络或 runner 故障可在 Actions 重跑原 tag。
 
-上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原来的包，重跑只核对源码 SHA 和完整资产清单（Linux x64 的两件资产与 SDK 的三件资产），不覆盖已发布包。需要修订已发布版本时使用新 tag。新 workflow 缺 SDK 资产会失败，不降级；历史已公开且不含 SDK 的 Release 不回填、不修改，仍使用其原 workflow。流程不会更新 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
+上传从 draft Release 开始，全部资产上传成功才公开；上传中断时重跑会补全这个 draft。已经公开的 Release 保留原包，重跑核对源码 SHA 和 Linux、SDK、Windows 的完整资产清单，并回读 Windows 字节，不覆盖已发布包。需要修订已发布版本时使用新 tag。缺任何目标的必需资产会失败；历史已公开的 Release 不回填、不修改，沿用原 workflow。流程只更新本 fork 的 `fork-desktop-latest`，不修改 `desktop-latest`、`desktop-nightly` 或上游安装渠道。
 
 ## 4. 向上游反馈
 

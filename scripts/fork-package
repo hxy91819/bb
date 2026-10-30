@@ -149,7 +149,7 @@ step "安装依赖"
 CI=true NODE_ENV=development npm_config_production=false run_stage install "$iso" --profile package -- node "$here/fork-install.mjs" "$wt"
 
 step "维护脚本与边界契约"
-run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs" "$wt/scripts/fork-flow.test.mjs"
+run_stage maintenance "$iso" --profile package -- node --test "$wt/scripts/fork-maintenance.test.mjs" "$wt/scripts/fork-flow.test.mjs" "$wt/scripts/fork-release/windows-desktop.test.mjs"
 run_stage protocol "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/host-daemon-contract --concurrency=1 --output-logs=errors-only
 run_stage plugin-contract "$iso" --profile package -- pnpm -C "$wt" exec turbo run test --filter=@bb/server --concurrency=1 --output-logs=errors-only -- test/services/plugins/plugin-authoring-docs.test.ts
 

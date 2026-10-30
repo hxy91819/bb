@@ -5,6 +5,8 @@ set -euo pipefail
 remote_source="$(git ls-remote "https://github.com/${GH_REPO}.git" "refs/tags/${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}^{}" | awk '/\^\{\}$/ { peeled=$1; next } { target=$1 } END { print peeled ? peeled : target }')"
 test "$remote_source" = "$GITHUB_SHA"
 node scripts/fork-release/verify-sdk.mjs release "$RELEASE_TAG" "$GITHUB_SHA"
+node scripts/fork-release/windows-desktop.mjs verify release "$RELEASE_TAG" "$GITHUB_SHA" > windows-assets.txt
+mapfile -t windows_assets < windows-assets.txt
 cd release
 
 archive="bb-${RELEASE_TAG}-linux-x64.tar.gz"
@@ -19,13 +21,16 @@ assets=("$archive" "$archive.sha256")
 
 sdk="bb-plugin-sdk-${RELEASE_TAG}"
 assets+=("$sdk.tgz" "$sdk.tgz.sha256" "$sdk.json")
+assets+=("${windows_assets[@]}")
 
 cat > release-notes.md <<EOF
 Prebuilt BB fork aggregate from commit ${GITHUB_SHA}.
 
 The universal Plugin SDK npm tarball and provenance JSON come from the same commit. They are for plugin development; SDK package names and versions retain their upstream values.
 
-This release targets the self-hosted Linux x64 deployment. Download its linux-x64 archive. Verify its accompanying SHA-256 checksum, extract it, then run bin/bb-app or bin/bb --help inside the extracted directory.
+This release includes a self-hosted Linux x64 runtime and a Windows x64 desktop installer. For Linux, verify the archive checksum, extract it, then run bin/bb-app or bin/bb --help. For Windows, verify the .exe checksum and run the per-user installer. Windows builds without a configured signing certificate are unsigned.
+
+The Windows desktop uses the fork-desktop-latest update channel in this fork. Its prerelease version includes the fork date and revision; it does not update from upstream desktop feeds. Windows provenance and SHA-256 hashes are recorded in bb-fork-windows.json.
 
 Node, the web app, server, host daemon, CLI and built-in plugins are included. No source checkout, aggregation, rebase, pnpm or compilation is needed on the target machine.
 
@@ -45,6 +50,8 @@ if (!release.body.includes(`commit ${source}.`) || expected.some(name => !releas
 }
 NODE
     echo "Release $RELEASE_TAG is already published; keeping its existing assets."
+    cd ..
+    node scripts/fork-release/publish-windows-feed.mjs release "$RELEASE_TAG" "$GITHUB_SHA"
     exit 0
   fi
   gh release edit "$RELEASE_TAG" --title "BB fork $RELEASE_TAG" --notes-file release-notes.md
@@ -55,3 +62,5 @@ fi
 gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
 gh release edit "$RELEASE_TAG" --draft=false --latest=false
 gh release view "$RELEASE_TAG" --json url --jq .url
+cd ..
+node scripts/fork-release/publish-windows-feed.mjs release "$RELEASE_TAG" "$GITHUB_SHA"

@@ -38,4 +38,4 @@ jobs:
       - name: Verify kernel resource limits
         run: scripts/run-resource-isolated --profile package -- node scripts/fork-release/verify-resource-scope.mjs
       - name: Test fork maintenance
-        run: scripts/run-resource-isolated --profile package -- node --test scripts/resource-profile.test.mjs scripts/fork-maintenance.test.mjs scripts/fork-flow.test.mjs
+        run: scripts/run-resource-isolated --profile package -- node --test scripts/resource-profile.test.mjs scripts/fork-maintenance.test.mjs scripts/fork-flow.test.mjs scripts/fork-release/windows-desktop.test.mjs

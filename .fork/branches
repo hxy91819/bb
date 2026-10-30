@@ -7,6 +7,7 @@
 base desktop-v0.47.0
 
 fork-tooling                           internal                                                   # fork 维护规则、聚合脚本、部署 skill
+feature/desktop-release-feed            needs-feedback                                             # 桌面更新源可在构建时配置，版本检查与 electron-updater 共用；供 fork Windows 桌面发布使用
 security/baseline                      internal                                                   # 安全基线：所有 worktree 与聚合的共同安全祖先，含依赖漏洞修复；main 默认等于 fork-base/<base>，新 worktree 默认包含安全修复
 fix/local-aggregate-server-startup     internal                                                   # 服务先监听再做启动恢复
 fix/vite-cve-2026-39363                reported        https://github.com/get-bb/bb/issues/1780   # Vite 6.4.1 CVE 覆盖到 6.4.3
