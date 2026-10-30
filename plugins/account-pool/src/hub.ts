@@ -186,8 +186,9 @@ export class AccountPoolHub {
 
   async importAccount(
     provider: PoolProvider,
+    authFile: string | null,
   ): Promise<ImportedProviderAccount> {
-    return this.adapter(provider).importAccount();
+    return this.adapter(provider).importAccount(authFile);
   }
 
   async handle(
