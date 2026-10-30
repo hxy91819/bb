@@ -3,6 +3,7 @@ import {
   PendingInteractionShell,
 } from "@/components/thread/pending-interactions/PendingInteractionShell";
 import { useCallback, useContext, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bb/shared-ui/button";
 import type { JsonValue, PendingInteraction } from "@bb/domain";
 import { PluginSlotMount } from "./PluginSlotMount";
@@ -13,6 +14,10 @@ import { usePluginFrontendsSettled } from "@/lib/plugin-frontend-boot-state";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { useStopThread } from "@/hooks/mutations/thread-runtime-mutations";
 import { sdk } from "@/lib/sdk";
+import {
+  applyResolvedThreadPendingInteraction,
+  invalidateThreadPendingInteractionResolutionQueries,
+} from "@/hooks/cache-owners/mutation-cache-effects";
 
 export interface PluginPendingInteractionRequest {
   pluginId: string;
@@ -42,6 +47,7 @@ export function PluginPendingInteractionComposer({
   const pluginsSettled = usePluginFrontendsSettled();
   const inline = useContext(InlinePendingInteractionContext) !== null;
   const stopThread = useStopThread();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const slot = useMemo(
@@ -53,23 +59,37 @@ export function PluginPendingInteractionComposer({
       ),
     [request.pluginId, request.rendererId, pendingInteractions],
   );
+  const applyResolution = useCallback(
+    (resolved: PendingInteraction) => {
+      applyResolvedThreadPendingInteraction({
+        interaction: resolved,
+        queryClient,
+      });
+      invalidateThreadPendingInteractionResolutionQueries({
+        queryClient,
+        threadId: resolved.threadId,
+      });
+    },
+    [queryClient],
+  );
   const submit = useCallback(
     async (value: JsonValue) => {
       setSubmitting(true);
       setError(null);
       try {
-        await sdk.threads.interactions.respond({
+        const resolved = await sdk.threads.interactions.respond({
           interactionId: interaction.id,
           threadId: interaction.threadId,
           value,
         });
+        applyResolution(resolved);
       } catch (cause) {
         setSubmitting(false);
         setError(cause instanceof Error ? cause.message : String(cause));
         throw cause;
       }
     },
-    [interaction.id, interaction.threadId],
+    [interaction.id, interaction.threadId, applyResolution],
   );
 
   const cancel = useCallback(async () => {
@@ -79,17 +99,24 @@ export function PluginPendingInteractionComposer({
       if (origin === "provider") {
         await stopThread.mutateAsync(interaction.threadId);
       } else {
-        await sdk.threads.interactions.cancel({
+        const resolved = await sdk.threads.interactions.cancel({
           interactionId: interaction.id,
           threadId: interaction.threadId,
         });
+        applyResolution(resolved);
       }
     } catch (cause) {
       setSubmitting(false);
       setError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
     }
-  }, [origin, interaction.id, interaction.threadId, stopThread]);
+  }, [
+    origin,
+    interaction.id,
+    interaction.threadId,
+    stopThread,
+    applyResolution,
+  ]);
   const dismissLabel = origin === "plugin" ? "Cancel" : "Stop turn";
 
   return (
