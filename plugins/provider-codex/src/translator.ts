@@ -475,6 +475,8 @@ export function createCodexEventTranslator(
     args: PrepareWorkspaceWriteGitRootsArgs,
   ): PreparedWorkspaceWriteGitRoots {
     const command = args.command;
+    eventTranslationState.providerId =
+      command.options.codexExecution?.providerId ?? "codex";
     const captureWorkspaceWriteGitRoots = shouldCaptureWorkspaceWriteGitRoots(
       command.options,
     );
