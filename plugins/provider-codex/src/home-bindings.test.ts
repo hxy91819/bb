@@ -86,6 +86,7 @@ it("persists a binding, permits rename, and preserves its directory identity aft
 it.each([
   JSON.stringify([binding, binding]),
   JSON.stringify([{ ...binding, codexHome: "relative-home" }]),
+  JSON.stringify([{ ...binding, command: "relative-launcher" }]),
   JSON.stringify([{ ...binding, id: "INVALID" }]),
   "{bad-json",
 ])(
@@ -195,4 +196,31 @@ it("opens bound-provider questions, returns answers to that thread, and stops ha
   });
   expect(host.harness.sdk.callsTo("threads.events.list")).toHaveLength(1);
   expect(host.harness.pendingInteractions).toHaveLength(0);
+});
+
+it("retains a launcher binding through plugin reload and forwards its command only to that provider", async () => {
+  let host = await load();
+  await host.harness.behavior.setSettings({
+    homeBindings: JSON.stringify([{ ...binding, command: "~/bin/codex-work" }]),
+  });
+  host = await host.harness.lifecycle.reload(plugin);
+  hosts.push(host);
+  const providers = host.harness.registrations.providerRegistrations;
+  expect(
+    providers
+      .find((provider) => provider.id === "codex-work")
+      ?.experimental_deriveHostOptions?.({ hostId: "host", settings: {} }),
+  ).toEqual({
+    codexExecution: {
+      kind: "home",
+      providerId: "codex-work",
+      codexHome: binding.codexHome,
+      command: "~/bin/codex-work",
+    },
+  });
+  expect(
+    providers
+      .find((provider) => provider.id === "codex")
+      ?.experimental_deriveHostOptions?.({ hostId: "host", settings: {} }),
+  ).toEqual({ codexExecution: { kind: "default", providerId: "codex" } });
 });
