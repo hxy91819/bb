@@ -1197,6 +1197,36 @@ describe("sdk", () => {
     ]);
   });
 
+  it("records activity metadata namespace defaults and explicit overrides", async () => {
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "active-plugin",
+      sdk: { threads: { experimental_activity: async () => ({ items: [] }) } },
+    });
+    const input = {
+      mode: "details" as const,
+      threadId: "thread-1",
+      metadata: { key: "memberId", equals: "a" },
+      from: 1,
+      to: 2,
+    };
+    await bb.sdk.threads.experimental_activity(input);
+    await bb.sdk.threads.experimental_activity({
+      ...input,
+      metadata: { ...input.metadata, pluginId: "other" },
+    });
+    expect(
+      harness.inspection.sdk.callsTo("threads.experimental_activity"),
+    ).toEqual([
+      [
+        {
+          ...input,
+          metadata: { ...input.metadata, pluginId: "active-plugin" },
+        },
+      ],
+      [{ ...input, metadata: { ...input.metadata, pluginId: "other" } }],
+    ]);
+  });
+
   it("defaults metadata targets, preserves explicit targets, and validates set before stubs", async () => {
     const invoked: unknown[] = [];
     const { bb, harness } = createFakePluginHost({
