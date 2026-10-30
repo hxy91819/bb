@@ -180,10 +180,12 @@ function getRowsSeqWindowKey(rows: readonly SeqAnchoredRow[]): string {
 
 function collectSearchedMessageAncestorRowIdsInRows({
   ancestorIds,
+  match,
   rows,
   seq,
 }: {
   ancestorIds: Set<string>;
+  match: SearchMessageTarget["match"];
   rows: readonly SeqAnchoredRow[];
   seq: number;
 }): boolean {
@@ -192,20 +194,25 @@ function collectSearchedMessageAncestorRowIdsInRows({
       continue;
     }
     const nestedRows = getNestedRows(row);
-    if (nestedRows === null || nestedRows.length === 0) {
+    if (
+      nestedRows === null ||
+      (match === "sequence" && nestedRows.length === 0)
+    ) {
       ancestorIds.add(row.id);
       return true;
     }
     if (
       collectSearchedMessageAncestorRowIdsInRows({
         ancestorIds,
+        match,
         rows: nestedRows,
         seq,
       })
     ) {
       ancestorIds.add(row.id);
+      return true;
     }
-    return true;
+    if (match === "sequence") return true;
   }
   return false;
 }
@@ -219,11 +226,13 @@ export function collectSearchedMessageAncestorRowIds(
   if (messagePath !== null) {
     return new Set(messagePath.map((row) => row.id));
   }
-  if (match === "message") {
-    return new Set();
-  }
   const ancestorIds = new Set<string>();
-  collectSearchedMessageAncestorRowIdsInRows({ ancestorIds, rows, seq });
+  collectSearchedMessageAncestorRowIdsInRows({
+    ancestorIds,
+    match,
+    rows,
+    seq,
+  });
   return ancestorIds;
 }
 
@@ -383,6 +392,14 @@ export function useScrollToSearchedMessage(
       }
     }
     if (targetLeafRow === null) {
+      if (
+        targetMatch === "message" &&
+        collectSearchedMessageAncestorRowIds(rows, targetSeq, targetMatch)
+          .size > 0
+      ) {
+        setSettledLocationKey(targetLocationKey);
+        return;
+      }
       const olderLoadAttemptKey =
         loadedRange === null
           ? null
