@@ -2,6 +2,7 @@ import {
   createBbDesktopVersionFeedFileName,
   type BbDesktopVersionFeedPlatform,
 } from "@bb/desktop-contract";
+import { createDesktopUpdateReleaseBaseUrl } from "../scripts/desktop-release-channel.mjs";
 
 type DesktopReleaseChannel = "latest" | "nightly";
 
@@ -15,6 +16,7 @@ interface DesktopReleaseInfo {
 
 export function createDesktopReleaseInfo(
   channel: DesktopReleaseChannel,
+  updateBaseUrl?: string,
 ): DesktopReleaseInfo {
   const nightly = channel === "nightly";
   const releaseTag = nightly ? "desktop-nightly" : "desktop-latest";
@@ -24,7 +26,10 @@ export function createDesktopReleaseInfo(
     channel,
     iconFileName: nightly ? "icon-nightly.png" : "icon.png",
     releaseTag,
-    updateReleaseBaseUrl: `https://github.com/get-bb/bb/releases/download/${releaseTag}/`,
+    updateReleaseBaseUrl: createDesktopUpdateReleaseBaseUrl(
+      releaseTag,
+      updateBaseUrl,
+    ),
   };
 }
 
@@ -48,6 +53,7 @@ export const DESKTOP_RELEASE_CHANNEL = resolveBuiltDesktopReleaseChannel(
 );
 export const DESKTOP_RELEASE_INFO = createDesktopReleaseInfo(
   DESKTOP_RELEASE_CHANNEL,
+  process.env.BB_DESKTOP_UPDATE_BASE_URL,
 );
 const DESKTOP_UPDATE_RELEASE_BASE_URL =
   DESKTOP_RELEASE_INFO.updateReleaseBaseUrl;
