@@ -1,3 +1,4 @@
+import { queueChildThreadRetryCancelledNotificationBestEffort } from "../../services/threads/child-thread-notifications.js";
 import { refreshProviderRetirement } from "../../services/environments/environment-engine.js";
 import {
   deleteQueuedThreadMessage,
@@ -367,7 +368,9 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
     if (!deleted) {
       throw new ApiError(404, "invalid_request", "Queued message not found");
     }
-    emitPluginMessageCancelled(toThreadQueuedMessage(queuedMessage));
+    const entry = toThreadQueuedMessage(queuedMessage);
+    emitPluginMessageCancelled(entry);
+    void queueChildThreadRetryCancelledNotificationBestEffort(deps, entry);
     return context.json({ ok: true });
   });
 

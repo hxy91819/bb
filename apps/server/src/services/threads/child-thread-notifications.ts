@@ -4,9 +4,12 @@ import type {
   SystemMessageSubject,
   ThreadEventTurnStatus,
   ChildThreadOutcome,
+  ThreadQueuedMessage,
   TurnRequestEventData,
 } from "@bb/domain";
 import {
+  getThread,
+  getQueuedRetryOfTurnRequest,
   listActiveBackgroundTaskCountsByThreadIds,
   listStoredClientTurnRequestRowsByKeys,
   listStoredTurnRequestEventsForTurn,
@@ -29,6 +32,10 @@ import {
 } from "./system-message-kind.js";
 import { getLastThreadOutput } from "./thread-data.js";
 import { parseStoredTurnRequestEvent } from "./thread-events.js";
+
+import { waitForPluginTurnFailed } from "../plugins/plugin-thread-events.js";
+import { loadFailedTurn, retryChain } from "./turn-failed.js";
+import { isParentNotifiableChildThread } from "./thread-parent.js";
 
 export type ChildThreadNotificationSource = ParentSystemThreadMentionSource;
 
@@ -143,8 +150,13 @@ export interface ChildThreadTurnNotificationBatchItem {
   interruption?: ChildThreadOutcome["interruption"];
 }
 
+interface PendingChildThreadTurnNotification extends ChildThreadTurnNotificationBatchItem {
+  failedRequestId: string | null;
+}
+
 interface ChildThreadTurnNotificationBatch {
-  items: ChildThreadTurnNotificationBatchItem[];
+  items: PendingChildThreadTurnNotification[];
+  flushing: boolean;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -565,18 +577,39 @@ async function flushChildThreadTurnNotificationBatch(
   parentThreadId: string,
 ): Promise<void> {
   const batch = childThreadTurnNotificationBatches.get(parentThreadId);
-  if (!batch) {
-    return;
-  }
-  childThreadTurnNotificationBatches.delete(parentThreadId);
+  if (!batch || batch.flushing) return;
+  batch.flushing = true;
 
   try {
+    let snapshot: PendingChildThreadTurnNotification[];
+    do {
+      snapshot = batch.items;
+      await Promise.all(
+        snapshot.map((item) =>
+          item.failedRequestId === null
+            ? undefined
+            : waitForPluginTurnFailed(item.childThread.id),
+        ),
+      );
+    } while (snapshot !== batch.items);
+    childThreadTurnNotificationBatches.delete(parentThreadId);
+    const items = snapshot.filter((item) => {
+      if (item.failedRequestId === null) return true;
+      const thread = getThread(deps.db, item.childThread.id);
+      const failed = loadFailedTurn(deps.db, item.childThread.id);
+      if (!thread || failed?.request.requestId !== item.failedRequestId)
+        return false;
+      const retry = getQueuedRetryOfTurnRequest(deps.db, {
+        threadId: thread.id,
+        retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
+      });
+      return retry === null || retry.state === "failed_exhausted";
+    });
+    if (items.length === 0) return;
     await queueParentSystemMessage(deps, {
-      input: buildChildThreadTurnStatusBatchInput({
-        items: batch.items,
-      }),
+      input: buildChildThreadTurnStatusBatchInput({ items }),
       parentThreadId,
-      ...childThreadTurnStatusBatchTaxonomy(batch.items),
+      ...childThreadTurnStatusBatchTaxonomy(items),
     });
   } catch (error) {
     deps.logger.error(
@@ -590,6 +623,9 @@ async function flushChildThreadTurnNotificationBatch(
       },
       "Failed to queue batched parent turn notifications",
     );
+  } finally {
+    if (childThreadTurnNotificationBatches.get(parentThreadId) === batch)
+      childThreadTurnNotificationBatches.delete(parentThreadId);
   }
 }
 
@@ -606,7 +642,12 @@ function queueChildThreadTurnNotificationBatchItem(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: QueueChildThreadTurnNotificationArgs,
 ): void {
-  const item: ChildThreadTurnNotificationBatchItem = {
+  const item: PendingChildThreadTurnNotification = {
+    failedRequestId:
+      args.turnStatus === "failed" && !args.failureContext
+        ? (loadFailedTurn(deps.db, args.childThread.id)?.request.requestId ??
+          null)
+        : null,
     activeWorkflowCount: getChildThreadActiveWorkflowCount(deps, args),
     author: args.author ?? null,
     childThread: args.childThread,
@@ -625,17 +666,20 @@ function queueChildThreadTurnNotificationBatchItem(
         entry.failureContext === args.failureContext,
     );
     if (existingIndex === -1) {
-      existingBatch.items.push(item);
+      existingBatch.items = [...existingBatch.items, item];
     } else {
       const previous = existingBatch.items[existingIndex];
-      existingBatch.items[existingIndex] =
+      const items = [...existingBatch.items];
+      items[existingIndex] =
         item.turnStatus === "interrupted" &&
         !item.interruption &&
         previous?.turnStatus === "interrupted" &&
         previous.interruption
           ? { ...item, interruption: previous.interruption }
           : item;
+      existingBatch.items = items;
     }
+    if (existingBatch.flushing) return;
     clearTimeout(existingBatch.timer);
     existingBatch.timer = scheduleChildThreadTurnNotificationBatchFlush(
       deps,
@@ -646,6 +690,7 @@ function queueChildThreadTurnNotificationBatchItem(
 
   childThreadTurnNotificationBatches.set(args.parentThreadId, {
     items: [item],
+    flushing: false,
     timer: scheduleChildThreadTurnNotificationBatchFlush(
       deps,
       args.parentThreadId,
@@ -698,4 +743,31 @@ export async function queueChildThreadNeedsAttentionNotificationBestEffort(
       "Failed to queue parent needs-attention notification",
     );
   }
+}
+
+export async function queueChildThreadRetryCancelledNotificationBestEffort(
+  deps: LoggedPendingInteractionWorkSessionDeps,
+  entry: ThreadQueuedMessage,
+): Promise<void> {
+  if (entry.payload.kind !== "retry" || entry.state === "failed_exhausted")
+    return;
+  const thread = getThread(deps.db, entry.threadId);
+  if (
+    !thread ||
+    thread.status !== "error" ||
+    !isParentNotifiableChildThread(thread, "failed")
+  )
+    return;
+  const failed = loadFailedTurn(deps.db, thread.id);
+  if (
+    !failed ||
+    retryChain(failed.request).originalRequestId !==
+      entry.payload.retryOfTurnRequestId
+  )
+    return;
+  await queueChildThreadTurnNotificationBestEffort(deps, {
+    childThread: thread,
+    parentThreadId: thread.parentThreadId,
+    turnStatus: "failed",
+  });
 }
