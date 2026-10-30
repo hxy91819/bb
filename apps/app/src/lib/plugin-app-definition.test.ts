@@ -696,6 +696,7 @@ describe("collectPluginAppRegistrations", () => {
     ]);
     expect(registrations.threadPanelActions).toMatchObject([
       {
+        experimental_pinned: false,
         id: "issue",
         title: "Issue",
         icon: "Columns",
