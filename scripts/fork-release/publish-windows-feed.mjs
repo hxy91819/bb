@@ -43,7 +43,8 @@ async function publish() {
       tag,
       source,
     );
-    const watermarkName = "bb-fork-windows-watermark.json";
+    const watermarkPrefix = "bb-fork-windows-watermark-";
+    const watermarkName = `${watermarkPrefix}${manifest.version}.json`;
     const alias = "fork-desktop-latest";
     const response = spawnSync(
       "gh",
@@ -65,9 +66,27 @@ async function publish() {
         throw new Error("Ambiguous Windows feed release lookup");
     }
     if (existing) {
-      const checkpoints = [watermarkName, desktopManifestName].filter((name) =>
-        existing.assets.some((asset) => asset.name === name),
+      assert.ok(Number.isSafeInteger(existing.id) && existing.id > 0);
+      const pages = JSON.parse(
+        gh([
+          "api",
+          "--paginate",
+          "--slurp",
+          `repos/${repo}/releases/${existing.id}/assets?per_page=100`,
+        ]),
       );
+      assert.ok(Array.isArray(pages) && pages.every(Array.isArray));
+      existing.assets = pages.flat();
+      const checkpoints = existing.assets
+        .map((asset) => asset.name)
+        .filter(
+          (name) =>
+            name === desktopManifestName ||
+            (typeof name === "string" &&
+              /^bb-fork-windows-watermark-[0-9][a-zA-Z0-9._-]*\.json$/u.test(
+                name,
+              )),
+        );
       if (checkpoints.length === 0 && !existing.draft)
         throw new Error(
           "Published Windows feed has no provenance or version watermark",
@@ -89,6 +108,8 @@ async function publish() {
             await readFile(join(currentDir, name), "utf8"),
           );
           assert.equal(current.version, desktopVersion(current.tag));
+          if (name !== desktopManifestName)
+            assert.equal(name, `${watermarkPrefix}${current.version}.json`);
           assert.match(current.source, /^[a-f0-9]{40}$/u);
           const comparison = compareDesktopVersions(
             current.version,
@@ -138,6 +159,12 @@ async function publish() {
       ["latest.yml", "desktop-version-windows.json"],
       [desktopManifestName],
     ]) {
+      const isWatermark = names[0] === watermarkName;
+      if (
+        isWatermark &&
+        existing?.assets.some((asset) => asset.name === watermarkName)
+      )
+        continue;
       gh([
         "release",
         "upload",
@@ -145,7 +172,7 @@ async function publish() {
         "--repo",
         repo,
         ...names.map((name) => join(exact, name)),
-        "--clobber",
+        ...(isWatermark ? [] : ["--clobber"]),
       ]);
     }
     gh([

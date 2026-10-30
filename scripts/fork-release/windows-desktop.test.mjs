@@ -53,15 +53,21 @@ const args=process.argv.slice(2),root=process.env.FIXTURE_ROOT;
 fs.appendFileSync(path.join(root,'calls'),JSON.stringify(args)+'\n');
 const value=k=>args[args.indexOf(k)+1],alias=path.join(root,'alias');
 if(args[0]==='api') {
+ if(args.some(a=>a.endsWith('/assets?per_page=100'))){process.stdout.write(JSON.stringify([fs.readdirSync(alias).map(name=>({name}))]));process.exit(0)}
  if(process.env.FIXTURE_API_ERROR){process.stdout.write(JSON.stringify({status:'503',message:'Unavailable'}));process.exit(1)}
  if(!fs.existsSync(alias)){process.stdout.write(JSON.stringify({status:'404',message:'Not Found'}));process.exit(1)}
- process.stdout.write(JSON.stringify({draft:false,assets:fs.readdirSync(alias).map(name=>({name}))}));
+ process.stdout.write(JSON.stringify({id:1,draft:false,assets:fs.readdirSync(alias).map(name=>({name}))}));
 } else if(args[0]==='release'&&args[1]==='download'){
  const from=args[2]==='fork-desktop-latest'?alias:path.join(root,'immutable'),to=value('--dir');
  fs.mkdirSync(to,{recursive:true});
  for(let i=0;i<args.length;i++)if(args[i]==='--pattern')fs.copyFileSync(path.join(from,args[++i]),path.join(to,args[i]));
 } else if(args[1]==='create'){fs.mkdirSync(alias,{recursive:true})}
 else if(args[1]==='upload'){
+ if(process.env.FIXTURE_FAIL_WATERMARK==='1'){
+  const files=args.filter(a=>a.includes('/bb-fork-windows-watermark'));
+  if(files.length){for(const file of files){const target=path.join(alias,path.basename(file));if(args.includes('--clobber')&&fs.existsSync(target))fs.unlinkSync(target)}process.exit(1)}
+ }
+
  if(process.env.FIXTURE_FAIL_MANIFEST==='1'&&args.some(a=>a.endsWith('/bb-fork-windows.json')))process.exit(1);
  for(const arg of args.slice(3))if(fs.existsSync(arg)&&fs.statSync(arg).isFile())fs.copyFileSync(arg,path.join(alias,path.basename(arg)));
 }
@@ -127,7 +133,7 @@ for (const scenario of [
         const uploads = calls.filter((a) => a[1] === "upload");
         assert.equal(uploads.length, 4);
         assert.ok(
-          uploads[0].some((a) => a.endsWith("bb-fork-windows-watermark.json")),
+          uploads[0].some((a) => a.includes("bb-fork-windows-watermark-")),
         );
         assert.ok(uploads[1].some((a) => a.endsWith(".exe")));
         assert.ok(
@@ -201,6 +207,55 @@ test("an interrupted metadata promotion reserves its version against an older jo
       join(root, "alias"),
       "fork-v1.0.0-20261030.3",
       source,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a failed newer watermark upload preserves an earlier incomplete promotion", async () => {
+  const root = await mkdtemp(join(tmpdir(), "bb-windows-watermark-"));
+  try {
+    await mkdir(join(root, "bin"));
+    await writeFile(join(root, "bin/gh"), ghFixture, { mode: 0o755 });
+    writeDesktopFixture(join(root, "alias"), "fork-v1.0.0-20261030.1", source);
+    const invoke = (revision, failure) => {
+      const next = `fork-v1.0.0-20261030.${revision}`;
+      writeDesktopFixture(join(root, "local"), next, source);
+      writeDesktopFixture(join(root, "immutable"), next, source);
+      return spawnSync(
+        process.execPath,
+        [
+          resolve("scripts/fork-release/publish-windows-feed.mjs"),
+          join(root, "local"),
+          next,
+          source,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: join(root, "bin") + ":" + process.env.PATH,
+            GH_REPO: "example/fork",
+            FIXTURE_ROOT: root,
+            ...(failure === "manifest" ? { FIXTURE_FAIL_MANIFEST: "1" } : {}),
+            ...(failure === "watermark" ? { FIXTURE_FAIL_WATERMARK: "1" } : {}),
+          },
+        },
+      );
+    };
+    assert.equal(invoke(3, "manifest").status, 1);
+    assert.equal(invoke(4, "watermark").status, 1);
+    const older = invoke(2);
+    assert.equal(older.status, 0, older.stderr);
+    assert.equal(
+      JSON.parse(
+        await readFile(
+          join(root, "alias", "desktop-version-windows.json"),
+          "utf8",
+        ),
+      ).version,
+      "1.0.0-fork.20261030.3",
     );
   } finally {
     await rm(root, { recursive: true, force: true });

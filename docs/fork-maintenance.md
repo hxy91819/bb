@@ -232,7 +232,7 @@ Linux 包包含 Node 24.15.0、生产依赖、网页、服务端、host daemon�
 
 Windows 构建将桌面应用版本映射为 `<上游版本>-fork.<日期>.<序号>`，例如 `0.47.0-fork.20261030.2`，只在 CI 检出中生成，不修改仓库版本或 SDK 版本。安装器、blockmap、两种更新 metadata、SHA-256 和 `bb-fork-windows.json` 来源记录一起发布；来源记录绑定不可变 fork tag、完整 source SHA 和逐文件哈希。下载后校验 `.exe.sha256` 再安装。未配置 `WINDOWS_CERTIFICATE_PFX` / `WINDOWS_CERTIFICATE_PASSWORD` 时沿用上游无签名构建；两项必须同时配置或同时留空。
 
-Windows 自动更新使用本 fork 的独立 `fork-desktop-latest` Release，构建时固定 `BB_DESKTOP_UPDATE_BASE_URL`，不会拉取上游安装包。CI 在不可变 fork Release 发布并回读 Windows 字节后，串行更新该频道：先持久化版本水位，再上传带版本名的二进制，最后更新 feeds 和来源记录，保留旧二进制。中途中断后水位仍阻止旧任务回退频道；同 tag 重跑复用已公开的原始资产，不要求重新构建的安装器字节相同。该频道是更新指针，实际发布来源以其 `bb-fork-windows.json` 指向的不可变 fork tag 为准。
+Windows 自动更新使用本 fork 的独立 `fork-desktop-latest` Release，构建时固定 `BB_DESKTOP_UPDATE_BASE_URL`，不会拉取上游安装包。CI 在不可变 fork Release 发布并回读 Windows 字节后，串行更新该频道：先追加每个版本的独立水位（不覆盖旧水位），再上传带版本名的二进制，最后更新 feeds 和来源记录，保留旧二进制。中途中断后水位仍阻止旧任务回退频道；同 tag 重跑复用已公开的原始资产，不要求重新构建的安装器字节相同。该频道是更新指针，实际发布来源以其 `bb-fork-windows.json` 指向的不可变 fork tag 为准。
 
 流程仅使用 GitHub 自带的 `GITHUB_TOKEN`，发布 job 获得 `contents: write`；无需 npm token、Apple 签名证书或上游的 Blacksmith runner。Fork 的 Actions 需已启用。
 
