@@ -99,6 +99,20 @@ async function createSectionFrom(actionsLabel: string) {
 }
 
 describe("creating a sidebar section", () => {
+  it("keeps project selection with the host when the Threads header opens a composer", async () => {
+    const { inspection } = renderCustomSections();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "New thread in Threads" }),
+    );
+    expect(inspection.navigateCalls).toContainEqual({
+      method: "toCompose",
+      options: {
+        focusPrompt: true,
+        placement: { sectionId: null, pinned: false },
+      },
+    });
+  });
+
   it("pins new threads from the Pinned header", async () => {
     const { inspection } = renderCustomSections(true);
     fireEvent.click(
