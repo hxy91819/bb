@@ -1366,6 +1366,11 @@ function LazyTurnRowBody({
   showAssistantMessageActions,
 }: TurnRowBodyProps) {
   const { getViewRows, threadId } = useTimelineRendererStaticContext();
+  const { target } = useSearchMessageLocation();
+  const containsTarget =
+    target !== null &&
+    row.sourceSeqStart <= target.seq &&
+    target.seq <= row.sourceSeqEnd;
   const detail = useTimelineDetailRows(
     timelineDetailIdentity(row, threadId, null),
     true,
@@ -1390,6 +1395,9 @@ function LazyTurnRowBody({
             />
           ) : null}
           <TimelineRowsList
+            hasOlderTimelineRows={containsTarget && detail.hasEarlierRows}
+            isLoadingOlderTimelineRows={detail.isLoadingEarlierRows}
+            onLoadOlderRows={containsTarget ? detail.loadEarlier : undefined}
             rows={rows}
             scopeActive={false}
             showAssistantMessageActions={showAssistantMessageActions}
@@ -1440,6 +1448,11 @@ function DeferredDelegationChildRows({
   row: TimelineViewDelegationWorkRow;
 }) {
   const { getViewRows, threadId } = useTimelineRendererStaticContext();
+  const { target } = useSearchMessageLocation();
+  const containsTarget =
+    target !== null &&
+    row.sourceSeqStart <= target.seq &&
+    target.seq <= row.sourceSeqEnd;
   const detail = useTimelineDetailRows(
     timelineDetailIdentity(row, threadId, row.callId),
     true,
@@ -1480,6 +1493,9 @@ function DeferredDelegationChildRows({
       ) : null}
       {rows.length > 0 ? (
         <TimelineRowsList
+          hasOlderTimelineRows={containsTarget && detail.hasEarlierRows}
+          isLoadingOlderTimelineRows={detail.isLoadingEarlierRows}
+          onLoadOlderRows={containsTarget ? detail.loadEarlier : undefined}
           rows={rows}
           scopeActive={false}
           showAssistantMessageActions={false}
