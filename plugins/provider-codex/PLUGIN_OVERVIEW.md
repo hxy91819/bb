@@ -41,3 +41,7 @@ A binding ID stays associated with its original directory expression, including 
 Model queries for bindings check the executing host each time. When the home is logged into another account or its shared authentication file changes, the next model query replaces the old model connection; refresh usage to read the current account's limits.
 
 Fixed home bindings bypass Account Pooler and inherited pool routing. Default `codex` and the Codex AI service retain their current account selection. Homes are prepared separately on each execution machine; an unavailable login never falls back to another account. Concurrent token refresh retains Codex's existing shared-file behavior.
+
+### Credential launchers for named homes
+
+A `homeBindings` entry may set `command` to a host-local absolute or `~/` executable path. It receives `app-server` and the selected home's environment. The executable must forward arguments and preserve standard input/output for the native protocol. This supports credentials loaded inside the Codex process launch rather than placed in plugin settings. Default Codex and bindings without a command are unchanged. Missing launchers and invalid authentication probes return structured health instead of failing the health RPC.
