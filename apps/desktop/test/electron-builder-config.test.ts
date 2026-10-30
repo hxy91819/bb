@@ -563,6 +563,17 @@ describe("electron-builder signing config", () => {
     );
   });
 
+  it("packages the same distribution feed used by desktop version checks", async () => {
+    const baseUrl =
+      "https://github.com/example/fork/releases/download/fork-desktop-latest";
+    const { config } = await readResolvedConfig({
+      BB_DESKTOP_UPDATE_BASE_URL: baseUrl,
+    });
+    expect(config.publish[0].url).toBe(
+      createDesktopReleaseInfo("latest", baseUrl).updateReleaseBaseUrl,
+    );
+  });
+
   it("creates a separate nightly app identity and update feed", async () => {
     const { config } = await readResolvedConfig({
       BB_DESKTOP_RELEASE_CHANNEL: "nightly",
