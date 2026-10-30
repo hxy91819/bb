@@ -107,13 +107,23 @@ export function findAcpThoughtLevelConfigOption(
   );
 }
 
-const ACP_NATIVE_REASONING_VALUE_ALIASES_BY_LEVEL: Readonly<
+const ACP_NATIVE_REASONING_LEVEL_BY_VALUE: Readonly<
+  Partial<Record<string, ReasoningLevel>>
+> = {
+  off: "none",
+};
+
+const ACP_NATIVE_REASONING_VALUE_CANDIDATES_BY_LEVEL: Readonly<
   Partial<Record<ReasoningLevel, readonly string[]>>
 > = {
-  low: ["minimal"],
-  ultracode: ["xhigh"],
-  max: ["xhigh"],
-  ultra: ["max"],
+  none: ["none", "off"],
+  low: ["low", "minimal"],
+  medium: ["medium"],
+  high: ["high"],
+  xhigh: ["xhigh"],
+  ultracode: ["ultracode", "xhigh"],
+  max: ["max", "xhigh"],
+  ultra: ["ultra", "max"],
 };
 
 export function acpNativeReasoningLevelToValue(
@@ -126,7 +136,7 @@ export function acpNativeReasoningLevelToValue(
   if (values.has(level)) {
     return level;
   }
-  return (ACP_NATIVE_REASONING_VALUE_ALIASES_BY_LEVEL[level] ?? []).find(
+  return (ACP_NATIVE_REASONING_VALUE_CANDIDATES_BY_LEVEL[level] ?? []).find(
     (value) => values.has(value),
   );
 }
@@ -145,17 +155,19 @@ export function buildAcpNativeReasoningSupport(
   const supportedReasoningEfforts: AvailableModel["supportedReasoningEfforts"] =
     [];
   for (const option of thoughtLevelOption?.options ?? []) {
-    if (option.value === "" || seen.has(option.value)) {
+    const reasoningEffort =
+      ACP_NATIVE_REASONING_LEVEL_BY_VALUE[option.value] ?? option.value;
+    if (option.value === "" || seen.has(reasoningEffort)) {
       continue;
     }
-    seen.add(option.value);
+    seen.add(reasoningEffort);
     const name =
       option.name !== undefined && option.name.trim() !== ""
         ? option.name
         : undefined;
     supportedReasoningEfforts.push({
-      reasoningEffort: option.value,
-      ...(name !== undefined && name !== option.value ? { label: name } : {}),
+      reasoningEffort,
+      ...(name !== undefined && name !== reasoningEffort ? { label: name } : {}),
       description: readOptionDescription(option) ?? name ?? option.value,
     });
   }
@@ -170,8 +182,8 @@ export function buildAcpNativeReasoningSupport(
   return {
     supportedReasoningEfforts,
     defaultReasoningEffort:
-      currentValue !== undefined && seen.has(currentValue)
-        ? currentValue
+      currentValue !== undefined
+        ? (ACP_NATIVE_REASONING_LEVEL_BY_VALUE[currentValue] ?? currentValue)
         : supportedReasoningEfforts[0].reasoningEffort,
   };
 }
