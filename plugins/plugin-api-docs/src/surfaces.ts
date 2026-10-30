@@ -534,7 +534,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Replace the prompt box with one your plugin draws, everywhere bb shows a composer. With this, a plugin can:",
         bullets: [
           "Bring its own editor, from a plain textarea to a code editor",
-          "Search bb's @-mentions and commands, and keep bb's pills, attachments, history and voice input",
+          "Search mentions, run commands, and keep pills, attachments, history and voice input",
           "Place bb's model, mode and handoff controls where it wants them",
           "Keep other plugins' actions, popups and menu entries working inside it",
         ],
@@ -557,6 +557,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "ExperimentalComposerMentionSuggestion",
           "experimental_useComposerCommandSearch",
           "ExperimentalComposerCommandSearch",
+          "ExperimentalComposerCommandSearch.experimental_select",
           "ExperimentalComposerCommandSuggestionGroup",
           "experimental_describePromptMention",
           "experimental_promptMentionClipboardAttributes",
@@ -564,6 +565,9 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "experimental_PromptMentionIcon",
           "experimental_VoiceInputButton",
           "experimental_VoiceRecordingBar",
+        ],
+        reference: [
+          "Call ExperimentalComposerCommandSearch.experimental_select(suggestion) before inserting a command mention. True dispatches an action command through the host's shared panel action path, removes the slash query and closes the menu. False or absence keeps normal mention insertion; the core composer uses the same interface.",
         ],
         firstParty: ["Composer"],
         experimental: true,
