@@ -66,6 +66,7 @@ const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "PluginAgentToolSelection",
   "PluginBackground",
   "PluginBbSdk",
+  "ExperimentalPluginThreadActivityArgs",
   "PluginCli",
   "PluginCliCommandInfo",
   "PluginCliContext",
@@ -303,7 +304,12 @@ describe("backend plugin SDK public surface", () => {
       [...EXPECTED_BACKEND_ROOT_TYPE_EXPORTS].sort(),
     );
     expect(declaredBackendValues).toEqual(EXPECTED_BACKEND_ROOT_VALUE_EXPORTS);
-    for (const exportName of EXPECTED_BACKEND_ROOT_TYPE_EXPORTS) {
+    for (const exportName of [
+      ...EXPECTED_BACKEND_ROOT_TYPE_EXPORTS,
+      "ExperimentalThreadActivityArgs",
+      "ExperimentalThreadActivityResult",
+      "ExperimentalActivityEvidence",
+    ]) {
       expect(rootTypeExports.has(exportName), exportName).toBe(true);
     }
     for (const exportName of EXPECTED_BACKEND_ROOT_VALUE_EXPORTS) {

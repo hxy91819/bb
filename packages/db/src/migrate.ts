@@ -1409,6 +1409,51 @@ function validateAppliedMigrationHistory(
   );
 }
 
+function applyMarketplaceMigrationAfterForkActivityIndexes(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) return;
+  const legacy = db.$client
+    .prepare<[string, number, number], { hash: string }>(
+      "SELECT hash FROM __drizzle_migrations WHERE hash = ? AND created_at IN (?, ?)",
+    )
+    .get(
+      "6122ee20e6fe0c0fcabcbd106956b5188b68e6e94ac8397e7fdfa425cb6b79c3",
+      1791953791435,
+      1792377646956,
+    );
+  if (!legacy) return;
+  const expected = readExpectedAppliedMigrations(migrationsFolder);
+  const repairs = [
+    {
+      tag: "0142_burly_baron_strucker",
+      present: () =>
+        columnExists(db, "plugin_marketplaces", "source_git_subdirectory"),
+    },
+    {
+      tag: "0143_queued_message_state",
+      present: () =>
+        columnExists(db, "queued_thread_messages", "state") &&
+        !columnExists(db, "queued_thread_messages", "group_with_next"),
+    },
+    {
+      tag: "0144_thread_parent_notifications",
+      present: () => columnExists(db, "threads", "parent_notifications"),
+    },
+    { tag: "0145_terminal_sessions_status_thread_index", present: () => false },
+  ];
+  for (const repair of repairs) {
+    const migration = requireExpectedAppliedMigration(expected, repair.tag);
+    const applied = db.$client
+      .prepare("SELECT 1 FROM __drizzle_migrations WHERE created_at = ?")
+      .get(migration.createdAt);
+    if (applied) continue;
+    if (repair.present()) markMigrationApplied(db, migration);
+    else applyMigrationStatements(db, migration);
+  }
+}
+
 export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   const migrationsFolder = resolveMigrationsFolder();
   const sqlite = db.$client;
@@ -1443,10 +1488,11 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   }
   sqlite.pragma("foreign_keys = OFF");
   try {
+    stageQueuedMessageGroups(db, migrationsFolder);
+    applyMarketplaceMigrationAfterForkActivityIndexes(db, migrationsFolder);
     assertNoDuplicatePendingInteractionProviderRequests(db);
     applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
     skipEventLargeValuesRoundTripForInlineEvents(db, migrationsFolder);
-    stageQueuedMessageGroups(db, migrationsFolder);
     const stagedConnectMachineId = stageExistingConnectMachineIdColumn(
       db,
       migrationsFolder,
