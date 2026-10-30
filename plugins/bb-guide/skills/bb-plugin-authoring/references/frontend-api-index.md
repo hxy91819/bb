@@ -4,6 +4,12 @@ Use this index to check public imports from `@get-bb/plugin-sdk/app`.
 Read the other frontend references for behavior, fields, and examples.
 Read the installed SDK declarations for the exact current signatures.
 
+Creation registration: `PluginAppBuilder.experimental_threadCreationContext`,
+`experimental_AppThreadCreationContext` and
+`experimental_AppThreadCreationContextRegistration`. Forward
+`NewThreadRequest.experimental_pluginContext` unchanged; see Plugin Guide's
+Thread plugin metadata card for capture, preparation and failure semantics.
+
 ## Runtime values
 
 - `experimental_Icon`
