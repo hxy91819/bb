@@ -92,6 +92,12 @@ Interactions:
     --json                                 Machine-readable output (every subcommand)
 
   `show` prints a plugin form's `Data` so you can shape the `--value` JSON.
+  A child thread's pending interaction also notifies its parent, including
+  plugin forms opened with `ui.requestInput`. The parent can inspect the form
+  and submit an answer from existing context; ask the user when a decision is
+  missing. For Codex async questions, `Data.responseInstructions` describes the
+  answer JSON. Submit the form to close it and deliver the answer; an ordinary
+  thread message does not close the card.
   A provider's plugin-defined request cannot be cancelled; stop the thread to
   back out of it.
 
