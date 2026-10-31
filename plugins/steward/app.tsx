@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   definePluginApp,
@@ -8,13 +8,11 @@ import {
   useRealtimeConnectionState,
   useRpc,
   type PluginThreadHeaderActionProps,
+  type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
-import type {
-  Checks,
-  Registration,
-  DocumentResult,
-  rpcContract,
-} from "./contract";
+import type { Checks, Registration, rpcContract } from "./contract";
+import { documentRequest } from "./contract";
+import { GitDocumentReader } from "./document-view";
 
 const buttonClass =
   "cursor-pointer rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -63,53 +61,26 @@ function DocumentButtons({
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
   const [error, setError] = useState("");
-  const [view, setView] = useState<DocumentResult | null>(null);
-  const [selected, setSelected] = useState<"workbook" | "ledger">("workbook");
-  const [busy, setBusy] = useState(false);
-  const request = useRef(0);
-  const open = async (
-    document: "workbook" | "ledger",
-    link?: { from: string; target: string; sha: string },
-    cursor?: NonNullable<DocumentResult["next"]>,
-    append = false,
-  ) => {
-    const id = ++request.current;
-    if (!append) setView(null);
+  const open = async (document: "workbook" | "ledger") => {
     setError("");
-    setSelected(document);
-    setBusy(true);
+    if (registration.source.kind === "git") {
+      const opened = navigate.openThreadPanel({
+        actionId: "document",
+        title: document === "workbook" ? "工作簿" : "要求帐",
+        params: { document },
+      });
+      setError(
+        opened ? "" : "当前页面无法打开文档面板，请返回管家会话后重试。",
+      );
+      return;
+    }
     try {
       const status = await rpc.call("document", {
         threadId: registration.threadId,
         document,
-        ...(link ? { link } : {}),
-        ...(cursor ? { cursor } : {}),
       });
-      if (id !== request.current) return;
       if (!status.available) {
         setError(status.message);
-        return;
-      }
-      if (registration.source.kind === "git") {
-        setView((previous) =>
-          append && previous
-            ? {
-                ...status,
-                offset: previous.offset,
-                ...(status.kind === "directory"
-                  ? {
-                      entries: [
-                        ...(previous.entries ?? []),
-                        ...(status.entries ?? []),
-                      ],
-                    }
-                  : {
-                      content:
-                        (previous.content ?? "") + (status.content ?? ""),
-                    }),
-              }
-            : status,
-        );
         return;
       }
       const opened = navigate.experimental_openFilePreview({
@@ -124,10 +95,7 @@ function DocumentButtons({
         opened ? "" : "当前页面无法打开文件预览，请返回管家会话后重试。",
       );
     } catch {
-      if (id === request.current)
-        setError("文件预览暂时未就绪，请确认主机连接后重试。");
-    } finally {
-      if (id === request.current) setBusy(false);
+      setError("文件预览暂时未就绪，请确认主机连接后重试。");
     }
   };
   return (
@@ -150,155 +118,30 @@ function DocumentButtons({
       >
         {compact ? "☷" : "要求帐"}
       </button>
-      {busy && <span role="status">正在核实来源并读取…</span>}
-      {view?.snapshot && view.path && (
-        <section
-          aria-label="Git 只读文档"
-          className="basis-full space-y-2 border-t border-border p-2"
-          style={{
-            maxWidth: "min(80vw, 640px)",
-            maxHeight: "50dvh",
-            overflow: "auto",
-          }}
-        >
-          <p className="break-all">
-            {view.snapshot.repo} @ {view.snapshot.ref}
-            <br />
-            SHA：{view.snapshot.sha}
-            <br />
-            {view.path}
-          </p>
-          <p>{view.message}</p>
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() => open(selected)}
-          >
-            刷新远端文档
-          </button>
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() => {
-              request.current++;
-              setView(null);
-              setBusy(false);
-            }}
-          >
-            关闭正文
-          </button>
-          {view.kind === "directory" ? (
-            <section aria-label="Git 目录" className="space-y-1">
-              <p>
-                目录：{view.path}（已列出 {view.entries?.length ?? 0} /{" "}
-                {view.total} 项）
-              </p>
-              <button
-                type="button"
-                className={buttonClass}
-                onClick={() =>
-                  open(selected, undefined, {
-                    path: registration[selected],
-                    sha: view.snapshot!.sha,
-                    offset: 0,
-                  })
-                }
-              >
-                返回入口索引
-              </button>
-              {view.path !== "." && (
-                <button
-                  type="button"
-                  className={buttonClass}
-                  onClick={() =>
-                    open(selected, {
-                      from: `${view.path}/`,
-                      target: "../",
-                      sha: view.snapshot!.sha,
-                    })
-                  }
-                >
-                  上级目录
-                </button>
-              )}
-              <ul>
-                {view.entries?.map((entry) => (
-                  <li key={entry.path}>
-                    <button
-                      type="button"
-                      className={buttonClass}
-                      disabled={entry.kind === "unsupported"}
-                      onClick={() =>
-                        open(selected, {
-                          from: `${view.path}/`,
-                          target:
-                            encodeURIComponent(entry.name) +
-                            (entry.kind === "directory" ? "/" : ""),
-                          sha: view.snapshot!.sha,
-                        })
-                      }
-                    >
-                      {entry.name}
-                    </button>{" "}
-                    {entry.kind === "directory"
-                      ? "目录"
-                      : entry.kind === "file"
-                        ? "文件"
-                        : "不支持的对象"}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-xs">
-              {(view.content ?? "")
-                .split(/(\[[^\]]+\]\([^)]+\))/g)
-                .map((part, i) => {
-                  const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
-                  if (!match) return part;
-                  return (
-                    <button
-                      type="button"
-                      key={i}
-                      className="cursor-pointer underline"
-                      onClick={() =>
-                        open(selected, {
-                          from: view.path!,
-                          target: match[2],
-                          sha: view.snapshot!.sha,
-                        })
-                      }
-                    >
-                      {match[1]}
-                    </button>
-                  );
-                })}
-            </pre>
-          )}
-          {view.next && (
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={busy}
-              onClick={() => open(selected, undefined, view.next!, true)}
-            >
-              继续读取{view.kind === "directory" ? "目录" : "正文"}
-            </button>
-          )}
-          {view.kind === "file" && view.total !== undefined && (
-            <p>
-              {view.next ? "正文尚未完整读取" : "正文已完整读取"}（总计{" "}
-              {view.total} UTF-8 字节）
-            </p>
-          )}
-        </section>
-      )}
       {error && (
         <span role="status" className="text-xs">
           {error}
         </span>
       )}
     </div>
+  );
+}
+function DocumentPanel({ threadId, params }: ExperimentalThreadActionTabProps) {
+  const { registration, error } = useSteward(threadId);
+  const parsed = documentRequest
+    .pick({ document: true })
+    .safeParse(params ?? { document: "workbook" });
+  if (!parsed.success) return <p role="alert">无法识别文档入口。</p>;
+  if (!registration)
+    return <p role="status">{error || "尚未取得管家绑定。"}</p>;
+  if (registration.source.kind !== "git")
+    return <DocumentButtons registration={registration} />;
+  return (
+    <GitDocumentReader
+      key={`${JSON.stringify(registration)}:${parsed.data.document}`}
+      registration={registration}
+      selected={parsed.data.document}
+    />
   );
 }
 function Header({
@@ -499,6 +342,15 @@ function FloatingCard({
   );
 }
 export default definePluginApp((app) => {
+  app.slots.experimental_tab({
+    context: { kind: "thread" },
+    availability: "action",
+    id: "document",
+    title: "管家文档",
+    icon: "BookOpen",
+    component: DocumentPanel,
+    layout: "flush",
+  });
   app.slots.experimental_threadHeaderAction({
     id: "documents",
     title: "管家文件",

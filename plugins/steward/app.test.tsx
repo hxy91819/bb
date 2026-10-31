@@ -1,8 +1,61 @@
 // @vitest-environment jsdom
+import type { ExperimentalTabRegistration } from "@get-bb/plugin-sdk/app";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { expect, it, vi } from "vitest";
 import entry from "./app";
 import { registrationSchema, documentRequest } from "./contract";
+
+it("opens Git documents in the thread side panel instead of the header", async () => {
+  const app = await loadPluginApp(entry);
+  const slot = renderSlot(
+    app.threadHeaderActions[0]!,
+    { threadId: "git", projectId: "project", isCompactViewport: false },
+    {
+      rpc: {
+        show: () =>
+          registrationSchema.parse({
+            threadId: "git",
+            topic: "目标",
+            workbook: "workbook.md",
+            ledger: "ledger.md",
+            checker: "/checker.py",
+            source: { kind: "git", repo: "/repo", ref: "origin/main" },
+            schemaVersion: 1,
+            projectId: "project",
+            hostId: "host",
+            repoRoot: "/repo",
+            workbookRelativePath: "workbook.md",
+            registeredAt: "2026-10-27",
+          }),
+        document: () => ({
+          available: true,
+          message: "",
+          path: "workbook.md",
+          content: "# 目标",
+          snapshot: { repo: "/repo", ref: "origin/main", sha: "a".repeat(40) },
+        }),
+      },
+      openThreadPanel: () => true,
+    },
+  );
+  try {
+    for (const [name, document] of [
+      ["打开工作簿", "workbook"],
+      ["打开要求帐", "ledger"],
+    ]) {
+      (await slot.findByRole("button", { name })).click();
+      await vi.waitFor(() =>
+        expect(slot.inspection.navigateCalls.at(-1)).toMatchObject({
+          method: "openThreadPanel",
+          options: { actionId: "document", params: { document } },
+        }),
+      );
+    }
+    expect(slot.queryByRole("region", { name: "Git 只读文档" })).toBeNull();
+  } finally {
+    slot.unmount();
+  }
+});
 
 it("recovers a failed first read and refreshes missed registration changes after reconnect", async () => {
   const app = await loadPluginApp(entry);
@@ -138,8 +191,21 @@ it("reads Git history in the plugin at the pinned SHA and clears old content whe
   const sha = "a".repeat(40);
   let failed = false;
   const slot = renderSlot(
-    app.threadHeaderActions[0]!,
-    { threadId: "git", projectId: "project", isCompactViewport: false },
+    app.tabs.find(
+      (
+        tab,
+      ): tab is Extract<
+        ExperimentalTabRegistration,
+        {
+          context: { kind: "thread" };
+          availability: "action";
+        }
+      > =>
+        tab.context.kind === "thread" &&
+        tab.availability === "action" &&
+        tab.id === "document",
+    )!,
+    { threadId: "git", params: { document: "ledger" } },
     {
       rpc: {
         show: () =>
@@ -176,9 +242,8 @@ it("reads Git history in the plugin at the pinned SHA and clears old content whe
     },
   );
   try {
-    (await slot.findByRole("button", { name: "打开要求帐" })).click();
     await slot.findByText(`SHA：${sha}`, { exact: false });
-    (await slot.findByRole("button", { name: "旧账" })).click();
+    (await slot.findByRole("link", { name: "旧账" })).click();
     await slot.findByText("原始旧账正文");
     expect(slot.inspection.rpcCalls.at(-1)).toMatchObject({
       method: "document",
@@ -193,6 +258,9 @@ it("reads Git history in the plugin at the pinned SHA and clears old content whe
     (await slot.findByRole("button", { name: "刷新远端文档" })).click();
     await slot.findByText("远端无法核实");
     expect(slot.queryByText("原始旧账正文")).toBeNull();
+    failed = false;
+    (await slot.findByRole("button", { name: "刷新远端文档" })).click();
+    await slot.findByRole("link", { name: "旧账" });
   } finally {
     slot.unmount();
   }
