@@ -265,7 +265,7 @@ export function registerPoolCli(
           summary:
             "Sign in to Claude or Codex, import credentials, or add an Anthropic API key",
           description:
-            "--login prints the browser or device step and exits; finish it with `bb pool account login-complete` (Claude) or `bb pool account login-poll` (Codex).\n--import reads the provider's existing login on this bb server host (~/.claude or ~/.codex).",
+            "--login prints the browser or device step and exits; finish it with `bb pool account login-complete` (Claude) or `bb pool account login-poll` (Codex).\n--import reads the provider's existing login on this bb server host (~/.claude or ~/.codex). Codex --auth-file overrides the server-side auth.json path and follows symlinks.",
           unexpectedPositionalHint:
             "the provider belongs in --provider <claude|codex>, not a bare argument",
           options: {
@@ -281,6 +281,12 @@ export function registerPoolCli(
               aliases: ["import-local", "local"],
               description:
                 "Import the provider's existing login from this bb server host",
+            },
+            "auth-file": {
+              type: "string",
+              placeholder: "path",
+              description:
+                "Codex auth.json on the bb server host: absolute path or ~/ path; requires --import and follows symlinks",
             },
             "api-key": {
               type: "string",
@@ -313,6 +319,7 @@ export function registerPoolCli(
             { kind: "exactly-one", options: ["login", "import", "api-key"] },
             { kind: "at-most-one", options: ["login", "label"] },
             { kind: "at-most-one", options: ["login", "priority"] },
+            { kind: "requires", option: "auth-file", needs: ["import"] },
           ],
           run: (input) =>
             attempt(async () => {
@@ -362,7 +369,10 @@ export function registerPoolCli(
               const parsed = accountAddInputSchema.parse({
                 provider,
                 source: imported
-                  ? { kind: "import" }
+                  ? {
+                      kind: "import",
+                      authFile: input.options["auth-file"] ?? null,
+                    }
                   : { kind: "api-key", apiKey: input.options["api-key"] },
                 label: input.options.label ?? null,
                 priority: input.options.priority,
