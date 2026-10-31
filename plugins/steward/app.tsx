@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   definePluginApp,
@@ -61,7 +61,9 @@ function DocumentButtons({
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
   const [error, setError] = useState("");
+  const request = useRef(0);
   const open = async (document: "workbook" | "ledger") => {
+    const id = ++request.current;
     setError("");
     if (registration.source.kind === "git") {
       const opened = navigate.openThreadPanel({
@@ -79,6 +81,7 @@ function DocumentButtons({
         threadId: registration.threadId,
         document,
       });
+      if (id !== request.current) return;
       if (!status.available) {
         setError(status.message);
         return;
@@ -95,7 +98,8 @@ function DocumentButtons({
         opened ? "" : "当前页面无法打开文件预览，请返回管家会话后重试。",
       );
     } catch {
-      setError("文件预览暂时未就绪，请确认主机连接后重试。");
+      if (id === request.current)
+        setError("文件预览暂时未就绪，请确认主机连接后重试。");
     }
   };
   return (

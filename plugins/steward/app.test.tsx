@@ -136,6 +136,10 @@ it("floating document buttons retain the focused thread's navigation through the
   const previous = localStorage.getItem(storageKey);
   localStorage.setItem(storageKey, "false");
   const opened: string[] = [];
+  const pending: Array<
+    (result: { available: boolean; message: string }) => void
+  > = [];
+  let delayed = false;
   const slot = renderSlot(
     app.threadHeaderActions[0]!,
     { threadId: "thread", projectId: "project", isCompactViewport: false },
@@ -156,7 +160,10 @@ it("floating document buttons retain the focused thread's navigation through the
             workbookRelativePath: "workbook.md",
             registeredAt: "2026-10-27T00:00:00.000Z",
           }),
-        document: () => ({ available: true, message: "" }),
+        document: () =>
+          delayed
+            ? new Promise((resolve) => pending.push(resolve))
+            : { available: true, message: "" },
       },
       openFilePreview: (options) => {
         opened.push(options.target.path);
@@ -179,6 +186,23 @@ it("floating document buttons retain the focused thread's navigation through the
     await vi.waitFor(() =>
       expect(opened).toEqual(["/repo/workbook.md", "/repo/ledger.md"]),
     );
+    delayed = true;
+    floating
+      .querySelector<HTMLButtonElement>('button[aria-label="打开工作簿"]')!
+      .click();
+    floating
+      .querySelector<HTMLButtonElement>('button[aria-label="打开要求帐"]')!
+      .click();
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[1]!({ available: true, message: "" });
+    await vi.waitFor(() => expect(opened).toHaveLength(3));
+    pending[0]!({ available: true, message: "" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(opened).toEqual([
+      "/repo/workbook.md",
+      "/repo/ledger.md",
+      "/repo/ledger.md",
+    ]);
   } finally {
     slot.unmount();
     if (previous === null) localStorage.removeItem(storageKey);
