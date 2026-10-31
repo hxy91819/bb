@@ -55,12 +55,25 @@ remain separate from bb's bind setting.
 
 ### Use editors installed on the browser device
 
+To open remote workspaces and files in VS Code without a local bb helper, use
+Settings → Files → **VS Code over SSH**. Install VS Code and its Remote-SSH
+extension on the browser device, verify `ssh <alias>` works there, then save
+that SSH config Host alias beside the corresponding bb machine. Jump hosts
+and authentication stay in the device's SSH config. On Windows this route
+does not require WSL2 or a local bb process.
+
+Mappings are saved only in this browser for this bb origin. A mapped machine's
+VS Code actions use `vscode://` links; clearing its alias restores the existing
+helper behavior. The browser may ask to open VS Code, and SSH errors appear in
+VS Code. Handing off a link does not confirm that the connection succeeded.
+The normal file-click behavior still follows File openers.
+
 Local editor integration is optional. It connects the remote bb page to the
 loopback-only helper started by the bb desktop app or `npx bb-app` on the
 computer running the browser. The helper discovers installed editors and opens
 paths without exposing its API to the network.
 
-If that browser should open work-host files in its local editor, first make
+For helper-based opening of work-host files in local editors, first make
 sure bb is running on the browser device. Verify `ssh <work-host>` succeeds
 there, then map the server/work-host to that SSH target:
 
