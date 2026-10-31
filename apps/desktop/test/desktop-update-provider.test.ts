@@ -1,10 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  createDesktopReleaseInfo,
   createDesktopUpdateFeedUrl,
   resolveDesktopUpdateSupport,
 } from "../src/desktop-update-provider.js";
 
 describe("desktop update feed url", () => {
+  it("uses a distribution feed for version checks and updater downloads", () => {
+    const release = createDesktopReleaseInfo(
+      "latest",
+      "https://github.com/example/fork/releases/download/fork-desktop-latest",
+    );
+    expect(release.updateReleaseBaseUrl).toBe(
+      "https://github.com/example/fork/releases/download/fork-desktop-latest/",
+    );
+    expect(() =>
+      createDesktopReleaseInfo("latest", "http://example.com/updates"),
+    ).toThrow(/HTTPS/);
+    expect(() =>
+      createDesktopReleaseInfo(
+        "latest",
+        "https://example.com/updates?token=value",
+      ),
+    ).toThrow(/query/);
+  });
   it("gives each platform its own feed file inside one release tag", () => {
     expect(createDesktopUpdateFeedUrl("macos")).toBe(
       "https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version.json",
