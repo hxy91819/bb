@@ -61,7 +61,11 @@ function seedTurnEvent(
     threadId: string;
     environmentId: string;
     sequence: number;
-    type: "turn/started" | "turn/input/accepted" | "item/completed";
+    type:
+      | "turn/started"
+      | "turn/input/accepted"
+      | "turn/input/delivery"
+      | "item/completed";
     data: Record<string, unknown>;
   },
 ): void {
@@ -169,6 +173,15 @@ function seedSteeredThread(
     ],
     target: { kind: "new-turn" },
   });
+  seedTurnEvent(deps, {
+    ...ids,
+    sequence: 10,
+    type: "turn/input/delivery",
+    data: {
+      clientRequestId: encodeClientTurnRequestIdNumber({ value: 102 }),
+      delivery: "interrupted",
+    },
+  });
 }
 
 describe("thread messages", () => {
@@ -235,6 +248,9 @@ describe("thread messages", () => {
       const body = threadMessageResponseSchema.parse(await readJson(response));
       expect(body.before.map((message) => message.messageSeq)).toEqual([1, 4]);
       expect(body.message.messageSeq).toBe(5);
+      expect(body.message.turnRequest).toMatchObject({
+        delivery: "interrupted",
+      });
       expect(body.after.map((message) => message.messageSeq)).toEqual([8]);
 
       const narrow = threadMessageResponseSchema.parse(
