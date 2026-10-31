@@ -72,7 +72,7 @@ export default async function plugin(bb: BbPluginApi) {
       type: "string",
       label: "Codex home bindings",
       description:
-        "JSON list of {id, displayName, codexHome}. Paths belong to the execution machine. Bound providers use their own login and bypass Account Pooler.",
+        "JSON list of {id, displayName, codexHome, command?}. Optional command launches the local Codex app server for this binding. Paths belong to the execution machine. Bound providers bypass Account Pooler.",
       experimental_multiline: true,
       experimental_schema: z.string().superRefine((value, context) => {
         try {
@@ -196,7 +196,14 @@ function createCodexProvider(
         codexExecution:
           binding === null
             ? { kind: "default", providerId: id }
-            : { kind: "home", providerId: id, codexHome: binding.codexHome },
+            : {
+                kind: "home",
+                providerId: id,
+                codexHome: binding.codexHome,
+                ...(binding.command === undefined
+                  ? {}
+                  : { command: binding.command }),
+              },
       };
     },
     deriveProviderOptions(context) {
