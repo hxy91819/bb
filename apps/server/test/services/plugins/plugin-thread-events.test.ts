@@ -1,10 +1,18 @@
-import { getLatestThreadSequence } from "@bb/db";
+import {
+  getLatestThreadSequence,
+  listEvents,
+  listQueuedThreadMessages,
+} from "@bb/db";
 import { emitPluginThreadEvents } from "../../../src/services/plugins/plugin-thread-events.js";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { threadScope, turnScope } from "@bb/domain";
+import { threadScope, turnScope, turnRequestEventDataSchema } from "@bb/domain";
+import { groupHostDaemonEvents } from "@bb/host-daemon-contract";
+import { internalAuthHeaders } from "../../helpers/commands.js";
+import { queueChildThreadTurnNotificationBestEffort } from "../../../src/services/threads/child-thread-notifications.js";
+import { runQueuedMessageDispatch } from "../../../src/services/threads/queued-message-dispatch.js";
 import { applyLoggedThreadLifecycleEvent } from "../../../src/services/threads/lifecycle-outcome.js";
 import { beginProjectDeletion } from "../../../src/services/projects/project-deletion.js";
 import { createThreadRecord } from "../../../src/services/threads/thread-create-helpers.js";
@@ -14,11 +22,13 @@ import {
   seedEvent,
   seedThreadFixture,
   seedTurnStarted,
+  seedThreadRuntimeState,
   seedThread,
 } from "../../helpers/seed.js";
 import { createUserQuestionPayload } from "../../helpers/pending-interactions.js";
 import {
   createTestAppHarness,
+  startTestServer,
   testLogger,
   type TestAppHarness,
 } from "../../helpers/test-app.js";
@@ -46,11 +56,16 @@ interface RecordedInteractionPayload extends RecordedThreadPayload {
 
 const globals = globalThis as Record<string, unknown>;
 
-async function setUpPluginHarness(serverSource: string): Promise<{
+async function setUpPluginHarness(
+  serverSource: string,
+  withSdk = false,
+): Promise<{
   harness: TestAppHarness;
   cleanup(): Promise<void>;
 }> {
-  const harness = await createTestAppHarness();
+  const server = withSdk ? await startTestServer() : null;
+  const harness = server ?? (await createTestAppHarness());
+  if (server) server.pluginService.bindSdk({ baseUrl: server.baseUrl });
   const workDir = await mkdtemp(join(tmpdir(), "bb-plugin-events-"));
   const rootDir = join(workDir, "bb-plugin-observer");
   await mkdir(rootDir, { recursive: true });
@@ -75,7 +90,8 @@ async function setUpPluginHarness(serverSource: string): Promise<{
     async cleanup() {
       await harness.pluginService.stop();
       await rm(workDir, { recursive: true, force: true });
-      await harness.cleanup();
+      if (server) await server.close();
+      else await harness.cleanup();
     },
   };
 }
@@ -786,6 +802,283 @@ it("coalesces thread appends and delivers current status without reading history
   } finally {
     vi.useRealTimers();
     delete globals.__sequenceEvents;
+    await cleanup();
+  }
+});
+
+it.each(["exhausted", "cancelled", "completed"])(
+  "waits for the retry decision and notifies the parent when retry is %s",
+  async (outcome) => {
+    const recorded: unknown[] = [];
+    globals.__retryDecisions = recorded;
+    const { harness, cleanup } = await setUpPluginHarness(
+      `
+    export default function plugin(bb: any) {
+      bb.events.on("turn.failed", async (event: any) => {
+        (globalThis as any).__retryDecisions.push(event);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        if (event.attemptNumber === 1) {
+          await bb.sdk.threads.retry({
+            threadId: event.threadId,
+            turnRequestId: event.requestId,
+            sendAt: Date.now() + 60000,
+            reason: "Provider overloaded",
+          });
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      });
+    }
+  `,
+      true,
+    );
+    try {
+      const {
+        thread: parent,
+        environment,
+        project,
+        session,
+      } = seedThreadFixture(harness);
+      seedThreadRuntimeState(harness.deps, {
+        threadId: parent.id,
+        environmentId: environment.id,
+        providerThreadId: "parent-provider",
+      });
+      const child = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: environment.id,
+        parentThreadId: parent.id,
+        status: "active",
+      });
+      seedThreadRuntimeState(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        providerThreadId: "child-provider",
+      });
+      const notices = () =>
+        listEvents(harness.db, { threadId: parent.id })
+          .filter((row) => row.type === "client/turn/requested")
+          .map((row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)))
+          .filter((data) => data.initiator === "system");
+      const finish = async (turnId: string, status: "failed" | "completed") => {
+        seedTurnStarted(harness.deps, {
+          threadId: child.id,
+          environmentId: environment.id,
+          turnId,
+        });
+        const response = await harness.app.request("/internal/session/events", {
+          method: "POST",
+          headers: internalAuthHeaders(harness),
+          body: JSON.stringify({
+            sessionId: session.id,
+            eventGroups: groupHostDaemonEvents([
+              {
+                threadId: child.id,
+                event: {
+                  type: "turn/completed",
+                  threadId: child.id,
+                  providerThreadId: "child-provider",
+                  scope: turnScope(turnId),
+                  status,
+                },
+              },
+            ]),
+          }),
+        });
+        expect(response.status).toBe(200);
+      };
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      await finish("first-attempt", "failed");
+      await vi.waitFor(() => expect(recorded).toHaveLength(1));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(notices()).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() =>
+        expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(1),
+      );
+      expect(notices()).toHaveLength(0);
+      if (outcome === "cancelled") {
+        const queued = listQueuedThreadMessages(harness.db, child.id)[0]!;
+        const response = await harness.app.request(
+          `/api/v1/threads/${child.id}/queued-messages/${queued.id}`,
+          { method: "DELETE" },
+        );
+        expect(response.status).toBe(200);
+        await vi.advanceTimersByTimeAsync(3000);
+        await vi.waitFor(() => expect(notices()).toHaveLength(1));
+        expect(notices()[0]?.systemMessageKind).toBe("child-failed");
+        expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
+        return;
+      }
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(notices()).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(60000);
+      await runQueuedMessageDispatch(harness.deps, {
+        kind: "time-reached",
+        now: Date.now(),
+      });
+      expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
+      if (outcome === "completed") {
+        await finish("recovered-attempt", "completed");
+        await vi.advanceTimersByTimeAsync(2000);
+        await vi.waitFor(() => expect(notices()).toHaveLength(1));
+        expect(notices()[0]?.systemMessageKind).toBe("child-completed");
+        return;
+      }
+      await finish("last-attempt", "failed");
+      await vi.waitFor(() => expect(recorded).toHaveLength(2));
+      await vi.advanceTimersByTimeAsync(3000);
+      await vi.waitFor(() => expect(notices()).toHaveLength(1));
+      expect(notices()[0]?.systemMessageSubject).toMatchObject({
+        outcomes: [{ threadId: child.id, status: "failed" }],
+      });
+    } finally {
+      vi.useRealTimers();
+      delete globals.__retryDecisions;
+      await cleanup();
+    }
+  },
+);
+
+it.each(["absent", "declined", "threw", "timed-out", "retry-rejected"])(
+  "notifies the parent when the retry listener is %s",
+  async (decision) => {
+    const recorded: unknown[] = [];
+    globals.__retryDecisions = recorded;
+    const source =
+      decision === "absent"
+        ? "export default function plugin() {}"
+        : `
+      export default function plugin(bb: any) {
+        bb.events.on("turn.failed", async (event: any) => {
+          (globalThis as any).__retryDecisions.push(event);
+          if (${JSON.stringify(decision)} === "threw") throw new Error("Retry unavailable");
+          if (${JSON.stringify(decision)} === "timed-out") await new Promise(() => {});
+          if (${JSON.stringify(decision)} === "retry-rejected") await bb.sdk.threads.retry({ threadId: event.threadId, turnRequestId: "invalid" });
+        });
+      }
+    `;
+    const { harness, cleanup } = await setUpPluginHarness(source, true);
+    try {
+      const {
+        thread: parent,
+        environment,
+        project,
+      } = seedThreadFixture(harness);
+      seedThreadRuntimeState(harness.deps, {
+        threadId: parent.id,
+        environmentId: environment.id,
+        providerThreadId: "parent-provider",
+      });
+      const child = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: environment.id,
+        parentThreadId: parent.id,
+        status: "active",
+      });
+      seedThreadRuntimeState(harness.deps, {
+        threadId: child.id,
+        environmentId: environment.id,
+        providerThreadId: "child-provider",
+      });
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      applyLoggedThreadLifecycleEvent(lifecycleDeps(harness), {
+        threadId: child.id,
+        event: { type: "run.failed" },
+      });
+      await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+        childThread: child,
+        parentThreadId: parent.id,
+        turnStatus: "failed",
+      });
+      if (decision !== "absent")
+        await vi.waitFor(() => expect(recorded).toHaveLength(1));
+      await vi.advanceTimersByTimeAsync(12000);
+      await vi.waitFor(() =>
+        expect(
+          listEvents(harness.db, { threadId: parent.id }).filter(
+            (row) =>
+              row.type === "client/turn/requested" &&
+              JSON.parse(row.data).systemMessageKind === "child-failed",
+          ),
+        ).toHaveLength(1),
+      );
+      expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+      delete globals.__retryDecisions;
+      await cleanup();
+    }
+  },
+);
+
+it("keeps the original failure deadline when another child joins the batch", async () => {
+  const recorded: unknown[] = [];
+  globals.__retryDecisions = recorded;
+  const { harness, cleanup } = await setUpPluginHarness(`
+    export default function plugin(bb: any) {
+      bb.events.on("turn.failed", async (event: any) => {
+        (globalThis as any).__retryDecisions.push(event);
+        await new Promise(() => {});
+      });
+    }
+  `);
+  try {
+    const { thread: parent, environment, project } = seedThreadFixture(harness);
+    seedThreadRuntimeState(harness.deps, {
+      threadId: parent.id,
+      environmentId: environment.id,
+      providerThreadId: "parent-provider",
+    });
+    const child = seedThread(harness.deps, {
+      projectId: project.id,
+      environmentId: environment.id,
+      parentThreadId: parent.id,
+      status: "active",
+    });
+    seedThreadRuntimeState(harness.deps, {
+      threadId: child.id,
+      environmentId: environment.id,
+      providerThreadId: "child-provider",
+    });
+    const sibling = seedThread(harness.deps, {
+      projectId: project.id,
+      environmentId: environment.id,
+      parentThreadId: parent.id,
+      status: "idle",
+    });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    applyLoggedThreadLifecycleEvent(lifecycleDeps(harness), {
+      threadId: child.id,
+      event: { type: "run.failed" },
+    });
+    await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+      childThread: child,
+      parentThreadId: parent.id,
+      turnStatus: "failed",
+    });
+    await vi.waitFor(() => expect(recorded).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(3000);
+    await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+      childThread: sibling,
+      parentThreadId: parent.id,
+      turnStatus: "completed",
+    });
+    await vi.advanceTimersByTimeAsync(9000);
+    const notices = () =>
+      listEvents(harness.db, { threadId: parent.id })
+        .filter((row) => row.type === "client/turn/requested")
+        .map((row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)))
+        .filter((data) => data.initiator === "system");
+    await vi.waitFor(() => expect(notices()).toHaveLength(1));
+    expect(notices()[0]?.systemMessageSubject).toMatchObject({
+      outcomes: [
+        { threadId: child.id, status: "failed" },
+        { threadId: sibling.id, status: "completed" },
+      ],
+    });
+  } finally {
+    vi.useRealTimers();
+    delete globals.__retryDecisions;
     await cleanup();
   }
 });

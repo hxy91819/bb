@@ -1448,7 +1448,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
       emitTurnFailed(threadId) {
         // Built lazily inside the emitter: with no listener the failure path
         // pays one map lookup and never touches the database.
-        emitThreadEvent("turn.failed", () =>
+        return emitThreadEvent("turn.failed", () =>
           buildTurnFailedEvent(deps.db, threadId),
         );
       },
