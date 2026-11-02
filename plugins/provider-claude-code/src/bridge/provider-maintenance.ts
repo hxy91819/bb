@@ -268,7 +268,8 @@ function buildClaudeProviderInstallationRun(
 }
 
 async function readKeychainCredentials(): Promise<string | null> {
-  if (process.platform !== "darwin") return null;
+  if (process.platform !== "darwin" || process.env.CLAUDE_CONFIG_DIR)
+    return null;
   const argumentSets = [
     [
       "find-generic-password",
@@ -315,7 +316,10 @@ async function readCredentials(): Promise<ClaudeCredentials | null> {
   try {
     return parseCredentials(
       await fs.readFile(
-        path.join(os.homedir(), ".claude", ".credentials.json"),
+        path.join(
+          process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"),
+          ".credentials.json",
+        ),
         "utf8",
       ),
     );
@@ -328,7 +332,12 @@ async function readAccount() {
   try {
     const parsed = claudeAccountSchema.safeParse(
       JSON.parse(
-        await fs.readFile(path.join(os.homedir(), ".claude.json"), "utf8"),
+        await fs.readFile(
+          process.env.CLAUDE_CONFIG_DIR
+            ? path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json")
+            : path.join(os.homedir(), ".claude.json"),
+          "utf8",
+        ),
       ),
     );
     return parsed.success ? (parsed.data.oauthAccount ?? null) : null;
@@ -370,9 +379,41 @@ function healthResult(
       minimumSupportedVersion: null,
       canInstall: true,
       canUpdate: status !== "not_installed",
-      loginCommand: "claude auth login",
+      loginCommand: process.env.CLAUDE_CONFIG_DIR ? null : "claude auth login",
     },
   };
+}
+
+const boundAuthStatusSchema = z.object({
+  loggedIn: z.boolean(),
+  email: z.string().nullish(),
+});
+
+async function readBoundAuthStatus(
+  command: string,
+): Promise<{ loggedIn: boolean; email: string | null } | null> {
+  const attempt = (stdout: string) => {
+    try {
+      const parsed = boundAuthStatusSchema.safeParse(JSON.parse(stdout));
+      return parsed.success
+        ? { loggedIn: parsed.data.loggedIn, email: parsed.data.email ?? null }
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  try {
+    const { stdout } = await execFileAsync(
+      command,
+      ["auth", "status", "--json"],
+      { env: process.env, timeout: 10_000 },
+    );
+    return attempt(stdout);
+  } catch (error) {
+    const failure = z.object({ stdout: z.string() }).safeParse(error);
+    if (failure.success) return attempt(failure.data.stdout);
+    return null;
+  }
 }
 
 export async function getClaudeProviderHealth(): Promise<ProviderHealthResult> {
@@ -381,6 +422,19 @@ export async function getClaudeProviderHealth(): Promise<ProviderHealthResult> {
     return healthResult("not_installed");
   }
   const version = await readCliVersion(command);
+  if (process.env.CLAUDE_CONFIG_DIR) {
+    const status = await readBoundAuthStatus(command);
+    if (status === null)
+      return healthResult("unknown", {
+        installedVersion: version,
+        statusMessage:
+          "Could not read the bound Claude CLI authentication status.",
+      });
+    return healthResult(status.loggedIn ? "ready" : "unauthenticated", {
+      installedVersion: version,
+      accountEmail: status.email ?? null,
+    });
+  }
   try {
     const [credentials, email] = await Promise.all([
       readCredentials(),
@@ -459,9 +513,7 @@ function usageWindow(
 
 function scopedWindows(
   limits:
-    | (z.infer<typeof claudeScopedUsageLimitSchema> | null)[]
-    | null
-    | undefined,
+    (z.infer<typeof claudeScopedUsageLimitSchema> | null)[] | null | undefined,
 ): ProviderUsageWindow[] {
   const windows: ProviderUsageWindow[] = [];
   const seen = new Set<string>();
@@ -523,6 +575,27 @@ function normalizeUsage(
   };
 }
 
+async function boundHomeUsage(command: string): Promise<ProviderUsage | null> {
+  if (!process.env.CLAUDE_CONFIG_DIR) return null;
+  const status = await readBoundAuthStatus(command);
+  if (status === null) {
+    return {
+      status: "error",
+      message: "Could not read the bound Claude CLI authentication status.",
+      planLabel: null,
+      accountEmail: null,
+    };
+  }
+  if (!status.loggedIn) return { status: "unauthenticated" };
+  const email = z.string().email().safeParse(status.email);
+  return {
+    status: "ok",
+    accountEmail: email.success ? email.data : null,
+    planLabel: null,
+    windows: [],
+  };
+}
+
 export async function getClaudeProviderUsage(): Promise<ProviderUsageResult> {
   const command = await claudeExecutable();
   if ((await resolveExecutablePath(command)) === null) {
@@ -534,6 +607,8 @@ export async function getClaudeProviderUsage(): Promise<ProviderUsageResult> {
   ]);
   const email = account?.emailAddress ?? null;
   if (!credentials) {
+    const boundHome = await boundHomeUsage(command);
+    if (boundHome !== null) return { supported: true, usage: boundHome };
     return { supported: true, usage: { status: "unauthenticated" } };
   }
   if (credentials.expiresAt != null && Date.now() >= credentials.expiresAt) {

@@ -185,6 +185,84 @@ it("forwards validated provider-owned identity and normalization metadata while 
   }
 });
 
+it("publishes bound Claude Code homes as separate usage resources", async () => {
+  const collect = vi.fn(async () => ({
+    "claude-code": {
+      status: "ok" as const,
+      accountEmail: "main@example.com",
+      planLabel: "Pro",
+      windows: [{ label: "Weekly limit", usedPercent: 10, resetsAt: null }],
+    },
+    "claude-code-ollama": {
+      status: "ok" as const,
+      accountEmail: null,
+      planLabel: null,
+      windows: [],
+    },
+  }));
+  const { bb, harness } = createFakePluginHost({
+    sdk: {
+      hosts: {
+        list: async () => [makeHostResponse({ id: "host", status: "connected" })],
+        get: async ({ hostId }) =>
+          makeHostResponse({ id: hostId, status: "connected" }),
+      },
+      providers: {
+        list: async () => [
+          {
+            id: "claude-code",
+            displayName: "Claude Code",
+            pluginId: "provider-claude-code",
+          },
+          {
+            id: "claude-code-ollama",
+            displayName: "Claude Code · Ollama",
+            pluginId: "provider-claude-code",
+          },
+          {
+            id: "foreign",
+            displayName: "Foreign",
+            pluginId: "unrelated",
+          },
+        ],
+      },
+      system: { usageLimits: collect },
+    },
+  });
+  try {
+    plugin(bb);
+    const list = usageResourceListSchema.parse(
+      await harness.behavior.callRpc(usageListMethod, {}),
+    );
+    expect(list.resources.map((resource) => resource.id)).toEqual([
+      JSON.stringify(["host", "claude-code"]),
+      JSON.stringify(["host", "claude-code-ollama"]),
+    ]);
+    const measured = usageMeasurementSchema.parse(
+      await harness.behavior.callRpc(usageFetchMethod, {
+        resourceId: JSON.stringify(["host", "claude-code-ollama"]),
+        refresh: false,
+      }),
+    );
+    expect(measured).toMatchObject({
+      usage: { status: "ok", planLabel: null, windows: [] },
+    });
+    expect(collect).toHaveBeenCalledWith({
+      hostId: "host",
+      providerId: "claude-code-ollama",
+      refresh: false,
+    });
+    await expect(
+      harness.behavior.callRpc(usageFetchMethod, {
+        resourceId: JSON.stringify(["host", "foreign"]),
+        refresh: false,
+      }),
+    ).rejects.toThrow("Usage resource no longer exists.");
+  } finally {
+    await harness.lifecycle.dispose();
+  }
+});
+
 it("coalesces concurrent reads and makes a forced refresh wait for a fresh collection", async () => {
   let finish: (() => void) | undefined;
   const gate = new Promise<void>((resolve) => {

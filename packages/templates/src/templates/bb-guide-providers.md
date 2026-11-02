@@ -161,3 +161,15 @@ Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
 recognized without a local subscription login. A failed probe returns structured health and waits for its child process to exit.
 Startup and authentication share a ten-second health probe deadline. Successful
 launcher-managed authentication clears unrelated local account and login hints.
+
+The Claude Code plugin also supports independent `homeBindings`:
+
+  bb plugin config provider-claude-code set homeBindings '[{"id":"work","displayName":"Work","claudeConfigDir":"~/.claude-work"}]'
+  bb provider models claude-code-work
+
+Put the endpoint, credentials and model settings in that directory's
+`settings.json` on the execution machine. The binding adds a separate native
+Claude Code provider, with its own history and skill roots, and bypasses
+Account Pooler. Optional `reasoningLevels`, `defaultReasoningLevel` and
+`supportsFastMode` describe a custom endpoint's controls. See the
+Claude Code provider skill for preparation and restoration.
