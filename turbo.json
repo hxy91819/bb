@@ -742,6 +742,7 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/resource-profile.mjs",
         "$TURBO_ROOT$/plugins/*/**",
         "!$TURBO_ROOT$/plugins/*/node_modules/**",
         "!$TURBO_ROOT$/plugins/*/dist/**",
