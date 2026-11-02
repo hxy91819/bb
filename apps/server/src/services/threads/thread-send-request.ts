@@ -10,6 +10,7 @@ import type {
 import { ApiError } from "../../errors.js";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { attemptDispatch } from "./dispatch-attempt.js";
+import { cancelEnvironmentSwitchContinuation } from "./environment-switch-continuation.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { sendThreadMessage } from "./thread-send.js";
 import { assertThreadHostAcceptsWork } from "./thread-host-admission.js";
@@ -37,6 +38,7 @@ export async function acceptThreadSendRequest(
       thread: args.thread,
       trigger: "user",
     });
+    cancelEnvironmentSwitchContinuation(deps, args.thread.id);
     return { ok: true, delivery: "sent" };
   }
 
@@ -71,6 +73,7 @@ export async function acceptThreadSendRequest(
         trigger: "user",
       }),
   );
+  cancelEnvironmentSwitchContinuation(deps, args.thread.id);
   if (outcome.kind === "dispatched") {
     return { ok: true, delivery: "sent" };
   }
