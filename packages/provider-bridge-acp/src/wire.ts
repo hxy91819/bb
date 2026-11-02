@@ -244,6 +244,12 @@ export const acpInitializeResultSchema = z
       .passthrough()
       .optional(),
     authMethods: z.array(z.object({ id: z.string() }).passthrough()).optional(),
+    _meta: z
+      .object({
+        midTurnSteering: z.unknown().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 

@@ -85,6 +85,12 @@
  * - FAKE_ACP_PROMPT_ERROR=1  → reject every session/prompt request
  * - FAKE_ACP_GROK_CONTEXT=1  → advertise Grok model _meta.totalContextTokens
  *                              and prompt-result _meta.usage
+ * - FAKE_ACP_PROMPT_FAIL_TEXT=<substring>
+ *                            → reject session/prompt requests whose text
+ *                              contains it, after FAKE_ACP_PROMPT_FAIL_DELAY_MS
+ * - FAKE_ACP_PROMPT_FAIL_DELAY_MS=<ms>
+ *                            → delay before the FAKE_ACP_PROMPT_FAIL_TEXT
+ *                              rejection is sent (default 0)
  * - FAKE_ACP_COMPACT_STOP_REASON
  *                            → stop reason returned for /compact
  * - FAKE_ACP_RESUME_SESSION=1
@@ -109,6 +115,16 @@
  * - "advertise-commands"         → advertise two slash commands, twice
  * - "ask-form"                   → ask a two-field form question
  * - "ask-form-too-large"         → ask a form with more fields than bb shows
+ * - FAKE_ACP_MID_TURN_STEERING
+ *                            → advertise _meta.midTurnSteering on initialize;
+ *                              "1" sends true, "0" sends false, any other value
+ *                              is sent verbatim for malformed-metadata tests
+ * - FAKE_ACP_CONCURRENT_PROMPTS=1
+ *                            → accept overlapping session/prompt requests;
+ *                              each settles independently, session/cancel
+ *                              settles all of them
+ * - FAKE_ACP_BUSY_PROMPT=1   → reject a session/prompt while another is
+ *                              in flight with a -32602 busy error
  */
 
 import { spawn } from "node:child_process";
@@ -118,8 +134,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
 const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
-const resumeSession =
-  process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
+const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const deleteSession = process.env.FAKE_ACP_DELETE_SESSION === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
@@ -162,11 +177,28 @@ const sessionNewDelayMs = Number(
 const updatesWithSessionResponse =
   process.env.FAKE_ACP_UPDATES_WITH_SESSION_RESPONSE === "1";
 const ignoreCancel = process.env.FAKE_ACP_IGNORE_CANCEL === "1";
-const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1";
 let sessionBusyPromptsLeft = Number(
   process.env.FAKE_ACP_SESSION_BUSY_PROMPTS ?? "0",
 );
 const UNPROMPTED_DELAY_MS = 150;
+const midTurnSteeringEnv = process.env.FAKE_ACP_MID_TURN_STEERING;
+const advertiseMidTurnSteering = midTurnSteeringEnv !== undefined;
+const midTurnSteeringValue =
+  midTurnSteeringEnv === "1"
+    ? true
+    : midTurnSteeringEnv === "0"
+      ? false
+      : midTurnSteeringEnv;
+const concurrentPrompts = process.env.FAKE_ACP_CONCURRENT_PROMPTS === "1";
+const busyReject = process.env.FAKE_ACP_BUSY_PROMPT === "1";
+const busyPromptText = process.env.FAKE_ACP_BUSY_PROMPT_TEXT;
+const busyPromptDelayMs = Number(
+  process.env.FAKE_ACP_BUSY_PROMPT_DELAY_MS ?? "0",
+);
+const promptFailText = process.env.FAKE_ACP_PROMPT_FAIL_TEXT;
+const promptFailDelayMs = Number(
+  process.env.FAKE_ACP_PROMPT_FAIL_DELAY_MS ?? "0",
+);
 // `--list-models` is the agent's own model-list mode: the bridge derives its
 // list command from the launch spec's agent binary plus `modelCli.listArgs`,
 // so a list command can only ever be this binary.
@@ -200,6 +232,7 @@ const fakeModels = [
 
 let activePromptId = null;
 let stuckAfterCancel = false;
+const concurrentActivePromptIds = new Set();
 let nextAgentRequestId = 1000;
 let selectedModel = "fake/default";
 let selectedEffort = "none";
@@ -428,6 +461,7 @@ function sessionCapabilities() {
   const capabilities = {
     ...(forkSession ? { fork: {} } : {}),
     ...(resumeSession ? { resume: {} } : {}),
+    ...(deleteSession ? { delete: {} } : {}),
   };
   return Object.keys(capabilities).length > 0
     ? { sessionCapabilities: capabilities }
@@ -551,8 +585,32 @@ async function handlePrompt(message) {
     });
     return;
   }
-  activePromptId = message.id;
+  const trackConcurrent = concurrentPrompts || busyReject;
   const text = promptText(message.params?.prompt);
+  if (
+    trackConcurrent &&
+    (activePromptId !== null || concurrentActivePromptIds.size > 0)
+  ) {
+    if (
+      busyReject &&
+      (busyPromptText === undefined || text.includes(busyPromptText))
+    ) {
+      if (busyPromptDelayMs > 0) {
+        await sleep(busyPromptDelayMs);
+      }
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: { code: -32602, message: "a prompt is already in flight" },
+      });
+      return;
+    }
+    concurrentActivePromptIds.add(message.id);
+  } else if (trackConcurrent) {
+    concurrentActivePromptIds.add(message.id);
+  } else {
+    activePromptId = message.id;
+  }
   if (process.env.FAKE_ACP_PROMPT_LOG) {
     appendFileSync(
       process.env.FAKE_ACP_PROMPT_LOG,
@@ -577,6 +635,21 @@ async function handlePrompt(message) {
 
   if (process.env.FAKE_ACP_PROMPT_ERROR === "1") {
     activePromptId = null;
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      error: { code: -32000, message: "Fake prompt failure" },
+    });
+    return;
+  }
+
+  if (promptFailText !== undefined && text.includes(promptFailText)) {
+    await sleep(promptFailDelayMs);
+    if (trackConcurrent) {
+      concurrentActivePromptIds.delete(message.id);
+    } else if (activePromptId === message.id) {
+      activePromptId = null;
+    }
     send({
       jsonrpc: "2.0",
       id: message.id,
@@ -857,8 +930,15 @@ async function handlePrompt(message) {
     notifyUpdate(messageChunk(`echo:${text}`));
   }
 
-  if (activePromptId === message.id) {
-    activePromptId = null;
+  const stillActive = trackConcurrent
+    ? concurrentActivePromptIds.has(message.id)
+    : activePromptId === message.id;
+  if (stillActive) {
+    if (trackConcurrent) {
+      concurrentActivePromptIds.delete(message.id);
+    } else {
+      activePromptId = null;
+    }
     const scriptedStopReason = /stop-reason:([a-z_]+)/.exec(text)?.[1];
     const stopReason =
       text === "/compact"
@@ -904,6 +984,13 @@ async function handleMessage(message) {
             promptCapabilities: { image: false },
             ...sessionCapabilities(),
           },
+          ...(advertiseMidTurnSteering
+            ? {
+                _meta: {
+                  midTurnSteering: midTurnSteeringValue,
+                },
+              }
+            : {}),
           ...(authMethods.length > 0
             ? {
                 authMethods: [
@@ -1263,6 +1350,10 @@ async function handleMessage(message) {
         }
         send({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } });
       }
+      for (const id of concurrentActivePromptIds) {
+        send({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } });
+      }
+      concurrentActivePromptIds.clear();
       return;
     default:
       if (message.id !== undefined) {
