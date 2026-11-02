@@ -9,7 +9,11 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginPendingInteraction } from "@bb/domain";
 import type { PluginPendingInteractionProps } from "@get-bb/plugin-sdk";
@@ -37,6 +41,7 @@ import { InlinePendingInteractionContext } from "@/components/thread/pending-int
 import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 import { AppCommandProvider } from "@/components/commands/AppCommandProvider";
 import { sdk } from "@/lib/sdk";
+import { threadPendingInteractionsQueryKey } from "@/hooks/queries/query-keys";
 
 vi.mock(
   "@/hooks/queries/system-queries",
@@ -137,6 +142,73 @@ const secretsRequest = {
 };
 
 describe("PluginPendingInteractionComposer", () => {
+  it.each([
+    ["submit", "respond", "resolved"],
+    ["cancel", "cancel", "interrupted"],
+  ] as const)(
+    "closes the pending form after a confirmed %s without a realtime notification",
+    async (action, sdkMethod, status) => {
+      function Renderer({ submit, cancel }: PluginPendingInteractionProps) {
+        return (
+          <button
+            type="button"
+            onClick={() =>
+              void (action === "submit" ? submit("answer") : cancel())
+            }
+          >
+            Send answer
+          </button>
+        );
+      }
+      setPluginSlotRegistrations(
+        "secrets",
+        registrations([{ id: "secret-request", component: Renderer }]),
+      );
+      const queryClient = new QueryClient();
+      const queryKey = threadPendingInteractionsQueryKey(interaction.threadId);
+      queryClient.setQueryData(queryKey, [interaction]);
+      const respond = vi
+        .spyOn(sdk.threads.interactions, sdkMethod)
+        .mockResolvedValue({
+          ...interaction,
+          status,
+          resolvedAt: 3,
+        });
+      function PendingForms() {
+        const { data = [] } = useQuery<PluginPendingInteraction[]>({
+          queryKey,
+          enabled: false,
+        });
+        return data.length === 0 ? (
+          <p>No pending questions</p>
+        ) : (
+          <PluginPendingInteractionComposer
+            collapsedByDefault={false}
+            interaction={interaction}
+            request={secretsRequest}
+            origin="plugin"
+          />
+        );
+      }
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AppCommandProvider>
+            <PendingForms />
+          </AppCommandProvider>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Send answer" }));
+
+      await vi.waitFor(() => expect(respond).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() =>
+        expect(screen.queryByText("No pending questions")).not.toBeNull(),
+      );
+      expect(screen.queryByRole("button", { name: "Send answer" })).toBeNull();
+      queryClient.clear();
+    },
+  );
+
   it("adds path break opportunities without changing the header label", () => {
     const title = String.raw`Review /workspace/deep/path\.env.local`;
     renderComposer(
@@ -342,7 +414,11 @@ describe("PluginPendingInteractionComposer", () => {
       const call = vi
         .spyOn(sdk.threads.interactions, sdkMethod)
         .mockRejectedValueOnce(new Error("offline"))
-        .mockResolvedValueOnce(undefined as never);
+        .mockResolvedValueOnce({
+          ...interaction,
+          status: "resolved",
+          resolvedAt: 3,
+        });
       renderComposer(
         <PluginPendingInteractionComposer
           collapsedByDefault={false}
