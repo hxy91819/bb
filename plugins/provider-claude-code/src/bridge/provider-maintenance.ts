@@ -384,6 +384,38 @@ function healthResult(
   };
 }
 
+const boundAuthStatusSchema = z.object({
+  loggedIn: z.boolean(),
+  email: z.string().nullish(),
+});
+
+async function readBoundAuthStatus(
+  command: string,
+): Promise<{ loggedIn: boolean; email: string | null } | null> {
+  const attempt = (stdout: string) => {
+    try {
+      const parsed = boundAuthStatusSchema.safeParse(JSON.parse(stdout));
+      return parsed.success
+        ? { loggedIn: parsed.data.loggedIn, email: parsed.data.email ?? null }
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  try {
+    const { stdout } = await execFileAsync(
+      command,
+      ["auth", "status", "--json"],
+      { env: process.env, timeout: 10_000 },
+    );
+    return attempt(stdout);
+  } catch (error) {
+    const failure = z.object({ stdout: z.string() }).safeParse(error);
+    if (failure.success) return attempt(failure.data.stdout);
+    return null;
+  }
+}
+
 export async function getClaudeProviderHealth(): Promise<ProviderHealthResult> {
   const command = await claudeExecutable();
   if ((await resolveExecutablePath(command)) === null) {
@@ -391,38 +423,17 @@ export async function getClaudeProviderHealth(): Promise<ProviderHealthResult> {
   }
   const version = await readCliVersion(command);
   if (process.env.CLAUDE_CONFIG_DIR) {
-    try {
-      const { stdout } = await execFileAsync(
-        command,
-        ["auth", "status", "--json"],
-        { env: process.env, timeout: 10_000 },
-      );
-      const status = z
-        .object({ loggedIn: z.boolean(), email: z.string().optional() })
-        .parse(JSON.parse(stdout));
-      return healthResult(status.loggedIn ? "ready" : "unauthenticated", {
-        installedVersion: version,
-        accountEmail: status.email ?? null,
-      });
-    } catch (error) {
-      const failedStatus = z.object({ stdout: z.string() }).safeParse(error);
-      if (failedStatus.success) {
-        try {
-          const status = z
-            .object({ loggedIn: z.boolean() })
-            .parse(JSON.parse(failedStatus.data.stdout));
-          if (!status.loggedIn)
-            return healthResult("unauthenticated", {
-              installedVersion: version,
-            });
-        } catch {}
-      }
+    const status = await readBoundAuthStatus(command);
+    if (status === null)
       return healthResult("unknown", {
         installedVersion: version,
         statusMessage:
           "Could not read the bound Claude CLI authentication status.",
       });
-    }
+    return healthResult(status.loggedIn ? "ready" : "unauthenticated", {
+      installedVersion: version,
+      accountEmail: status.email ?? null,
+    });
   }
   try {
     const [credentials, email] = await Promise.all([
@@ -564,6 +575,27 @@ function normalizeUsage(
   };
 }
 
+async function boundHomeUsage(command: string): Promise<ProviderUsage | null> {
+  if (!process.env.CLAUDE_CONFIG_DIR) return null;
+  const status = await readBoundAuthStatus(command);
+  if (status === null) {
+    return {
+      status: "error",
+      message: "Could not read the bound Claude CLI authentication status.",
+      planLabel: null,
+      accountEmail: null,
+    };
+  }
+  if (!status.loggedIn) return { status: "unauthenticated" };
+  const email = z.string().email().safeParse(status.email);
+  return {
+    status: "ok",
+    accountEmail: email.success ? email.data : null,
+    planLabel: null,
+    windows: [],
+  };
+}
+
 export async function getClaudeProviderUsage(): Promise<ProviderUsageResult> {
   const command = await claudeExecutable();
   if ((await resolveExecutablePath(command)) === null) {
@@ -575,6 +607,8 @@ export async function getClaudeProviderUsage(): Promise<ProviderUsageResult> {
   ]);
   const email = account?.emailAddress ?? null;
   if (!credentials) {
+    const boundHome = await boundHomeUsage(command);
+    if (boundHome !== null) return { supported: true, usage: boundHome };
     return { supported: true, usage: { status: "unauthenticated" } };
   }
   if (credentials.expiresAt != null && Date.now() >= credentials.expiresAt) {

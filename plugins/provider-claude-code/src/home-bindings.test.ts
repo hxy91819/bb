@@ -53,6 +53,11 @@ it("registers a durable independent home, capabilities and directory identity", 
     (provider) => provider.id === "claude-code-ollama",
   );
   expect(bound?.displayName).toBe("Claude Code · Ollama");
+  expect(bound?.maintenance).toEqual({
+    health: true,
+    usage: true,
+    installation: true,
+  });
   expect(bound?.capabilities.reasoningLevels).toEqual(["low", "high", "max"]);
   expect(bound?.capabilities.supportsServiceTier).toBe(false);
   expect(

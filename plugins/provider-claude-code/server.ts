@@ -195,7 +195,7 @@ function createClaudeProvider(
     experimental_deriveHostOptions(): Readonly<Record<string, JsonValue>> {
       return binding === null ? {} : { claudeExecution: binding };
     },
-    maintenance: { health: true, usage: binding === null, installation: true },
+    maintenance: { health: true, usage: true, installation: true },
     capabilities: {
       supportsServiceTier: binding?.supportsFastMode ?? true,
       supportsNativeUserQuestion: true,
