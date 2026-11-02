@@ -19,7 +19,13 @@ import { useStore } from "jotai";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import { lookupCachedThread } from "@/lib/cached-thread";
-import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
+import { useRouteState } from "@/hooks/useRouteState";
+import { resolveSidebarNewThreadProjectId } from "@bb/client-core";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import {
+  useLastSelectedProjectId,
+  useSetRootComposeProjectId,
+} from "@/lib/root-compose-selection";
 import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
 import { useAppNavigationHost } from "@/lib/app-navigation-host";
 import { normalizeExperimentalFileOpenOptions } from "@/lib/live-file-navigation";
@@ -48,6 +54,9 @@ export function useBbNavigate(): BbNavigate {
   const queryClient = useQueryClient();
   const isCompact = useIsCompactViewport();
   const setRootComposeProjectId = useSetRootComposeProjectId();
+  const rememberedProjectId = useLastSelectedProjectId();
+  const { projectId: routeProjectId } = useRouteState();
+  const { data: navigation } = useSidebarNavigation();
   const toThread = useCallback<BbNavigate["toThread"]>(
     (threadId, options) => {
       onNavigate?.();
@@ -101,9 +110,21 @@ export function useBbNavigate(): BbNavigate {
       const replacesAutomationEditRoute =
         pluginId === AUTOMATIONS_PLUGIN_ID &&
         isAutomationEditRoutePath(location.pathname);
-      if (options?.projectId !== undefined) {
-        setRootComposeProjectId(options.projectId);
-      }
+      setRootComposeProjectId(
+        options?.projectId ??
+          resolveSidebarNewThreadProjectId({
+            availableProjectIds: navigation?.projects.map(
+              (project) => project.id,
+            ),
+            recentThreads: navigation
+              ? [...navigation.projects, navigation.personalProject].flatMap(
+                  (project) => project.threads,
+                )
+              : [],
+            rememberedProjectId,
+            routeProjectId,
+          }),
+      );
       const hostId = options?.hostId?.trim() ?? "";
       onNavigate?.();
       void navigate(getRootComposeRoutePath(), {
@@ -126,6 +147,9 @@ export function useBbNavigate(): BbNavigate {
     },
     [
       location.pathname,
+      navigation,
+      rememberedProjectId,
+      routeProjectId,
       navigate,
       onNavigate,
       pluginId,

@@ -30,6 +30,10 @@ vi.mock("@/components/commands/AppCommandProvider", () => ({
   useIsAppCommandModifierHeld: () => false,
 }));
 
+vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
+  useSidebarNavigation: () => ({ data: undefined }),
+}));
+
 vi.mock("./PluginThreadList", () => ({
   PluginThreadList: () => <div data-testid="thread-list" />,
 }));
