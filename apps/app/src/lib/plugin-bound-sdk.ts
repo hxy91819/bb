@@ -3,6 +3,7 @@ import {
   markThreadUnreadMutationOptions,
 } from "@/hooks/mutations/thread-state-mutations";
 import { createThreadMutationBatcher } from "@/hooks/mutations/thread-mutation-batcher";
+import { withThreadCreationContext } from "./thread-creation-context";
 import type {
   BbSdkAreas,
   ThreadForkArgs,
@@ -277,11 +278,19 @@ export function bindSdkToPlugin(
           pluginId: args.pluginId ?? pluginId,
         });
       },
-      fork(args: ThreadForkArgs) {
-        return sdk.threads.fork(withPluginThreadAttribution(args, pluginId));
+      async fork(args: ThreadForkArgs) {
+        return sdk.threads.fork(
+          withThreadCreationContext(
+            withPluginThreadAttribution(args, pluginId),
+          ),
+        );
       },
-      spawn(args: ThreadSpawnArgs) {
-        return sdk.threads.spawn(withPluginThreadAttribution(args, pluginId));
+      async spawn(args: ThreadSpawnArgs) {
+        return sdk.threads.spawn(
+          withThreadCreationContext(
+            withPluginThreadAttribution(args, pluginId),
+          ),
+        );
       },
     },
   };

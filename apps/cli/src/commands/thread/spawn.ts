@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import {
   jsonValueSchema,
+  experimental_validatePluginContext,
   PERSONAL_PROJECT_ID,
   threadVisibilitySchema,
   type GitBranchSelection,
@@ -47,6 +48,7 @@ const PROVIDER_HELP =
   "Provider ID for the thread. Omit to use the project's remembered provider choice";
 
 interface ThreadSpawnCommandOptions {
+  experimentalPluginContext?: string;
   prompt?: string;
   promptFile?: string;
   json?: boolean;
@@ -413,6 +415,10 @@ export function registerSpawnCommand(
       "JSON value for an --environment-provider that declares inputs (`bb environment providers --json` shows the schema)",
     )
     .option("--send-at <when>", SEND_AT_HELP)
+    .option(
+      "--experimental-plugin-context <json>",
+      "Explicit plugin creation context snapshot; no browser identity is inferred",
+    )
     .option("--origin-kind <kind>", "Thread origin: fork")
     .option("--source-thread <id>", "Source thread for a fork")
     .option(
@@ -601,6 +607,14 @@ export function registerSpawnCommand(
           });
           thread = await sdk.threads.spawn({
             origin: "cli",
+            ...(opts.experimentalPluginContext === undefined
+              ? {}
+              : {
+                  experimental_pluginContext:
+                    experimental_validatePluginContext(
+                      JSON.parse(opts.experimentalPluginContext),
+                    ),
+                }),
             projectId,
             ...(providerId ? { providerId } : {}),
             ...(opts.model ? { model: opts.model } : {}),
