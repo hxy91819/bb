@@ -6,7 +6,6 @@ import { PluginHomepageSections } from "@/components/plugin/PluginHomepageSectio
 import { usePluginComposerHost } from "@/components/plugin/plugin-composer-host";
 import { SecondaryPanelLayout } from "@/components/secondary-panel/SecondaryPanelLayout";
 import { LazyThreadSecondaryPanel } from "@/components/secondary-panel/lazySecondaryPanelComponents";
-import { PAGE_SHELL_CONTENT_STYLE } from "@/components/ui/page-shell-content-style.js";
 import {
   CHROME_ROW_HEIGHT_CLASS,
   getBbDesktopInfo,
@@ -127,10 +126,7 @@ export function RootComposeSecondaryContent({
         </div>
       ) : null}
       {isCompactHomeLayout ? (
-        <div
-          className="@container/page flex min-h-0 flex-1 flex-col"
-          style={PAGE_SHELL_CONTENT_STYLE}
-        >
+        <div className="@container/page flex min-h-0 flex-1 flex-col">
           <RootComposeCompactHome composer={children}>
             {compactScrollContent}
             <PluginHomepageSections />
@@ -144,7 +140,6 @@ export function RootComposeSecondaryContent({
               ROOT_COMPOSE_MAX_WIDTH_CLASS,
               contentClassName,
             )}
-            style={PAGE_SHELL_CONTENT_STYLE}
           >
             {children}
             <PluginHomepageSections />
