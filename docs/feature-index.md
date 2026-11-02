@@ -39,6 +39,8 @@
 
 原生 Codex 多 home 入口（`Codex`、`Codex · L`）由内置 `provider-codex` 与核心参数传递共同实现，聚合输入为 `feature/codex-home-bindings`；独立凭据启动器的通用 `command` 配置与健康探测由叠放分支 `feature/codex-home-launchers` 维护，机器路径和凭据不进入源码；保留要求见 `.fork/branches`。
 
+原生 Claude Code 多配置目录入口由内置 `provider-claude-code` 的 `homeBindings` 维护，聚合分支为 `feature/claude-home-bindings`（叠在 `feature/codex-home-bindings` 上复用主机参数传递）。每个入口使用独立 `CLAUDE_CONFIG_DIR`，可声明自定义 endpoint 的思考档位和 Fast 能力；机器路径、endpoint 凭据与模型窗口参数保存在主机原生设置，不进入源码。
+
 `/side` 主输入框快捷入口与原生侧聊入口一起保留。移动端使用原生长按 Queue/Steer，不恢复常驻第二排队按钮。迁出决定、旧分支映射和验收历史见[插件迁出说明](steward/plugin-extraction.md)。
 
 ## 聚合环境中的 Account Limits
