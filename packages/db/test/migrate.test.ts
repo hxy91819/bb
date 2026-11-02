@@ -1793,6 +1793,7 @@ describe("migrate", () => {
         keepHistoryAfterContextClear: false,
         summarizeShellCommands: true,
         providerOrder: [],
+        hiddenProviders: [],
         defaultProviderId: null,
         providerCompletedTurnDisplay: {},
         machineServerUrl: null,
