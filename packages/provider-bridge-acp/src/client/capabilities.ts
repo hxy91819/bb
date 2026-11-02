@@ -35,6 +35,7 @@ export interface AcpAgentCapabilities {
   logout: boolean;
   authMethods: AcpAuthMethod[];
   meta: AcpJsonObject;
+  initializeMeta: AcpJsonObject;
 }
 
 export class AcpUnsupportedProtocolVersionError extends Error {
@@ -162,5 +163,6 @@ export function readAcpAgentCapabilities(
     logout: isPresent(auth, "logout"),
     authMethods: decodeAuthMethods(initializeResult["authMethods"]),
     meta: readMeta(agent) ?? {},
+    initializeMeta: readMeta(initializeResult) ?? {},
   };
 }
