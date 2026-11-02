@@ -597,9 +597,13 @@ function useComposerRendererHostApi({
   useLayoutEffect(() => {
     if (focusEndKey === undefined) return;
     if (focusEndKey === lastFocusEndKeyRef.current) return;
+    if (layout === "compact") return;
+    const editor = getEditorRef.current?.();
+    if (!editor) return;
     lastFocusEndKeyRef.current = focusEndKey;
-    getEditorRef.current?.().focusEnd();
-  }, [focusEndKey]);
+    editor.focusEnd();
+    editor?.focus();
+  }, [focusEndKey, layout]);
   const attachEditor: ComposerRootHost["attachEditor"] = (getEditor) => {
     getEditorRef.current = getEditor;
     assignRef(promptBoxRef, {
