@@ -52,7 +52,7 @@ import Image from "@tiptap/extension-image";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
-import Table from "@tiptap/extension-table";
+import { Table } from "@tiptap/extension-table";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
@@ -101,6 +101,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { usePortalScopeProps } from "@/lib/portal-scope";
+import { markdownStorage } from "./markdown-storage.js";
 
 interface Vault {
   id: string;
@@ -457,7 +458,7 @@ function TiptapEditor(props: {
     else {
       const body = parseMarkdownDocument(latest.current.baseMarkdown).body;
       const root = new window.DOMParser().parseFromString(
-        editor.storage.markdown.parser.parse(
+        markdownStorage(editor).parser.parse(
           displayMarkdown(body, previewBaseUrl, notePath),
         ),
         "text/html",
@@ -493,7 +494,7 @@ function TiptapEditor(props: {
     editor = new Editor({
       element: rootRef.current,
       extensions: [
-        StarterKit,
+        StarterKit.configure({ trailingNode: false }),
         createProposalDiff({ getBaseDocument: () => baselineRef.current }),
         Link.configure({ openOnClick: false, autolink: true }),
         Image.configure({ allowBase64: false }),
@@ -562,7 +563,7 @@ function TiptapEditor(props: {
       parseMarkdownDocument(sourceRef.current).frontmatter +
       saveMarkdownBlocks(editor, blocksRef.current!, (nodes) =>
         storedMarkdown(
-          editor.storage.markdown.serializer.serialize(
+          markdownStorage(editor).serializer.serialize(
             editor.schema.topNodeType.create(null, nodes),
           ),
           previewBaseUrl,
