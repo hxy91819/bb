@@ -391,10 +391,11 @@ export function createCodexAdapter(options: {
   return {
     provider: "codex",
     upstreamName: "ChatGPT",
-    async importAccount() {
-      const imported = await (
-        options.importCredentials ?? importCodexCredentials
-      )();
+    async importAccount(authFile) {
+      const imported =
+        authFile === null
+          ? await (options.importCredentials ?? importCodexCredentials)()
+          : await importCodexCredentials(authFile);
       return {
         label: imported.email ?? "Codex account",
         email: imported.email,

@@ -371,6 +371,110 @@ const EMPTY_USAGE_URL = "data:application/json,{}";
 const CODEX_USAGE_STUB_URL = "https://usage.example/wham/usage";
 
 describe("Account Pool config schema", () => {
+  it("imports a Codex auth-file symlink through CLI and RPC and keeps credentials out of responses", async () => {
+    const fixture = await createFixture({
+      upstreamUrl: "https://upstream.example",
+      options: {
+        codexUsageUrl: "https://upstream.example/usage",
+        fetch: async () => Response.json({}),
+        importCodexCredentials: async () => {
+          throw new Error("Default credentials must not be read.");
+        },
+      },
+    });
+    const source = path.join(fixture.dataDir, "disk-auth.json");
+    const link = path.join(fixture.dataDir, "auth.json");
+    const raw = JSON.stringify({
+      tokens: {
+        access_token: testJwt({ exp: 4_102_444_800 }),
+        refresh_token: "linked-refresh-secret",
+        account_id: "linked-account",
+        id_token: testJwt({ email: "linked@example.com" }),
+      },
+    });
+    await fs.writeFile(source, raw);
+    await fs.symlink(source, link);
+    const cli = await fixture.host.harness.behavior.runCli([
+      "account",
+      "add",
+      "--provider",
+      "codex",
+      "--import",
+      "--auth-file",
+      link,
+      "--label",
+      "codexl",
+      "--json",
+    ]);
+    expect(cli.exitCode).toBe(0);
+    const added = accountSchema.parse(JSON.parse(cli.stdout).account);
+    expect(added).toMatchObject({
+      label: "codexl",
+      codexAccountId: "linked-account",
+      email: "linked@example.com",
+    });
+    expect(JSON.stringify(cli)).not.toContain("linked-refresh-secret");
+    const store = new AccountStore(
+      fixture.host.bb.storage.kv,
+      path.join(
+        fixture.dataDir,
+        "plugins",
+        "account-pool",
+        "secrets",
+        "accounts",
+      ),
+    );
+    expect(await store.readSecret(added.id)).toMatchObject({
+      refreshToken: "linked-refresh-secret",
+    });
+    const rpc = accountSchema.parse(
+      await fixture.host.harness.behavior.callRpc("account.add", {
+        provider: "codex",
+        source: { kind: "import", authFile: link },
+        label: "RPC",
+        priority: 200,
+      }),
+    );
+    expect(rpc.codexAccountId).toBe("linked-account");
+    expect(JSON.stringify(rpc)).not.toContain("linked-refresh-secret");
+    await expect(
+      fixture.host.harness.behavior.callRpc("account.add", {
+        provider: "claude",
+        source: { kind: "import", authFile: link },
+        label: null,
+        priority: 100,
+      }),
+    ).rejects.toThrow("rpc input validation failed");
+    for (const argv of [
+      ["--provider", "claude", "--import", "--auth-file", link],
+      ["--provider", "codex", "--login", "--auth-file", link],
+      ["--provider", "claude", "--api-key", "test-key", "--auth-file", link],
+      [
+        "--provider",
+        "codex",
+        "--import",
+        "--auth-file",
+        path.join(fixture.dataDir, "missing.json"),
+      ],
+      ["--provider", "codex", "--import", "--auth-file", "relative.json"],
+    ]) {
+      const result = await fixture.host.harness.behavior.runCli([
+        "account",
+        "add",
+        ...argv,
+        "--json",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(JSON.stringify(result)).not.toContain("linked-refresh-secret");
+    }
+    const accounts = z
+      .array(accountSummarySchema)
+      .parse(await fixture.host.harness.behavior.callRpc("account.list", null));
+    expect(accounts).toHaveLength(3);
+    expect(await fs.readlink(link)).toBe(source);
+    expect(await fs.readFile(source, "utf8")).toBe(raw);
+  });
+
   it("fills defaults and rejects invalid URLs and thresholds", () => {
     expect(accountPoolConfigSchema.parse({})).toEqual({
       anthropicUpstreamBaseUrl: "https://api.anthropic.com",
