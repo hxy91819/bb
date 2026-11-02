@@ -299,6 +299,7 @@ function normalizeClaudeOverageStatus(
 
 function normalizeClaudeRateLimits(
   message: ClaudeRateLimitEvent,
+  providerId: string,
 ): ProviderRateLimitState {
   const info = message.rate_limit_info;
   const windowStatus = normalizeClaudeRateLimitStatus(info.status);
@@ -312,7 +313,7 @@ function normalizeClaudeRateLimits(
   const providerKey = info.rateLimitType ?? null;
 
   return {
-    providerId: "claude-code",
+    providerId,
     status,
     kind:
       providerKey === "overage"
@@ -391,8 +392,7 @@ interface ClaudeThreadDialectState {
   latestRequestContextTokens: number | undefined;
   latestProviderCheckpointId: string | undefined;
   lastModelFallback:
-    | (ClaudeModelFallbackTransition & { segment: number })
-    | undefined;
+    (ClaudeModelFallbackTransition & { segment: number }) | undefined;
   armedHardRateLimitRejection: { detail: string; segment: number } | undefined;
   mainRunIdle: boolean;
   selectedModelContextWindow: number | null;
@@ -425,6 +425,7 @@ function createThreadState(): ClaudeThreadDialectState {
 }
 
 export interface ClaudeDeltaTranslatorOptions {
+  providerId?: string;
   cwd?: string | undefined;
   sandboxEnabled: boolean;
 }
@@ -1183,7 +1184,10 @@ export function createClaudeDeltaTranslator(
       return unexpectedSdkEventDeltas(event, context);
     }
     const message = parsedMessage.data;
-    const rateLimits = normalizeClaudeRateLimits(message);
+    const rateLimits = normalizeClaudeRateLimits(
+      message,
+      options.providerId ?? "claude-code",
+    );
     if (!isHardClaudeRateLimitRejection(message)) {
       if (
         rateLimits.status === "allowed" &&
