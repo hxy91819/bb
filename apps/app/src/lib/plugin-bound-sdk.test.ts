@@ -24,6 +24,11 @@ import type { SidebarBootstrapResponse } from "@bb/server-contract";
 import { makeThreadResponse } from "@/test/fixtures/thread-responses";
 import { bindSdkToPlugin, getPluginBoundSdk } from "./plugin-bound-sdk";
 import { createDeferredPromise } from "@bb/test-helpers";
+import {
+  collectPluginAppRegistrations,
+  definePluginApp,
+} from "./plugin-app-definition";
+import { threadCreationContextRegistry } from "./thread-creation-context";
 
 function makeSdk() {
   const threads = {
@@ -125,12 +130,14 @@ describe("bindSdkToPlugin", () => {
       prompt: "hi",
       origin: "plugin",
       originPluginId: "thread-list",
+      experimental_pluginContext: {},
     });
     await bound.threads.fork({ sourceThreadId: "thr_1" } as never);
     expect(threads.fork).toHaveBeenCalledWith({
       sourceThreadId: "thr_1",
       origin: "plugin",
       originPluginId: "thread-list",
+      experimental_pluginContext: {},
     });
   });
 
@@ -141,16 +148,19 @@ describe("bindSdkToPlugin", () => {
     expect(threads.spawn).toHaveBeenLastCalledWith({
       prompt: "hi",
       origin: "user",
+      experimental_pluginContext: {},
     });
     await bound.threads.spawn({
       prompt: "hi",
       origin: "plugin",
       originPluginId: "other",
+      experimental_pluginContext: {},
     } as never);
     expect(threads.spawn).toHaveBeenLastCalledWith({
       prompt: "hi",
       origin: "plugin",
       originPluginId: "other",
+      experimental_pluginContext: {},
     });
     await bound.threads.spawn({
       prompt: "hi",
@@ -162,7 +172,45 @@ describe("bindSdkToPlugin", () => {
       origin: "plugin",
       originPluginId: "thread-list",
       pluginMetadata: { note: 1 },
+      experimental_pluginContext: {},
     });
+  });
+
+  it("snapshots plugin selection before transport and preserves explicit snapshots", async () => {
+    const { sdk, queryClient, threads } = makeSdk();
+    const selected = { memberId: "A" };
+    const capture = vi.fn(() => selected);
+    threadCreationContextRegistry.set(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({ capture });
+        }),
+      ),
+    );
+    try {
+      const bound = bindSdkToPlugin(sdk, "thread-list", queryClient);
+      const pending = bound.threads.spawn({ prompt: "hi" } as never);
+      selected.memberId = "B";
+      const created = await pending;
+      expect(created).toMatchObject({
+        experimental_pluginContext: { team: { memberId: "A" } },
+      });
+      await bound.threads.fork({
+        sourceThreadId: "thr_1",
+        experimental_pluginContext: {},
+      });
+      expect(capture).toHaveBeenCalledTimes(1);
+      expect(threads.fork.mock.calls[0]?.[0]).toMatchObject({
+        experimental_pluginContext: {},
+      });
+      await bound.threads.spawn({ prompt: "next" } as never);
+      expect(threads.spawn.mock.calls[1]?.[0]).toMatchObject({
+        experimental_pluginContext: { team: { memberId: "B" } },
+      });
+    } finally {
+      threadCreationContextRegistry.clear();
+    }
   });
 
   it("defaults the plugin id on metadata calls without hiding an explicit one", async () => {
