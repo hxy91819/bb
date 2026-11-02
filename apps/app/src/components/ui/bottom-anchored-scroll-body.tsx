@@ -13,7 +13,6 @@ import { flushSync } from "react-dom";
 import { useStore } from "jotai";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
-import { PAGE_SHELL_CONTENT_STYLE } from "./page-shell-content-style.js";
 import { PAGE_SCROLL_TO_TOP_EVENT } from "@/lib/page-scroll-to-top";
 import { isIOSWebKit } from "@/lib/ios-webkit";
 import { threadTimelineScrollAnchorAtomFamily } from "@/lib/thread-timeline-scroll-anchor.js";
@@ -372,7 +371,6 @@ export function BottomAnchoredScrollBody({
                   maxWidthClassName,
                   contentClassName,
                 )}
-                style={PAGE_SHELL_CONTENT_STYLE}
               >
                 {children}
               </div>
