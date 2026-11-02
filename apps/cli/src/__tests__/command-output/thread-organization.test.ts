@@ -46,6 +46,33 @@ describe("bb thread organization commands", () => {
   const register: CommandRegistrar = (program) =>
     registerThreadCommands(program, () => "http://server");
 
+  it("searches a thread's complete message history with bounded pagination", async () => {
+    const search = vi.fn(async () => ({ total: 9, matches: [] }));
+    stubServerApi({ "v1.threads.:id.search.$get": search });
+    await runCommand(
+      [
+        "thread",
+        "search",
+        "中文 %_",
+        "--thread",
+        "thread-1",
+        "--limit",
+        "2",
+        "--offset",
+        "4",
+        "--json",
+      ],
+      register,
+    );
+    expect(search).toHaveBeenCalledWith({
+      param: { id: "thread-1" },
+      query: { query: "中文 %_", limit: "2", offset: "4" },
+    });
+    expect(console.log).toHaveBeenCalledWith(
+      JSON.stringify({ total: 9, matches: [] }, null, 2),
+    );
+  });
+
   it("creates a named thread section", async () => {
     const create = vi.fn(async () => ({
       id: "section-review",

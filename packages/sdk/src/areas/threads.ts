@@ -56,6 +56,7 @@ import type {
   ThreadDescendantsListResponse,
   ThreadPluginMetadataResponse,
   ThreadSearchResponse,
+  ThreadMessageSearchResponse,
   ThreadStorageFileListResponse,
   ThreadStorageLocationResponse,
   ThreadStoragePathListResponse,
@@ -121,6 +122,14 @@ export interface ThreadListArgs {
 }
 
 export interface ThreadSearchArgs extends ThreadSearchQuery {
+  signal?: AbortSignal;
+}
+
+export interface ExperimentalThreadMessageSearchArgs {
+  threadId: string;
+  query: string;
+  limit?: number;
+  offset?: number;
   signal?: AbortSignal;
 }
 
@@ -700,6 +709,9 @@ export interface ThreadsArea {
   ): Promise<ThreadRestoreEnvironmentResult>;
   retry(args: ThreadRetryArgs): Promise<ThreadRetryResult>;
   search(args: ThreadSearchArgs): Promise<ThreadSearchResult>;
+  experimental_searchMessages(
+    args: ExperimentalThreadMessageSearchArgs,
+  ): Promise<ThreadMessageSearchResponse>;
   send(args: ThreadSendArgs): Promise<ThreadSendResult>;
   spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
   /**
@@ -1500,6 +1512,25 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return transport.readJson(
         transport.api.v1.threads["resolve-mentions"].$post(
           { json: { threadIds: input.threadIds } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async experimental_searchMessages(input) {
+      return transport.readJson(
+        transport.api.v1.threads[":id"].search.$get(
+          {
+            param: { id: input.threadId },
+            query: {
+              query: input.query,
+              ...(input.limit === undefined
+                ? {}
+                : { limit: String(input.limit) }),
+              ...(input.offset === undefined
+                ? {}
+                : { offset: String(input.offset) }),
+            },
+          },
           ...signalRequestArgs(input.signal),
         ),
       );

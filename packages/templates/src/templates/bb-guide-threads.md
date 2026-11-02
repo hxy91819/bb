@@ -229,3 +229,17 @@ Experimental activity facts:
   are included, deleted threads and non-public projects excluded. Agent
   statements are not verified results. See the Plugin Guide thread metadata
   card for the experimental API and pagination limitations.
+
+Searching one conversation:
+
+  bb thread search <query> --thread <id> [--limit <1-100>] [--offset <n>]
+
+Thread-scoped search uses a literal substring, ignoring case and accents, and
+supports single characters and punctuation. It searches persisted user messages
+and assistant replies, including unloaded history; titles, system notices,
+agent-only input and tool output are excluded. Results are ordered by message
+sequence. `total` counts matching messages, not occurrences. The default page
+contains 50 messages. Snippets include UTF-16 `highlightRanges` and `sourceSeq`
+for message navigation. SDK: `threads.experimental_searchMessages({ threadId, query, limit,
+offset })`; HTTP: `GET /api/v1/threads/:id/search`. Query length is 1-1000
+characters after trimming. `--offset` requires `--thread`.

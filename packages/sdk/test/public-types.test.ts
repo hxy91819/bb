@@ -406,6 +406,7 @@ type ExpectedThreadSectionsKey = "create" | "delete" | "list" | "update";
 
 type ExpectedThreadsKey =
   | "experimental_activity"
+  | "experimental_searchMessages"
   | "experimental_listAncestors"
   | "experimental_listDescendants"
   | "experimental_listPluginMetadata"
