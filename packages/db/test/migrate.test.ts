@@ -1543,6 +1543,72 @@ describe("migrate", () => {
     prepareMigratedConnectionTemplate();
   });
 
+  it.each([1791953791435, 1792377646956])(
+    "upgrades the published fork activity-index ledger at %s without skipping upstream migrations",
+    (legacyTimestamp) => {
+      const db = createMigratedConnection();
+      try {
+        rewindQueuedMessageStateMigration(db);
+        dropMarketplaceSourceGitSubdirectoryColumn(db);
+        db.$client.exec("ALTER TABLE threads DROP COLUMN parent_notifications");
+        db.$client.exec(
+          "DROP INDEX IF EXISTS terminal_sessions_status_thread_idx",
+        );
+        db.$client.exec(
+          "DELETE FROM __drizzle_migrations WHERE created_at >= 1791840325007",
+        );
+        db.$client
+          .prepare(
+            "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+          )
+          .run(
+            "6122ee20e6fe0c0fcabcbd106956b5188b68e6e94ac8397e7fdfa425cb6b79c3",
+            legacyTimestamp,
+          );
+        db.$client.exec(
+          "INSERT INTO plugin_kv (plugin_id, key, value, updated_at) VALUES ('migration-test', 'saved', 'kept', 1)",
+        );
+        migrate(db);
+        migrate(db);
+        expect(
+          db.$client
+            .prepare(
+              "SELECT value FROM plugin_kv WHERE plugin_id = 'migration-test' AND key = 'saved'",
+            )
+            .get(),
+        ).toEqual({ value: "kept" });
+        expect(
+          db.$client
+            .prepare(
+              "SELECT source_git_subdirectory FROM plugin_marketplaces LIMIT 1",
+            )
+            .all(),
+        ).toBeDefined();
+        expect(
+          db.$client
+            .prepare("SELECT state FROM queued_thread_messages LIMIT 1")
+            .all(),
+        ).toBeDefined();
+        expect(
+          db.$client
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('events_thread_created_sequence_idx', 'thread_plugin_metadata_plugin_thread_idx')",
+            )
+            .all(),
+        ).toHaveLength(2);
+        expect(
+          db.$client
+            .prepare(
+              "SELECT created_at FROM __drizzle_migrations WHERE created_at IN (1791840325007, 1792010323040)",
+            )
+            .all(),
+        ).toHaveLength(2);
+      } finally {
+        db.$client.close();
+      }
+    },
+  );
+
   it("adds retained outputs without rewriting events", () => {
     const db = createMigratedConnection();
 
