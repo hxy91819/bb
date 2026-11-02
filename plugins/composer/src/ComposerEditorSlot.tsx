@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { EditorContent, type Editor } from "@tiptap/react";
-import { COARSE_POINTER_TEXT_BASE_CLASS } from "@/components/ui/coarse-pointer-sizing";
+import { COARSE_POINTER_INPUT_TEXT_CLASS } from "@/components/ui/coarse-pointer-sizing";
 import { cn } from "@/lib/utils";
 import {
   PromptMentionLinkContext,
@@ -49,7 +49,7 @@ export function ComposerEditorSlot({
       aria-busy={inputLocked || undefined}
       className={cn(
         "w-full overflow-y-auto bg-transparent px-4 pb-1 pr-14 pt-3 outline-none",
-        COARSE_POINTER_TEXT_BASE_CLASS,
+        COARSE_POINTER_INPUT_TEXT_CLASS,
         "leading-relaxed",
         isCompactLayout && "h-12 overflow-hidden pb-0 pr-2 pt-0",
       )}
