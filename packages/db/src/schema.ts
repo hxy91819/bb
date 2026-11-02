@@ -703,7 +703,13 @@ export const threadPluginMetadata = sqliteTable(
     pluginId: text("plugin_id").notNull(),
     metadataJson: text("metadata_json").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.threadId, table.pluginId] })],
+  (table) => [
+    primaryKey({ columns: [table.threadId, table.pluginId] }),
+    index("thread_plugin_metadata_plugin_thread_idx").on(
+      table.pluginId,
+      table.threadId,
+    ),
+  ],
 );
 
 export const threadTabs = sqliteTable("thread_tabs", {
@@ -811,6 +817,11 @@ export const events = sqliteTable(
   (table) => [
     uniqueIndex("events_thread_sequence_idx").on(
       table.threadId,
+      table.sequence,
+    ),
+    index("events_thread_created_sequence_idx").on(
+      table.threadId,
+      table.createdAt,
       table.sequence,
     ),
     index("events_delegating_item_lookup_idx")
