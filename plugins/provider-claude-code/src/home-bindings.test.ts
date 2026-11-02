@@ -1,7 +1,9 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import Database from "better-sqlite3";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   createFakePluginHost,
   type FakePluginHost,
@@ -106,3 +108,32 @@ it.each([
     ).toBe(true);
   },
 );
+
+it("creates durable binding storage only after the first home is configured", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bb-claude-lazy-storage-"));
+  directories.push(directory);
+  const databasePath = join(directory, "data.db");
+  const host = createFakePluginHost({
+    pluginId: "provider-claude-code",
+    experimental_declaredIconNames: ["./icons/claude-code.svg"],
+  });
+  hosts.push(host);
+  let connection: Database.Database | undefined;
+  const storage = vi
+    .spyOn(host.bb.storage, "database")
+    .mockImplementation(() => {
+      connection ??= new Database(databasePath);
+      return connection;
+    });
+  try {
+    await plugin(host.bb);
+    expect(existsSync(databasePath)).toBe(false);
+    await host.harness.behavior.setSettings({
+      homeBindings: JSON.stringify([binding]),
+    });
+    expect(existsSync(databasePath)).toBe(true);
+  } finally {
+    storage.mockRestore();
+    connection?.close();
+  }
+});
