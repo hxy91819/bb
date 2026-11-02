@@ -290,6 +290,7 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalPluginProviderEnvEntry`
 - `ExperimentalPluginProviderEnvHealthContext`
 - `ExperimentalPluginProviderEnvHealth`
+- `ExperimentalPluginProviderHostOptionsContext`
 - `PluginProviderExtensionKindDeclaration`
 - `PluginProviderFallbackModel`
 - `PluginProviderIconRegistration`

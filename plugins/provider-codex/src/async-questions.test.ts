@@ -127,11 +127,14 @@ describe("Codex async questions", () => {
     expect(host.harness.sdk.callsTo("threads.send")).toEqual([]);
   });
 
-  it("ignores threads from other providers", async () => {
-    const host = createHost([questionRow(5)]);
+  it.each(["claude-code", "codex-unregistered"])(
+    "ignores unowned provider %s",
+    async (providerId) => {
+      const host = createHost([questionRow(5)]);
 
-    await notify(host, "claude-code");
+      await notify(host, providerId);
 
-    expect(host.harness.sdk.callsTo("threads.events.list")).toEqual([]);
-  });
+      expect(host.harness.sdk.callsTo("threads.events.list")).toEqual([]);
+    },
+  );
 });

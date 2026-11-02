@@ -21,6 +21,7 @@ import type { ApprovalsReviewer } from "./generated/codex-app-server/schema/v2/A
 import { mapBbReasoningLevelToCodex } from "./models.js";
 
 export type CodexSessionOptions = {
+  codexExecution?: import("./execution-context.js").CodexExecutionContext;
   model?: string;
   serviceTier?: ServiceTier;
   reasoningLevel?: ReasoningLevel;

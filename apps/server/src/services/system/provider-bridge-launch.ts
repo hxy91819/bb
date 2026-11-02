@@ -6,6 +6,7 @@ import type { AppDeps } from "../../types.js";
 export function resolveBridgeLaunchForProviderId(
   deps: Pick<AppDeps, "providerRegistry" | "pluginHostArtifacts">,
   providerId: string,
+  hostId: string,
 ): HostDaemonBridgeLaunch | null {
   const registration = deps.providerRegistry.get(providerId);
   if (
@@ -29,7 +30,10 @@ export function resolveBridgeLaunchForProviderId(
   return {
     pluginId,
     source,
-    providerOptions: { ...registration.bridgeOptions },
+    providerOptions: {
+      ...registration.bridgeOptions,
+      ...registration.deriveHostOptions?.(hostId),
+    },
     envPassthrough: [...registration.envPassthrough],
     capabilities: {
       providerInstallation: registration.info.maintenance.installation,
@@ -45,6 +49,7 @@ export function resolveBridgeLaunchForProviderId(
 export function requireBridgeLaunchForProviderId(
   deps: Pick<AppDeps, "providerRegistry" | "pluginHostArtifacts">,
   providerId: string,
+  hostId: string,
 ): HostDaemonBridgeLaunch {
   if (deps.providerRegistry.disabledProviderIds().has(providerId)) {
     throw new ApiError(
@@ -53,7 +58,11 @@ export function requireBridgeLaunchForProviderId(
       `Provider "${providerId}" is disabled. Enable it in Settings → Providers to start a new turn.`,
     );
   }
-  const bridgeLaunch = resolveBridgeLaunchForProviderId(deps, providerId);
+  const bridgeLaunch = resolveBridgeLaunchForProviderId(
+    deps,
+    providerId,
+    hostId,
+  );
   if (bridgeLaunch === null) {
     throw new ApiError(
       409,
