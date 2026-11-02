@@ -268,7 +268,8 @@ function buildClaudeProviderInstallationRun(
 }
 
 async function readKeychainCredentials(): Promise<string | null> {
-  if (process.platform !== "darwin") return null;
+  if (process.platform !== "darwin" || process.env.CLAUDE_CONFIG_DIR)
+    return null;
   const argumentSets = [
     [
       "find-generic-password",
@@ -315,7 +316,10 @@ async function readCredentials(): Promise<ClaudeCredentials | null> {
   try {
     return parseCredentials(
       await fs.readFile(
-        path.join(os.homedir(), ".claude", ".credentials.json"),
+        path.join(
+          process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"),
+          ".credentials.json",
+        ),
         "utf8",
       ),
     );
@@ -328,7 +332,12 @@ async function readAccount() {
   try {
     const parsed = claudeAccountSchema.safeParse(
       JSON.parse(
-        await fs.readFile(path.join(os.homedir(), ".claude.json"), "utf8"),
+        await fs.readFile(
+          process.env.CLAUDE_CONFIG_DIR
+            ? path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json")
+            : path.join(os.homedir(), ".claude.json"),
+          "utf8",
+        ),
       ),
     );
     return parsed.success ? (parsed.data.oauthAccount ?? null) : null;
@@ -370,7 +379,7 @@ function healthResult(
       minimumSupportedVersion: null,
       canInstall: true,
       canUpdate: status !== "not_installed",
-      loginCommand: "claude auth login",
+      loginCommand: process.env.CLAUDE_CONFIG_DIR ? null : "claude auth login",
     },
   };
 }
@@ -381,6 +390,40 @@ export async function getClaudeProviderHealth(): Promise<ProviderHealthResult> {
     return healthResult("not_installed");
   }
   const version = await readCliVersion(command);
+  if (process.env.CLAUDE_CONFIG_DIR) {
+    try {
+      const { stdout } = await execFileAsync(
+        command,
+        ["auth", "status", "--json"],
+        { env: process.env, timeout: 10_000 },
+      );
+      const status = z
+        .object({ loggedIn: z.boolean(), email: z.string().optional() })
+        .parse(JSON.parse(stdout));
+      return healthResult(status.loggedIn ? "ready" : "unauthenticated", {
+        installedVersion: version,
+        accountEmail: status.email ?? null,
+      });
+    } catch (error) {
+      const failedStatus = z.object({ stdout: z.string() }).safeParse(error);
+      if (failedStatus.success) {
+        try {
+          const status = z
+            .object({ loggedIn: z.boolean() })
+            .parse(JSON.parse(failedStatus.data.stdout));
+          if (!status.loggedIn)
+            return healthResult("unauthenticated", {
+              installedVersion: version,
+            });
+        } catch {}
+      }
+      return healthResult("unknown", {
+        installedVersion: version,
+        statusMessage:
+          "Could not read the bound Claude CLI authentication status.",
+      });
+    }
+  }
   try {
     const [credentials, email] = await Promise.all([
       readCredentials(),
@@ -459,9 +502,7 @@ function usageWindow(
 
 function scopedWindows(
   limits:
-    | (z.infer<typeof claudeScopedUsageLimitSchema> | null)[]
-    | null
-    | undefined,
+    (z.infer<typeof claudeScopedUsageLimitSchema> | null)[] | null | undefined,
 ): ProviderUsageWindow[] {
   const windows: ProviderUsageWindow[] = [];
   const seen = new Set<string>();

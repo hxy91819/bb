@@ -150,3 +150,15 @@ Absolute paths and `~/` expressions are accepted. File logins and auth symlinks
 are reused; fixed bindings bypass Account Pooler. Renaming a label is supported;
 changing a directory requires a new ID. Restore a removed binding with the same
 ID and home to continue its threads. See the Codex provider skill for preparation.
+
+The Claude Code plugin also supports independent `homeBindings`:
+
+  bb plugin config provider-claude-code set homeBindings '[{"id":"work","displayName":"Work","claudeConfigDir":"~/.claude-work"}]'
+  bb provider models claude-code-work
+
+Put the endpoint, credentials and model settings in that directory's
+`settings.json` on the execution machine. The binding adds a separate native
+Claude Code provider, with its own history and skill roots, and bypasses
+Account Pooler. Optional `reasoningLevels`, `defaultReasoningLevel` and
+`supportsFastMode` describe a custom endpoint's controls. See the
+Claude Code provider skill for preparation and restoration.

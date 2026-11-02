@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+import {
+  resolveClaudeExecution,
+  claudeExecutionEnv,
+} from "../execution-context.js";
+import type { ClaudeHomeBinding } from "../home-bindings.js";
 import { ClaudeContextUsageCollector } from "./context-usage.js";
 import { readIsolatedClaudeContextUsage } from "./context-usage-probe.js";
 
@@ -207,8 +212,7 @@ interface PendingUserQuestionRequest extends PendingInteractiveRequestBase {
 }
 
 type PendingInteractiveRequest =
-  | PendingPermissionRequest
-  | PendingUserQuestionRequest;
+  PendingPermissionRequest | PendingUserQuestionRequest;
 
 interface ClaudeSessionPermissionGrant {
   permissions: PendingInteractionGrantedPermissionProfile;
@@ -312,9 +316,7 @@ interface ClaudeLiveSessionSettings {
 }
 
 type SessionConstructionParams =
-  | ThreadStartParams
-  | ThreadResumeParams
-  | ThreadForkParams;
+  ThreadStartParams | ThreadResumeParams | ThreadForkParams;
 
 interface ReplaceThreadSessionArgs {
   attachment: ThreadAttachment;
@@ -1111,6 +1113,9 @@ function createThreadSession(attachment: ThreadAttachment): ThreadSession {
   );
 
   const translator = createClaudeDeltaTranslator({
+    providerId: selectedExecution
+      ? `claude-code-${selectedExecution.id}`
+      : "claude-code",
     cwd: attachment.sessionConstructionConfig.sessionOptions.cwd,
     sandboxEnabled: attachment.sessionOptions.sandbox?.enabled === true,
   });
@@ -2205,7 +2210,40 @@ function createCanUseTool(threadIdRef: ThreadIdRef): CanUseTool {
   };
 }
 
+let selectedExecution: ClaudeHomeBinding | null | undefined;
+
+function selectExecution(request: ClaudeCodeJsonRpcRequest): void {
+  if (
+    request.method === "initialize" ||
+    request.method === "skills/configure" ||
+    request.method === "thread/stop" ||
+    request.method === "thread/discard"
+  )
+    return;
+  const params = request.params;
+  const options = "options" in params ? params.options : undefined;
+  const providerOptions = z
+    .object({ providerOptions: z.unknown().optional() })
+    .parse(options ?? params).providerOptions;
+  const binding = resolveClaudeExecution(providerOptions);
+  if (selectedExecution !== undefined) {
+    if (
+      selectedExecution?.id !== binding?.id ||
+      selectedExecution?.claudeConfigDir !== binding?.claudeConfigDir
+    )
+      throw new Error("A Claude provider process cannot switch home bindings.");
+    selectedExecution = binding;
+    return;
+  }
+  const env = claudeExecutionEnv(binding, process.env);
+  for (const name of Object.keys(process.env))
+    if (!(name in env)) delete process.env[name];
+  Object.assign(process.env, env);
+  selectedExecution = binding;
+}
+
 async function handleRequest(request: ClaudeCodeJsonRpcRequest): Promise<void> {
+  selectExecution(request);
   switch (request.method) {
     case "initialize":
       const result: InitializeResult = {
@@ -2227,7 +2265,37 @@ async function handleRequest(request: ClaudeCodeJsonRpcRequest): Promise<void> {
       break;
     case "model/list":
       try {
-        sendResult(request.id, await listModelsMemoized());
+        const cachedCatalog = await listModelsMemoized();
+        const catalog = structuredClone(cachedCatalog);
+        const binding = selectedExecution;
+        if (binding?.reasoningLevels) {
+          for (const model of [
+            ...catalog.models,
+            ...catalog.selectedOnlyModels,
+          ]) {
+            model.supportedReasoningEfforts = binding.reasoningLevels.map(
+              (reasoningEffort) => ({
+                reasoningEffort,
+                description: `${reasoningEffort} reasoning effort`,
+              }),
+            );
+            model.defaultReasoningEffort =
+              binding.defaultReasoningLevel ??
+              (binding.reasoningLevels.some(
+                (level) => level === model.defaultReasoningEffort,
+              )
+                ? model.defaultReasoningEffort
+                : binding.reasoningLevels[0]!);
+          }
+        }
+        if (binding?.supportsFastMode === false) {
+          for (const model of [
+            ...catalog.models,
+            ...catalog.selectedOnlyModels,
+          ])
+            model.supportedServiceTiers = [];
+        }
+        sendResult(request.id, catalog);
       } catch (error) {
         if (error instanceof MissingClaudeCliError) {
           sendError(
