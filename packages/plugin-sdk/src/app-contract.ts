@@ -2555,6 +2555,10 @@ export interface ExperimentalComposerCommandSuggestionGroup {
 
 /** What `experimental_useComposerCommandSearch` returns. */
 export interface ExperimentalComposerCommandSearch {
+  /** Handle action commands before inserting a command mention; false keeps normal insertion. */
+  experimental_select?(
+    suggestion: ExperimentalComposerCommandSuggestion,
+  ): boolean;
   /** `"idle"` without a query. */
   status: "idle" | "loading" | "error" | "ready";
   /** Earlier results are showing while newer ones load. */
