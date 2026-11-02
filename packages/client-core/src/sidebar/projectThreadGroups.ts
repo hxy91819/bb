@@ -1,4 +1,5 @@
 import type { ThreadListEntry } from "@bb/domain";
+import { compareCodepoint } from "../codepoint-compare.js";
 import {
   getCollapsedChildActivity,
   type CollapsedChildActivity,
@@ -43,6 +44,54 @@ interface BuildThreadNodeArgs {
   draftThreadIds: ReadonlySet<string>;
   thread: ThreadListEntry;
   visitedThreadIds: Set<string>;
+}
+
+export type StandardThreadSortFields = Pick<
+  ThreadListEntry,
+  "id" | "status" | "createdAt" | "latestAttentionAt"
+>;
+
+export function compareByCreatedAtDescending(
+  left: StandardThreadSortFields,
+  right: StandardThreadSortFields,
+): number {
+  const createdAtDelta = right.createdAt - left.createdAt;
+  if (createdAtDelta !== 0) {
+    return createdAtDelta;
+  }
+
+  return compareCodepoint(left.id, right.id);
+}
+
+function compareByLatestAttentionAtDescending(
+  left: StandardThreadSortFields,
+  right: StandardThreadSortFields,
+): number {
+  const latestAttentionAtDelta =
+    right.latestAttentionAt - left.latestAttentionAt;
+  if (latestAttentionAtDelta !== 0) {
+    return latestAttentionAtDelta;
+  }
+
+  return compareByCreatedAtDescending(left, right);
+}
+
+export function compareStandardThreads(
+  left: StandardThreadSortFields,
+  right: StandardThreadSortFields,
+): number {
+  const leftIsActive = left.status === "active";
+  const rightIsActive = right.status === "active";
+
+  if (leftIsActive !== rightIsActive) {
+    return leftIsActive ? -1 : 1;
+  }
+
+  if (leftIsActive) {
+    return compareByCreatedAtDescending(left, right);
+  }
+
+  return compareByLatestAttentionAtDescending(left, right);
 }
 
 function getNodeAndDescendantThreads(
