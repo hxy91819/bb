@@ -3695,3 +3695,9 @@ Before stabilization, verify:
 - Alignment with `ThreadChatMessageReference.experimental_messageSeq` and
   whether the option stabilizes as `messageSeq` or retains parity with message references.
 - Multi-pane split layouts when navigating between messages across different panes.
+
+## `ExperimentalTabRegistration.experimental_pinned`
+
+Declares the action's null-params tab as always present and non-closable on existing thread surfaces while the registration is active. The app uses the ordinary plugin-panel tab identity, persisted selection, rendering, navigation and open/close paths. It preserves panel visibility and the selected tab; parameterized tabs remain closable. Disabling or removing the registration releases the pin, leaving the persisted tab under the ordinary unavailable-plugin behavior. The New thread surface is unaffected; older hosts ignore the opt-in.
+
+Stabilization requires live verification of initial and hydrated thread state, language/title updates, reload/disable/re-enable, close shortcuts, parameterized siblings and mobile tab navigation. Core callers are `useThreadFileTabs`, `ThreadDetailView` and the shared secondary-panel tab strip; native controls, SDK `openThreadPanel` and CLI thread tab operations use the same persisted tab model. Bookmarks is an external consumer; no bookmark-specific core policy is added.
