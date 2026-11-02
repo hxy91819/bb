@@ -1123,6 +1123,9 @@ function seedHistoryUserRequest(
     sequence: number;
     text: string;
     threadId: string;
+    model?: string;
+    reasoningLevel?: string;
+    serviceTier?: string;
   },
 ): void {
   seedEvent(harness.deps, {
@@ -1137,9 +1140,9 @@ function seedHistoryUserRequest(
       input: [{ type: "text", text: args.text }],
       target: { kind: "new-turn" },
       execution: {
-        model: "gpt-5",
-        serviceTier: "default",
-        reasoningLevel: "medium",
+        model: args.model ?? "gpt-5",
+        serviceTier: args.serviceTier ?? "default",
+        reasoningLevel: args.reasoningLevel ?? "medium",
         permissionMode: "full",
         source: "client/turn/requested",
       },
@@ -1153,7 +1156,15 @@ function seedHistoryUserRequest(
 
 function seedConversationForkSource(
   harness: TestAppHarness,
-  args: { providerId?: string; runningThirdTurn?: boolean } = {},
+  args: {
+    providerId?: string;
+    runningThirdTurn?: boolean;
+    laterExecution?: {
+      model: string;
+      reasoningLevel: string;
+      serviceTier: string;
+    };
+  } = {},
 ) {
   const { host } = seedHostSession(harness.deps);
   const { project } = seedProjectWithSource(harness.deps, {
@@ -1212,6 +1223,7 @@ function seedConversationForkSource(
     requestId: secondRequestId,
     sequence: 6,
     text: "Reply only with the word second.",
+    ...args.laterExecution,
   });
   seedEvent(harness.deps, {
     ...base,
@@ -1306,6 +1318,74 @@ async function waitForForkStart(harness: TestAppHarness, forkId: string) {
 }
 
 describe("fork branch point and inherited history", () => {
+  it.each([
+    { sourceSeqEnd: 5, visibility: "visible" },
+    { sourceSeqEnd: 5, visibility: "hidden" },
+    { sourceSeqEnd: undefined, visibility: "visible" },
+  ])(
+    "inherits boundary execution at $sourceSeqEnd for $visibility forks and later sends",
+    async ({ sourceSeqEnd, visibility }) => {
+      await withTestHarness(async (harness) => {
+        const laterExecution = {
+          model: "gpt-5-mini",
+          reasoningLevel: "high",
+          serviceTier: "fast",
+        };
+        const expected =
+          sourceSeqEnd === undefined
+            ? laterExecution
+            : {
+                model: "gpt-5",
+                reasoningLevel: "medium",
+                serviceTier: "default",
+              };
+        const { sourceThread } = seedConversationForkSource(harness, {
+          runningThirdTurn: false,
+          laterExecution,
+        });
+        const response = await postFork(harness, {
+          sourceThreadId: sourceThread.id,
+          sourceSeqEnd,
+          visibility,
+        });
+        expect(response.status).toBe(201);
+        const fork = threadResponseSchema.parse(await readJson(response));
+        const start = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "thread.start" && command.threadId === fork.id,
+        );
+        if (start.command.type !== "thread.start")
+          throw new Error("Expected thread.start");
+        expect(start.command.options).toMatchObject(expected);
+        await reportQueuedCommandSuccess(harness, start, {
+          providerThreadId: "provider-boundary-child",
+        });
+        const send = await harness.app.request(
+          `/api/v1/threads/${fork.id}/send`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              input: [{ type: "text", text: "Continue" }],
+              mode: "auto",
+              permissionMode: "full",
+            }),
+          },
+        );
+        expect(send.status).toBe(200);
+        const turn = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "turn.submit" && command.threadId === fork.id,
+        );
+        if (turn.command.type !== "turn.submit")
+          throw new Error("Expected turn.submit");
+        expect(turn.command.options).toMatchObject(expected);
+      });
+    },
+  );
+
   function referenceAttachmentInHistory(
     harness: TestAppHarness,
     threadId: string,

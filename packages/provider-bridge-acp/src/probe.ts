@@ -20,6 +20,7 @@ export type AcpAgentProbe =
   | {
       reachable: true;
       fork: boolean;
+      checkpointFork?: boolean;
     }
   | { reachable: false; reason: string };
 
@@ -76,6 +77,7 @@ export async function probeAcpAgent(
     return {
       reachable: true,
       fork: result.session.fork,
+      checkpointFork: result.session.checkpointFork,
     };
   } catch (error) {
     return { reachable: false, reason: describe(error) };
@@ -85,6 +87,10 @@ export async function probeAcpAgent(
 }
 
 export const acpAgentProbeSchema: z.ZodType<AcpAgentProbe> = z.union([
-  z.object({ reachable: z.literal(true), fork: z.boolean() }),
+  z.object({
+    reachable: z.literal(true),
+    fork: z.boolean(),
+    checkpointFork: z.boolean().optional(),
+  }),
   z.object({ reachable: z.literal(false), reason: z.string() }),
 ]);
