@@ -170,6 +170,8 @@ does not verify a desktop plugin dependency install.
 
 ### Windows (NSIS, x64)
 
+Distributors can set `BB_DESKTOP_UPDATE_BASE_URL` when building and packaging to use their own HTTPS release directory for both version checks and electron-updater downloads. Include a trailing slash or it will be added. This is a build setting: the URL is compiled into the desktop entries and must match the packaging setting; changing a running app's environment does not replace it. Unset builds keep the upstream stable/nightly feeds. Turbo includes the setting in the desktop build cache identity.
+
 Windows packaging needs a Windows x64 host; `afterPack` refuses to cross-build
 because it verifies the packaged native modules by loading them. From the repo
 root, install with `pnpm install --frozen-lockfile --ignore-scripts`, then build
