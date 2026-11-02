@@ -32,10 +32,10 @@ vi.mock("node:child_process", () => ({
       callback(null, { stdout: state.authStdout, stderr: "" });
       return;
     }
-    callback(
-      new Error(`unexpected command: ${args.join(" ")}`),
-      { stdout: "", stderr: "" },
-    );
+    callback(new Error(`unexpected command: ${args.join(" ")}`), {
+      stdout: "",
+      stderr: "",
+    });
   },
 }));
 
@@ -185,8 +185,18 @@ describe("Claude Code usage reporting", () => {
         planLabel: "Pro",
         plan: { id: "pro", multiplier: null },
         windows: [
-          { kind: "five-hour", label: "Current session", usedPercent: 20, resetsAt: null },
-          { kind: "weekly", label: "Weekly limit", usedPercent: 40, resetsAt: null },
+          {
+            kind: "five-hour",
+            label: "Current session",
+            usedPercent: 20,
+            resetsAt: null,
+          },
+          {
+            kind: "weekly",
+            label: "Weekly limit",
+            usedPercent: 40,
+            resetsAt: null,
+          },
         ],
       },
     });

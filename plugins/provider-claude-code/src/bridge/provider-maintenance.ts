@@ -513,7 +513,9 @@ function usageWindow(
 
 function scopedWindows(
   limits:
-    (z.infer<typeof claudeScopedUsageLimitSchema> | null)[] | null | undefined,
+    | (z.infer<typeof claudeScopedUsageLimitSchema> | null)[]
+    | null
+    | undefined,
 ): ProviderUsageWindow[] {
   const windows: ProviderUsageWindow[] = [];
   const seen = new Set<string>();

@@ -203,7 +203,9 @@ it("publishes bound Claude Code homes as separate usage resources", async () => 
   const { bb, harness } = createFakePluginHost({
     sdk: {
       hosts: {
-        list: async () => [makeHostResponse({ id: "host", status: "connected" })],
+        list: async () => [
+          makeHostResponse({ id: "host", status: "connected" }),
+        ],
         get: async ({ hostId }) =>
           makeHostResponse({ id: hostId, status: "connected" }),
       },
