@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
+
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, cleanup, render } from "@testing-library/react";
@@ -642,16 +644,18 @@ describe("hidden sidebar thread list", () => {
                 <SidebarProvider>
                   <Sidebar>
                     <SidebarContent>
-                      <ThreadActionCollectors
-                        coreRegistrations={CORE_THREAD_ACTIONS}
-                        requestRename={() => {}}
-                      />
-                      <ThreadActionSurfaceVisibility visible={false}>
-                        <PluginThreadList
-                          replacement={replacement}
-                          onNavigate={() => {}}
+                      <ThreadListContributions>
+                        <ThreadActionCollectors
+                          coreRegistrations={CORE_THREAD_ACTIONS}
+                          requestRename={() => {}}
                         />
-                      </ThreadActionSurfaceVisibility>
+                        <ThreadActionSurfaceVisibility visible={false}>
+                          <PluginThreadList
+                            replacement={replacement}
+                            onNavigate={() => {}}
+                          />
+                        </ThreadActionSurfaceVisibility>
+                      </ThreadListContributions>
                     </SidebarContent>
                   </Sidebar>
                 </SidebarProvider>

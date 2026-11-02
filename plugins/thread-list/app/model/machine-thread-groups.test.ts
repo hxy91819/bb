@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { makeSidebarThread, type SidebarThreadOverrides } from "./fixtures.js";
+import {
+  makeSidebarEnvironment,
+  makeSidebarThread,
+  type SidebarThreadOverrides,
+} from "./fixtures.js";
 import {
   buildMachineThreadGroups,
   NO_MACHINE_GROUP_KEY,
 } from "./machine-thread-groups.js";
+import { buildContributedThreadGroups } from "./contributed-thread-groups.js";
+import {
+  buildProjectThreadGroups,
+  getProjectThreadItemDescendants,
+} from "./project-thread-groups.js";
 import type { SidebarThread } from "./sidebar-thread.js";
 
 function createThread(overrides: SidebarThreadOverrides): SidebarThread {
@@ -68,7 +77,9 @@ describe("buildMachineThreadGroups", () => {
 
     const groups = buildMachineThreadGroups(threads, hosts);
 
-    expect(groups.map((group) => ({ key: group.key, threads: group.threads }))).toEqual([
+    expect(
+      groups.map((group) => ({ key: group.key, threads: group.threads })),
+    ).toEqual([
       { key: "host_a", threads: [] },
       { key: "host_b", threads },
     ]);
@@ -83,5 +94,68 @@ describe("buildMachineThreadGroups", () => {
     const groups = buildMachineThreadGroups(threads, []);
 
     expect(groups.map((group) => group.key)).toEqual(["host_a", "host_b"]);
+  });
+});
+
+describe.each([
+  {
+    name: "machine",
+    build: (threads: SidebarThread[]) =>
+      buildMachineThreadGroups(threads, [
+        { id: "a", name: "A" },
+        { id: "b", name: "B" },
+      ]),
+  },
+  {
+    name: "public contribution",
+    build: (threads: SidebarThread[]) =>
+      buildContributedThreadGroups(threads, "adapter/owners", (thread) => ({
+        status: "ready",
+        group: {
+          key: thread.host?.id ?? "none",
+          label: thread.host?.name ?? "None",
+        },
+      })).groups,
+  },
+])("$name root projection", ({ build }) => {
+  it("keeps a cross-group child in its root tree and does not merge the same environment across groups", () => {
+    const environment = makeSidebarEnvironment({
+      id: "shared",
+      isWorktree: true,
+    });
+    const input = [
+      createThread({ id: "root-a", host: { id: "a", name: "A" }, environment }),
+      createThread({
+        id: "child-b",
+        parentThreadId: "root-a",
+        host: { id: "b", name: "B" },
+        environment,
+      }),
+      createThread({ id: "root-b", host: { id: "b", name: "B" }, environment }),
+      createThread({
+        id: "root-a2",
+        host: { id: "a", name: "A" },
+        environment,
+      }),
+    ];
+    const groups = build(input);
+    const a = groups.find((group) => group.label === "A");
+    const b = groups.find((group) => group.label === "B");
+    expect(a?.threads.map((thread) => thread.id).sort()).toEqual([
+      "child-b",
+      "root-a",
+      "root-a2",
+    ]);
+    expect(b?.threads.map((thread) => thread.id)).toEqual(["root-b"]);
+    const aTree = buildProjectThreadGroups(a?.threads ?? []);
+    const bTree = buildProjectThreadGroups(b?.threads ?? []);
+    expect(aTree[0]?.kind).toBe("environment");
+    expect(bTree[0]?.kind).toBe("thread");
+    expect(
+      getProjectThreadItemDescendants([...aTree, ...bTree])
+        .map((thread) => thread.id)
+        .sort(),
+    ).toEqual(input.map((thread) => thread.id).sort());
+    expect(input[1].host?.id).toBe("b");
   });
 });

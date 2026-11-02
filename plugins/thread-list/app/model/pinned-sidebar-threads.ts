@@ -1,6 +1,7 @@
 import { compareCodepoint } from "./compare-codepoint.js";
 import {
   buildProjectThreadGroups,
+  projectRootThreadGroups,
   compareStandardThreads,
   type ProjectThreadItem,
   type ProjectThreadNode,
@@ -15,6 +16,7 @@ interface PinnedSidebarState {
 
 interface BuildPinnedSidebarStateArgs {
   groupEnvironmentThreads?: boolean;
+  rootGroupKey?: (thread: SidebarThread) => string;
   threads: readonly SidebarThread[];
 }
 
@@ -101,6 +103,7 @@ function getPinnedItemThread(item: ProjectThreadItem): SidebarThread {
 
 export function buildPinnedSidebarState({
   groupEnvironmentThreads = false,
+  rootGroupKey,
   threads,
 }: BuildPinnedSidebarStateArgs): PinnedSidebarState {
   const explicitlyPinnedThreads = threads.filter(
@@ -134,11 +137,22 @@ export function buildPinnedSidebarState({
   const effectivePinnedThreads = threads.filter((thread) =>
     effectivePinnedThreadIds.has(thread.id),
   );
-  const rootItems = buildProjectThreadGroups(
-    effectivePinnedThreads,
-    compareStandardThreads,
-    groupEnvironmentThreads,
-  );
+  const rootItems = rootGroupKey
+    ? projectRootThreadGroups(effectivePinnedThreads, (thread) => ({
+        key: rootGroupKey(thread),
+        label: "Pinned",
+      })).flatMap((group) =>
+        buildProjectThreadGroups(
+          group.threads,
+          compareStandardThreads,
+          groupEnvironmentThreads,
+        ),
+      )
+    : buildProjectThreadGroups(
+        effectivePinnedThreads,
+        compareStandardThreads,
+        groupEnvironmentThreads,
+      );
   for (const item of rootItems) {
     if (item.kind === "environment") {
       item.group.nodes.sort((left, right) =>

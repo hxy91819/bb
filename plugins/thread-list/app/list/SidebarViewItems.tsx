@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { experimental_useThreadListContributions } from "@get-bb/plugin-sdk/app";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -136,6 +137,10 @@ export function SidebarHeaderMenuContents({
 function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [lifecycles, setLifecycles] = useAtom(sidebarThreadLifecyclesAtom);
   const [organization, setOrganization] = useAtom(sidebarOrganizationModeAtom);
+  const { groupings } = experimental_useThreadListContributions({
+    rootThreadIds: [],
+    groupingKey: null,
+  });
   const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
   const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const setEnvironmentGrouping = useSetAtom(sidebarEnvironmentGroupingAtom);
@@ -184,7 +189,13 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
       <>
         <DropdownMenuGroup aria-label="Sections">
           <DropdownMenuLabel>Sections</DropdownMenuLabel>
-          {SIDEBAR_ORGANIZE_OPTIONS.map((option) => (
+          {[
+            ...SIDEBAR_ORGANIZE_OPTIONS,
+            ...groupings.map((grouping) => ({
+              label: grouping.title,
+              mode: grouping.key,
+            })),
+          ].map((option) => (
             <DropdownMenuItem
               key={option.mode}
               role="menuitemradio"
