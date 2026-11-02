@@ -1586,7 +1586,13 @@ async function selectAcpNativeModel(args: {
           timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
         });
         setModel = false;
-      } catch {
+      } catch (error) {
+        if (
+          !(error instanceof AcpAgentResponseError) ||
+          error.code !== -32601
+        ) {
+          throw error;
+        }
         setModel = true;
       }
     }
