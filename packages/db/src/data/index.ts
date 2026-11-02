@@ -455,7 +455,7 @@ export {
   deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction,
   getQueuedThreadMessage,
   getQueuedThreadStartMessage,
-  hasQueuedRetryOfTurnRequest,
+  getQueuedRetryOfTurnRequest,
   hasClaimedQueuedThreadMessages,
   holdQueuedThreadMessageForEdit,
   isOrdinaryTurnEndQueuedMessage,

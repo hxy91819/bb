@@ -4,6 +4,17 @@ import type { PendingInteraction, Thread } from "@bb/domain";
 import type { ThreadQueuedMessage } from "@bb/domain";
 import type { PluginThreadEventEmitter } from "./plugin-service.js";
 
+import { settledWithin } from "./plugin-time-box.js";
+import { DEFAULT_PLUGIN_HOOK_TIMEOUT_MS } from "./plugin-hook-registry.js";
+
+const pendingTurnFailures = new Map<
+  string,
+  {
+    settlement: Promise<void>;
+    deadline: number;
+  }
+>();
+
 const pendingThreadEvents = new Map<string, ReturnType<typeof setTimeout>>();
 
 let emitter: PluginThreadEventEmitter | undefined;
@@ -13,6 +24,7 @@ export function setPluginThreadEventEmitter(
 ): void {
   for (const timer of pendingThreadEvents.values()) clearTimeout(timer);
   pendingThreadEvents.clear();
+  pendingTurnFailures.clear();
   emitter = next;
 }
 
@@ -77,7 +89,23 @@ export function emitPluginMessageCancelled(entry: ThreadQueuedMessage): void {
  * failure stands either way — so neither can block the seam.
  */
 export function emitPluginTurnFailed(threadId: string): void {
-  emitter?.emitTurnFailed(threadId);
+  const pending = {
+    settlement: Promise.resolve(emitter?.emitTurnFailed(threadId)),
+    deadline: Date.now() + DEFAULT_PLUGIN_HOOK_TIMEOUT_MS,
+  };
+  pendingTurnFailures.set(threadId, pending);
+  const clear = () => {
+    if (pendingTurnFailures.get(threadId) === pending)
+      pendingTurnFailures.delete(threadId);
+  };
+  void pending.settlement.then(clear, clear);
+}
+
+export async function waitForPluginTurnFailed(threadId: string): Promise<void> {
+  const pending = pendingTurnFailures.get(threadId);
+  if (!pending) return;
+  const remaining = pending.deadline - Date.now();
+  if (remaining > 0) await settledWithin(pending.settlement, remaining);
 }
 
 /**
