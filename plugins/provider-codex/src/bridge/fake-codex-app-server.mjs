@@ -212,7 +212,7 @@ const requestLogPath = script?.requestLogPath ?? null;
 if (script?.executionLogPath)
   appendFileSync(
     script.executionLogPath,
-    `${JSON.stringify({ pid: process.pid, codexHome: process.env.CODEX_HOME ?? null, sqliteHome: process.env.CODEX_SQLITE_HOME ?? null, poolRouted: Boolean(process.env.CODEX_POOL_AUTH_TOKEN || process.env.CODEX_OPENAI_BASE_URL), apiKeyPresent: Boolean(process.env.OPENAI_API_KEY) })}\n`,
+    `${JSON.stringify({ pid: process.pid, codexHome: process.env.CODEX_HOME ?? null, sqliteHome: process.env.CODEX_SQLITE_HOME ?? null, launcher: process.env.BB_TEST_LAUNCHER ?? null, poolRouted: Boolean(process.env.CODEX_POOL_AUTH_TOKEN || process.env.CODEX_OPENAI_BASE_URL), apiKeyPresent: Boolean(process.env.OPENAI_API_KEY) })}\n`,
   );
 const responseLogPath = script?.responseLogPath ?? null;
 const modelListFailOnceMarkerPath = script?.modelListFailOnceMarkerPath ?? null;
@@ -427,6 +427,10 @@ async function handleRequest(message) {
   }
   switch (method) {
     case "initialize":
+      if (script?.initializeDelayMs)
+        await new Promise((resolve) =>
+          setTimeout(resolve, script.initializeDelayMs),
+        );
       respond(id, {});
       return;
     case "account/rateLimits/read":
@@ -468,6 +472,16 @@ async function handleRequest(message) {
           },
         ],
       });
+      return;
+    case "account/read":
+      if (script?.accountReadDelayMs)
+        await new Promise((resolve) =>
+          setTimeout(resolve, script.accountReadDelayMs),
+        );
+      respond(
+        id,
+        script?.accountRead ?? { account: null, requiresOpenaiAuth: true },
+      );
       return;
     case "config/read":
       if (script?.configReadError) {
