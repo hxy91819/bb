@@ -4995,9 +4995,14 @@ export interface BbNavigate {
    * Open a thread. `split: true` applies bb's split placement rules (a right
    * split by default, focus when already open, replace at the pane cap) and
    * falls back to plain navigation where splits are off. Opening also expands
-   * the thread's conversation if the side panel had collapsed it.
+   * the thread's conversation if the side panel had collapsed it. Pass
+   * `experimental_messageSeq` to reveal and scroll to that message (exact
+   * message link match semantics, matching `#msg=N`).
    */
-  toThread(threadId: string, options?: { split?: boolean }): void;
+  toThread(
+    threadId: string,
+    options?: { split?: boolean; experimental_messageSeq?: number },
+  ): void;
   toProject(projectId: string): void;
   /**
    * Navigate to one of this plugin's own nav panels by its `path`.
