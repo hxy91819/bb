@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { experimental_createBridgeJsonRpcTestHarness as createHarness } from "@get-bb/plugin-sdk/provider-bridge/testing";
 const { queryMock, forkSessionMock } = vi.hoisted(() => ({
   queryMock: vi.fn(),
@@ -127,15 +128,18 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
   expect((await bridge.waitForResponse(5)).error?.message).toContain(
     "cannot switch home bindings",
   );
-  for (const [index, threadId] of [
-    "bound-thread",
-    "resumed-thread",
-    "forked-thread",
+  const createdId = z
+    .object({ providerThreadId: z.string() })
+    .parse(start.result).providerThreadId;
+  for (const [index, [threadId, providerThreadId]] of [
+    ["bound-thread", createdId],
+    ["resumed-thread", "saved-home-session"],
+    ["forked-thread", "forked-home-session"],
   ].entries()) {
     bridge.sendRequest(10 + index, "thread/discard", {
       threadId,
-      providerThreadId: null,
+      providerThreadId,
     });
-    await bridge.waitForResponse(10 + index);
+    expect((await bridge.waitForResponse(10 + index)).error).toBeUndefined();
   }
 });

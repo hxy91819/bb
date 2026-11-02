@@ -817,6 +817,7 @@
       "dependsOn": ["topo"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/plugins/provider-claude-code/src/**",
         "$TURBO_ROOT$/packages/domain/src/**",
         "$TURBO_ROOT$/packages/plugin-sdk/src/**",
         "$TURBO_ROOT$/packages/provider-bridge-protocol/src/**",

@@ -64,6 +64,38 @@ export default async function plugin(bb: BbPluginApi) {
     },
   });
 
+  let identities: Map<string, string> | null = null;
+  const bindingIdentities = () => {
+    if (identities !== null) return identities;
+    const database = bb.storage.database();
+    bb.storage.migrate(database, [
+      "CREATE TABLE claude_home_binding_identities (id TEXT PRIMARY KEY, config_dir TEXT NOT NULL)",
+    ]);
+    identities = new Map(
+      z
+        .array(z.object({ id: z.string(), config_dir: z.string() }))
+        .parse(
+          database
+            .prepare(
+              "SELECT id, config_dir FROM claude_home_binding_identities",
+            )
+            .all(),
+        )
+        .map((row) => [row.id, row.config_dir]),
+    );
+    return identities;
+  };
+  function validateBindings(value: string) {
+    const bindings = parseClaudeHomeBindings(value);
+    for (const binding of bindings) {
+      const previous = bindingIdentities().get(binding.id);
+      if (previous !== undefined && previous !== binding.claudeConfigDir)
+        throw new Error(
+          `Binding "${binding.id}" already belongs to another directory. Use a new binding ID.`,
+        );
+    }
+    return bindings;
+  }
   const settings = bb.settings.define({
     homeBindings: {
       type: "string",
@@ -85,46 +117,25 @@ export default async function plugin(bb: BbPluginApi) {
       default: "[]",
     },
   });
-  const database = bb.storage.database();
-  bb.storage.migrate(database, [
-    "CREATE TABLE claude_home_binding_identities (id TEXT PRIMARY KEY, config_dir TEXT NOT NULL)",
-  ]);
-  const identities = new Map(
-    z
-      .array(z.object({ id: z.string(), config_dir: z.string() }))
-      .parse(
-        database
-          .prepare("SELECT id, config_dir FROM claude_home_binding_identities")
-          .all(),
-      )
-      .map((row) => [row.id, row.config_dir]),
-  );
-  function validateBindings(value: string) {
-    const bindings = parseClaudeHomeBindings(value);
-    for (const binding of bindings) {
-      const previous = identities.get(binding.id);
-      if (previous !== undefined && previous !== binding.claudeConfigDir)
-        throw new Error(
-          `Binding "${binding.id}" already belongs to another directory. Use a new binding ID.`,
-        );
-    }
-    return bindings;
-  }
   bb.providers.register(
     createClaudeProvider("claude-code", "Claude Code", null),
   );
   let registrations: Array<{ dispose(): void }> = [];
   const apply = (value: string) => {
     const bindings = validateBindings(value);
-    const insert = database.prepare(
-      "INSERT OR IGNORE INTO claude_home_binding_identities (id, config_dir) VALUES (?, ?)",
-    );
-    database.transaction(() => {
+    if (bindings.length > 0) {
+      const remembered = bindingIdentities();
+      const database = bb.storage.database();
+      const insert = database.prepare(
+        "INSERT OR IGNORE INTO claude_home_binding_identities (id, config_dir) VALUES (?, ?)",
+      );
+      database.transaction(() => {
+        for (const binding of bindings)
+          insert.run(binding.id, binding.claudeConfigDir);
+      })();
       for (const binding of bindings)
-        insert.run(binding.id, binding.claudeConfigDir);
-    })();
-    for (const binding of bindings)
-      identities.set(binding.id, binding.claudeConfigDir);
+        remembered.set(binding.id, binding.claudeConfigDir);
+    }
     for (const registration of registrations) registration.dispose();
     registrations = bindings.map((binding) =>
       bb.providers.register(
