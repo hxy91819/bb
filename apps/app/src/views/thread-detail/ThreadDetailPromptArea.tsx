@@ -228,6 +228,7 @@ interface ThreadDetailPromptAreaProps {
   sentMessageEdit?: ThreadDetailSentMessageEdit;
   steerActiveThreadOnEnter: boolean;
   composerFocusRequestNonce: number;
+  isForkAvailable?: boolean;
   thread: ThreadWithRuntime;
 }
 
@@ -438,6 +439,7 @@ export function ThreadDetailPromptArea({
   sentMessageEdit,
   steerActiveThreadOnEnter,
   composerFocusRequestNonce,
+  isForkAvailable = false,
   thread,
 }: ThreadDetailPromptAreaProps) {
   const navigate = useImmediateRouteNavigate();
@@ -876,6 +878,7 @@ export function ThreadDetailPromptArea({
     threadProviderCommands:
       selectedProviderId === thread.providerId ? providerCommands : null,
     resolveMentionLink,
+    sideChatCommand: { enabled: isForkAvailable },
   });
   const {
     typeaheadConfig: inlineTypeaheadConfig,
