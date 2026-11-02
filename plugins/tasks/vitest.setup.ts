@@ -13,6 +13,26 @@ if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   });
 }
 
+if (
+  typeof Range !== "undefined" &&
+  typeof Range.prototype.getClientRects !== "function"
+) {
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () => [],
+  });
+}
+
+if (
+  typeof Range !== "undefined" &&
+  typeof Range.prototype.getBoundingClientRect !== "function"
+) {
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: () => new DOMRect(0, 0, 0, 0),
+  });
+}
+
 if (typeof window !== "undefined" && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
