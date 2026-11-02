@@ -33,4 +33,5 @@ export function createDesktopReleaseConfig(
 
 export function createDesktopUpdateReleaseBaseUrl(
   releaseTag: DesktopReleaseConfig["releaseTag"],
+  override?: string,
 ): string;
