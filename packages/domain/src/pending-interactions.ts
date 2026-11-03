@@ -490,6 +490,31 @@ export type PluginExtensionInteractionResolution = z.infer<
   typeof pluginExtensionInteractionResolutionSchema
 >;
 
+const pendingInteractionResolutionBranches = {
+  user_answer: userQuestionPendingInteractionResolutionSchema,
+  plugin_submitted: pluginPendingInteractionResolutionSchema,
+  request_answer: pluginExtensionInteractionResolutionSchema,
+} as const;
+
+function pendingInteractionResolutionMessage(input: unknown): string {
+  if (input === null || typeof input !== "object" || !("kind" in input)) {
+    return approvalDecisionDiscriminatorError;
+  }
+  const kind = input.kind;
+  if (
+    kind !== "user_answer" &&
+    kind !== "plugin_submitted" &&
+    kind !== "request_answer"
+  ) {
+    return approvalDecisionDiscriminatorError;
+  }
+  const parsed = pendingInteractionResolutionBranches[kind].safeParse(input);
+  if (parsed.success) {
+    return approvalDecisionDiscriminatorError;
+  }
+  return parsed.error.issues[0]?.message ?? approvalDecisionDiscriminatorError;
+}
+
 export const pendingInteractionResolutionSchema = z.union(
   [
     approvalPendingInteractionResolutionSchema,
@@ -497,7 +522,7 @@ export const pendingInteractionResolutionSchema = z.union(
     pluginPendingInteractionResolutionSchema,
     pluginExtensionInteractionResolutionSchema,
   ],
-  approvalDecisionDiscriminatorError,
+  { error: (issue) => pendingInteractionResolutionMessage(issue.input) },
 );
 export type PendingInteractionResolution = z.infer<
   typeof pendingInteractionResolutionSchema

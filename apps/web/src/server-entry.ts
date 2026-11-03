@@ -14,18 +14,16 @@ const fetch = createStartHandler(async (context) => {
     pathname,
     context.router.state.matches.map((match) => match.loaderData),
   );
-  if (status !== null) {
-    context.router.stores.statusCode.set(status);
-  }
   const result = await defaultStreamHandler(context);
   const response = "response" in result ? result.response : result;
-  const cacheControl = marketplaceHtmlCacheControl(pathname, response.status);
+  const responseStatus = status ?? response.status;
+  const cacheControl = marketplaceHtmlCacheControl(pathname, responseStatus);
   if (cacheControl === null) return result;
   const headers = new Headers(response.headers);
   headers.set("cache-control", cacheControl);
   const updatedResponse = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
+    status: responseStatus,
+    statusText: responseStatus === response.status ? response.statusText : "",
     headers,
   });
   return "response" in result
