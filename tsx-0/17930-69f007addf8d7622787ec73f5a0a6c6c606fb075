@@ -1,0 +1,1 @@
+{"code":"const PROMPT_ATTACHMENT_MAX_BYTES=35*1024*1024;export{PROMPT_ATTACHMENT_MAX_BYTES};\n","warnings":[],"map":{"version":3,"mappings":"AAAO,MAAM,4BAA8B,GAAK,KAAO","names":[],"ignoreList":[],"sources":["/data/code/bb-codex-home-package/.worktrees/aggregate-deploy-51af3f6ade/packages/domain/src/prompt-attachment-limits.ts"],"sourcesContent":[null]}}
