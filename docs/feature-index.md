@@ -6,6 +6,8 @@
 
 本波近期修复的统一发布、安装验收与耗时复盘见[管家工作簿](steward/bb-consolidated-delivery.md)。
 
+跨环境复用 AGY 的安装、完整 provider 模板及模型目录排查见 [AGY ACP 配置](agy-acp.md)。该方案使用个人 fork 的 CLI 桥，与 `agy acp` 原生 server 分开验收。
+
 ## 按功能找维护位置
 
 本次迁出的五个业务插件统一在 [hxy91819/bb-plugins](https://github.com/hxy91819/bb-plugins)，升级续跑在 [hxy91819/bb-plugin-upgrade-resume](https://github.com/hxy91819/bb-plugin-upgrade-resume)；已有的 Account Limits 和 Usage 继续使用各自仓库。BB 本体、公共 SDK 与仍随 BB 打包的插件在 [hxy91819/bb](https://github.com/hxy91819/bb)。旧团队、书签、图标仓库保留历史，当前实现使用集合仓库。
