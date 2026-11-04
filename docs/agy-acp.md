@@ -21,6 +21,8 @@
 
 这是该账号当时的目录快照，不是其他账号的固定模型清单，也不证明每个模型已完成推理验证。本轮没有另发付费模型请求。另一环境报告的 `claude-opus-5-5-high` 不在本机目录中，不应直接照抄该 ID。
 
+另一环境（Linux，AGY `1.5.0`，同一桥 commit）按本文配置后，`agy models` 与 `bb provider models acp-agy --json` 均返回 13 个 ID，包含 `claude-opus-5-5-*`、`claude-sonnet-5-5-*`、`gpt-oss-120b-medium`。真实请求各跑一轮：`gemini-3.8-flash-low` 与 `claude-sonnet-5-5-low` 均返回预期文本；同轮 steer 在 8.1s 投递、20.7s 结束，未出现第二个 `turn/started`。该环境另外补了 `bun` 的 PATH 软链和 `HOME`，见第 1 节。
+
 ## 1. 准备执行机器
 
 以下命令适用于 Linux/macOS，在 BB host daemon 所在机器、以其运行用户执行。该用户需要能运行 `bb`、`agy`、Bun、Git 和 Python 3，并已完成 AGY 登录。
@@ -53,6 +55,17 @@ agy plugin list --json
 ```
 
 应看到启用的 `agy-acp-steer`。缺少 hook 时桥仍可执行普通请求，但不通告同轮 steer；Windows 也不通告此能力。
+
+hook 由 agy 以 `sh -c bun …` 启动，所以 `bun` 必须能被 agy 进程的 PATH 解析，只把 Bun 的绝对路径写进 `customAgents.command` 不够。bun 装在 `$HOME/.bun/bin` 且该目录不在 PATH 时，先建立软链再验证：
+
+```sh
+ln -sf "$HOME/.bun/bin/bun" "$HOME/.local/bin/bun"
+bun --version
+```
+
+缺这一步时 hook 以 127 退出，agy 日志出现 `sh: 1: bun: not found`，BB 侧整轮静默：只有 `turn/started` 和 `turn/completed`，没有任何消息，也没有错误事件。
+
+同一类静默失败还来自缺失的 `HOME`：agy 是 Go 程序，`HOME` 未定义时直接以 `$HOME is not defined` 退出，桥只能回报空结果。host daemon 的进程环境不含 `HOME` 时，在 `agy` 条目的 `env` 里补 `"HOME": "<用户主目录绝对路径>"`；模板为保持通用未写死该值。
 
 桥的 binary resolver 优先使用 checkout 下的 `bin/agy`，然后才使用 `AGY_BIN`，最后使用 `PATH`。因此安装时就设置 `AGY_SKIP_DOWNLOAD=1`，以免 postinstall 下载另一版本。复用旧目录时如有 `bin/agy`，先核实其版本和用途；仅设置 `AGY_BIN` 不足以覆盖它。`agy-entry.mjs` 的目录预热使用 `AGY_BIN`，两者指向不同版本会再次造成目录与执行不一致。
 
