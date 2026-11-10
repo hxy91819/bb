@@ -6,11 +6,19 @@ import { buildPinnedSidebarState } from "../model/pinned-sidebar-threads.js";
 import {
   CHRONOLOGICAL_CONTAINER_ID,
   resolveSidebarProjectId,
+  getCandidateRootThreads,
 } from "../model/project-thread-groups.js";
 import { sectionKeyForThreadSection } from "../model/section-keys.js";
 import type { CollapsibleSidebarSectionId } from "../model/sidebar-section-id.js";
-import { useBbContext } from "@get-bb/plugin-sdk/app";
-import type { OrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
+import {
+  useBbContext,
+  experimental_useThreadListContributions,
+} from "@get-bb/plugin-sdk/app";
+import {
+  builtInOrganizationModeSchema,
+  buildContributionGroupKey,
+  type OrganizationMode as SidebarOrganizationMode,
+} from "../../shared/preferences.js";
 import { useSidebarData } from "../model/use-sidebar-data.js";
 import {
   collapsedEnvironmentIdsAtom,
@@ -19,6 +27,7 @@ import {
   sidebarCollapsedMachinesAtom,
   sidebarCollapsedThreadSectionsAtom,
   sidebarOrganizationModeAtom,
+  sidebarCollapsedContributionGroupsAtom,
 } from "../preferences/atoms.js";
 import { usePreferencesReady } from "../preferences/PreferencesSync.js";
 import { useExpandThreadAncestors } from "./useReadStatusGrouping.js";
@@ -227,14 +236,19 @@ export function resolveThreadRevealExpansion({
   const expansion = getThreadSidebarExpansion({
     organizationMode,
     isPinned: effectivePinnedThreadIds.has(thread.id),
-    thread,
+    thread: organizationMode === "machine" ? (currentThread ?? thread) : thread,
     sidebarProjectId: resolveSidebarProjectId(thread, threadById),
     personalProjectId,
   });
-  return { threadIdsToExpand, environmentIdsToExpand, expansion };
+  return {
+    threadIdsToExpand,
+    environmentIdsToExpand,
+    expansion,
+    currentThread,
+  };
 }
 
-interface SidebarThreadRevealInputs {
+export interface SidebarThreadRevealInputs {
   selectedThreadId: string | undefined;
   threads: readonly SidebarThread[];
   threadsReady: boolean;
@@ -242,7 +256,7 @@ interface SidebarThreadRevealInputs {
   personalProjectId: string | null;
 }
 
-function useSidebarThreadRevealCore({
+export function useSidebarThreadRevealCore({
   selectedThreadId,
   threads,
   threadsReady,
@@ -250,6 +264,21 @@ function useSidebarThreadRevealCore({
   personalProjectId,
 }: SidebarThreadRevealInputs): void {
   const organizationMode = useAtomValue(sidebarOrganizationModeAtom);
+  const providerKey = builtInOrganizationModeSchema.safeParse(organizationMode)
+    .success
+    ? null
+    : organizationMode;
+  const candidateRoots = useMemo(
+    () => getCandidateRootThreads(threads),
+    [threads],
+  );
+  const { grouping } = experimental_useThreadListContributions({
+    rootThreadIds: candidateRoots.map((thread) => thread.id),
+    groupingKey: providerKey,
+  });
+  const setCollapsedContributionGroups = useSetAtom(
+    sidebarCollapsedContributionGroupsAtom,
+  );
   const expandThreadAncestors = useExpandThreadAncestors();
   const setCollapsedEnvironmentIdList = useSetAtom(collapsedEnvironmentIdsAtom);
   const setCollapsedProjectIdList = useSetAtom(collapsedProjectIdsAtom);
@@ -268,6 +297,7 @@ function useSidebarThreadRevealCore({
     () => buildPinnedSidebarState({ threads }).effectivePinnedThreadIds,
     [threads],
   );
+  const pendingGroupingReveal = useRef(new Set<string>());
   const revealState = useRef(INITIAL_SIDEBAR_THREAD_REVEAL_STATE);
 
   useEffect(() => {
@@ -279,19 +309,31 @@ function useSidebarThreadRevealCore({
       preferencesReady,
     });
     revealState.current = step.state;
-    for (const threadId of step.revealIds) {
+    const revealIds = new Set([
+      ...step.revealIds,
+      ...pendingGroupingReveal.current,
+    ]);
+    const navigationRevealId = step.navigationRevealId;
+    for (const threadId of revealIds) {
       const thread = threadById.get(threadId);
       if (!thread || thread.isHidden) {
+        pendingGroupingReveal.current.delete(threadId);
+        if (threadId === navigationRevealId)
+          revealState.current.pendingNavigation = undefined;
         continue;
       }
-      const { threadIdsToExpand, environmentIdsToExpand, expansion } =
-        resolveThreadRevealExpansion({
-          thread,
-          threadById,
-          effectivePinnedThreadIds,
-          organizationMode,
-          personalProjectId,
-        });
+      const {
+        threadIdsToExpand,
+        environmentIdsToExpand,
+        expansion,
+        currentThread,
+      } = resolveThreadRevealExpansion({
+        thread,
+        threadById,
+        effectivePinnedThreadIds,
+        organizationMode: providerKey ? "chronological" : organizationMode,
+        personalProjectId,
+      });
 
       expandThreadAncestors(
         threadIdsToExpand,
@@ -300,6 +342,32 @@ function useSidebarThreadRevealCore({
       setCollapsedEnvironmentIdList((current) =>
         removeCollapsedIds(current, environmentIdsToExpand),
       );
+
+      const isPinned = effectivePinnedThreadIds.has(thread.id);
+      let awaitingGroup = providerKey !== null && !isPinned;
+      if (providerKey && grouping && currentThread && !isPinned) {
+        const result = grouping(currentThread);
+        awaitingGroup = result.status !== "ready";
+        if (result.status === "ready") {
+          const key =
+            result.group === null
+              ? buildContributionGroupKey(providerKey, "ungrouped")
+              : buildContributionGroupKey(
+                  providerKey,
+                  "group",
+                  result.group.key,
+                );
+          setCollapsedContributionGroups((current) =>
+            removeCollapsedIds(current, new Set([key])),
+          );
+        }
+      }
+      if (awaitingGroup) pendingGroupingReveal.current.add(threadId);
+      else {
+        pendingGroupingReveal.current.delete(threadId);
+        if (threadId === navigationRevealId)
+          revealState.current.pendingNavigation = undefined;
+      }
       if (expansion.machineKey) {
         const machineKey = expansion.machineKey;
         setCollapsedMachineKeyList((current) =>
@@ -331,6 +399,9 @@ function useSidebarThreadRevealCore({
     preferencesReady,
     personalProjectId,
     organizationMode,
+    providerKey,
+    grouping,
+    setCollapsedContributionGroups,
     threads,
     threadById,
     effectivePinnedThreadIds,

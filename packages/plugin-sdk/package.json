@@ -110,6 +110,12 @@
       "import": "./dist/internal/plugin-app-collector.js",
       "default": "./dist/internal/plugin-app-collector.js"
     },
+    "./internal/thread-contribution-runtime": {
+      "source": "./src/internal/thread-contribution-runtime.tsx",
+      "types": "./bundled-types/bb-plugin-sdk-internal-thread-contribution-runtime.d.ts",
+      "import": "./dist/internal/thread-contribution-runtime.js",
+      "default": "./dist/internal/thread-contribution-runtime.js"
+    },
     "./testing": {
       "source": "./src/testing/index.ts",
       "types": "./bundled-types/bb-plugin-sdk-testing.d.ts",
