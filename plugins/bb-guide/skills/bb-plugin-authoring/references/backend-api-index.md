@@ -42,6 +42,10 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalThreadTabActionContext`
 - `ExperimentalAppPanel`
 - `ExperimentalAppPanelSurface`
+- `ExperimentalActivityEvidence`
+- `ExperimentalThreadActivityArgs`
+- `ExperimentalThreadActivityResult`
+- `ExperimentalPluginThreadActivityArgs`
 - `ExperimentalDesktopBrowserAcquireInput`
 - `ExperimentalDesktopBrowserCreateInput`
 - `ExperimentalDesktopBrowserLease`
@@ -455,47 +459,39 @@ Read the installed declarations for exact current signatures.
 - `createFakePluginHost`
 - `createFakeSdk`
 - `experimental_scanPublicSdkOnly`
-- `makeHostResponse`
-- `makeMessageDispatchHookContext`
+- `makeHostResponse`, `makeMessageDispatchHookContext`
 - `makePluginAgentConfigurationContext`
-- `makeQueueEntry`
-- `makeThreadResponse`
+- `makeQueueEntry`, `makeThreadResponse`
 - `makeTurnFailedEvent`
 - `CreateFakePluginHostOptions`
-- `FakeAgentToolRecord`
-- `FakeCliRecord`
+- `FakeAgentToolRecord`, `FakeCliRecord`
 - `FakeHttpRouteRecord`
-- `FakeLogEntry`
-- `FakeLogLevel`
+- `FakeLogEntry`, `FakeLogLevel`
 - `FakeMentionProviderRecord`
 - `FakePluginBehaviorDrivers`
 - `ExperimentalFakeHostRpcCall`
-- `FakePluginHarness`
-- `FakePluginHost`
-- `FakePluginInspectionState`
-- `FakePluginLifecycleControls`
+- `FakePluginHarness`, `FakePluginHost`
+- `FakePluginInspectionState`, `FakePluginLifecycleControls`
 - `FakePluginRegistrations`
-- `FakeRealtimeSignal`
-- `FakeScheduleRecord`
-- `FakeSdkCall`
-- `FakeSdkHarness`
+- `FakeRealtimeSignal`, `FakeScheduleRecord`
+- `FakeSdkCall`, `FakeSdkHarness`
 - `FakeSdkOverrides`
 - `FakeServiceRecord`
-- `PublicSdkOnlyScan`
-- `PublicSdkOnlyScanOptions`
+- `PublicSdkOnlyScan`, `PublicSdkOnlyScanOptions`
 - `PublicSdkOnlyViolation`
 
 ## `@get-bb/plugin-sdk/testing/host`
 
 - `experimental_createHostEntryHarness`
 - `ExperimentalCreateHostEntryHarnessOptions`
-- `ExperimentalHostEntryHarness`
-- `ExperimentalHostHarnessSignal`
+- `ExperimentalHostEntryHarness`, `ExperimentalHostHarnessSignal`
 
 ## Live RPC client types
 
-- `ExperimentalRpcKeyedMethod`, `ExperimentalRpcKeyedValue`
-- `experimental_PluginRpcCallError`
+- `ExperimentalRpcKeyedMethod`, `ExperimentalRpcKeyedValue`, `experimental_PluginRpcCallError`
 
 The keyed method and row types are inferred from the `contract` option.
 Read-state and error behavior is documented in [Frontend hooks and UI](frontend-hooks-and-ui.md).
+
+Activity API reference: the Plugin Guide's Thread plugin metadata card describes
+`PluginBbSdk.threads.experimental_activity`.
