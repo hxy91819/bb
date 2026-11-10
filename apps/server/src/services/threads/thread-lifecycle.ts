@@ -101,7 +101,10 @@ import { createAsyncDeduper } from "../lib/async-deduper.js";
 import { requestQueuedMessageDispatch } from "./queued-message-dispatch.js";
 import { throwThreadNotWritable } from "../lib/lifecycle-api-errors.js";
 import { NotificationBuffer } from "../lib/notification-buffer.js";
-import { queueChildThreadTurnNotificationBestEffort } from "./child-thread-notifications.js";
+import {
+  getChildThreadTurnAuthor,
+  queueChildThreadTurnNotificationBestEffort,
+} from "./child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "./thread-parent.js";
 import {
   clearThreadProvisionSchedule,
@@ -861,6 +864,7 @@ function settleThreadCommandFailure(
     postCommitActions.push({
       run: (deps) =>
         queueChildThreadTurnNotificationBestEffort(deps, {
+          author: null,
           childThread: thread,
           parentThreadId,
           turnStatus: "failed",
@@ -1894,6 +1898,11 @@ function interruptActiveThreads(
       isParentNotifiableChildThread(thread, "interrupted")
     ) {
       void queueChildThreadTurnNotificationBestEffort(deps, {
+        author: getChildThreadTurnAuthor(deps, {
+          threadId: thread.id,
+          turnId: result.interruptedTurnId,
+          parentThreadId: thread.parentThreadId,
+        }),
         childThread: thread,
         parentThreadId: thread.parentThreadId,
         turnStatus: "interrupted",
