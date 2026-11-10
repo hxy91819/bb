@@ -1,4 +1,4 @@
-Keep a Claude Code or Codex thread running when one account hits its limit. The Account Pooler puts every account you own behind a local hub and picks the account for each request.
+Account Pooler keeps Claude Code and Codex threads running across account limits. Codex pool accounts also generate titles and commit messages through the `codex-pool` AI service without a local Codex login.
 
 ## What you get
 
