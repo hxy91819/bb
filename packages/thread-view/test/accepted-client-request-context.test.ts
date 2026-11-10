@@ -41,6 +41,7 @@ describe("accepted client request context", () => {
   it("keeps the first accepted event for duplicate accepted inputs", () => {
     const context: AcceptedClientRequestContext = {
       acceptedClientRequestEvents: [],
+      deliveryClientRequestEvents: [],
       rejectedClientRequestEvents: [],
     };
 
@@ -83,6 +84,7 @@ describe("accepted client request context", () => {
           turnId: "turn-2",
         }),
       ],
+      deliveryClientRequestEvents: [],
       rejectedClientRequestEvents: [],
     };
 
