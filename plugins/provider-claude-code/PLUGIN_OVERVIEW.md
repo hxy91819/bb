@@ -15,6 +15,7 @@ Start a thread, pick Claude Code, and let it work in your repository from bb. Th
 - `Disable provider subagents`: hide the native Task tool so the agent delegates through bb.
 - `Disable Workflow tool`: hide the native Workflow tool.
 - `Claude in Chrome`: start Claude Code with the browser tools.
+- `Claude Code home bindings`: add independent native providers for separate accounts or Anthropic-compatible endpoints. Each binding has its own configuration, history and skills. Optional effort and Fast-mode capabilities adapt the controls to custom endpoints.
 
 ## Requirements
 
