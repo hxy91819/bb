@@ -59,3 +59,4 @@ fix/tunnel-contract-buffer-types              pr-open         https://github.com
 fix/interaction-submit-cache                needs-feedback                                             # 插件交互确认提交或取消后立即更新缓存，实时通知缺失时关闭等待卡片
 fix/retry-parent-notifications              needs-feedback                                             # 自动重试排队期间不报父线程失败；核心等待插件决定，保留最终结果与取消通知，固定截止时间并避免耗尽行删除重复通知
 fix/server-worker-budget                    needs-feedback                                             # server 测试按 VITEST_MAX_WORKERS 应用有效 CPU/内存容量，保留隔离分类与完整范围；资源模块进入测试缓存输入
+fix/codex-ai-proxy                          needs-feedback                                             # Codex 标题、提交信息与转录请求遵守代理环境及 NO_PROXY，独立连接池随 host 插件释放
