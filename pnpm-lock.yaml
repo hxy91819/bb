@@ -5245,6 +5245,9 @@ importers:
       '@get-bb/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      undici:
+        specifier: 7.30.1
+        version: 7.30.1
       zod:
         specifier: 4.6.6
         version: 4.6.6

@@ -11,6 +11,7 @@ import {
 } from "./ai/chatgpt-client.js";
 import { readCodexAuthCredentials } from "./ai/codex-auth.js";
 import { AiServiceFailure, toAiServiceFailure } from "./ai/failure.js";
+import { disposeCodexAiTransport } from "./ai/fetch.js";
 import {
   codexAiHostContract,
   type CodexAiStatus,
@@ -35,6 +36,7 @@ async function textResult(work: Promise<string>): Promise<CodexAiTextResult> {
 
 export default experimental_defineHostEntry({
   contract: codexHostContract,
+  dispose: disposeCodexAiTransport,
   handlers: {
     resolveNativeRoots: (): Promise<ExperimentalNativeRootsResolveAnswer> =>
       resolveCodexNativeRoots({ homeDir: os.homedir(), env: process.env }),
