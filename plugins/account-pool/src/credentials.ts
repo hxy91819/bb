@@ -144,16 +144,29 @@ export function parseCodexCredentials(raw: string): ImportedCodexCredentials {
   };
 }
 
-export async function importCodexCredentials(): Promise<ImportedCodexCredentials> {
-  try {
-    return parseCodexCredentials(
-      await fs.readFile(path.join(os.homedir(), ".codex", "auth.json"), "utf8"),
+export async function importCodexCredentials(
+  authFile: string | null = null,
+): Promise<ImportedCodexCredentials> {
+  const filePath =
+    authFile === null
+      ? path.join(os.homedir(), ".codex", "auth.json")
+      : authFile.startsWith("~/")
+        ? path.join(os.homedir(), authFile.slice(2))
+        : authFile;
+  if (!path.isAbsolute(filePath)) {
+    throw new Error(
+      "Codex auth file must be an absolute path or start with ~/ on the bb server host.",
     );
+  }
+  try {
+    return parseCodexCredentials(await fs.readFile(filePath, "utf8"));
   } catch (error) {
     if (error instanceof Error && error.message.includes("ChatGPT account id"))
       throw error;
     throw new Error(
-      "Codex OAuth credentials were not found or usable. Run `codex login` on the bb server host, then retry.",
+      authFile === null
+        ? "Codex OAuth credentials were not found or usable. Run `codex login` on the bb server host, then retry."
+        : "Codex OAuth credentials were not found or usable at the specified auth file on the bb server host.",
     );
   }
 }

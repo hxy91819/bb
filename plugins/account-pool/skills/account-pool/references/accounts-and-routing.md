@@ -9,6 +9,7 @@ bb pool account add --provider codex --login
 bb pool account login-poll --session <id>
 bb pool account add --provider claude --import
 bb pool account add --provider codex --import
+bb pool account add --provider codex --import --auth-file '~/.codexl/auth.json' --label codexl
 printf '%s\n' "$ANTHROPIC_API_KEY" | bb pool account add --provider claude --api-key-stdin [--label <text>] [--priority <n>]
 bb pool account add --provider claude --api-key <key> [--label <text>] [--priority <n>]
 bb pool account list [--json]
@@ -59,7 +60,15 @@ prior token valid for ten minutes. Agents should pipe API keys to
 `--api-key <key>` is an unsafe compatibility form that exposes the key in
 process arguments, shell history, and agent transcripts. Prefer `--import` for
 an existing Claude Code login. The CLI Codex import path reads
-`~/.codex/auth.json` on the bb server host. OAuth quota refreshes on add or
+`~/.codex/auth.json` on the bb server host by default. Codex `--import` accepts
+`--auth-file <path>` for another server-side auth file and follows symlinks.
+Use an absolute path or a quoted `~/` path, which expands to the server user's
+home; relative paths are rejected. The equivalent `account.add` RPC input is
+`{provider: "codex", source: {kind: "import", authFile: "/path/to/auth.json"}, label: "codexl", priority: 100}`.
+Omitting `authFile` preserves the default import path. The pool stores and
+refreshes its own credential copy; it does not alter or keep syncing the source
+file or symlink. `--auth-file` requires `--import` and `--provider codex`.
+OAuth quota refreshes on add or
 enable and every five minutes while an account is idle. When a request finds no
 eligible account, the pool first refreshes the OAuth accounts it considers
 exhausted, at most once every 30 seconds per account, so a plan upgrade or an
