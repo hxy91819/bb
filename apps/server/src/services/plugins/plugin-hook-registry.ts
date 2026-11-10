@@ -1,4 +1,5 @@
 import type { PluginHookHandler, PluginHookName } from "@get-bb/plugin-sdk";
+import type { ThreadCreationContextRegistration } from "./plugin-thread-creation-context.js";
 import { errorMessage } from "../lib/error-log-fields.js";
 
 /** One plugin's handler for one hook. */
@@ -54,6 +55,7 @@ export async function invokeBridgedProvider<T>(
 export interface PluginHookProvider {
   /** Registered handlers for a hook, in plugin install order. */
   listHooks<K extends PluginHookName>(hook: K): PluginHookRegistration<K>[];
+  listThreadCreationContexts?(): ThreadCreationContextRegistration[];
   /**
    * Runs one handler through the plugin service's failure isolation (handler
    * stats, plugin status detail, plugin log), so a handler that throws is as
@@ -77,7 +79,9 @@ export interface PluginHookProvider {
  */
 let provider: PluginHookProvider | undefined;
 
-export function setPluginHookProvider(next: PluginHookProvider | undefined): void {
+export function setPluginHookProvider(
+  next: PluginHookProvider | undefined,
+): void {
   provider = next;
 }
 

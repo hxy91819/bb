@@ -12,6 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SYSTEM_EXECUTION_OPTIONS_QUERY_KEY } from "@/hooks/queries/query-keys";
 import { makeThreadResponse } from "@/test/fixtures/thread-responses";
 import { useForkThreadFromMessage } from "./useForkThreadFromMessage";
+import {
+  collectPluginAppRegistrations,
+  definePluginApp,
+} from "@/lib/plugin-app-definition";
+import { threadCreationContextRegistry } from "@/lib/thread-creation-context";
 
 const mocks = vi.hoisted(() => ({
   defaultExecutionOptions: vi.fn(),
@@ -64,12 +69,95 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  threadCreationContextRegistry.clear();
   cleanup();
   queryClient.clear();
   vi.clearAllMocks();
 });
 
 describe("useForkThreadFromMessage", () => {
+  it("captures before reading source options and recaptures for a new fork", async () => {
+    let memberId = "A";
+    threadCreationContextRegistry.set(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({
+            capture: () => ({ memberId }),
+          });
+        }),
+      ),
+    );
+    mocks.defaultExecutionOptions.mockImplementation(async () => {
+      memberId = "B";
+      return {
+        model: "gpt-5",
+        permissionMode: "accept-edits",
+        reasoningLevel: "high",
+      };
+    });
+    mocks.spawn.mockResolvedValue(makeThreadResponse({ id: "thr_fork" }));
+    const navigateInPane = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useForkThreadFromMessage({
+          navigateInPane,
+          sourceThread: makeThread(),
+        }),
+      { wrapper: Wrapper },
+    );
+    await act(async () => {
+      await result.current({ sourceSeqEnd: 12 });
+    });
+    expect(mocks.spawn.mock.calls[0]?.[0]).toMatchObject({
+      experimental_pluginContext: { team: { memberId: "A" } },
+    });
+    await act(async () => {
+      await result.current({ sourceSeqEnd: 13 });
+    });
+    expect(mocks.spawn.mock.calls[1]?.[0]).toMatchObject({
+      experimental_pluginContext: { team: { memberId: "B" } },
+    });
+    expect(navigateInPane).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not read source options on capture failure and releases the in-flight operation", async () => {
+    let fail = true;
+    threadCreationContextRegistry.set(
+      "team",
+      collectPluginAppRegistrations(
+        definePluginApp((app) => {
+          app.experimental_threadCreationContext.register({
+            capture: () => {
+              if (fail) throw new Error("identity unavailable");
+              return { memberId: "B" };
+            },
+          });
+        }),
+      ),
+    );
+    mocks.spawn.mockResolvedValue(makeThreadResponse({ id: "thr_fork" }));
+    const navigateInPane = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useForkThreadFromMessage({
+          navigateInPane,
+          sourceThread: makeThread(),
+        }),
+      { wrapper: Wrapper },
+    );
+    await act(async () => {
+      await result.current({ sourceSeqEnd: 12 });
+    });
+    expect(mocks.defaultExecutionOptions).not.toHaveBeenCalled();
+    expect(navigateInPane).not.toHaveBeenCalled();
+    fail = false;
+    await act(async () => {
+      await result.current({ sourceSeqEnd: 12 });
+    });
+    expect(navigateInPane).toHaveBeenCalledTimes(1);
+  });
+
   it("creates an idle fork at the target sequence and opens it", async () => {
     mocks.spawn.mockResolvedValue(
       makeThreadResponse({

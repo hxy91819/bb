@@ -145,6 +145,7 @@ import {
   type DiffProps,
   type SourceCodeProps,
   type JsonValue,
+  type NewThreadRequest,
 } from "@get-bb/plugin-sdk";
 import { isComposerDraftEmpty } from "../internal/composer-view.js";
 import {
@@ -163,6 +164,7 @@ import {
 } from "../thread-info-groups.js";
 import {
   collectPluginAppRegistrations,
+  ThreadCreationContextRegistry,
   type CollectedPluginProviderIconRegistration,
   type CollectedExperimentalSidebarFooterItem,
 } from "../internal/plugin-app-collector.js";
@@ -314,6 +316,7 @@ interface TestComposerStore {
 
 interface SlotEnv {
   rpcQueryHost: RpcQueryHost;
+  threadCreationContext: experimental_ThreadCreationContextHost;
   rpcClient: PluginRpcClient;
   rpcCalls: RpcCall[];
   realtimeHandlers: Map<string, Set<(payload: unknown) => void>>;
@@ -454,10 +457,21 @@ function createSdkFakeNode(
   provided: unknown,
   path: string,
   calls: SdkCall[],
+  threadCreationContext: experimental_ThreadCreationContextHost,
 ): unknown {
   const callable = function sdkFakeNode() {};
   return new Proxy(callable, {
     apply(_target, _thisArg, args: unknown[]) {
+      if (path === "threads.spawn" || path === "threads.fork") {
+        const request = args[0];
+        if (
+          typeof request !== "object" ||
+          request === null ||
+          Array.isArray(request)
+        )
+          throw new Error("Expected thread creation request");
+        args = [threadCreationContext.prepare(request), ...args.slice(1)];
+      }
       calls.push({ method: path, args });
       if (typeof provided !== "function") {
         throw new Error(
@@ -478,6 +492,7 @@ function createSdkFakeNode(
         next,
         path === "" ? key : `${path}.${key}`,
         calls,
+        threadCreationContext,
       );
     },
   });
@@ -486,8 +501,14 @@ function createSdkFakeNode(
 function createSdkFake(
   fakes: PluginSdkTestFakes,
   calls: SdkCall[],
+  threadCreationContext: experimental_ThreadCreationContextHost,
 ): PluginBrowserBbSdk {
-  return createSdkFakeNode(fakes, "", calls) as PluginBrowserBbSdk;
+  return createSdkFakeNode(
+    fakes,
+    "",
+    calls,
+    threadCreationContext,
+  ) as PluginBrowserBbSdk;
 }
 
 function TestThreadTitle({ threadId }: { threadId: string }) {
@@ -934,6 +955,7 @@ function TestNewThreadComposer({
   draftKey,
   onSubmit,
 }: NewThreadComposerProps) {
+  const env = useSlotEnv("experimental_NewThreadComposer");
   const [text, setText] = useState(initialPrompt ?? "");
   return (
     <div
@@ -967,19 +989,21 @@ function TestNewThreadComposer({
           // Untouched submits echo the `default*` seeds back, mirroring the
           // real composer's round-trip guarantee so plugin tests can cover
           // the store-then-restore pattern.
-          void onSubmit({
-            projectId: defaultProjectId ?? "project-test",
-            providerId: defaultProviderId ?? "codex",
-            model: defaultModel ?? "gpt-5",
-            reasoningLevel: defaultReasoningLevel ?? "medium",
-            permissionMode: defaultPermissionMode ?? "auto",
-            ...(defaultServiceTier !== undefined
-              ? { serviceTier: defaultServiceTier }
-              : {}),
-            executionInputSources: {},
-            environment: defaultEnvironment ?? { type: "project-default" },
-            input: [{ type: "text", text, mentions: [] }],
-          });
+          void onSubmit(
+            env.threadCreationContext.prepare<NewThreadRequest>({
+              projectId: defaultProjectId ?? "project-test",
+              providerId: defaultProviderId ?? "codex",
+              model: defaultModel ?? "gpt-5",
+              reasoningLevel: defaultReasoningLevel ?? "medium",
+              permissionMode: defaultPermissionMode ?? "auto",
+              ...(defaultServiceTier !== undefined
+                ? { serviceTier: defaultServiceTier }
+                : {}),
+              executionInputSources: {},
+              environment: defaultEnvironment ?? { type: "project-default" },
+              input: [{ type: "text", text, mentions: [] }],
+            }),
+          );
         }}
       >
         Start thread
@@ -1862,6 +1886,28 @@ export function installTestPluginRuntime(): void {
 // loadPluginApp — run setup, capture typed slot registrations.
 // ---------------------------------------------------------------------------
 
+export interface experimental_ThreadCreationContextHost {
+  mount(pluginId: string, app: CapturedPluginApp): () => void;
+  capture(): Record<string, JsonValue>;
+  prepare<T extends object>(
+    request: T,
+  ): T & { experimental_pluginContext: Record<string, JsonValue> };
+  dispose(): void;
+}
+
+export function experimental_createThreadCreationContextHost(): experimental_ThreadCreationContextHost {
+  const registry = new ThreadCreationContextRegistry();
+  return {
+    mount(pluginId, app) {
+      registry.set(pluginId, app);
+      return () => registry.remove(pluginId, app);
+    },
+    capture: () => registry.capture(),
+    prepare: (request) => registry.prepare(request),
+    dispose: () => registry.clear(),
+  };
+}
+
 export interface CapturedPluginApp {
   homepageSections: PluginHomepageSectionRegistration[];
   settingsSections: PluginSettingsSectionRegistration[];
@@ -2104,6 +2150,7 @@ export interface RenderSlotOptions<
   context?: { projectId?: string | null; threadId?: string | null };
   /** `experimental_usePluginId()` value; defaults to `test-plugin`. */
   pluginId?: string;
+  experimental_threadCreationContextHost?: experimental_ThreadCreationContextHost;
   /** Initial `useRealtimeConnectionState()` value; defaults to `connected`. */
   realtimeConnectionState?: PluginRealtimeConnectionState;
   /** Initial state for this render's isolated composer scope and view. */
@@ -2643,7 +2690,10 @@ export function renderSlot<
     providers: options.environmentProviders?.providers ?? [],
   };
   const sdkCalls: SdkCall[] = [];
-  const sdk = createSdkFake(options.sdk ?? {}, sdkCalls);
+  const threadCreationContext =
+    options.experimental_threadCreationContextHost ??
+    experimental_createThreadCreationContextHost();
+  const sdk = createSdkFake(options.sdk ?? {}, sdkCalls, threadCreationContext);
   const codeTheme: PluginCodeThemeState = {
     mode: options.codeTheme?.mode ?? "light",
     name: options.codeTheme?.name ?? "pierre-light",
@@ -3017,6 +3067,7 @@ export function renderSlot<
   };
   const env: SlotEnv = {
     rpcQueryHost,
+    threadCreationContext,
     rpcClient,
     rpcCalls,
     realtimeHandlers,

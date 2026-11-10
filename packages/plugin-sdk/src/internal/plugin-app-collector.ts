@@ -18,3 +18,5 @@ export {
   type CollectedSidebarNavigationRegistration,
   collectPluginAppRegistrations,
 } from "./plugin-app-registration-collector.js";
+
+export { ThreadCreationContextRegistry } from "./plugin-app-registration-collector.js";
