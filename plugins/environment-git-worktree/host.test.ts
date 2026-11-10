@@ -30,16 +30,20 @@ function isPidAlive(pid: number): boolean {
 }
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
-  const result = await execFileAsync("git", args, {
-    cwd,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "bb",
-      GIT_AUTHOR_EMAIL: "bb@example.com",
-      GIT_COMMITTER_NAME: "bb",
-      GIT_COMMITTER_EMAIL: "bb@example.com",
+  const result = await execFileAsync(
+    "git",
+    ["-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", ...args],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "bb",
+        GIT_AUTHOR_EMAIL: "bb@example.com",
+        GIT_COMMITTER_NAME: "bb",
+        GIT_COMMITTER_EMAIL: "bb@example.com",
+      },
     },
-  });
+  );
   return result.stdout;
 }
 
