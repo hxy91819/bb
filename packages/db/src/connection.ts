@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { normalizeThreadSearchText } from "./data/thread-search-text.js";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { resourceUsage, threadCpuUsage } from "node:process";
@@ -298,6 +299,12 @@ export function createConnection(
   sqlite.pragma(`mmap_size = ${SQLITE_MMAP_SIZE_BYTES}`);
   sqlite.pragma(`busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
   registerHostPathSqlFunctions(sqlite);
+  sqlite.function(
+    "bb_search_normalize",
+    { deterministic: true },
+    (value: unknown) =>
+      typeof value === "string" ? normalizeThreadSearchText(value) : null,
+  );
   instrumentSqliteClient(sqlite, options);
 
   const db = drizzle({ client: sqlite, schema });

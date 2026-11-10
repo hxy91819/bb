@@ -37,6 +37,8 @@ interface SectionDeleteOptions extends JsonOptions {
 }
 
 interface SearchOptions extends JsonOptions {
+  thread?: string;
+  offset?: string;
   limit?: string;
 }
 
@@ -238,14 +240,36 @@ export function registerOrganizationCommands(
 
   parent
     .command("search <query>")
-    .description("Search threads and messages")
+    .description(
+      "Search threads and messages, or all matching messages in one thread",
+    )
+    .option("--thread <id>", "Search messages only in this thread")
+    .option("--offset <count>", "Skip matching messages (requires --thread)")
     .option(
       "--limit <count>",
-      `Maximum results per group (1-${THREAD_SEARCH_LIMIT_PER_GROUP_MAX})`,
+      `Maximum results per group (1-${THREAD_SEARCH_LIMIT_PER_GROUP_MAX}), or messages with --thread (1-100)`,
     )
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(async (query: string, opts: SearchOptions) => {
+        if (opts.thread) {
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).threads.experimental_searchMessages({
+            threadId: opts.thread,
+            query,
+            limit:
+              opts.limit === undefined
+                ? undefined
+                : Number(parsePositiveInteger(opts.limit, "--limit", 100)),
+            offset: opts.offset === undefined ? undefined : Number(opts.offset),
+          });
+          if (outputJson(opts, result)) return;
+          printHumanJson(result);
+          return;
+        }
+        if (opts.offset !== undefined)
+          throw new Error("--offset requires --thread");
         const result = await createCliBbSdk(getUrl()).threads.search({
           query,
           limitPerGroup: parsePositiveInteger(
