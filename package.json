@@ -178,7 +178,7 @@
       "vite@6.4.4": "6.4.5",
       "follow-redirects@1.16.1": "1.16.2",
       "joi@17.13.8": "17.13.9",
-      "node-forge@1.4.0": "1.4.1"
+      "node-forge": "1.4.3"
     },
     "patchedDependencies": {
       "app-builder-lib@26.15.7": "patches/app-builder-lib@26.15.7.patch",
