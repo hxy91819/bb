@@ -51,6 +51,7 @@ function writeExecutable(path: string, contents: string): void {
 type Fixture = ReturnType<typeof createFixture>;
 
 function writeRestartingSystemdUser(fixture: Fixture): void {
+  writeExecutable(join(fixture.binDir, "id"), "#!/bin/sh\necho 1000\n");
   writeExecutable(join(fixture.binDir, "uname"), "#!/bin/sh\necho Linux\n");
   writeExecutable(
     join(fixture.binDir, "systemctl"),
@@ -379,7 +380,7 @@ exec '${process.execPath}' "$@"
     );
   });
 
-  it("starts an owned daemon that has no service under launcher supervision", () => {
+  it("starts an owned daemon that has no service under launcher supervision", async () => {
     const fixture = createFixture();
     mkdirSync(join(fixture.homeDir, ".bb-machines", "owned"), {
       recursive: true,
@@ -388,36 +389,40 @@ exec '${process.execPath}' "$@"
       join(fixture.homeDir, ".bb-machines", "owned"),
     );
     writeJoinedState({ ...fixture, dataDir });
-    writeFileSync(join(dataDir, "host-daemon-port"), "40000\n");
+    const listener = createNetServer();
+    await new Promise<void>((resolve) =>
+      listener.listen(0, "127.0.0.1", resolve),
+    );
+    const address = listener.address();
+    if (address === null || typeof address === "string")
+      throw new Error("Expected a TCP address");
+    const port = String(address.port);
+    await new Promise<void>((resolve, reject) =>
+      listener.close((error) => (error ? reject(error) : resolve())),
+    );
+    writeFileSync(join(dataDir, "host-daemon-port"), `${port}\n`);
     const invocationPath = join(dataDir, "invocation");
     mkdirSync(join(dataDir, "npm", "bin"), { recursive: true });
     writeExecutable(
       join(dataDir, "npm", "bin", "bb-app"),
       createEnrollingBbAppScript({ hostId: "host-test", invocationPath }),
     );
-    const daemonPidPath = join(dataDir, "install-daemon.pid");
 
     const started = runScript(
       ["--start", "--host-id", "host-test", "--data-dir", dataDir],
       fixture,
     );
 
-    try {
-      expect(started.status, started.stderr).toBe(0);
-      expect(readFileSync(invocationPath, "utf8").trim().split("\n")).toEqual([
-        "host-daemon",
-        "--auto-update",
-        "--supervise",
-        "--host-daemon-port",
-        "40000",
-        "--server-url",
-        "https://machine.getbb.app",
-      ]);
-    } finally {
-      if (existsSync(daemonPidPath)) {
-        process.kill(Number(readFileSync(daemonPidPath, "utf8")), "SIGTERM");
-      }
-    }
+    expect(started.status, started.stderr).toBe(0);
+    expect(readFileSync(invocationPath, "utf8").trim().split("\n")).toEqual([
+      "host-daemon",
+      "--auto-update",
+      "--supervise",
+      "--host-daemon-port",
+      port,
+      "--server-url",
+      "https://machine.getbb.app",
+    ]);
   });
 
   it("stops and uninstalls an owned Linux service through installer flags", () => {
