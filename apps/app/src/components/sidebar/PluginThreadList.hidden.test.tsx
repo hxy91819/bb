@@ -16,6 +16,8 @@ import {
   SidebarThreadListHarness,
   stubPluginRpcFetch,
 } from "@/test/fixtures/sidebar-thread-list";
+import { ThreadActionsProvider } from "@/components/thread/ThreadActionsProvider";
+import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
 import { PluginThreadList } from "./PluginThreadList";
 
 afterEach(() => {
@@ -64,13 +66,17 @@ it("a hidden plugin thread list mounts no rows and subscribes no thread ids", as
   );
   const rendered = render(
     <SidebarThreadListHarness queryClient={seedSidebarQueryClient(250)}>
-      <ThreadActionCollectors
-        coreRegistrations={CORE_THREAD_ACTIONS}
-        requestRename={() => {}}
-      />
-      <ThreadActionSurfaceVisibility visible={false}>
-        <PluginThreadList replacement={replacement} onNavigate={() => {}} />
-      </ThreadActionSurfaceVisibility>
+      <ThreadActionsProvider>
+        <ThreadListContributions>
+          <ThreadActionCollectors
+            coreRegistrations={CORE_THREAD_ACTIONS}
+            requestRename={() => {}}
+          />
+          <ThreadActionSurfaceVisibility visible={false}>
+            <PluginThreadList replacement={replacement} onNavigate={() => {}} />
+          </ThreadActionSurfaceVisibility>
+        </ThreadListContributions>
+      </ThreadActionsProvider>
     </SidebarThreadListHarness>,
   );
   await act(async () => {
