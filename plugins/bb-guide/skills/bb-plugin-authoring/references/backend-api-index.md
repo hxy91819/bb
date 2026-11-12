@@ -34,10 +34,7 @@ Check imports here, behavior in the Plugin Guide, and signatures in the installe
 - `ExperimentalThreadActionTabProps`
 - `ExperimentalThreadTabProps`
 - `ExperimentalThreadTabActionContext`
-- `ExperimentalActivityEvidence`
-- `ExperimentalThreadActivityArgs`
-- `ExperimentalThreadActivityResult`
-- `ExperimentalPluginThreadActivityArgs`
+- `ExperimentalActivityEvidence`, `ExperimentalThreadActivityArgs`, `ExperimentalThreadActivityResult`, `ExperimentalPluginThreadActivityArgs`
 - `ExperimentalPanelController`
 - `ExperimentalDesktopBrowserAcquireInput`
 - `ExperimentalDesktopBrowserCreateInput`
@@ -492,5 +489,4 @@ Check imports here, behavior in the Plugin Guide, and signatures in the installe
 The keyed method and row types are inferred from the `contract` option.
 Read-state and error behavior is documented in [Frontend hooks and UI](frontend-hooks-and-ui.md).
 
-Activity API reference: the Plugin Guide's Thread plugin metadata card describes
-`PluginBbSdk.threads.experimental_activity`.
+Activity API reference: the Plugin Guide's Thread plugin metadata card describes `PluginBbSdk.threads.experimental_activity`.
