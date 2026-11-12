@@ -110,6 +110,7 @@ export {
   listThreadAncestors,
   listThreadDescendants,
   searchThreadsWithPendingInteractionState,
+  searchThreadMessages,
   THREAD_SEARCH_LIMIT_PER_GROUP_DEFAULT,
   THREAD_SEARCH_LIMIT_PER_GROUP_MAX,
 } from "./threads.js";
