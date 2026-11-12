@@ -30,6 +30,7 @@ import {
   seedThreadRuntimeState,
   seedTurnStarted,
 } from "../helpers/seed.js";
+import { flushChildThreadNotifications } from "../helpers/child-thread-notification-clock.js";
 import { textInput } from "../helpers/prompt-input.js";
 import { internalAuthHeaders } from "../helpers/commands.js";
 import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
@@ -294,7 +295,7 @@ describe("child outcomes without provider completion", () => {
         includeStopping: false,
         resumingThreadIds: new Set(),
       });
-      await vi.advanceTimersByTimeAsync(2_000);
+      await flushChildThreadNotifications(harness);
 
       const [notice] = parentSystemRequests(harness, parent.id);
       expect(notice?.systemMessageKind).toBe("child-interrupted");
@@ -394,7 +395,7 @@ describe("child outcomes without provider completion", () => {
         includeStopping: false,
         resumingThreadIds: new Set(),
       });
-      await vi.advanceTimersByTimeAsync(2_000);
+      await flushChildThreadNotifications(harness);
 
       const [notice] = parentSystemRequests(harness, parent.id);
       expect(notice?.systemMessageSubject).toMatchObject({
@@ -461,7 +462,7 @@ describe("child outcomes without provider completion", () => {
         includeStopping: false,
         resumingThreadIds: new Set(),
       });
-      await vi.advanceTimersByTimeAsync(2_000);
+      await flushChildThreadNotifications(harness);
 
       const [notice] = parentSystemRequests(harness, parent.id);
       expect(notice?.systemMessageKind).toBe("child-interrupted");
