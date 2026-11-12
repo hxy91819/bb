@@ -283,7 +283,7 @@ function claudePlan(
 
 function accountFields(account: AccountInfo) {
   return {
-    accountEmail: account.email ?? null,
+    accountEmail: z.email().safeParse(account.email).data ?? null,
     planLabel: claudePlan(account)?.label ?? null,
   };
 }
@@ -435,8 +435,7 @@ function normalizeUsage(raw: unknown, account: AccountInfo): ProviderUsage {
   const plan = claudePlan(account);
   return {
     status: "ok",
-    accountEmail: account.email ?? null,
-    planLabel: plan?.label ?? null,
+    ...accountFields(account),
     plan: plan ? { id: plan.id, multiplier: null } : null,
     windows,
   };
@@ -463,6 +462,16 @@ export async function getClaudeProviderUsage(): Promise<ProviderUsageResult> {
     };
   }
   const { account, usage } = probe;
+  if (
+    isSignedIn(account) &&
+    !usage.rate_limits_available &&
+    args.env.CLAUDE_CONFIG_DIR
+  ) {
+    return {
+      supported: true,
+      usage: { status: "ok", ...accountFields(account), windows: [] },
+    };
+  }
   if (!isSignedIn(account) || !usage.rate_limits_available) {
     return { supported: true, usage: { status: "unauthenticated" } };
   }
