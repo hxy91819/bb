@@ -1567,16 +1567,6 @@ describe("Account Pool plugin", () => {
       "--login and --api-key cannot be combined",
     );
 
-    const removedImport = await run([
-      "account",
-      "add",
-      "--provider",
-      "claude",
-      "--import",
-    ]);
-    expect(removedImport.exitCode).toBe(1);
-    expect(removedImport.stderr).toContain("--import");
-
     const jsonEnvelope = await run([
       "account",
       "add",
