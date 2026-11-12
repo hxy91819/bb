@@ -2513,6 +2513,13 @@ export function getQueuedRetryOfTurnRequest(
   );
 }
 
+export function hasQueuedRetryOfTurnRequest(
+  db: DbQueryConnection,
+  args: { threadId: string; retryOfTurnRequestId: string },
+): boolean {
+  return getQueuedRetryOfTurnRequest(db, args) !== null;
+}
+
 export function hasLiveQueuedRetry(
   db: DbQueryConnection,
   threadId: string,
