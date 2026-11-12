@@ -27,9 +27,6 @@ export interface BottomAnchorContextValue {
   isAtBottom: boolean;
   scrollToBottom: () => void;
   scrollElementIntoView: (args: ScrollElementIntoViewArgs) => void;
-  scrollElementIntoViewClampedToMaxScroll: (
-    args: ScrollElementIntoViewClampedToMaxScrollArgs,
-  ) => void;
   holdContentPosition: (args: HoldContentPositionArgs) => void;
   positionKeeper: ScrollPositionKeeper;
 }
@@ -43,6 +40,7 @@ interface BottomAnchoredScrollBodyProps {
   children: ReactNode;
   footer: ReactNode;
   scrollOverlay?: ReactNode;
+  contentInsetEndPx?: number;
   scrollAreaClassName?: string;
   contentClassName?: string;
   maxWidthClassName: string;
@@ -52,10 +50,6 @@ interface BottomAnchoredScrollBodyProps {
 interface ScrollElementIntoViewArgs {
   element: HTMLElement;
   options?: ScrollIntoViewOptions;
-}
-
-interface ScrollElementIntoViewClampedToMaxScrollArgs {
-  element: HTMLElement;
 }
 
 interface HoldContentPositionArgs {
@@ -104,6 +98,7 @@ export function BottomAnchoredScrollBody({
   maxWidthClassName,
   footer,
   scrollOverlay,
+  contentInsetEndPx,
   children,
   scrollAnchorThreadId,
 }: BottomAnchoredScrollBodyProps) {
@@ -113,6 +108,7 @@ export function BottomAnchoredScrollBody({
   const scrollContentRef = useRef<HTMLDivElement>(null);
   const pageContentRef = useRef<HTMLDivElement>(null);
   const scrollFooterRef = useRef<HTMLDivElement>(null);
+  const scrollFloorRef = useRef<HTMLDivElement>(null);
   const hasFooter = Boolean(footer);
   const scrollAnchorCaptureThrottleRef = useRef<{
     lastWriteAt: number;
@@ -137,6 +133,7 @@ export function BottomAnchoredScrollBody({
         bottomThresholdPx: BOTTOM_ANCHOR_THRESHOLD_PX,
         deferWritesWhileScrolling: isIOSWebKit(navigator),
         getContentElement: () => pageContentRef.current,
+        getFloorElement: () => scrollFloorRef.current,
         getFooterElement: () => scrollFooterRef.current,
         getScrollElement: () => scrollAreaRef.current,
         getTopLevelRows,
@@ -159,23 +156,6 @@ export function BottomAnchoredScrollBody({
   const scrollElementIntoView = useCallback(
     ({ element, options }: ScrollElementIntoViewArgs) => {
       positionKeeper.revealElement(element, options ?? {});
-    },
-    [positionKeeper],
-  );
-
-  const scrollElementIntoViewClampedToMaxScroll = useCallback(
-    ({ element }: ScrollElementIntoViewClampedToMaxScrollArgs) => {
-      const scrollArea = scrollAreaRef.current;
-      if (!scrollArea) {
-        element.scrollIntoView({ block: "start", inline: "nearest" });
-        return;
-      }
-      positionKeeper.scrollTo(
-        element.getBoundingClientRect().top -
-          scrollArea.getBoundingClientRect().top +
-          scrollArea.scrollTop,
-        "instant",
-      );
     },
     [positionKeeper],
   );
@@ -331,7 +311,6 @@ export function BottomAnchoredScrollBody({
       isAtBottom,
       scrollToBottom,
       scrollElementIntoView,
-      scrollElementIntoViewClampedToMaxScroll,
       holdContentPosition,
       positionKeeper,
     }),
@@ -340,7 +319,6 @@ export function BottomAnchoredScrollBody({
       isAtBottom,
       scrollToBottom,
       scrollElementIntoView,
-      scrollElementIntoViewClampedToMaxScroll,
       holdContentPosition,
       positionKeeper,
     ],
@@ -362,7 +340,15 @@ export function BottomAnchoredScrollBody({
             <div
               ref={scrollContentRef}
               className="flex min-h-full min-w-0 flex-col"
+              style={
+                contentInsetEndPx ? { paddingInlineEnd: contentInsetEndPx } : undefined
+              }
             >
+              <div
+                ref={scrollFloorRef}
+                aria-hidden="true"
+                className="pointer-events-none invisible w-px shrink-0"
+              />
               <div
                 ref={pageContentRef}
                 data-scroll-attached={isAtBottom ? "" : undefined}
@@ -388,9 +374,9 @@ export function BottomAnchoredScrollBody({
           {scrollOverlay ? (
             <div
               data-scroll-overlay=""
-              className="pointer-events-none z-30 col-start-1 row-start-1 flex min-h-0 min-w-0 items-center justify-end px-3 py-3"
+              className="pointer-events-none z-30 col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col items-end px-3 py-3"
             >
-              <div className="pointer-events-auto">{scrollOverlay}</div>
+              {scrollOverlay}
             </div>
           ) : null}
         </div>

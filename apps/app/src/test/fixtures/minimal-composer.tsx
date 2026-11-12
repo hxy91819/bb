@@ -9,10 +9,16 @@ import {
   type ExperimentalComposerEditor,
   type ExperimentalDroppedThreadMention,
 } from "@get-bb/plugin-sdk/app";
+import { installPluginRuntime } from "@/lib/plugin-frontend";
 import { setPluginSlotRegistrations } from "@/lib/plugin-slots";
 import { makePluginRegistrationSet } from "./plugins";
 
 export const MINIMAL_COMPOSER_PLUGIN_ID = "minimal-composer";
+
+export const minimalComposerLastRender: {
+  renderer: object | null;
+  composer: { scope: unknown; key: string } | null;
+} = { renderer: null, composer: null };
 
 function shifted(mention: ComposerMention, delta: number): ComposerMention {
   return { ...mention, from: mention.from + delta, to: mention.to + delta };
@@ -21,6 +27,8 @@ function shifted(mention: ComposerMention, delta: number): ComposerMention {
 function MinimalComposer() {
   const composer = useComposer();
   const renderer = useComposerRenderer();
+  minimalComposerLastRender.renderer = renderer;
+  minimalComposerLastRender.composer = composer;
   const { popups, Popup, Actions } = useComposerContributions();
   const rootRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,24 +88,21 @@ function MinimalComposer() {
       textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     },
     acceptsThreadDrop: () => !renderer.inputLocked,
-    insertDroppedThread(thread: ExperimentalDroppedThreadMention) {
-      const text = `@thread:${thread.threadId}`;
-      const at = composer.draft.text.length;
-      insert(
-        {
-          text,
-          mentions: [
-            {
-              kind: "thread",
-              threadId: thread.threadId,
-              label: thread.label,
-              from: 0,
-              to: text.length,
-            },
-          ],
-        },
-        at,
-      );
+    insertDroppedThreads(threads: readonly ExperimentalDroppedThreadMention[]) {
+      let text = "";
+      const mentions = threads.map((thread) => {
+        if (text.length > 0) text += " ";
+        const from = text.length;
+        text += `@thread:${thread.threadId}`;
+        return {
+          kind: "thread" as const,
+          threadId: thread.threadId,
+          label: thread.label,
+          from,
+          to: text.length,
+        };
+      });
+      insert({ text, mentions }, composer.draft.text.length);
     },
     openPopup(pluginId, popupId) {
       const popup = popups.find(
@@ -163,6 +168,7 @@ function MinimalComposer() {
 }
 
 export function registerMinimalComposer(): void {
+  installPluginRuntime();
   setPluginSlotRegistrations(
     MINIMAL_COMPOSER_PLUGIN_ID,
     makePluginRegistrationSet({
