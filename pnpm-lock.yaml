@@ -6029,6 +6029,52 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(jsdom@29.1.1(@noble/hashes@2.4.0))(msw@2.15.0(@types/node@22.20.5)(@typescript/typescript6@6.0.2))(vite@8.3.6(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.8.3))
 
+  plugins/steward:
+    dependencies:
+      react-markdown:
+        specifier: ^10.1.0
+        version: 10.1.0(@types/react@19.3.0)(react@19.3.1)
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@bb/plugin-build':
+        specifier: workspace:*
+        version: link:../../packages/plugin-build
+      '@get-bb/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.5
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      jsdom:
+        specifier: ^29.0.1
+        version: 29.1.1(@noble/hashes@2.4.0)
+      react:
+        specifier: ^19.0.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.1(react@19.3.1)
+      tsrs:
+        specifier: 0.18.0-ts7.1.0-dev.20260929
+        version: 0.18.0-ts7.1.0-dev.20260929
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(jsdom@29.1.1(@noble/hashes@2.4.0))(msw@2.15.0(@types/node@22.20.5)(@typescript/typescript6@6.0.2))(vite@8.3.6(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.8.3))
+
   plugins/storage-retention:
     dependencies:
       '@bb/domain':
@@ -20749,7 +20795,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -23332,7 +23378,7 @@ snapshots:
 
   '@types/bunyan@1.8.11':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/cacache@20.0.1':
     dependencies:
@@ -23343,7 +23389,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
       '@types/responselike': 1.0.3
 
   '@types/chai@5.2.3':
@@ -23353,7 +23399,7 @@ snapshots:
 
   '@types/cli-progress@3.11.6':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/cross-spawn@6.0.6':
     dependencies:
@@ -23494,7 +23540,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/geojson@7946.0.16': {}
 
@@ -23520,7 +23566,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/linkify-it@3.0.5': {}
 
@@ -23586,7 +23632,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/retry@0.12.0': {}
 
@@ -23596,7 +23642,7 @@ snapshots:
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
 
   '@types/statuses@2.0.6': {}
 
@@ -27007,7 +27053,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -27024,7 +27070,7 @@ snapshots:
 
   jest-worker@29.7.0:
     dependencies:
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
@@ -29343,7 +29389,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.2
-      '@types/node': 24.19.2
+      '@types/node': 22.20.5
       long: 5.3.2
 
   proxy-addr@2.0.8:
