@@ -368,7 +368,8 @@ export function registerPoolCli(
                   input.options.json === true,
                 );
               }
-              if (provider !== "claude") {
+              const imported = input.options.import;
+              if (!imported && provider !== "claude") {
                 throw new PluginCliError(
                   "Anthropic API keys require --provider claude.",
                   { code: "invalid_value" },
