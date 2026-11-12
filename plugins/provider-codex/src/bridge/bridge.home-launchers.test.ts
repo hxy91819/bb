@@ -348,7 +348,7 @@ it("reaps obsolete pool catalog processes before reusing the same execution on a
   }
 });
 
-it("cancels an initializing old route without leaving a stale cached process", async () => {
+it("isolates overlapping route probes and reaps both processes", async () => {
   await writeFile(
     scriptPath,
     JSON.stringify({
@@ -373,10 +373,12 @@ it("cancels an initializing old route without leaving a stale cached process", a
       CODEX_POOL_AUTH_TOKEN: "new",
     },
   });
-  expect((await harness.waitForResponse(1)).error).toBeDefined();
+  expect((await harness.waitForResponse(1)).error).toBeUndefined();
   expect((await harness.waitForResponse(2)).error).toBeUndefined();
-  const log = await readFile(processLog, "utf8");
-  expect(
-    log.split("\n").filter((line) => line.startsWith("exit:")),
-  ).toHaveLength(1);
+  await vi.waitFor(async () => {
+    const log = await readFile(processLog, "utf8");
+    expect(
+      log.split("\n").filter((line) => line.startsWith("exit:")),
+    ).toHaveLength(2);
+  });
 });
