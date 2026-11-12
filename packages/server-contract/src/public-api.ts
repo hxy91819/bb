@@ -1,4 +1,4 @@
-import { type ThreadMessageSearchQuery, type ThreadMessageSearchResponse, threadMessageSearchQuerySchema } from "./api/threads.js";
+import { type ThreadMessageSearchQuery, type ThreadMessageSearchResponse } from "./api/threads.js";
 import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
