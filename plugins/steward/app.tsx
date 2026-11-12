@@ -7,7 +7,7 @@ import {
   useRealtime,
   useRealtimeConnectionState,
   useRpc,
-  type PluginThreadHeaderActionProps,
+  experimental_useAppPanel,
   type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
 import type { Checks, Registration, rpcContract } from "./contract";
@@ -59,6 +59,7 @@ function DocumentButtons({
   compact?: boolean;
 }) {
   const navigate = useBbNavigate();
+  const panel = experimental_useAppPanel();
   const rpc = useRpc<typeof rpcContract>();
   const [error, setError] = useState("");
   const request = useRef(0);
@@ -66,8 +67,8 @@ function DocumentButtons({
     const id = ++request.current;
     setError("");
     if (registration.source.kind === "git") {
-      const opened = navigate.openThreadPanel({
-        actionId: "document",
+      const opened = panel.openTab({
+        tab: { id: "document", context: { kind: "thread" }, availability: "action" },
         title: document === "workbook" ? "工作簿" : "要求帐",
         params: { document },
       });
@@ -151,7 +152,7 @@ function DocumentPanel({ threadId, params }: ExperimentalThreadActionTabProps) {
 function Header({
   threadId,
   isCompactViewport,
-}: PluginThreadHeaderActionProps) {
+}: { threadId: string; isCompactViewport: boolean }) {
   const { registration, error } = useSteward(threadId);
   const { threadId: focusedThreadId } = useBbContext();
   if (!registration) return null;
@@ -355,6 +356,9 @@ export default definePluginApp((app) => {
     component: DocumentPanel,
     layout: "flush",
   });
+  if (!("experimental_threadHeaderAction" in app.slots) || typeof app.slots.experimental_threadHeaderAction !== "function") {
+    throw new Error("Steward requires the legacy thread header slot supported by BB 0.49.");
+  }
   app.slots.experimental_threadHeaderAction({
     id: "documents",
     title: "管家文件",

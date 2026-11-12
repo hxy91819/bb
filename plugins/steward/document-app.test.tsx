@@ -27,7 +27,7 @@ it("UI opens README → month directory → original shard at the displayed SHA 
   const f = await documentFixture();
   const slot = renderSlot(
     panel,
-    { threadId: "original", params: { document: "ledger" } },
+    { threadId: "original", environment: null, params: { document: "ledger" } },
     {
       rpc: {
         show: () => f.registration,
@@ -60,7 +60,7 @@ it("UI continues a partial Unicode file at its original SHA and marks completion
   const sha = await f.advance();
   const slot = renderSlot(
     panel,
-    { threadId: "original", params: { document: "ledger" } },
+    { threadId: "original", environment: null, params: { document: "ledger" } },
     {
       rpc: {
         show: () => f.registration,
@@ -98,7 +98,7 @@ it("UI follows docs README to root, reenters docs and returns to the same root w
   const sha = await f.advance();
   const slot = renderSlot(
     panel,
-    { threadId: "original", params: { document: "ledger" } },
+    { threadId: "original", environment: null, params: { document: "ledger" } },
     {
       rpc: {
         show: () => f.registration,
@@ -152,7 +152,7 @@ it("renders Markdown headings, task lists, tables and code while following refer
   const sha = await f.advance();
   const slot = renderSlot(
     panel,
-    { threadId: "original", params: { document: "workbook" } },
+    { threadId: "original", environment: null, params: { document: "workbook" } },
     {
       rpc: {
         show: () => f.registration,

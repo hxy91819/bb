@@ -35,7 +35,7 @@ it("opens Git documents in the thread side panel instead of the header", async (
           snapshot: { repo: "/repo", ref: "origin/main", sha: "a".repeat(40) },
         }),
       },
-      openThreadPanel: () => true,
+      experimental_panel: { openTab: () => true },
     },
   );
   try {
@@ -46,8 +46,8 @@ it("opens Git documents in the thread side panel instead of the header", async (
       (await slot.findByRole("button", { name })).click();
       await vi.waitFor(() =>
         expect(slot.inspection.navigateCalls.at(-1)).toMatchObject({
-          method: "openThreadPanel",
-          options: { actionId: "document", params: { document } },
+          method: "experimental_panel.openTab",
+          options: { tab: { id: "document" }, params: { document } },
         }),
       );
     }
@@ -229,7 +229,7 @@ it("reads Git history in the plugin at the pinned SHA and clears old content whe
         tab.availability === "action" &&
         tab.id === "document",
     )!,
-    { threadId: "git", params: { document: "ledger" } },
+    { threadId: "git", environment: null, params: { document: "ledger" } },
     {
       rpc: {
         show: () =>
