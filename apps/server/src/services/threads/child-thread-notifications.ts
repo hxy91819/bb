@@ -1,4 +1,5 @@
 import {
+  emitPluginMessageCancelled,
   pluginTurnFailureDeadline,
   waitForPluginTurnFailed,
 } from "../plugins/plugin-thread-events.js";
@@ -15,6 +16,9 @@ import {
 } from "@bb/domain";
 import {
   getThread,
+  getPendingCoalescedQueuedThreadMessage,
+  updateCoalescedQueuedThreadMessageInTransaction,
+  deleteCoalescedQueuedThreadMessageInTransaction,
   getQueuedRetryOfTurnRequest,
   listActiveBackgroundTaskCountsByThreadIds,
 } from "@bb/db";
@@ -23,6 +27,7 @@ import { z } from "zod";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { requestQueuedMessageDispatchAt } from "./queued-message-dispatch.js";
 import { buildExecutionOptions } from "./thread-commands.js";
+import { toThreadQueuedMessage } from "./thread-queued-messages.js";
 import { postCoalescedSystemNotice } from "./coalesced-system-notices.js";
 import {
   buildParentSystemInputFromTemplateSlot,
@@ -444,6 +449,79 @@ function mergeChildThreadTurnNotificationItem<
   );
 }
 
+function shouldNotifyChildFailure(
+  deps: Pick<LoggedPendingInteractionWorkSessionDeps, "db">,
+  threadId: string,
+  failedRequestId: string | null,
+): boolean {
+  if (getThread(deps.db, threadId) === null) return false;
+  const failed = loadFailedTurn(deps.db, threadId);
+  if ((failed?.request.requestId ?? null) !== failedRequestId) return false;
+  if (!failed) return true;
+  const retry = getQueuedRetryOfTurnRequest(deps.db, {
+    threadId,
+    retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
+  });
+  return retry === null || retry.state === "failed_exhausted";
+}
+
+export function reconcileChildThreadRetryNotifications(
+  deps: Pick<LoggedPendingInteractionWorkSessionDeps, "db" | "hub">,
+  parentThreadId: string,
+): void {
+  const change = deps.db.transaction(
+    (tx) => {
+      const row = getPendingCoalescedQueuedThreadMessage(tx, {
+        coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
+        threadId: parentThreadId,
+      });
+      if (row?.coalesceState == null) return null;
+      const previous = childThreadTurnNotificationBatchSchema.parse(
+        JSON.parse(row.coalesceState),
+      );
+      let changed = false;
+      const items = previous.flatMap((entry) => {
+        const decision = entry.retryDecision;
+        if (decision === null || decision.deadline > Date.now()) return [entry];
+        changed = true;
+        return shouldNotifyChildFailure(
+          deps,
+          entry.childThread.id,
+          decision.requestId,
+        )
+          ? [{ ...entry, retryDecision: null }]
+          : [];
+      });
+      if (!changed) return null;
+      if (items.length === 0) {
+        const deleted = deleteCoalescedQueuedThreadMessageInTransaction(
+          tx,
+          row,
+        );
+        return deleted === null ? null : { cancelled: true, row: deleted };
+      }
+      const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
+      const updated = updateCoalescedQueuedThreadMessageInTransaction(tx, {
+        id: row.id,
+        threadId: parentThreadId,
+        coalesceState: JSON.stringify(items),
+        content: buildChildThreadTurnStatusBatchInput({ items }),
+        systemNotice: {
+          kind: taxonomy.systemMessageKind,
+          subject: taxonomy.systemMessageSubject,
+        },
+        windowEndsAt: row.sendAt ?? Date.now(),
+      });
+      return updated === null ? null : { cancelled: false, row: updated };
+    },
+    { behavior: "immediate" },
+  );
+  if (change === null) return;
+  if (change.cancelled)
+    emitPluginMessageCancelled(toThreadQueuedMessage(change.row));
+  deps.hub.notifyThread(parentThreadId, ["queue-changed"]);
+}
+
 async function queueChildThreadTurnNotificationBatchItem(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: QueueChildThreadTurnNotificationArgs,
@@ -457,21 +535,11 @@ async function queueChildThreadTurnNotificationBatchItem(
     args.turnStatus === "failed" && !args.failureContext
       ? pluginTurnFailureDeadline(args.childThread.id)
       : null;
-  const shouldNotifyFailure = () => {
-    const failed = loadFailedTurn(deps.db, args.childThread.id);
-    if ((failed?.request.requestId ?? null) !== failedRequestId) return false;
-    if (!failed) return true;
-    const retry = getQueuedRetryOfTurnRequest(deps.db, {
-      threadId: args.childThread.id,
-      retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
-    });
-    return retry === null || retry.state === "failed_exhausted";
-  };
   if (
     args.turnStatus === "failed" &&
     !args.failureContext &&
     deadline === null &&
-    !shouldNotifyFailure()
+    !shouldNotifyChildFailure(deps, args.childThread.id, failedRequestId)
   )
     return;
   const parentThread = getThread(deps.db, args.parentThreadId);
@@ -554,7 +622,11 @@ async function queueChildThreadTurnNotificationBatchItem(
                   entry.retryDecision.requestId !== failedRequestId
                 )
                   return [entry];
-                return shouldNotifyFailure()
+                return shouldNotifyChildFailure(
+                  deps,
+                  args.childThread.id,
+                  failedRequestId,
+                )
                   ? [{ ...entry, retryDecision: null }]
                   : [];
               }),

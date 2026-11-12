@@ -3,7 +3,10 @@ import {
   listEvents,
   listQueuedThreadMessages,
 } from "@bb/db";
-import { emitPluginThreadEvents } from "../../../src/services/plugins/plugin-thread-events.js";
+import {
+  emitPluginThreadEvents,
+  setPluginThreadEventEmitter,
+} from "../../../src/services/plugins/plugin-thread-events.js";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -929,13 +932,18 @@ it("coalesces thread appends and delivers current status without reading history
   }
 });
 
-it.each(["exhausted", "cancelled", "completed"])(
-  "waits for the retry decision and notifies the parent when retry is %s",
-  async (outcome) => {
-    const recorded: unknown[] = [];
-    globals.__retryDecisions = recorded;
-    const { harness, cleanup } = await setUpPluginHarness(
-      `
+it.each([
+  "exhausted",
+  "cancelled",
+  "completed",
+  "restarted",
+  "restarted-idle",
+  "restarted-sibling",
+])("settles parent notifications when retry is %s", async (outcome) => {
+  const recorded: unknown[] = [];
+  globals.__retryDecisions = recorded;
+  const { harness, cleanup } = await setUpPluginHarness(
+    `
     export default function plugin(bb: any) {
       bb.events.on("turn.failed", async (event: any) => {
         (globalThis as any).__retryDecisions.push(event);
@@ -952,115 +960,150 @@ it.each(["exhausted", "cancelled", "completed"])(
       });
     }
   `,
-      true,
-    );
-    try {
-      const {
-        thread: parent,
-        environment,
-        project,
-        session,
-      } = seedThreadFixture(harness);
-      seedThreadRuntimeState(harness.deps, {
-        threadId: parent.id,
-        environmentId: environment.id,
-        providerThreadId: "parent-provider",
-      });
-      const child = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-        parentThreadId: parent.id,
-        status: "active",
-      });
-      seedThreadRuntimeState(harness.deps, {
+    true,
+  );
+  try {
+    const {
+      thread: parent,
+      environment,
+      project,
+      session,
+    } = seedThreadFixture(harness);
+    seedThreadRuntimeState(harness.deps, {
+      threadId: parent.id,
+      environmentId: environment.id,
+      providerThreadId: "parent-provider",
+    });
+    const child = seedThread(harness.deps, {
+      projectId: project.id,
+      environmentId: environment.id,
+      parentThreadId: parent.id,
+      status: "active",
+    });
+    seedThreadRuntimeState(harness.deps, {
+      threadId: child.id,
+      environmentId: environment.id,
+      providerThreadId: "child-provider",
+    });
+    const notices = () =>
+      listEvents(harness.db, { threadId: parent.id })
+        .filter((row) => row.type === "client/turn/requested")
+        .map((row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)))
+        .filter((data) => data.initiator === "system");
+    const finish = async (turnId: string, status: "failed" | "completed") => {
+      seedTurnStarted(harness.deps, {
         threadId: child.id,
         environmentId: environment.id,
-        providerThreadId: "child-provider",
+        turnId,
       });
-      const notices = () =>
-        listEvents(harness.db, { threadId: parent.id })
-          .filter((row) => row.type === "client/turn/requested")
-          .map((row) => turnRequestEventDataSchema.parse(JSON.parse(row.data)))
-          .filter((data) => data.initiator === "system");
-      const finish = async (turnId: string, status: "failed" | "completed") => {
-        seedTurnStarted(harness.deps, {
-          threadId: child.id,
-          environmentId: environment.id,
-          turnId,
-        });
-        const response = await harness.app.request("/internal/session/events", {
-          method: "POST",
-          headers: internalAuthHeaders(harness),
-          body: JSON.stringify({
-            sessionId: session.id,
-            eventGroups: groupHostDaemonEvents([
-              {
+      const response = await harness.app.request("/internal/session/events", {
+        method: "POST",
+        headers: internalAuthHeaders(harness),
+        body: JSON.stringify({
+          sessionId: session.id,
+          eventGroups: groupHostDaemonEvents([
+            {
+              threadId: child.id,
+              event: {
+                type: "turn/completed",
                 threadId: child.id,
-                event: {
-                  type: "turn/completed",
-                  threadId: child.id,
-                  providerThreadId: "child-provider",
-                  scope: turnScope(turnId),
-                  status,
-                },
+                providerThreadId: "child-provider",
+                scope: turnScope(turnId),
+                status,
               },
-            ]),
-          }),
-        });
-        expect(response.status).toBe(200);
-      };
-      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-      await finish("first-attempt", "failed");
-      await vi.waitFor(() => expect(recorded).toHaveLength(1));
-      await vi.advanceTimersByTimeAsync(2000);
-      expect(notices()).toHaveLength(0);
-      await vi.advanceTimersByTimeAsync(1000);
-      await vi.waitFor(() =>
-        expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(1),
-      );
-      expect(notices()).toHaveLength(0);
-      if (outcome === "cancelled") {
-        const queued = listQueuedThreadMessages(harness.db, child.id)[0]!;
-        const response = await harness.app.request(
-          `/api/v1/threads/${child.id}/queued-messages/${queued.id}`,
-          { method: "DELETE" },
-        );
-        expect(response.status).toBe(200);
-        await vi.advanceTimersByTimeAsync(3000);
-        await vi.waitFor(() => expect(notices()).toHaveLength(1));
-        expect(notices()[0]?.systemMessageKind).toBe("child-failed");
-        expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
-        return;
-      }
-      await vi.advanceTimersByTimeAsync(3000);
-      expect(notices()).toHaveLength(0);
-      await vi.advanceTimersByTimeAsync(60000);
-      await runQueuedMessageDispatch(harness.deps, {
-        kind: "time-reached",
-        now: Date.now(),
+            },
+          ]),
+        }),
       });
-      expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
-      if (outcome === "completed") {
-        await finish("recovered-attempt", "completed");
-        await vi.advanceTimersByTimeAsync(2000);
-        await vi.waitFor(() => expect(notices()).toHaveLength(1));
-        expect(notices()[0]?.systemMessageKind).toBe("child-completed");
-        return;
+      expect(response.status).toBe(200);
+    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    await finish("first-attempt", "failed");
+    await vi.waitFor(() => expect(recorded).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(notices()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() =>
+      expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(1),
+    );
+    expect(notices()).toHaveLength(0);
+    if (outcome.startsWith("restarted")) {
+      const sibling =
+        outcome === "restarted-sibling"
+          ? seedThread(harness.deps, {
+              projectId: project.id,
+              environmentId: environment.id,
+              parentThreadId: parent.id,
+              status: "idle",
+            })
+          : null;
+      if (sibling !== null)
+        await queueChildThreadTurnNotificationBestEffort(harness.deps, {
+          childThread: sibling,
+          parentThreadId: parent.id,
+          turnStatus: "completed",
+          turnId: null,
+        });
+      vi.clearAllTimers();
+      setPluginThreadEventEmitter(undefined);
+      vi.setSystemTime(Date.now() + 12000);
+      await runQueuedMessageDispatch(
+        harness.deps,
+        outcome === "restarted-idle"
+          ? { kind: "thread-ready", threadId: parent.id }
+          : { kind: "time-reached", now: Date.now() },
+      );
+      if (sibling === null) expect(notices()).toHaveLength(0);
+      else {
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0]?.systemMessageSubject).toMatchObject({
+          outcomes: [{ threadId: sibling.id, status: "completed" }],
+        });
       }
-      await finish("last-attempt", "failed");
-      await vi.waitFor(() => expect(recorded).toHaveLength(2));
+      expect(listQueuedThreadMessages(harness.db, parent.id)).toHaveLength(0);
+      return;
+    }
+    if (outcome === "cancelled") {
+      const queued = listQueuedThreadMessages(harness.db, child.id)[0]!;
+      const response = await harness.app.request(
+        `/api/v1/threads/${child.id}/queued-messages/${queued.id}`,
+        { method: "DELETE" },
+      );
+      expect(response.status).toBe(200);
       await vi.advanceTimersByTimeAsync(3000);
       await vi.waitFor(() => expect(notices()).toHaveLength(1));
-      expect(notices()[0]?.systemMessageSubject).toMatchObject({
-        outcomes: [{ threadId: child.id, status: "failed" }],
-      });
-    } finally {
-      vi.useRealTimers();
-      delete globals.__retryDecisions;
-      await cleanup();
+      expect(notices()[0]?.systemMessageKind).toBe("child-failed");
+      expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
+      return;
     }
-  },
-);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(notices()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(60000);
+    await runQueuedMessageDispatch(harness.deps, {
+      kind: "time-reached",
+      now: Date.now(),
+    });
+    expect(listQueuedThreadMessages(harness.db, child.id)).toHaveLength(0);
+    if (outcome === "completed") {
+      await finish("recovered-attempt", "completed");
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.waitFor(() => expect(notices()).toHaveLength(1));
+      expect(notices()[0]?.systemMessageKind).toBe("child-completed");
+      return;
+    }
+    await finish("last-attempt", "failed");
+    await vi.waitFor(() => expect(recorded).toHaveLength(2));
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.waitFor(() => expect(notices()).toHaveLength(1));
+    expect(notices()[0]?.systemMessageSubject).toMatchObject({
+      outcomes: [{ threadId: child.id, status: "failed" }],
+    });
+  } finally {
+    vi.useRealTimers();
+    delete globals.__retryDecisions;
+    await cleanup();
+  }
+});
 
 it.each(["absent", "declined", "threw", "timed-out", "retry-rejected"])(
   "notifies the parent when the retry listener is %s",
