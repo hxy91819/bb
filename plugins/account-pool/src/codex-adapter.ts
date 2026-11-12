@@ -7,11 +7,7 @@ import {
   type LimitWindow,
   type LimitWindowSlot,
 } from "./contracts.js";
-import {
-  codexAccessTokenExpiresAt,
-  importCodexCredentials,
-  type ImportedCodexCredentials,
-} from "./credentials.js";
+import { codexAccessTokenExpiresAt, importCodexCredentials, type ImportedCodexCredentials } from "./credentials.js";
 import type { ProviderAdapter } from "./provider-adapter.js";
 import {
   fetchOAuthRefresh,
@@ -138,14 +134,7 @@ function orderedWindows(
 function withoutClaudeSlots(previous: AccountQuota): AccountQuota {
   return {
     ...previous,
-    fiveHourUtilization: null,
-    fiveHourResetAt: null,
-    fiveHourStatus: null,
-    sevenDayUtilization: null,
-    sevenDayResetAt: null,
-    sevenDayStatus: null,
     representativeClaim: null,
-
     familyWeekly: EMPTY_FAMILY_WEEKLY,
   };
 }
@@ -384,9 +373,9 @@ export function codexQuotaFromUsage(
 }
 
 export function createCodexAdapter(options: {
+  importCredentials?: () => Promise<ImportedCodexCredentials>;
   refreshUrl: string;
   usageUrl: string;
-  importCredentials?: () => Promise<ImportedCodexCredentials>;
 }): ProviderAdapter {
   return {
     provider: "codex",

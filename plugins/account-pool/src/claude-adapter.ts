@@ -1,9 +1,6 @@
+import { importClaudeCredentials, type ImportedClaudeCredentials } from "./credentials.js";
 import { z } from "zod";
 import type { AccountSecret } from "./contracts.js";
-import {
-  importClaudeCredentials,
-  type ImportedClaudeCredentials,
-} from "./credentials.js";
 import type { ProviderAdapter } from "./provider-adapter.js";
 import {
   fetchOAuthRefresh,
@@ -50,10 +47,10 @@ const profileResponseSchema = z
   .passthrough();
 
 export function createClaudeAdapter(options: {
+  importCredentials?: () => Promise<ImportedClaudeCredentials>;
   refreshUrl: string;
   usageUrl: string;
   profileUrl: string;
-  importCredentials?: () => Promise<ImportedClaudeCredentials>;
 }): ProviderAdapter {
   return {
     provider: "claude",
