@@ -52,6 +52,8 @@ import { useRouteNavigate } from "@/components/ui/app-route-anchor";
 import { resolveThread } from "@/lib/cached-thread";
 import { CORE_THREAD_ACTIONS } from "@/lib/thread-actions/core-thread-actions";
 import { ThreadActionCollectors } from "@/lib/thread-actions/thread-action-registry";
+import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
+
 import { planThreadSelection } from "@/lib/thread-selection-plan";
 import type { ThreadCascadeAction } from "@bb/server-contract";
 
@@ -559,7 +561,7 @@ export function ThreadActionsProvider({
         requestRename={requestRenameById}
       />
       <RenameControllerProvider controller={renameController}>
-        {children}
+        <ThreadListContributions>{children}</ThreadListContributions>
       </RenameControllerProvider>
       <ThreadDeleteDialog
         target={deleteDialog.target}

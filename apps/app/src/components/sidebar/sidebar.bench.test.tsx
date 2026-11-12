@@ -1,4 +1,8 @@
+import { setPluginSlotRegistrations } from "@/lib/plugin-slots";
+import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 // @vitest-environment jsdom
+
+import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
 
 import { writeFileSync } from "node:fs";
 import { act, cleanup, render } from "@testing-library/react";
@@ -11,7 +15,7 @@ import type { SidebarBootstrapResponse } from "@bb/server-contract";
 import { sidebarNavigationQueryKey } from "@/hooks/queries/query-keys";
 import { updateCachedThreadListStatusState } from "@/hooks/cache-owners/query-cache";
 import { CORE_THREAD_ACTIONS } from "@/lib/thread-actions/core-thread-actions";
-import { ThreadActionCollectors } from "@/lib/thread-actions/thread-action-registry";
+import { ThreadActionCollectors, ThreadActionSurfaceVisibility, resetThreadActionRegistryForTest } from "@/lib/thread-actions/thread-action-registry";
 import {
   loadPluginThreadListReplacement,
   seedSidebarQueryClient,
@@ -393,5 +397,75 @@ describe.skipIf(!BENCH_ENABLED)("sidebar thread list benchmark", () => {
   it("writes the comparison", () => {
     const out = process.env.BB_SIDEBAR_BENCH_OUT;
     if (out) writeFileSync(out, `${JSON.stringify(collected, null, 2)}\n`);
+  });
+});
+
+describe("hidden sidebar thread list", () => {
+  it("mounts no rows and subscribes no thread ids", async () => {
+    resetThreadActionRegistryForTest();
+    stubPluginRpcFetch(() => ({ result: { preferences: {} } }));
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const replacement = await loadPluginThreadListReplacement({
+      withNotifications: false,
+    });
+    const seen: (readonly string[])[] = [];
+    setPluginSlotRegistrations(
+      "recorder",
+      makePluginRegistrationSet({
+        threadActions: [
+          {
+            id: "recorder",
+            title: "Recorder",
+            icon: "Notification",
+            group: "9_test",
+            useData: ({ threadIds }) => {
+              if (seen.at(-1) !== threadIds) seen.push(threadIds);
+              return null;
+            },
+            item: () => null,
+          },
+        ],
+      }),
+    );
+    const rendered = render(
+      <SidebarThreadListHarness queryClient={seedSidebarQueryClient(250)}>
+        <ThreadListContributions>
+          <ThreadActionCollectors coreRegistrations={CORE_THREAD_ACTIONS} requestRename={() => {}} />
+          <ThreadActionSurfaceVisibility visible={false}>
+            <PluginThreadList replacement={replacement} onNavigate={() => {}} />
+          </ThreadActionSurfaceVisibility>
+        </ThreadListContributions>
+      </SidebarThreadListHarness>,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(
+      rendered.container.querySelectorAll("[data-sidebar-windowed-item]")
+        .length,
+    ).toBeGreaterThan(100);
+    expect(
+      rendered.container.querySelectorAll("[data-sidebar-thread-id]"),
+    ).toHaveLength(0);
+    expect(seen.every((ids) => ids.length === 0)).toBe(true);
+    vi.unstubAllGlobals();
   });
 });
