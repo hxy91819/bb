@@ -1,3 +1,4 @@
+import { cancelEnvironmentSwitchContinuationInTransaction } from "./environment-switch-continuation.js";
 import {
   isAppUpdateSendHoldSet,
   claimNextQueuedThreadMessageGroup,
@@ -216,6 +217,7 @@ export async function createQueuedMessageForThread(
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
         const { hasProviderSession } = admitQueuedMessage(tx, currentThread);
+        cancelEnvironmentSwitchContinuationInTransaction(tx, thread.id);
         const queuedMessage = createQueuedThreadMessageInTransaction(tx, {
           threadId: thread.id,
           content: input,
