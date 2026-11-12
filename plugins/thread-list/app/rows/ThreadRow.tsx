@@ -670,7 +670,6 @@ function ThreadRowComponent({
           aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
           className="absolute inset-0 rounded-md outline-none"
         />
-        {renderDecorations("leading")}
         <span
           className={
             showRowMetadata
