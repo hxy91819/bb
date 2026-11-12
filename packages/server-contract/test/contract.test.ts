@@ -53,7 +53,6 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
     reason:
       "Delivery is recorded only for ACP inputs steered, interrupted, or queued during an active turn; ordinary inputs and older events have no delivery classification.",
     fields: [
-      "threadTimelineResponseSchema.delta.upsertRows.turnRequest.delivery",
       "threadTimelineResponseSchema.rows.turnRequest.delivery",
       "threadTimelineResponseSchema.timelinePage.olderRowUpdates.turnRequest.delivery",
     ],
