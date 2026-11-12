@@ -1,0 +1,12 @@
+diff --git a/build/commandUtils/new/projectFiles.js b/build/commandUtils/new/projectFiles.js
+--- a/build/commandUtils/new/projectFiles.js
++++ b/build/commandUtils/new/projectFiles.js
+@@ -57,7 +57,7 @@
+             package: bundleIdentifier,
+         },
+     };
+-    const mergedConfig = (0, ts_deepmerge_1.default)(baseExpoConfig, expoConfig);
++    const mergedConfig = (0, ts_deepmerge_1.merge)(baseExpoConfig, expoConfig);
+     const appJsonPath = path_1.default.join(projectDir, 'app.json');
+     await fs_extra_1.default.writeJson(appJsonPath, { expo: mergedConfig }, { spaces: 2 });
+ }
