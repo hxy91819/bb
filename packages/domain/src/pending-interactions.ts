@@ -202,7 +202,7 @@ export type ApprovalPendingInteractionPayload = z.infer<
   typeof approvalPendingInteractionPayloadSchema
 >;
 
-export const USER_QUESTION_MAX_QUESTIONS = 4;
+export const USER_QUESTION_MAX_QUESTIONS = 10;
 export const USER_QUESTION_MAX_OPTIONS = 4;
 export const USER_QUESTION_MAX_SELECTED = 4;
 export const USER_QUESTION_MAX_FREE_TEXT_LENGTH = 4096;
@@ -280,6 +280,7 @@ export const pendingInteractionUserQuestionQuestionSchema = z
       )
       .optional(),
     allowFreeText: z.boolean(),
+    required: z.boolean().default(true),
   })
   .superRefine((question, context) => {
     const optionValues = new Set<string>();
@@ -490,29 +491,22 @@ export type PluginExtensionInteractionResolution = z.infer<
   typeof pluginExtensionInteractionResolutionSchema
 >;
 
-const pendingInteractionResolutionBranches = {
-  user_answer: userQuestionPendingInteractionResolutionSchema,
-  plugin_submitted: pluginPendingInteractionResolutionSchema,
-  request_answer: pluginExtensionInteractionResolutionSchema,
-} as const;
+const resolutionDiscriminatorKeys = new Set<PropertyKey>(["decision", "kind"]);
 
-function pendingInteractionResolutionMessage(input: unknown): string {
-  if (input === null || typeof input !== "object" || !("kind" in input)) {
+function pendingInteractionResolutionError(issue: z.core.$ZodRawIssue): string {
+  if (issue.code !== "invalid_union") {
     return approvalDecisionDiscriminatorError;
   }
-  const kind = input.kind;
-  if (
-    kind !== "user_answer" &&
-    kind !== "plugin_submitted" &&
-    kind !== "request_answer"
-  ) {
-    return approvalDecisionDiscriminatorError;
+  for (const branch of issue.errors) {
+    const first = branch[0];
+    if (
+      first !== undefined &&
+      !resolutionDiscriminatorKeys.has(first.path[0] ?? "")
+    ) {
+      return first.message;
+    }
   }
-  const parsed = pendingInteractionResolutionBranches[kind].safeParse(input);
-  if (parsed.success) {
-    return approvalDecisionDiscriminatorError;
-  }
-  return parsed.error.issues[0]?.message ?? approvalDecisionDiscriminatorError;
+  return approvalDecisionDiscriminatorError;
 }
 
 export const pendingInteractionResolutionSchema = z.union(
@@ -522,7 +516,7 @@ export const pendingInteractionResolutionSchema = z.union(
     pluginPendingInteractionResolutionSchema,
     pluginExtensionInteractionResolutionSchema,
   ],
-  { error: (issue) => pendingInteractionResolutionMessage(issue.input) },
+  { error: pendingInteractionResolutionError },
 );
 export type PendingInteractionResolution = z.infer<
   typeof pendingInteractionResolutionSchema
