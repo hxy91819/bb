@@ -14,6 +14,7 @@ import type {
 } from "@bb/sdk";
 import type { QueryClient } from "@tanstack/react-query";
 import type { PluginBrowserBbSdk } from "@get-bb/plugin-sdk";
+import { invalidateEnvironmentActionQueries } from "@/hooks/cache-owners/environment-cache-effects";
 import {
   beginEnvironmentNameUpdateTransaction,
   completeEnvironmentNameUpdateTransaction,
@@ -57,6 +58,14 @@ export function bindSdkToPlugin(
     ...sdk,
     environments: {
       ...sdk.environments,
+      async commit(args) {
+        const response = await sdk.environments.commit(args);
+        invalidateEnvironmentActionQueries({
+          environmentId: args.environmentId,
+          queryClient,
+        });
+        return response;
+      },
       async archiveThreads(args) {
         const transaction = await beginArchiveEnvironmentThreadsTransaction({
           environmentId: args.environmentId,

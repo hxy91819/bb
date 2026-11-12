@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-query";
 import type { ThreadQueuedMessage } from "@bb/domain";
 import type {
-  CreateQueuedMessageRequest,
   SendQueuedMessageMode,
   SendQueuedMessageResponse,
   ThreadQueuedMessageListResponse,
@@ -25,15 +24,12 @@ import type {
 } from "./mutation-request-types";
 import {
   applyCreateThreadResult,
-  applyQueuedMessageCreateResult,
   applyQueuedMessageDeleteResult,
   applyQueuedMessagesResult,
   applyQueuedMessageSendResult,
   applyQueuedMessageUpdateResult,
   applySendThreadMessageSuccess,
-  applyThreadGoalClearResult,
   applyThreadPlanCancellationResult,
-  beginCreateQueuedMessageTransaction,
   beginCreateThreadTransaction,
   beginRemoveQueuedMessageTransaction,
   beginReorderQueuedMessageTransaction,
@@ -43,14 +39,12 @@ import {
   beginStopThreadTransaction,
   beginUpdateQueuedMessageTransaction,
   prefetchThreadQueuedMessages,
-  rollbackCreateQueuedMessageTransaction,
   rollbackRemoveQueuedMessageTransaction,
   rollbackReorderQueuedMessageTransaction,
   rollbackSendThreadMessageTransaction,
   rollbackStopThreadTransaction,
   rollbackUpdateQueuedMessageTransaction,
   settleStopThreadTransaction,
-  type CreateQueuedMessageTransaction,
   type RemoveQueuedMessageTransaction,
   type ReorderQueuedMessageTransaction,
   type SendThreadMessageTransaction,
@@ -61,10 +55,6 @@ import {
   invalidateThreadBannerQueries,
   invalidateThreadHistoryRewriteQueries,
 } from "../cache-owners/mutation-cache-effects";
-
-interface CreateThreadQueuedMessageMutationRequest extends CreateQueuedMessageRequest {
-  id: string;
-}
 
 interface UpdateThreadQueuedMessageMutationRequest extends UpdateQueuedMessageRequest {
   id: string;
@@ -251,64 +241,6 @@ export function useEditThreadMessage() {
   return useMutation(editThreadMessageMutationOptions(queryClient));
 }
 
-export function createThreadQueuedMessageMutationOptions(
-  queryClient: QueryClient,
-) {
-  return mutationOptions({
-    meta: {
-      errorMessage: "Failed to queue message.",
-      lifecycleOperation: "queue_message",
-      showErrorToast: false,
-    },
-    mutationFn: ({
-      id,
-      input,
-      model,
-      serviceTier,
-      reasoningLevel,
-      permissionMode,
-      senderThreadId,
-      executionInputSources,
-    }: CreateThreadQueuedMessageMutationRequest): Promise<ThreadQueuedMessage> =>
-      sdk.threads.queuedMessages.create({
-        threadId: id,
-        input,
-        model,
-        serviceTier,
-        reasoningLevel,
-        permissionMode,
-        executionInputSources,
-        ...(senderThreadId !== undefined ? { senderThreadId } : {}),
-      }),
-    onMutate: async (variables): Promise<CreateQueuedMessageTransaction> =>
-      beginCreateQueuedMessageTransaction({
-        queryClient,
-        request: variables,
-      }),
-    onError: (_error, variables, context) => {
-      rollbackCreateQueuedMessageTransaction({
-        queryClient,
-        request: variables,
-        transaction: context,
-      });
-    },
-    onSuccess: (queuedMessage, variables, context) => {
-      notifyComposerSubmitted({ kind: "thread", threadId: variables.id });
-      applyQueuedMessageCreateResult({
-        queryClient,
-        queuedMessage,
-        threadId: variables.id,
-        transaction: context,
-      });
-    },
-  });
-}
-
-export function useCreateThreadQueuedMessage() {
-  const queryClient = useQueryClient();
-  return useMutation(createThreadQueuedMessageMutationOptions(queryClient));
-}
-
 export function useUpdateThreadQueuedMessage() {
   const queryClient = useQueryClient();
 
@@ -319,17 +251,10 @@ export function useUpdateThreadQueuedMessage() {
       showErrorToast: false,
     },
     mutationFn: ({
-      expectedUpdatedAt,
       id,
-      input,
-      queuedMessageId,
+      ...request
     }: UpdateThreadQueuedMessageMutationRequest): Promise<ThreadQueuedMessage> =>
-      sdk.threads.queuedMessages.update({
-        expectedUpdatedAt,
-        input,
-        queuedMessageId,
-        threadId: id,
-      }),
+      sdk.threads.queuedMessages.update({ ...request, threadId: id }),
     onMutate: async (variables): Promise<UpdateQueuedMessageTransaction> =>
       beginUpdateQueuedMessageTransaction({
         queryClient,
@@ -552,19 +477,15 @@ export function useStopThread() {
         transaction: context,
       });
     },
-    onSettled: (_data, _error, threadId, context) => {
-      settleStopThreadTransaction({
-        queryClient,
-        threadId,
-        transaction: context,
-      });
+    onSettled: (_data, _error, _threadId, context) => {
+      settleStopThreadTransaction({ queryClient, transaction: context });
     },
   });
 }
 
 export function cancelThreadPlanMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    meta: { errorMessage: "Failed to exit Plan mode." },
+    meta: { showErrorToast: false },
     mutationFn: async (threadId: string) => {
       await sdk.threads.cancelPlan({ threadId });
     },
@@ -578,22 +499,4 @@ export function cancelThreadPlanMutationOptions(queryClient: QueryClient) {
 export function useCancelThreadPlan() {
   const queryClient = useQueryClient();
   return useMutation(cancelThreadPlanMutationOptions(queryClient));
-}
-
-export function clearThreadGoalMutationOptions(queryClient: QueryClient) {
-  return mutationOptions({
-    meta: { errorMessage: "Failed to clear Goal." },
-    mutationFn: async (threadId: string) => {
-      await sdk.threads.clearGoal({ threadId });
-    },
-    onSuccess: (_data, threadId) => {
-      applyThreadGoalClearResult({ queryClient, threadId });
-      invalidateThreadBannerQueries({ queryClient, threadId });
-    },
-  });
-}
-
-export function useClearThreadGoal() {
-  const queryClient = useQueryClient();
-  return useMutation(clearThreadGoalMutationOptions(queryClient));
 }

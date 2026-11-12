@@ -28,11 +28,14 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `experimental_useBranches`
 - `experimental_useCheckoutState`
 - `experimental_SourceCode`
+- `experimental_FilePreview`
 - `experimental_Diff`
 - `experimental_InfoSection`
+- `experimental_CollapsibleStackCard`
 - `experimental_DetailRow`
 - `experimental_InfoList`
 - `experimental_InfoListRow`
+- `experimental_ThreadContextCardRow`
 - `useRpc`
 - `experimental_useRpcQuery`
 - `experimental_useRpcKeyedQuery`
@@ -41,11 +44,18 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `useRealtime`
 - `useRealtimeConnectionState`
 - `useSettings`
+- `experimental_useExperiment`
+- `experimental_useThreadContextKind`
+- `experimental_useThreadExtensionState`
 - `useBbContext`
 - `experimental_usePluginId`
 - `experimental_useQuestionFormHost`
 - `useBbNavigate`
+- `experimental_useCanOpenFileExternally`
+- `experimental_useTabVisible`
 - `experimental_useAppPanel`
+- `experimental_usePanelTabs`
+- `experimental_PanelTabIcon`
 - `experimental_useFixedTabTarget`
 - `useComposer`
 - `useComposers`
@@ -94,10 +104,15 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `useSidebarThreadShortcut`
 - `ThreadTitle`
 - `experimental_ThreadStatusGlyph`
+- `experimental_resolveThreadStatus`
+- `experimental_ThreadRowMetadata`
 - `useEnvironmentProviders`
 - `useSdk`
 - `experimental_useProviders`
 - `experimental_useCodeTheme`
+- `experimental_getApplicationLinkApprovals`
+- `experimental_revokeApplicationLinkApproval`
+- `experimental_useServers`
 - `experimental_copyToClipboard`
 - `experimental_saveFile`
 
@@ -121,6 +136,7 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginNewThreadPanelProps`
 - `PluginPendingInteractionView`
 - `PluginPendingInteractionProps`
+- `ExperimentalQuestionFormAction`
 - `ExperimentalQuestionFormHost`
 - `ExperimentalQuestionShortcut`
 - `BranchPickerProps`
@@ -137,12 +153,15 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginSidebarFooterActionProps`
 - `ExperimentalSidebarFooterDisclosureProps`
 - `PluginThreadListProps`
-- `PluginThreadHeaderActionProps`
 - `ExperimentalThreadInfoProps`
 - `ExperimentalThreadEnvironment`
 - `ExperimentalThreadContextSegmentInput`
 - `ExperimentalThreadContextSegmentProps`
 - `ExperimentalThreadContextSegmentReference`
+- `ExperimentalCollapsibleStackCardProps`
+- `ExperimentalCollapsibleStackCardDismiss`
+- `ExperimentalThreadRowMetadataProps`
+- `ExperimentalThreadRowMetadataLineProps`
 - `ExperimentalInfoSectionProps`
 - `ExperimentalDetailRowProps`
 - `ExperimentalInfoListProps`
@@ -176,7 +195,6 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `ExperimentalPageBreadcrumb`
 - `ExperimentalBadge`
 - `ExperimentalBadgeTone`
-- `PluginPanelActionOpenOptions`
 - `PluginNewThreadPanelActionContext`
 - `PluginNewThreadPanelActionRegistration`
 - `PluginPendingInteractionRegistration`
@@ -199,6 +217,8 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginCodeThemeTokenRule`
 - `PluginCodeThemeData`
 - `PluginCodeThemeState`
+- `ExperimentalServer`
+- `ExperimentalServers`
 - `ExperimentalClipboardContent`
 - `ExperimentalSaveFileRequest`
 - `ExperimentalSaveFileOutcome`
@@ -207,14 +227,22 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginSidebarThreadShortcut`
 - `PluginThreadTitleProps`
 - `PluginThreadStatusGlyphProps`
+- `PluginThreadStatusInput`
+- `PluginThreadStatusThread`
+- `PluginThreadStatus`
 - `PluginEnvironmentProvider`
 - `PluginEnvironmentProvidersState`
 - `PluginBoundThreadsArea`
 - `PluginBrowserBbSdk`
-- `PluginThreadHeaderActionRegistration`
 - `ExperimentalThreadContextSegmentRegistration`
 - `ExperimentalThreadInfoRowRegistration`
+- `ExperimentalThreadRowMetadataRegistration`
 - `ExperimentalThreadInfoSectionRegistration`
+- `ExperimentalThreadContextCardRowRegistration`
+- `ExperimentalThreadContextCardSectionRegistration`
+- `ExperimentalThreadContextKind`
+- `ExperimentalThreadContextCardProps`
+- `ExperimentalThreadContextCardRowProps`
 - `PluginThreadActionTarget`
 - `PluginThreadActionChoice`
 - `PluginThreadActionChoices`
@@ -222,7 +250,9 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginThreadAction`
 - `PluginThreadActionDataInput`
 - `PluginThreadActionItemInput`
+- `PluginThreadActionBulkItemInput`
 - `PluginThreadActionRegistration`
+- `PluginThreadActionPlacement`
 - `PluginBoundThreadAction`
 - `PluginThreadActionEntry`
 - `PluginThreadActionRegistrationInfo`
@@ -235,6 +265,7 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `PluginSidebarSplitPane`
 - `PluginSidebarSplitLayout`
 - `PluginSidebarThreadSplit`
+- `PluginSidebarThreadSplitOptions`
 - `PluginThreadListRegistration`
 - `ExperimentalSidebarNavigationShortcut`
 - `ExperimentalSidebarNavigationAction`
@@ -258,9 +289,12 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `ExperimentalCodeFenceRendererRegistration`
 - `ExperimentalCodeFenceStatus`
 - `ThreadChatMessageReference`
-- `PluginTargetedPanelActionOpenOptions`
 - `PluginMessageActionContext`
 - `PluginMessageActionRegistration`
+- `ExperimentalMessageMetadataContext`
+- `ExperimentalMessageMetadataPlacement`
+- `ExperimentalMessageMetadataProps`
+- `ExperimentalMessageMetadataRegistration`
 - `PluginAppCommands`
 - `PluginCommandContext`
 - `PluginCommandShortcut`
@@ -316,7 +350,6 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `ExperimentalComposerInput`
 - `ExperimentalComposerThreadLinks`
 - `ExperimentalComposerClipboard`
-- `ExperimentalComposerView`
 - `ExperimentalComposerContribution`
 - `ExperimentalComposerPlusMenuContribution`
 - `ExperimentalComposerSendMenuContribution`
@@ -374,17 +407,20 @@ Thread plugin metadata card for capture, preparation and failure semantics.
 - `ExperimentalFileLocation`
 - `ExperimentalFileOpenOptions`
 - `ExperimentalFileLinkProps`
-- `ExperimentalAppPanelSurface`
 - `ExperimentalFixedTabTargetState`
-- `ExperimentalOpenFixedTabOptions`
 - `ExperimentalTabRegistration`
 - `ExperimentalTabContext`
 - `ExperimentalTabReference`
-- `ExperimentalTabOpenOptions`
+- `ExperimentalOpenTabOptions`
 - `ExperimentalTabTargetReference`
 - `ExperimentalThreadActionTabProps`
+- `ExperimentalThreadTabProps`
 - `ExperimentalThreadTabActionContext`
-- `ExperimentalAppPanel`
+- `ExperimentalPanelController`
+- `ExperimentalPanelTab`
+- `ExperimentalPanelTabDetail`
+- `ExperimentalPanelTabs`
+- `ExperimentalPanelTabIconProps`
 - `BbContext`
 - `BbNavigate`
 - `PluginSdkApp`
@@ -417,6 +453,6 @@ Read-state and error behavior is documented in [Frontend hooks and UI](frontend-
 
 For `app.slots.experimental_tab`, `ExperimentalTabRegistration`,
 `ExperimentalTabReference`, `ExperimentalTabContext`, and
-`experimental_useAppPanel().experimental_openTab`, see
+`experimental_useAppPanel().openTab`, see
 [Thread side-panel tabs in the Plugin Guide](https://getbb.app/plugin-guide#surface-thread-panel).
 Source upgrades are in [Tab API migration](frontend-registration.md#tab-api-migration).
