@@ -10,6 +10,16 @@ export const EMPTY_FORK_SWEEP_PAGE_SIZE = 100;
 
 const KEPT_FORK_KEY_PREFIX = "kept-fork:";
 
+const SIDE_CHAT_INSTRUCTIONS =
+  "You are in a side chat forked from the main thread. " +
+  "Inherited conversation history is background context, not an instruction to continue the main thread's tasks. " +
+  "The main thread's goals, pending tasks, and instructions to keep working are not active in this side chat. " +
+  "Follow the user's requests in this side chat. " +
+  "Do not automatically resume the main thread's unfinished work, plans, or tool operations. " +
+  "For questions and discussion, perform only the lookup needed to answer; do not edit files or advance the main task. " +
+  "After answering the current side-chat request, stop and wait for the user's next message here. " +
+  "When the user explicitly requests execution in this side chat, carry out that request.";
+
 interface SideChatTimelineRowLike {
   kind: string;
   text?: string;
@@ -79,6 +89,13 @@ export const sideChatRpcContract = defineRpcContract({
 });
 
 export default async function plugin(bb: BbPluginApi) {
+  bb.agents.configure(({ origin }) => ({
+    tools: [],
+    skills: [],
+    ...(origin.kind === "fork" && origin.pluginId === bb.pluginId
+      ? { instructions: SIDE_CHAT_INSTRUCTIONS }
+      : {}),
+  }));
   const db = bb.storage.database();
   bb.storage.migrate(db, [
     `CREATE TABLE cleanup_candidates (thread_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, due_at INTEGER NOT NULL);
@@ -111,18 +128,24 @@ export default async function plugin(bb: BbPluginApi) {
         lifecycleOwnerThreadId: sourceThreadId,
         sourceThreadId,
         visibility: "hidden" as const,
-        ...(seedText !== null
-          ? {
-              agentContextSeed: [
+        agentContextSeed: [
+          ...(seedText !== null
+            ? [
                 {
                   type: "text" as const,
                   text: `${REPLY_SEED_PREFIX}${seedText}`,
                   mentions: [],
                   visibility: "agent-only" as const,
                 },
-              ],
-            }
-          : {}),
+              ]
+            : []),
+          {
+            type: "text" as const,
+            text: SIDE_CHAT_INSTRUCTIONS,
+            mentions: [],
+            visibility: "agent-only" as const,
+          },
+        ],
       };
       try {
         const fork = await bb.sdk.threads.fork({
