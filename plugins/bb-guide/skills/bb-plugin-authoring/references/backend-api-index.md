@@ -4,6 +4,13 @@ Check imports here, behavior in the Plugin Guide, and signatures in the installe
 
 ## `@get-bb/plugin-sdk`
 
+- `bb.experimental_threadCreationContext` — creation preparation; see Plugin Guide's Thread plugin metadata card
+- `experimental_ThreadCreationContext`
+- `experimental_ThreadCreationDescriptor`
+- `experimental_ThreadCreationPrepareArgs`
+- `experimental_AppThreadCreationContext`
+- `experimental_AppThreadCreationContextRegistration`
+- `FakePluginBehaviorDrivers.experimental_prepareThreadCreationContext`
 - `PLUGIN_CLI_OUTPUT_MAX_BYTES`
 - `defineRpcContract`
 - `experimental_defineHostEntry`

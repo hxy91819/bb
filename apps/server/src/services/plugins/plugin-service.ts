@@ -693,6 +693,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     isSafeModeExemptRow,
     isSuppressedBySafeMode,
     listPluginHooks,
+    listPluginThreadCreationContexts,
     listPluginEnvironmentCompositions,
     listPluginEnvironmentProviders,
     getPluginEnvironmentProvider,
@@ -1498,6 +1499,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
 
     hooks: {
       listHooks: listPluginHooks,
+      listThreadCreationContexts: listPluginThreadCreationContexts,
       invokeHook: invokeOwned,
       decisionTimeoutMs: DEFAULT_PLUGIN_HOOK_TIMEOUT_MS,
     },
