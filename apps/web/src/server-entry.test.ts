@@ -33,6 +33,10 @@ vi.mock("@tanstack/react-start/server", () => ({
   }),
 }));
 
+vi.mock("./server/env", () => ({
+  getEnv: () => ({ BASE_DOMAIN: "web.test" }),
+}));
+
 import server from "./server-entry.js";
 
 beforeEach(() => {
