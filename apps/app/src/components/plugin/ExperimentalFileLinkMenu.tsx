@@ -6,8 +6,8 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from "@bb/shared-ui/context-menu";
-import { useLocalOpenTargets } from "@/hooks/useLocalOpenTargets";
-import { useResolvedLiveFileTarget } from "@/hooks/useResolvedLiveFileTarget";
+import { useLiveFileOpenTargets } from "@/hooks/useLiveFileOpenTargets";
+import { resolveLiveFilePath } from "@/hooks/useResolvedLiveFileTarget";
 import { useAppNavigationHost } from "@/lib/app-navigation-host";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
 import {
@@ -15,7 +15,6 @@ import {
   getExperimentalFileLocationStart,
 } from "@/lib/live-file-navigation";
 import { usePluginSlots } from "@/lib/plugin-slots";
-import { useBrowserSshHosts } from "@/lib/browser-ssh-hosts";
 
 function getFileExtension(path: string): string | null {
   const name = getFileBasename(path);
@@ -31,18 +30,17 @@ export function ExperimentalFileLinkMenu({
   intent: ExperimentalFileOpenOptions;
 }) {
   const navigation = useAppNavigationHost();
-  const [sshHosts] = useBrowserSshHosts();
-  const resolved = useResolvedLiveFileTarget(intent.target, { enabled: true });
-  const localTargets = useLocalOpenTargets({
-    enabled: resolved.status === "available",
-    ...(resolved.status === "available"
-      ? { openContext: resolved.openContext }
-      : {}),
-  });
+  const localTargets = useLiveFileOpenTargets(intent.target);
+  const absolutePath =
+    localTargets.root.status === "available"
+      ? resolveLiveFilePath(localTargets.root, intent.target.path)
+      : null;
   const { fileOpeners } = usePluginSlots();
   const extension = getFileExtension(intent.target.path);
   const matchingOpeners =
-    extension === null
+    extension === null ||
+    (intent.target.kind === "workspace" &&
+      intent.target.experimental_ref !== undefined)
       ? []
       : fileOpeners.filter((opener) => opener.extensions.includes(extension));
   const location = getExperimentalFileLocationStart(intent.location);
@@ -83,31 +81,12 @@ export function ExperimentalFileLinkMenu({
         </ContextMenuSub>
       ) : null}
       <ContextMenuItem
-        disabled={
-          resolved.status !== "available" ||
-          localTargets.isLoading ||
-          !localTargets.canOpenPreferredFileTarget
-        }
-        onSelect={() => {
-          if (
-            resolved.status === "available" &&
-            resolved.openContext.kind === "remote-ssh" &&
-            sshHosts[resolved.openContext.hostId]
-          ) {
-            void localTargets.openPathInPreferredFileTarget({
-              columnNumber: location.columnNumber,
-              lineNumber: location.lineNumber,
-              path: resolved.absolutePath,
-            });
-          } else {
-            navigation.openFileExternally(intent);
-          }
-        }}
+        disabled={!localTargets.canOpenExternally}
+        onSelect={() => navigation.openFileExternally(intent)}
       >
         Open externally
       </ContextMenuItem>
-      {resolved.status === "available" &&
-      localTargets.fileOpenTargets.length > 0 ? (
+      {absolutePath !== null && localTargets.fileOpenTargets.length > 0 ? (
         <ContextMenuSub>
           <ContextMenuSubTrigger>Open in</ContextMenuSubTrigger>
           <ContextMenuSubContent className="min-w-52">
@@ -118,7 +97,7 @@ export function ExperimentalFileLinkMenu({
                   void localTargets.openPathInFileTarget({
                     columnNumber: location.columnNumber,
                     lineNumber: location.lineNumber,
-                    path: resolved.absolutePath,
+                    path: absolutePath,
                     rememberTarget: false,
                     targetId: target.id,
                   });
@@ -133,15 +112,10 @@ export function ExperimentalFileLinkMenu({
       <ContextMenuSeparator />
       <ContextMenuItem
         onSelect={() => {
-          void copyToClipboardWithToast(
-            resolved.status === "available"
-              ? resolved.absolutePath
-              : intent.target.path,
-            {
-              successMessage: "File path copied",
-              errorMessage: "Failed to copy file path",
-            },
-          );
+          void copyToClipboardWithToast(absolutePath ?? intent.target.path, {
+            successMessage: "File path copied",
+            errorMessage: "Failed to copy file path",
+          });
         }}
       >
         Copy file path
