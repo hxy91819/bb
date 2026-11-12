@@ -769,6 +769,13 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     return registrations;
   }
 
+  function listPluginThreadCreationContexts() {
+    return [...loaded.values()].flatMap((plugin) => {
+      const record = plugin.handle.threadCreationContext;
+      return record === null || record.signal.aborted ? [] : [ownedRecord(record, plugin)];
+    });
+  }
+
   function resolveRegisteredProviderIcon(
     pluginId: string,
     plugin: LoadedPlugin,
@@ -2260,6 +2267,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     isSafeModeExemptRow,
     isSuppressedBySafeMode,
     listPluginHooks,
+    listPluginThreadCreationContexts,
     listPluginEnvironmentCompositions,
     listPluginEnvironmentProviders,
     getPluginEnvironmentProvider,

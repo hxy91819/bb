@@ -231,7 +231,7 @@ export async function prepareThreadCreationContext(args: {
         };
         let failure: unknown;
         const invocation = provider!.invokeHook(
-          record.pluginId,
+          record,
           "thread creation context",
           async () => {
             try {

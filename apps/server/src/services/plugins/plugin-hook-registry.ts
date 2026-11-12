@@ -64,7 +64,7 @@ export interface PluginHookProvider {
    * registered it, and fails without running once that instance is disposed.
    */
   invokeHook<T>(
-    registration: PluginHookRegistration<PluginHookName>,
+    registration: PluginHookRegistration<PluginHookName> | ThreadCreationContextRegistration,
     label: string,
     run: () => Promise<T>,
   ): Promise<PluginHookInvocation<T>>;
