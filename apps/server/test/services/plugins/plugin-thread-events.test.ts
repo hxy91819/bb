@@ -1112,6 +1112,7 @@ it.each(["absent", "declined", "threw", "timed-out", "retry-rejected"])(
         childThread: child,
         parentThreadId: parent.id,
         turnStatus: "failed",
+        turnId: null,
       });
       if (decision !== "absent")
         await vi.waitFor(() => expect(recorded).toHaveLength(1));
@@ -1178,6 +1179,7 @@ it("keeps the original failure deadline when another child joins the batch", asy
       childThread: child,
       parentThreadId: parent.id,
       turnStatus: "failed",
+      turnId: null,
     });
     await vi.waitFor(() => expect(recorded).toHaveLength(1));
     await vi.advanceTimersByTimeAsync(3000);
@@ -1185,6 +1187,7 @@ it("keeps the original failure deadline when another child joins the batch", asy
       childThread: sibling,
       parentThreadId: parent.id,
       turnStatus: "completed",
+      turnId: null,
     });
     await vi.advanceTimersByTimeAsync(9000);
     const notices = () =>

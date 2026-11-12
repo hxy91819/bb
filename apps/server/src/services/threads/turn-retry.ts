@@ -1,7 +1,6 @@
 import { getQueuedRetryOfTurnRequest } from "@bb/db";
 import {
   getFirstUnclaimedQueuedRetry,
-  hasQueuedRetryOfTurnRequest,
   updateQueuedThreadMessage,
   type QueuedThreadMessageRow,
 } from "@bb/db";
