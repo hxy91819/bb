@@ -3,6 +3,7 @@ import {
   mergeHostAndProviderEnvironment,
 } from "../hosts/host-environment.js";
 import { getEnvironment, getHost, getProject } from "@bb/db";
+import { PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS } from "@get-bb/plugin-sdk/internal/host-policy";
 import type {
   DynamicTool,
   InstructionMode,
@@ -40,8 +41,6 @@ import { markTurnTraceSpan } from "../system/turn-trace.js";
 
 const UPDATE_ENVIRONMENT_DIRECTORY_INSTRUCTIONS =
   "If the user asks you to move this thread to another checkout, worktree, or directory, make sure the target directory exists, then call `update_environment_directory` with its absolute path. Set `continueCurrentTask` to true when unfinished work should resume automatically, or false when switching is the whole task. After it succeeds, stop work in the current turn because the running provider cwd cannot change; BB will resume unfinished work in the updated environment when requested.";
-
-const PLUGIN_INSTRUCTION_CONTRIBUTION_MAX_CHARS = 4096;
 
 export interface ThreadRuntimeCommandEnvironment {
   hostId: string;
@@ -141,7 +140,7 @@ export async function resolveThreadRuntimeCommandConfig(
   });
   markTurnTraceSpan("runtimeConfig.workspaceRead");
   const pluginSkillRoots = getPluginSkillRootContributions();
-  const skillIdsByPlugin = discoverPluginSkillIds(deps.logger, {
+  const skillIdsByPlugin = await discoverPluginSkillIds(deps.logger, {
     pluginSkillRoots,
     skillTreeRegistry: deps.skillTreeRegistry,
   });
@@ -201,11 +200,13 @@ export async function resolveThreadRuntimeCommandConfig(
     }),
   );
   markTurnTraceSpan("runtimeConfig.env");
-  const injectedSkillSources = resolveSkillCatalog(deps, {
-    projectSkillSources: workspaceAgentContext.projectSkillSources,
-    sharedSkillSources: workspaceAgentContext.sharedSkills.runtimeSources,
-    pluginSkillSelections: conditionalConfiguration.selectedSkillIdsByPlugin,
-  }).map((entry) => entry.runtimeSource);
+  const injectedSkillSources = (
+    await resolveSkillCatalog(deps, {
+      projectSkillSources: workspaceAgentContext.projectSkillSources,
+      sharedSkillSources: workspaceAgentContext.sharedSkills.runtimeSources,
+      pluginSkillSelections: conditionalConfiguration.selectedSkillIdsByPlugin,
+    })
+  ).map((entry) => entry.runtimeSource);
   const dataDirAgentInstructions = readDataDirAgentInstructions(
     deps.logger,
     deps.config.dataDir,
@@ -247,8 +248,8 @@ export async function resolveThreadRuntimeCommandConfig(
       continue;
     }
     if (text === null || text.trim().length === 0) continue;
-    if (text.length > PLUGIN_INSTRUCTION_CONTRIBUTION_MAX_CHARS) {
-      text = text.slice(0, PLUGIN_INSTRUCTION_CONTRIBUTION_MAX_CHARS);
+    if (text.length > PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS) {
+      text = text.slice(0, PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS);
     }
     instructionSections.push(
       `The following instructions come from the BB plugin "${contribution.pluginId}":`,
