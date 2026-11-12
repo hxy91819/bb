@@ -592,6 +592,14 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
               </Mark>
             ) : null}
           </span>
+          <span
+            data-guide-thread-decoration=""
+            role="img"
+            aria-label="Plugin row information"
+            className="text-xs text-muted-foreground"
+          >
+            Label
+          </span>
           {thread.glyph === "spin" ? (
             <Mark
               id="thread-row-status"
