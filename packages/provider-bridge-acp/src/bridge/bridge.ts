@@ -3718,7 +3718,6 @@ async function rebuildAgentSession(
     for (const controller of session.pendingToolCalls) controller.abort();
     session.turn = undefined;
     setActivePromptKind(session, null);
-    session.promptRequestPending = false;
     session.cancelRequested = false;
   }
   let replacement: AcpThreadSession;
