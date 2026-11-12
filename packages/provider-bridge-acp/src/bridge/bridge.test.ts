@@ -1435,7 +1435,7 @@ describe("acp bridge", () => {
           isDefault: true,
           defaultReasoningEffort: "medium",
           supportedReasoningEfforts: [],
-          reasoningDiscovery: "unknown",
+          reasoningDiscovery: "known",
         },
         {
           id: "fake/strong",
