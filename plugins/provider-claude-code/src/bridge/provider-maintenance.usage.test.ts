@@ -1,55 +1,37 @@
+import type {
+  AccountInfo,
+  SDKControlGetUsageResponse,
+} from "@anthropic-ai/claude-agent-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  authStdout: "",
-  authFailure: "",
-  credentials: "",
-  authCalls: 0,
+  account: {} as AccountInfo,
+  usage: {} as Pick<
+    SDKControlGetUsageResponse,
+    "rate_limits_available" | "rate_limits"
+  >,
+  failure: "",
+  env: undefined as NodeJS.ProcessEnv | undefined,
+  close: vi.fn(),
 }));
 
-vi.mock("node:child_process", () => ({
-  execFile: (
-    file: string,
-    args: readonly string[],
-    _options: object,
-    callback: (
-      error: Error | null,
-      result: { stdout: string; stderr: string },
-    ) => void,
-  ) => {
-    if (file === "security") {
-      callback(new Error("unavailable"), { stdout: "", stderr: "" });
-      return;
-    }
-    if (args[0] === "auth") {
-      state.authCalls += 1;
-      if (state.authFailure) {
-        const error = new Error(state.authFailure);
-        (error as Error & { stdout?: string }).stdout = state.authFailure;
-        callback(error, { stdout: "", stderr: "" });
-        return;
-      }
-      callback(null, { stdout: state.authStdout, stderr: "" });
-      return;
-    }
-    callback(new Error(`unexpected command: ${args.join(" ")}`), {
-      stdout: "",
-      stderr: "",
-    });
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  query: ({ options }: { options: { env: NodeJS.ProcessEnv } }) => {
+    state.env = { ...options.env };
+    return {
+      initializationResult: async () => {
+        if (state.failure) throw new Error(state.failure);
+        return { account: state.account };
+      },
+      usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: async () =>
+        state.usage,
+      close: state.close,
+    };
   },
 }));
 
 vi.mock("node:fs/promises", () => ({
-  default: {
-    readFile: (file: string) => {
-      if (file.endsWith(".credentials.json")) {
-        return state.credentials === ""
-          ? Promise.reject(new Error("missing credentials"))
-          : Promise.resolve(state.credentials);
-      }
-      return Promise.resolve(JSON.stringify({ oauthAccount: {} }));
-    },
-  },
+  default: { readFile: async () => JSON.stringify({ oauthAccount: {} }) },
 }));
 
 vi.mock("@get-bb/plugin-sdk/provider-bridge", async (importOriginal) => ({
@@ -61,121 +43,70 @@ vi.mock("@get-bb/plugin-sdk/provider-bridge", async (importOriginal) => ({
 
 import { getClaudeProviderUsage } from "./provider-maintenance.js";
 
-const savedConfigDir = process.env.CLAUDE_CONFIG_DIR;
-
 afterEach(() => {
-  if (savedConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-  else process.env.CLAUDE_CONFIG_DIR = savedConfigDir;
-  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
-
 beforeEach(() => {
-  delete process.env.CLAUDE_CONFIG_DIR;
-  state.authStdout = "";
-  state.authFailure = "";
-  state.credentials = "";
-  state.authCalls = 0;
+  vi.stubEnv("CLAUDE_CONFIG_DIR", "/home/agent/.claude-bound");
+  state.account = { apiProvider: "firstParty", tokenSource: "apiKeyHelper" };
+  state.usage = { rate_limits_available: false, rate_limits: null };
+  state.failure = "";
+  state.env = undefined;
+  state.close.mockClear();
 });
 
-describe("Claude Code usage reporting", () => {
-  it("reports an authenticated bound home without plan limits", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authStdout = JSON.stringify({ loggedIn: true });
+describe("Claude Code bound-home usage reporting", () => {
+  it.each([
+    [undefined, null],
+    ["bound@example.com", "bound@example.com"],
+    ["token", null],
+  ])(
+    "reports a signed-in bound home without plan limits (%s)",
+    async (email, accountEmail) => {
+      state.account = { ...state.account, email };
+      await expect(getClaudeProviderUsage()).resolves.toEqual({
+        supported: true,
+        usage: { status: "ok", accountEmail, planLabel: null, windows: [] },
+      });
+      expect(state.env?.CLAUDE_CONFIG_DIR).toBe("/home/agent/.claude-bound");
+      expect(state.close).toHaveBeenCalledOnce();
+    },
+  );
 
-    await expect(getClaudeProviderUsage()).resolves.toEqual({
-      supported: true,
-      usage: {
-        status: "ok",
-        accountEmail: null,
-        planLabel: null,
-        windows: [],
-      },
-    });
-  });
-
-  it("reports the bound home account email when the CLI exposes one", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authStdout = JSON.stringify({
-      loggedIn: true,
-      email: "bound@example.com",
-    });
-
-    await expect(getClaudeProviderUsage()).resolves.toEqual({
-      supported: true,
-      usage: {
-        status: "ok",
-        accountEmail: "bound@example.com",
-        planLabel: null,
-        windows: [],
-      },
-    });
-  });
-
-  it("keeps the non-email auth status email out of the usage measurement", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authStdout = JSON.stringify({
-      loggedIn: true,
-      email: "token",
-    });
-
-    await expect(getClaudeProviderUsage()).resolves.toEqual({
-      supported: true,
-      usage: {
-        status: "ok",
-        accountEmail: null,
-        planLabel: null,
-        windows: [],
-      },
-    });
-  });
-
-  it("reports an unauthenticated bound home when the CLI says logged out", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authStdout = JSON.stringify({ loggedIn: false });
-
+  it("reports an unauthenticated bound home when the SDK says signed out", async () => {
+    state.account = { apiProvider: "firstParty", tokenSource: "none" };
     await expect(getClaudeProviderUsage()).resolves.toEqual({
       supported: true,
       usage: { status: "unauthenticated" },
     });
   });
 
-  it("reports an error when the bound home CLI status cannot be read", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authFailure = "cli crashed";
-
+  it("reports a probe failure and closes the SDK session", async () => {
+    state.failure = "cli crashed";
     await expect(getClaudeProviderUsage()).resolves.toEqual({
       supported: true,
       usage: {
         status: "error",
-        message: "Could not read the bound Claude CLI authentication status.",
+        message: "cli crashed",
         planLabel: null,
         accountEmail: null,
       },
     });
+    expect(state.close).toHaveBeenCalledOnce();
   });
 
-  it("still reports Anthropic usage for a bound home with OAuth credentials", async () => {
-    process.env.CLAUDE_CONFIG_DIR = "/home/agent/.claude-bound";
-    state.authStdout = JSON.stringify({ loggedIn: false });
-    state.credentials = JSON.stringify({
-      claudeAiOauth: {
-        accessToken: "test-access-token",
-        expiresAt: null,
-        subscriptionType: "pro",
-        rateLimitTier: null,
+  it("reports subscription windows from the bound home's SDK session", async () => {
+    state.account = {
+      apiProvider: "firstParty",
+      subscriptionType: "Claude Pro",
+    };
+    state.usage = {
+      rate_limits_available: true,
+      rate_limits: {
+        five_hour: { utilization: 20, resets_at: null },
+        seven_day: { utilization: 40, resets_at: null },
       },
-    });
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          five_hour: { utilization: 20, resets_at: null },
-          seven_day: { utilization: 40, resets_at: null },
-        }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
+    };
     await expect(getClaudeProviderUsage()).resolves.toEqual({
       supported: true,
       usage: {
@@ -199,17 +130,6 @@ describe("Claude Code usage reporting", () => {
           },
         ],
       },
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(state.authCalls).toBe(0);
-  });
-
-  it("keeps the default home unauthenticated without credentials", async () => {
-    state.authStdout = JSON.stringify({ loggedIn: true });
-
-    await expect(getClaudeProviderUsage()).resolves.toEqual({
-      supported: true,
-      usage: { status: "unauthenticated" },
     });
   });
 });

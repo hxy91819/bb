@@ -1,17 +1,27 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { experimental_createBridgeJsonRpcTestHarness as createHarness } from "@get-bb/plugin-sdk/provider-bridge/testing";
-const { queryMock, forkSessionMock } = vi.hoisted(() => ({
+const { queryMock } = vi.hoisted(() => ({
   queryMock: vi.fn(),
-  forkSessionMock: vi.fn(),
 }));
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: queryMock,
-  forkSession: forkSessionMock,
 }));
 import { handleLine } from "../bridge.js";
 const originalEnv = { ...process.env };
+let fixtureDir: string | undefined;
 afterEach(() => {
+  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
   for (const name of Object.keys(process.env))
     if (!(name in originalEnv)) delete process.env[name];
   Object.assign(process.env, originalEnv);
@@ -44,16 +54,31 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
       applyFlagSettings: vi.fn().mockResolvedValue(undefined),
     });
   });
-  forkSessionMock.mockImplementation(async () => {
-    expect(process.env.CLAUDE_CONFIG_DIR).toBe("/tmp/bound-claude-home");
-    return { sessionId: "forked-home-session" };
-  });
+  fixtureDir = mkdtempSync(join(tmpdir(), "claude-bound-fork-"));
+  const configDir = join(fixtureDir, "bound");
+  const transcriptDir = join(configDir, "projects", "-tmp");
+  mkdirSync(transcriptDir, { recursive: true });
+  const sourceSessionId = randomUUID();
+  writeFileSync(
+    join(transcriptDir, `${sourceSessionId}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      uuid: randomUUID(),
+      parentUuid: null,
+      sessionId: sourceSessionId,
+      cwd: "/tmp",
+      isSidechain: false,
+      timestamp: "2026-11-05T00:00:00.000Z",
+      message: { role: "user", content: "bound home transcript" },
+    }) + "\n",
+  );
+  process.env.CLAUDE_CONFIG_DIR = join(fixtureDir, "default");
   process.env.ANTHROPIC_AUTH_TOKEN = "unrelated-auth";
   process.env.ANTHROPIC_BASE_URL = "https://unrelated.invalid";
   const binding = {
     id: "work",
     displayName: "Work",
-    claudeConfigDir: "/tmp/bound-claude-home",
+    claudeConfigDir: configDir,
     reasoningLevels: ["low", "high", "max"],
     defaultReasoningLevel: "max",
     supportsFastMode: false,
@@ -98,7 +123,7 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
   expect(envs.at(-1)?.CLAUDE_CONFIG_DIR).toBe(binding.claudeConfigDir);
   bridge.sendRequest(3, "thread/resume", {
     threadId: "resumed-thread",
-    providerThreadId: "saved-home-session",
+    providerThreadId: sourceSessionId,
     cwd: "/tmp",
     instructionMode: "append",
     options,
@@ -107,13 +132,20 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
   expect(envs.at(-1)?.CLAUDE_CONFIG_DIR).toBe(binding.claudeConfigDir);
   bridge.sendRequest(4, "thread/fork", {
     threadId: "forked-thread",
-    sourceProviderThreadId: "saved-home-session",
+    sourceProviderThreadId: sourceSessionId,
     cwd: "/tmp",
     instructionMode: "append",
     options,
   });
-  expect((await bridge.waitForResponse(4)).error).toBeUndefined();
-  expect(forkSessionMock).toHaveBeenCalled();
+  const fork = await bridge.waitForResponse(4);
+  expect(fork.error).toBeUndefined();
+  const forkedId = z
+    .object({ providerThreadId: z.string() })
+    .parse(fork.result).providerThreadId;
+  expect(forkedId).not.toBe(sourceSessionId);
+  expect(
+    readFileSync(join(transcriptDir, `${forkedId}.jsonl`), "utf8"),
+  ).toContain("bound home transcript");
   bridge.sendRequest(6, "model/list", {
     providerOptions: {
       claudeExecution: { ...binding, displayName: "Renamed" },
@@ -133,8 +165,8 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
     .parse(start.result).providerThreadId;
   for (const [index, [threadId, providerThreadId]] of [
     ["bound-thread", createdId],
-    ["resumed-thread", "saved-home-session"],
-    ["forked-thread", "forked-home-session"],
+    ["resumed-thread", sourceSessionId],
+    ["forked-thread", forkedId],
   ].entries()) {
     bridge.sendRequest(10 + index, "thread/discard", {
       threadId,
@@ -142,4 +174,5 @@ it("uses the bound home for models, sessions, resume and SDK-local forks, and re
     });
     expect((await bridge.waitForResponse(10 + index)).error).toBeUndefined();
   }
+  bridge.restore();
 });
