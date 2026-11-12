@@ -10,17 +10,21 @@
  * Env knobs (passed by tests through thread/start envVars):
  * - FAKE_ACP_LOAD_SESSION=1  → advertise + accept session/load
  * - FAKE_ACP_FAIL_LOAD=1     → advertise session/load, then fail it
+ * - FAKE_ACP_RESUME_SESSION=1 → advertise + accept session/resume
+ * - FAKE_ACP_FAIL_RESUME=1   → advertise session/resume, then fail it
  * - FAKE_ACP_FORK_SESSION=1  → advertise + accept session/fork
  * - FAKE_ACP_FORK_LOG        → write the session/fork params as JSON
  * - FAKE_ACP_FORK_REUSE_SOURCE_ID=1
  *                            → return the source session id from session/fork
- * - FAKE_ACP_USAGE_ON_LOAD=1 → report context usage during session/load
+ * - FAKE_ACP_USAGE_ON_LOAD=1 → report context usage during session/load or session/resume
  * - FAKE_ACP_USAGE_SESSION_ID
  *                            → override the usage notification session id
  * - FAKE_ACP_MODEL_LINES     → stdout for the agent's `--list-models` mode
  * - FAKE_ACP_MODEL_LIST_STDERR
  *                            → make `--list-models` fail with this stderr
  * - FAKE_ACP_MODEL_CONFIG=1  → advertise a model configOptions select
+ * - FAKE_ACP_GROUPED_MODEL_CONFIG=1
+ *                            → wrap model select options in ACP groups
  * - FAKE_ACP_MODELS_FIELD=1  → advertise legacy ACP models state
  * - FAKE_ACP_THOUGHT_LEVEL_CONFIG=1
  *                            → advertise per-model effort configOptions
@@ -115,6 +119,9 @@ import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
+const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
+const resumeSession =
+  process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const deleteSession = process.env.FAKE_ACP_DELETE_SESSION === "1";
 const additionalDirectories =
@@ -123,6 +130,7 @@ const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
 const usageOnLoad = process.env.FAKE_ACP_USAGE_ON_LOAD === "1";
 const usageSessionId = process.env.FAKE_ACP_USAGE_SESSION_ID;
 const modelConfig = process.env.FAKE_ACP_MODEL_CONFIG === "1";
+const groupedModelConfig = process.env.FAKE_ACP_GROUPED_MODEL_CONFIG === "1";
 const modelsField = process.env.FAKE_ACP_MODELS_FIELD === "1";
 const thoughtLevelConfig = process.env.FAKE_ACP_THOUGHT_LEVEL_CONFIG === "1";
 const grokContext = process.env.FAKE_ACP_GROK_CONTEXT === "1";
@@ -159,7 +167,6 @@ const sessionNewDelayMs = Number(
 const updatesWithSessionResponse =
   process.env.FAKE_ACP_UPDATES_WITH_SESSION_RESPONSE === "1";
 const ignoreCancel = process.env.FAKE_ACP_IGNORE_CANCEL === "1";
-const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1";
 let sessionBusyPromptsLeft = Number(
   process.env.FAKE_ACP_SESSION_BUSY_PROMPTS ?? "0",
 );
@@ -415,10 +422,24 @@ function configOptions() {
       category: "model",
       type: "select",
       currentValue: selectedModel,
-      options: fakeModels,
+      options: groupedModelConfig
+        ? [{ group: "fake", name: "Fake", options: fakeModels }]
+        : fakeModels,
     },
     effortOptionForModel(selectedModel),
   ].filter(Boolean);
+}
+
+function sessionCapabilities() {
+  const capabilities = {
+    ...(forkSession ? { fork: {} } : {}),
+    ...(resumeSession ? { resume: {} } : {}),
+    ...(deleteSession ? { delete: {} } : {}),
+    ...(additionalDirectories ? { additionalDirectories: {} } : {}),
+  };
+  return Object.keys(capabilities).length > 0
+    ? { sessionCapabilities: capabilities }
+    : {};
 }
 
 function configState() {
@@ -906,21 +927,7 @@ async function handleMessage(message) {
           agentCapabilities: {
             loadSession,
             promptCapabilities: { image: false },
-            ...(forkSession ||
-            resumeSession ||
-            deleteSession ||
-            additionalDirectories
-              ? {
-                  sessionCapabilities: {
-                    ...(forkSession ? { fork: {} } : {}),
-                    ...(resumeSession ? { resume: {} } : {}),
-                    ...(deleteSession ? { delete: {} } : {}),
-                    ...(additionalDirectories
-                      ? { additionalDirectories: {} }
-                      : {}),
-                  },
-                }
-              : {}),
+            ...sessionCapabilities(),
           },
           ...(authMethods.length > 0
             ? {
@@ -1013,6 +1020,36 @@ async function handleMessage(message) {
         });
       }
       return;
+    case "session/resume":
+      if (!requireAuthenticated(message)) {
+        return;
+      }
+      if (resumeSession) {
+        captureMcpServers(message);
+        if (usageOnLoad) {
+          notifyUpdate(
+            { sessionUpdate: "usage_update", used: 24_000, size: 128_000 },
+            usageSessionId ?? message.params?.sessionId,
+          );
+        }
+        if (failResume) {
+          send({
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32000, message: "session/resume failed" },
+          });
+        } else {
+          activeSessionId = message.params?.sessionId;
+          send({ jsonrpc: "2.0", id: message.id, result: configState() });
+        }
+      } else {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: { code: -32601, message: "session/resume is not supported" },
+        });
+      }
+      return;
     case "session/load":
       if (!requireAuthenticated(message)) {
         return;
@@ -1042,22 +1079,6 @@ async function handleMessage(message) {
           error: { code: -32601, message: "session/load is not supported" },
         });
       }
-      return;
-    case "session/resume":
-      if (!requireAuthenticated(message)) {
-        return;
-      }
-      if (!resumeSession) {
-        send({
-          jsonrpc: "2.0",
-          id: message.id,
-          error: { code: -32601, message: "session/resume is not supported" },
-        });
-        return;
-      }
-      captureMcpServers(message);
-      activeSessionId = message.params?.sessionId;
-      send({ jsonrpc: "2.0", id: message.id, result: configState() });
       return;
     case "session/fork":
       if (!requireAuthenticated(message)) {
