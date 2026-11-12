@@ -1567,7 +1567,7 @@ function AccountPoolSettings() {
                     void run("api-key", async () => {
                       await rpc.call("account.add", {
                         provider: "claude",
-                        apiKey: apiKey.trim(),
+                        source: { kind: "api-key", apiKey: apiKey.trim() },
                         label: null,
                         priority: 100,
                       });
