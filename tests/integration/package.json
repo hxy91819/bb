@@ -20,7 +20,7 @@
     "@bb/server": "workspace:*",
     "@bb/server-contract": "workspace:*",
     "@bb/test-helpers": "workspace:*",
-    "@hono/node-server": "^1.19.18",
+    "@hono/node-server": "^2.1.5",
     "bb-plugin-bb--git": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "zod": "^4.6.7"

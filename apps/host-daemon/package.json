@@ -40,7 +40,7 @@
     "@bb/text-utils": "workspace:*",
     "@bb/tunnel-client": "workspace:*",
     "@bb/tunnel-contract": "workspace:*",
-    "@hono/node-server": "^1.19.18",
+    "@hono/node-server": "^2.1.5",
     "@parcel/watcher": "2.6.0",
     "bb-environment-provider-host": "workspace:*",
     "mime-types": "^3.0.2",

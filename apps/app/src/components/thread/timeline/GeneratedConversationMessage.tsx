@@ -50,6 +50,7 @@ import {
 interface AutomationLink {
   automationId: string;
   projectId: string;
+  [parameter: string]: string;
 }
 
 interface GeneratedConversationMessageProps {

@@ -1,5 +1,5 @@
 import { getHTMLFromFragment } from "@tiptap/core";
-import Table from "@tiptap/extension-table";
+import { Table } from "@tiptap/extension-table";
 import TaskList from "@tiptap/extension-task-list";
 import { Fragment, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 

@@ -67,6 +67,7 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
 import { Markdown } from "tiptap-markdown";
 import { MarkdownTable, TightTaskList } from "./editor-extensions.js";
+import { markdownStorage } from "./markdown-storage.js";
 import {
   loadMarkdownBlocks,
   saveMarkdownBlocks,
@@ -478,7 +479,7 @@ function TiptapEditor(props: {
     else {
       const body = parseMarkdownDocument(latest.current.baseMarkdown).body;
       const root = new window.DOMParser().parseFromString(
-        editor.storage.markdown.parser.parse(display(body)),
+        markdownStorage(editor).parser.parse(display(body)),
         "text/html",
       ).body;
       baselineRef.current = ProseMirrorDOMParser.fromSchema(
@@ -583,7 +584,7 @@ function TiptapEditor(props: {
     setBase(editor);
     const serializeNodes = (nodes: ProseMirrorNode[]) =>
       storedMarkdown(
-        editor.storage.markdown.serializer.serialize(
+        markdownStorage(editor).serializer.serialize(
           editor.schema.topNodeType.create(null, nodes),
         ),
         previewRef.current.baseUrl,
