@@ -413,6 +413,7 @@ function ThreadDetailViewInternal(
     openPluginDetail,
     openPluginPanel,
     orderedSecondaryFileTabs,
+    pinnedPluginPanelTabIds,
     reopenClosedTab,
     reorderTab,
     selectFileSearchResult,
@@ -985,10 +986,9 @@ function ThreadDetailViewInternal(
     ) {
       if (activeFixedSecondaryTab.kind === "terminal") {
         terminals.close(activeFixedSecondaryTab.terminalId);
-      } else {
-        closeTab(activeFixedSecondaryTab.id);
+        return true;
       }
-      return true;
+      if (closeTab(activeFixedSecondaryTab.id)) return true;
     }
     return panel.close();
   }, [
@@ -1678,6 +1678,10 @@ function ThreadDetailViewInternal(
   const panelTabs: readonly SecondaryPanelRenderableTab[] =
     syncedOrderedSecondaryFileTabs.map((tab): SecondaryPanelRenderableTab => ({
       ...presentPanelTab(tab),
+      ...(tab.kind === "plugin-panel" && pinnedPluginPanelTabIds.has(tab.id) ? {
+        isPinned: true,
+        label: registeredThreadActions.find((action) => action.pluginId === tab.pluginId && action.id === tab.actionId)?.title ?? tab.title,
+      } : {}),
       tab,
       renderContent: () => renderSecondaryTabContent(tab),
       onSelect:
