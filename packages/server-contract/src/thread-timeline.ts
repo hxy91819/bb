@@ -293,6 +293,7 @@ export const timelineCommandWorkRowSchema = timelineWorkRowBaseSchema.extend({
   workKind: z.literal("command"),
   callId: z.string(),
   command: z.string(),
+  description: z.string().nullable(),
   cwd: z.string().nullable(),
   source: z.string().nullable(),
   output: z.string(),
@@ -654,16 +655,8 @@ export const timelineRowSchema: z.ZodType<TimelineRow> = z.lazy(() =>
 
 export type TimelineToolArgs = JsonObject | null;
 
-export const timelineDeltaSchema = z.object({
-  upsertRows: z.array(timelineRowSchema),
-  rowOrder: z.array(z.string()).optional(),
-});
-export type TimelineDelta = z.infer<typeof timelineDeltaSchema>;
-
 export {
   timelineRowChildren,
   withTimelineRowChildren,
   mapTimelineRowTree,
-  computeTimelineRowDelta,
-  applyTimelineDelta,
 } from "./thread-timeline-operations.js";
