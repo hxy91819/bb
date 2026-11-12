@@ -95,8 +95,6 @@
       "@better-auth/mongo-adapter@>=1.6": "1.7.18",
       "@better-auth/prisma-adapter@>=1.6": "1.7.18",
       "undici@>=6 <6.29.1": "6.29.1",
-      "undici@>=7 <7.30.1": "7.30.1",
-      "undici@>=8 <8.12.2": "8.12.2",
       "markdown-it@>=14 <14.3.3": "14.3.3",
       "brace-expansion@>=1 <1.1.21": "1.1.21",
       "brace-expansion@>=2 <2.1.7": "2.1.7",
@@ -134,12 +132,10 @@
       "js-yaml@>=3 <3.15.2": "3.15.2",
       "js-yaml@>=4 <4.3.2": "4.3.2",
       "mermaid@>=11 <11.16.1": "11.16.1",
-      "minimatch@<11.0.1": "11.0.3",
       "nanoid@>=3 <3.3.18": "3.3.18",
       "nanoid@>=5 <5.1.16": "5.1.16",
       "postcss@>=8 <8.5.23": "8.5.23",
       "proxy-addr@>=2 <2.0.8": "2.0.8",
-      "qs@>=6 <6.16.0": "6.16.1",
       "react-router@>=7 <7.18.2": "7.18.2",
       "react-router-dom@>=7 <7.18.2": "7.18.2",
       "seroval@>=1 <1.6.3": "1.6.3",
@@ -163,7 +159,6 @@
       "esbuild@0.18.20": "0.25.0",
       "esbuild@0.19.12": "0.25.0",
       "katex@0.16.47": "0.18.2",
-      "qs@6.16.0": "6.16.1",
       "satori@0.18.3": "0.33.5",
       "sharp@0.34.5": "0.35.5",
       "decode-uri-component@0.5.0": "0.5.1",
@@ -199,7 +194,15 @@
       "prosemirror-state": "1.4.4",
       "prosemirror-tables": "1.8.5",
       "prosemirror-transform": "1.12.5",
-      "prosemirror-view": "1.42.9"
+      "prosemirror-view": "1.42.9",
+      "minimatch@>=3 <3.1.5": "3.1.5",
+      "minimatch@>=5 <5.1.9": "5.1.9",
+      "minimatch@>=9 <9.0.9": "9.0.9",
+      "minimatch@>=10 <10.2.6": "10.2.6",
+      "minimatch@>=11 <11.0.4": "11.0.4",
+      "undici@>=7 <7.30.2": "7.30.2",
+      "undici@>=8 <8.12.4": "8.12.4",
+      "qs@>=6 <6.16.2": "6.17.1"
     },
     "patchedDependencies": {
       "sonner@1.7.4": "patches/sonner@1.7.4.patch",
@@ -211,8 +214,7 @@
       "@better-auth/api-key@1.7.18": "patches/@better-auth__api-key@1.7.18.patch",
       "app-builder-lib@26.18.0": "patches/app-builder-lib@26.18.0.patch",
       "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch",
-      "@electron/asar@3.4.1": "patches/@electron__asar@3.4.1.patch",
-      "dir-compare@4.2.0": "patches/dir-compare@4.2.0.patch"
+      "eas-cli@27.4.1": "patches/eas-cli@27.4.1.patch"
     }
   }
 }

@@ -18,8 +18,6 @@ overrides:
   '@better-auth/mongo-adapter@>=1.6': 1.7.18
   '@better-auth/prisma-adapter@>=1.6': 1.7.18
   undici@>=6 <6.29.1: 6.29.1
-  undici@>=7 <7.30.1: 7.30.1
-  undici@>=8 <8.12.2: 8.12.2
   markdown-it@>=14 <14.3.3: 14.3.3
   brace-expansion@>=1 <1.1.21: 1.1.21
   brace-expansion@>=2 <2.1.7: 2.1.7
@@ -57,12 +55,10 @@ overrides:
   js-yaml@>=3 <3.15.2: 3.15.2
   js-yaml@>=4 <4.3.2: 4.3.2
   mermaid@>=11 <11.16.1: 11.16.1
-  minimatch@<11.0.1: 11.0.3
   nanoid@>=3 <3.3.18: 3.3.18
   nanoid@>=5 <5.1.16: 5.1.16
   postcss@>=8 <8.5.23: 8.5.23
   proxy-addr@>=2 <2.0.8: 2.0.8
-  qs@>=6 <6.16.0: 6.16.1
   react-router@>=7 <7.18.2: 7.18.2
   react-router-dom@>=7 <7.18.2: 7.18.2
   seroval@>=1 <1.6.3: 1.6.3
@@ -86,7 +82,6 @@ overrides:
   esbuild@0.18.20: 0.25.0
   esbuild@0.19.12: 0.25.0
   katex@0.16.47: 0.18.2
-  qs@6.16.0: 6.16.1
   satori@0.18.3: 0.33.5
   sharp@0.34.5: 0.35.5
   decode-uri-component@0.5.0: 0.5.1
@@ -123,6 +118,14 @@ overrides:
   prosemirror-tables: 1.8.5
   prosemirror-transform: 1.12.5
   prosemirror-view: 1.42.9
+  minimatch@>=3 <3.1.5: 3.1.5
+  minimatch@>=5 <5.1.9: 5.1.9
+  minimatch@>=9 <9.0.9: 9.0.9
+  minimatch@>=10 <10.2.6: 10.2.6
+  minimatch@>=11 <11.0.4: 11.0.4
+  undici@>=7 <7.30.2: 7.30.2
+  undici@>=8 <8.12.4: 8.12.4
+  qs@>=6 <6.16.2: 6.17.1
 
 patchedDependencies:
   '@better-auth/api-key@1.7.18':
@@ -131,9 +134,6 @@ patchedDependencies:
   '@dnd-kit/core@6.3.1':
     hash: qw3asnk7ibbhyy46aayp6jxhwi
     path: patches/@dnd-kit__core@6.3.1.patch
-  '@electron/asar@3.4.1':
-    hash: muobsjlxilrv7yatfydlzzlfue
-    path: patches/@electron__asar@3.4.1.patch
   '@hugeicons/react-native@1.0.16':
     hash: jgndgzeuneyijh7hqrjlaypsmi
     path: patches/@hugeicons__react-native@1.0.16.patch
@@ -146,9 +146,9 @@ patchedDependencies:
   deepmerge@4.3.1:
     hash: c2w7cpza44hllsga3jnvqrbc5a
     path: patches/deepmerge@4.3.1.patch
-  dir-compare@4.2.0:
-    hash: z5uahgagb2psw34u3zb6heg3yq
-    path: patches/dir-compare@4.2.0.patch
+  eas-cli@27.4.1:
+    hash: ho4ymbdo2kwaizaxz7i6a56uqu
+    path: patches/eas-cli@27.4.1.patch
   mermaid@11.17.2:
     hash: 3m5kmqlt3oscxkkb53ahujfawq
     path: patches/mermaid@11.17.2.patch
@@ -1254,7 +1254,7 @@ importers:
         version: 4.0.2
       eas-cli:
         specifier: 27.4.1
-        version: 27.4.1(@swc/core@1.16.22)(@types/node@22.20.5)(@typescript/typescript6@6.0.2)
+        version: 27.4.1(patch_hash=ho4ymbdo2kwaizaxz7i6a56uqu)(@swc/core@1.16.22)(@types/node@22.20.5)(@typescript/typescript6@6.0.2)
       lightningcss:
         specifier: 1.30.1
         version: 1.30.1
@@ -12054,6 +12054,9 @@ packages:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
     engines: {node: '>= 5.10.0'}
 
+  brace-expansion@1.1.21:
+    resolution: {integrity: sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==}
+
   brace-expansion@2.1.7:
     resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
@@ -12395,6 +12398,9 @@ packages:
   compression@1.8.2:
     resolution: {integrity: sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==}
     engines: {node: '>= 0.8.0'}
+
+  concat-map@0.0.1:
+    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
   connect@3.7.0:
     resolution: {integrity: sha512-ZqRXc+tZukToSNmh5C2iWMSoV3X1YUcPbqEM4DkEG5tNQXrQUZCNVGGv3IuicnkMtPfGf3Xtp8WCXs295iQ1pQ==}
@@ -15344,17 +15350,24 @@ packages:
     resolution: {integrity: sha512-pYZ2n85+FYUb7s0oIVcQxO63/+wgaknm+A/kQjctJqshvHPJs3UtnzaIZ7xrrHMOk8atD7yAfauf6G9VAv7Upg==}
     engines: {node: '>=22.0.0'}
 
-  minimatch@11.0.3:
-    resolution: {integrity: sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw==}
+  minimatch@10.2.6:
+    resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
 
   minimatch@11.0.4:
     resolution: {integrity: sha512-/UJ1dEoVQTjPNDh6SGlUo+ueLMmoHTas4q+8yaAR/5t6nLAIiBDJtoYUh20IYleix7ehiQkgczb84PE3uzHkxg==}
     engines: {node: 20 || >=22}
 
+  minimatch@3.1.5:
+    resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
+
   minimatch@5.1.9:
     resolution: {integrity: sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==}
     engines: {node: '>=10'}
+
+  minimatch@9.0.9:
+    resolution: {integrity: sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==}
+    engines: {node: '>=16 || 14 >=14.17'}
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
@@ -16223,10 +16236,6 @@ packages:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
     engines: {node: '>=10.13.0'}
     hasBin: true
-
-  qs@6.16.1:
-    resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
-    engines: {node: '>=0.6'}
 
   qs@6.17.1:
     resolution: {integrity: sha512-jd3COkaKVgGUW+ZHyEHCG9bH7RoaaiWuMgzsIBjUMVjLAaWGWpoUAVwljVvBHxRu/2qEHnadLGZrkutYUBPQJA==}
@@ -17527,10 +17536,6 @@ packages:
   undici@6.29.1:
     resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
-
-  undici@7.30.1:
-    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
-    engines: {node: '>=20.18.1'}
 
   undici@7.30.2:
     resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
@@ -19371,7 +19376,7 @@ snapshots:
       hosted-git-info: 9.0.3
       ignore: 7.0.5
       jiti: 2.7.0
-      minimatch: 11.0.3
+      minimatch: 10.2.6
       proper-lockfile: 4.1.2
       semver: 7.8.0
       typebox: 1.3.7
@@ -19402,11 +19407,11 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.8': {}
 
-  '@electron/asar@3.4.1(patch_hash=muobsjlxilrv7yatfydlzzlfue)':
+  '@electron/asar@3.4.1':
     dependencies:
       commander: 5.1.0
       glob: 7.2.3
-      minimatch: 11.0.3
+      minimatch: 3.1.5
 
   '@electron/fuses@1.8.0':
     dependencies:
@@ -19437,7 +19442,7 @@ snapshots:
       semver: 7.8.6
       sumchecker: 3.0.1
     optionalDependencies:
-      undici: 7.30.1
+      undici: 7.30.2
     transitivePeerDependencies:
       - supports-color
 
@@ -19473,12 +19478,12 @@ snapshots:
 
   '@electron/universal@2.0.3':
     dependencies:
-      '@electron/asar': 3.4.1(patch_hash=muobsjlxilrv7yatfydlzzlfue)
+      '@electron/asar': 3.4.1
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3(supports-color@8.1.1)
-      dir-compare: 4.2.0(patch_hash=z5uahgagb2psw34u3zb6heg3yq)
+      dir-compare: 4.2.0
       fs-extra: 11.4.1
-      minimatch: 11.0.3
+      minimatch: 9.0.9
       plist: 3.1.1
     transitivePeerDependencies:
       - supports-color
@@ -20030,7 +20035,7 @@ snapshots:
       getenv: 2.0.0
       glob: 14.0.3
       ignore: 5.3.2
-      minimatch: 11.0.3
+      minimatch: 10.2.6
       resolve-from: 5.0.0
       semver: 7.8.6
     transitivePeerDependencies:
@@ -21072,7 +21077,7 @@ snapshots:
       get-package-type: 0.1.0
       indent-string: 4.0.0
       lilconfig: 3.1.4
-      minimatch: 11.0.3
+      minimatch: 10.2.6
       semver: 7.8.6
       string-width: 4.2.3
       supports-color: 8.1.1
@@ -23870,7 +23875,7 @@ snapshots:
 
   app-builder-lib@26.18.0(patch_hash=yeexx237g63gn66nqrorwrlvs4)(dmg-builder@26.18.0)(electron-builder-squirrel-windows@26.18.0):
     dependencies:
-      '@electron/asar': 3.4.1(patch_hash=muobsjlxilrv7yatfydlzzlfue)
+      '@electron/asar': 3.4.1
       '@electron/fuses': 1.8.0
       '@electron/get': 3.1.0
       '@electron/notarize': 2.5.0
@@ -23902,7 +23907,7 @@ snapshots:
       js-yaml: 4.3.2
       json5: 2.2.3
       lazy-val: 1.0.5
-      minimatch: 11.0.3
+      minimatch: 10.2.6
       pkijs: 3.4.3
       plist: 3.1.0
       proper-lockfile: 4.1.2
@@ -24294,6 +24299,11 @@ snapshots:
     dependencies:
       big-integer: 1.6.52
 
+  brace-expansion@1.1.21:
+    dependencies:
+      balanced-match: 1.0.2
+      concat-map: 0.0.1
+
   brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
@@ -24654,6 +24664,8 @@ snapshots:
       vary: 1.1.2
     transitivePeerDependencies:
       - supports-color
+
+  concat-map@0.0.1: {}
 
   connect@3.7.0:
     dependencies:
@@ -25080,9 +25092,9 @@ snapshots:
 
   dijkstrajs@1.0.3: {}
 
-  dir-compare@4.2.0(patch_hash=z5uahgagb2psw34u3zb6heg3yq):
+  dir-compare@4.2.0:
     dependencies:
-      minimatch: 11.0.3
+      minimatch: 3.1.5
       p-limit: 3.1.0
 
   dir-glob@3.0.1:
@@ -25191,7 +25203,7 @@ snapshots:
     dependencies:
       readable-stream: 2.3.8
 
-  eas-cli@27.4.1(@swc/core@1.16.22)(@types/node@22.20.5)(@typescript/typescript6@6.0.2):
+  eas-cli@27.4.1(patch_hash=ho4ymbdo2kwaizaxz7i6a56uqu)(@swc/core@1.16.22)(@types/node@22.20.5)(@typescript/typescript6@6.0.2):
     dependencies:
       '@expo/apple-utils': 2.3.0
       '@expo/code-signing-certificates': 0.0.5
@@ -25366,7 +25378,7 @@ snapshots:
 
   electron-winstaller@5.4.0:
     dependencies:
-      '@electron/asar': 3.4.1(patch_hash=muobsjlxilrv7yatfydlzzlfue)
+      '@electron/asar': 3.4.1
       debug: 4.4.3(supports-color@8.1.1)
       fs-extra: 7.0.1
       lodash: 4.18.1
@@ -25999,7 +26011,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.8
-      qs: 6.16.1
+      qs: 6.17.1
       range-parser: 1.3.0
       router: 2.2.0
       send: 1.2.1
@@ -26101,7 +26113,7 @@ snapshots:
 
   filelist@1.0.6:
     dependencies:
-      minimatch: 11.0.3
+      minimatch: 5.1.9
 
   fill-range@7.1.1:
     dependencies:
@@ -26339,7 +26351,7 @@ snapshots:
     dependencies:
       inflight: 1.0.6
       inherits: 2.0.4
-      minimatch: 11.0.3
+      minimatch: 3.1.5
       once: 1.4.0
       path-is-absolute: 1.0.1
     optional: true
@@ -26349,7 +26361,7 @@ snapshots:
       fs.realpath: 1.0.0
       inflight: 1.0.6
       inherits: 2.0.4
-      minimatch: 11.0.3
+      minimatch: 3.1.5
       once: 1.4.0
       path-is-absolute: 1.0.1
 
@@ -27059,7 +27071,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 7.30.1
+      undici: 7.30.2
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -28407,9 +28419,8 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  minimatch@11.0.3:
+  minimatch@10.2.6:
     dependencies:
-      '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12
 
   minimatch@11.0.4:
@@ -28417,7 +28428,15 @@ snapshots:
       '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12
 
+  minimatch@3.1.5:
+    dependencies:
+      brace-expansion: 1.1.21
+
   minimatch@5.1.9:
+    dependencies:
+      brace-expansion: 2.1.7
+
+  minimatch@9.0.9:
     dependencies:
       brace-expansion: 2.1.7
 
@@ -29329,11 +29348,6 @@ snapshots:
       dijkstrajs: 1.0.3
       pngjs: 5.0.0
       yargs: 15.4.1
-
-  qs@6.16.1:
-    dependencies:
-      es-define-property: 1.0.1
-      side-channel: 1.1.1
 
   qs@6.17.1:
     dependencies:
@@ -30855,8 +30869,6 @@ snapshots:
   undici-types@7.24.6: {}
 
   undici@6.29.1: {}
-
-  undici@7.30.1: {}
 
   undici@7.30.2: {}
 
