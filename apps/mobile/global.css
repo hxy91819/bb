@@ -133,6 +133,8 @@
   --text-xs--line-height: calc(18 / 13);
   --text-sm: 15px;
   --text-sm--line-height: calc(20 / 15);
+  --text-editable: 16px;
+  --text-editable--line-height: calc(24 / 16);
   --text-base: 17px;
   --text-base--line-height: calc(22 / 17);
   --text-lg: 20px;
