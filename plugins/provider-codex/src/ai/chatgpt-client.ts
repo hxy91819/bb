@@ -15,6 +15,7 @@ import {
   type CodexOpenAiApiKeyCredentials,
 } from "./codex-auth.js";
 import { AiServiceFailure } from "./failure.js";
+import { fetchCodexAi } from "./fetch.js";
 
 type InferenceCompleteCommand = CodexAiCompleteInput;
 type VoiceTranscribeCommand = CodexAiTranscribeInput;
@@ -739,7 +740,7 @@ async function fetchOpenAiResponses(
   return runWithTimeout({
     deadline: args.deadline,
     work: (signal) =>
-      fetch(OPENAI_RESPONSES_URL, {
+      fetchCodexAi(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: createOpenAiResponsesHeaders(args.auth),
         body: JSON.stringify(args.request),
@@ -854,7 +855,7 @@ async function fetchOpenAiTranscription(
   return runWithTimeout({
     deadline: args.deadline,
     work: (signal) =>
-      fetch(OPENAI_TRANSCRIBE_URL, {
+      fetchCodexAi(OPENAI_TRANSCRIBE_URL, {
         method: "POST",
         headers: createOpenAiHeaders(args.auth),
         body: buildTranscriptionFormData(args.command),

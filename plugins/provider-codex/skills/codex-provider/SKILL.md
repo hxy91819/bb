@@ -5,6 +5,14 @@ description: "Configure named Codex homes in BB and diagnose Codex session contr
 
 # Codex provider
 
+For automatic title, commit-message, or transcription timeouts, run
+`bb settings ai-services test thread-title --json` and inspect the primary
+machine's network. Codex AI requests respect `HTTP_PROXY`, `HTTPS_PROXY`, and
+`NO_PROXY` in the host daemon's launch environment, with lowercase variants
+taking precedence. Changing the agent CLI's proxy configuration alone does
+not configure these requests. The host daemon must inherit the variables when
+it starts.
+
 Codex supports structured plan requests, editing and rerunning eligible messages,
 and compaction through the corresponding core `bb thread` commands.
 Stopping a running Codex thread pauses its active Goal, as Codex's own client
