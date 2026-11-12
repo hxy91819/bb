@@ -61,8 +61,8 @@ try {
   if ($Operation -eq 'mount' -and (!(Test-Path 'P:\store') -or !(Test-Path 'P:\virtual-store'))) {
     throw 'Dependency image is missing its pnpm stores'
   }
-  'npm_config_store_dir=P:\store' | Out-File -Append $env:GITHUB_ENV
-  'npm_config_virtual_store_dir=P:\virtual-store' | Out-File -Append $env:GITHUB_ENV
+  'PNPM_CONFIG_STORE_DIR=P:\store' | Out-File -Append $env:GITHUB_ENV
+  'PNPM_CONFIG_VIRTUAL_STORE_DIR=P:\virtual-store' | Out-File -Append $env:GITHUB_ENV
   'active=true' | Out-File -Append $env:GITHUB_OUTPUT
 } catch {
   Write-Host "::warning::Dependency disk unavailable; using a fresh install. $($_.Exception.Message)"
