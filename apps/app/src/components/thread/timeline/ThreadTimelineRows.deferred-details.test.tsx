@@ -111,7 +111,6 @@ describe("deferred timeline details", () => {
                 unrelated,
               ]}
               threadRuntimeDisplayStatus="idle"
-              workspaceRootPath={undefined}
             />
           </Wrapper>
         </MemoryRouter>,
@@ -247,7 +246,6 @@ describe("deferred timeline details", () => {
               threadId="thr_main"
               timelineRows={[row]}
               threadRuntimeDisplayStatus="idle"
-              workspaceRootPath={undefined}
             />
           </>
         );
