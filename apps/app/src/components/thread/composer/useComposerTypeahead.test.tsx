@@ -163,13 +163,15 @@ describe("useComposerTypeahead /side command", () => {
     expect(lastCommandSuggestionsArgs().panelCommands).toBeUndefined();
   });
 
-  it("runs the panel action and routes openPanel through the thread panel opener", () => {
+  it("runs the panel action and opens its tab on the thread surface", () => {
     const openThreadPanel = vi.fn(() => true);
     const run = vi.fn(
-      ({
-        openPanel,
-      }: ExperimentalThreadTabActionContext) => {
-        openPanel({ title: "Side chat", params: { source: "command" } });
+      ({ experimental_panel }: ExperimentalThreadTabActionContext) => {
+        experimental_panel.openTab({
+          tab: { id: "side-chat", context: { kind: "thread" }, availability: "action" },
+          title: "Side chat",
+          params: { source: "command" },
+        });
       },
     );
     registerSideChatAction({ run });
