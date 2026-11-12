@@ -188,7 +188,11 @@ function createCodexProvider(
     serviceTiers: [
       { id: "default", label: "Default" },
       { id: "fast", label: "Fast" },
-      { id: "ultrafast", label: "Ultrafast" },
+      {
+        id: "ultrafast",
+        label: "Ultrafast",
+        experimental_icon: "provider-codex/ultrafast",
+      },
     ],
     composerActions: ["plan", "goal"],
     experimental_deriveHostOptions(): Readonly<Record<string, JsonValue>> {
@@ -199,6 +203,8 @@ function createCodexProvider(
             : { kind: "home", providerId: id, codexHome: binding.codexHome },
       };
     },
+
+    internal_DO_NOT_USE_guidedSignIn: true,
     deriveProviderOptions(context) {
       return {
         memoryEnabled: context.settings.memoryEnabled !== false,

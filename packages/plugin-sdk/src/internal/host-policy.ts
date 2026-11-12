@@ -1,4 +1,4 @@
-import type { ContractTagDeclarations } from "@bb/domain";
+import type { ContractTagDeclarations } from "./rpc-tags.js";
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { z } from "zod";
@@ -173,7 +173,7 @@ const PLUGIN_AGENT_STATIC_INSTRUCTIONS_MAX_CHARS = 4096;
 /** Status labels ride on every tool-call event and share one timeline row. */
 export const PLUGIN_AGENT_STATUS_LABEL_MAX_CHARS = 80;
 const PLUGIN_AGENT_SELECTION_MAX_IDS = 256;
-const PLUGIN_AGENT_DYNAMIC_INSTRUCTIONS_MAX_CHARS = 4096;
+export const PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS = 32_768;
 const PLUGIN_AGENT_TOOL_PARAMETERS_MAX_BYTES = 128 * 1024;
 
 // Mention provider ids prefix wire item ids ("<providerId>:<itemId>"), so
@@ -281,7 +281,10 @@ export function registerSettingDescriptors(
         `invalid setting key "${key}" — use letters, digits, "-" and "_"`,
       );
     }
-    if (key in target) {
+    if (key === "__proto__") {
+      throw new Error(`setting key "${key}" is reserved`);
+    }
+    if (Object.hasOwn(target, key)) {
       throw new Error(`setting "${key}" is already defined`);
     }
     const parsed = settingDescriptorSchema.safeParse(raw);
@@ -361,7 +364,12 @@ export function validateSettingsUpdate(
 ): string[] {
   const errors: string[] = [];
   for (const [key, value] of Object.entries(values)) {
-    const descriptor: PluginSettingDescriptor | undefined = descriptors[key];
+    const descriptor: PluginSettingDescriptor | undefined = Object.hasOwn(
+      descriptors,
+      key,
+    )
+      ? descriptors[key]
+      : undefined;
     if (!descriptor) {
       errors.push(`unknown setting "${key}"`);
       continue;
@@ -805,10 +813,28 @@ function validateProviderOptionDescriptors(args: {
               field: `${field}[${index}].description`,
               value: record.description,
             });
+      const icon =
+        record.experimental_icon === undefined
+          ? undefined
+          : requireNonBlankString({
+              providerId,
+              field: `${field}[${index}].experimental_icon`,
+              value: record.experimental_icon,
+            });
+      if (
+        icon !== undefined &&
+        !isNamespacedGlyph(icon) &&
+        /[/\\]/u.test(icon)
+      ) {
+        throw new Error(
+          `provider "${providerId}" ${field}[${index}].experimental_icon must be a host glyph name ("Zap") or a declared icon ("<pluginId>/<name>")`,
+        );
+      }
       return Object.freeze({
         id,
         label,
         ...(description === undefined ? {} : { description }),
+        ...(icon === undefined ? {} : { experimental_icon: icon }),
       });
     },
   );
@@ -1251,10 +1277,12 @@ export type NormalizedPluginProviderDeclaration = Omit<
   | "experimental_nativeSkillRoots"
   | "experimental_nativeCommandRoots"
   | "experimental_resolvesNativeRoots"
+  | "internal_DO_NOT_USE_guidedSignIn"
 > & {
   readonly experimental_nativeSkillRoots?: ProviderNativeRoots;
   readonly experimental_nativeCommandRoots?: ProviderNativeRoots;
   readonly experimental_resolvesNativeRoots: boolean;
+  readonly internal_DO_NOT_USE_guidedSignIn: boolean;
   readonly completedTurnDisplay: PluginProviderCompletedTurnDisplay;
   readonly maintenance: {
     readonly health: boolean;
@@ -1602,6 +1630,12 @@ export function validatePluginProviderDeclaration(
       `provider "${id}" experimental_deriveHostOptions must be a function`,
     );
   }
+  const guidedSignIn = declaration.internal_DO_NOT_USE_guidedSignIn;
+  if (guidedSignIn !== undefined && typeof guidedSignIn !== "boolean") {
+    throw new Error(
+      `provider "${id}" internal_DO_NOT_USE_guidedSignIn must be a boolean`,
+    );
+  }
   const deriveProviderOptions = declaration.deriveProviderOptions;
   if (
     deriveProviderOptions !== undefined &&
@@ -1648,6 +1682,7 @@ export function validatePluginProviderDeclaration(
     ...(deriveHostOptions === undefined
       ? {}
       : { experimental_deriveHostOptions: deriveHostOptions }),
+    internal_DO_NOT_USE_guidedSignIn: guidedSignIn ?? false,
     ...(deriveProviderOptions === undefined
       ? {}
       : { deriveProviderOptions: deriveProviderOptions }),
@@ -2332,6 +2367,39 @@ export function providerIconRefusalMessage(
   return `provider "${providerId}" icon ${problem}`;
 }
 
+/**
+ * `bb.providers.register` refusal for the provider icon or a service tier
+ * icon {@link undeclaredIconProblem} rejects, or null when every icon is
+ * acceptable.
+ */
+export function providerDeclarationIconRefusal(
+  pluginId: string,
+  declaredIconNames: ReadonlySet<string>,
+  declaration: NormalizedPluginProviderDeclaration,
+): string | null {
+  const iconProblem =
+    declaration.icon === undefined
+      ? null
+      : undeclaredIconProblem(pluginId, declaredIconNames, declaration.icon);
+  if (iconProblem !== null) {
+    return providerIconRefusalMessage(declaration.id, iconProblem);
+  }
+  for (const [index, tier] of (declaration.serviceTiers ?? []).entries()) {
+    const tierProblem =
+      tier.experimental_icon === undefined
+        ? null
+        : undeclaredIconProblem(
+            pluginId,
+            declaredIconNames,
+            tier.experimental_icon,
+          );
+    if (tierProblem !== null) {
+      return `provider "${declaration.id}" serviceTiers[${index}].experimental_icon ${tierProblem}`;
+    }
+  }
+  return null;
+}
+
 /** `bb.agents.registerTool` refusal for a glyph {@link undeclaredIconProblem} rejects. */
 function agentToolIconRefusalMessage(
   toolName: string,
@@ -2797,9 +2865,10 @@ export function runPluginStorageMigrations(
     database.exec("ALTER TABLE _bb_migrations ADD COLUMN statement_hash TEXT");
   }
   const rows = database
-    .prepare<[], { id: number; statement_hash: string | null }>(
-      "SELECT id, statement_hash FROM _bb_migrations ORDER BY id",
-    )
+    .prepare<
+      [],
+      { id: number; statement_hash: string | null }
+    >("SELECT id, statement_hash FROM _bb_migrations ORDER BY id")
     .all();
   const applied = new Map<number, string | null>();
   for (const row of rows) applied.set(row.id, row.statement_hash);
@@ -3584,10 +3653,7 @@ export function normalizePluginAgentConfiguration(args: {
   const instructions =
     typeof output.instructions === "string" &&
     output.instructions.trim().length > 0
-      ? output.instructions.slice(
-          0,
-          PLUGIN_AGENT_DYNAMIC_INSTRUCTIONS_MAX_CHARS,
-        )
+      ? output.instructions.slice(0, PLUGIN_DYNAMIC_INSTRUCTIONS_MAX_CHARS)
       : null;
   const toolSelections = normalizePluginAgentToolSelections({
     knownIds: args.knownToolIds,

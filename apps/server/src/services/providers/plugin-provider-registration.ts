@@ -50,6 +50,9 @@ function toOptionDescriptors(
     ...(option.description === undefined
       ? {}
       : { description: option.description }),
+    ...(option.experimental_icon === undefined
+      ? {}
+      : { icon: option.experimental_icon }),
   }));
 }
 
@@ -101,6 +104,7 @@ export function projectFallbackModels(
     model: model.id,
     displayName: model.displayName,
     description: model.description,
+    reasoningDiscovery: "known",
     supportedReasoningEfforts: model.supportedReasoningEfforts.map(
       (effort) => ({
         reasoningEffort: effort.reasoningEffort,
@@ -221,6 +225,7 @@ export function buildPluginProviderRegistration(args: {
   return {
     info,
     serverCapabilities,
+    guidedSignIn: declaration.internal_DO_NOT_USE_guidedSignIn,
     bridgeOptions: declaration.experimental_bridgeOptions ?? {},
     extensionKinds: declaration.extensionKinds ?? {},
     visibility: declaration.experimental_visibility ?? "always",
