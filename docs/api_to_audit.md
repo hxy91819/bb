@@ -4115,42 +4115,15 @@ Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
 
-## Shared VCS process admission (`@get-bb/plugin-sdk/host`)
+## Host-scoped provider options
 
-`experimental_runVcsProcess(command, args, operation, options)` admits a `git`
-or `gh` operation to the runtime's shared queue before invoking it. `args` are
-the command's arguments; they classify git network subcommands (`fetch`,
-`pull`, `push`, `clone`, `ls-remote`, `submodule update`, `remote update`).
-Arguments without a network subcommand, including an empty list for pipelines,
-admit to the local pool. The call holds the permit until the returned promise
-settles; callers must await child close and termination cleanup. Calls nested
-inside an admitted operation run under the outer permit without queueing again.
-`ExperimentalVcsProcessOptions` accepts `priority` (`interactive`, `status`,
-`background`), an optional cancellation signal, and `slots` for pipelines
-that start multiple git children. Queue cancellation prevents spawning; callers
-own cancellation of running children. Execution timeouts begin after admission.
+`PluginProviderDeclaration.models.experimental_cache` defaults to `true`. Setting it to `false` makes each server catalog read await a host probe, coalesces concurrent requests, and prevents serving a previous identity's catalog on failure. This is intended for externally managed credentials; bridge-local connections may still be reused while their credentials are unchanged. Stabilization requires API-level identity-change, concurrent-probe, failure and recovery coverage while default providers retain the existing cache behavior.
 
-The runtime keeps two disjoint pools. The local pool admits
-`clamp(os.availableParallelism() - 2, 4, 6)` local git children, computed once
-per runtime: background work can fill two fewer slots and status work one
-fewer, so eight or more cores give six, five, and four. The
-network pool admits at most four network git or `gh` children, with at most two
-`gh`: background work can fill two slots and status work three. Waiters gain one
-priority level every 15 seconds. FIFO applies within effective priority in each
-pool: when the first waiter that is not held back by the GitHub lane needs more
-slots than its pool has free, later waiters in that pool wait behind it, so
-pipelines are not starved by single-slot work. A blocked GitHub waiter does not
-block eligible network git work, and neither pool blocks the other. The budget
-is shared across module copies in one Node runtime, including bundled plugins.
-Separate host daemons and server processes own separate budgets; arbitrary
-commands run by agents or terminals are outside this queue.
+`PluginProviderDeclaration.experimental_deriveHostOptions(context)` resolves a bounded plain JSON object synchronously from the target `hostId` and the plugin's current non-secret settings. It uses the same 64 KiB validation as bridge options. The server merges the result over static bridge options for model discovery, health, usage, installation, thread execution and native-root resolution; thread-specific `deriveProviderOptions` values override base values during execution. Failures identify the provider and do not fall back to default configuration. Core treats provider fields as opaque JSON.
 
-Core buffered git/gh reads, streaming status/diff reads, blob reads, shell
-pipelines, watcher setup, environment provisioning, and the GitHub plugin use
-this path. The CLI and SDK's workspace reads and mutations reach the same host
-handlers. Host commands give explicit user mutations and diff panels interactive
-priority, status reads status priority, and PR polling/watcher setup/provisioning
-background priority.
+`ExperimentalPluginProviderHostOptionsContext` defines that input. `ExperimentalNativeRootsResolveInput.experimental_providerOptions` carries the same validated base options to host root resolvers; it is omitted for declarations without the new hook, preserving existing installed resolvers. Native-root cache keys include the options. Host daemon protocol 239 advertises the restored home-binding semantics on the desktop-v0.46.1 baseline (protocol 237), alongside the fork ACP delivery extension (protocol 238).
+
+Stabilization requires independent-host and independent-provider discovery, execution and cache-isolation proof; invalid and throwing hooks must fail rather than silently switch identity. Preserve compatibility with declarations and installed root resolvers that do not opt in, and audit payload limits and settings changes before removing the experimental names.
 
 Before stabilization, audit cancellation and permit release on all supported
 platforms, mixed plugin bundles sharing the singleton, aging under sustained
