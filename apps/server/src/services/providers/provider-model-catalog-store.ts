@@ -658,6 +658,7 @@ export function createProviderModelCatalogStore(options: {
     const refresh: CatalogRefresh & { expiresAt: number } = {
       expiresAt: Infinity,
       fingerprint,
+      beforeView: pickerView(entry, fingerprint),
       sessionId: deps.hub.getDaemonSessionIdForHost(entry.key.hostId),
       startedAt: options.now(),
       markedStale: false,
@@ -767,7 +768,7 @@ export function createProviderModelCatalogStore(options: {
       const launch = await resolveCatalogLaunch({
         hostId: args.hostId,
         providerId: args.provider.id,
-        bridgeLaunch: requireBridgeLaunchForProviderId(deps, args.provider.id),
+        bridgeLaunch: requireBridgeLaunchForProviderId(deps, args.provider.id, args.hostId),
       });
       const entry = loadEntry(deps, {
         hostId: args.hostId,
