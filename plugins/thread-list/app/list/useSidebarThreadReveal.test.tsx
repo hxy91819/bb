@@ -111,19 +111,18 @@ describe("useSidebarThreadReveal", () => {
     expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([]);
   });
 
-  it("reveals only newly unread non-open threads and respects a later manual collapse", () => {
+  it("preserves manually collapsed groups during background unread activity", () => {
     const { store, update } = setup([
       thread("first"),
       thread("second"),
       thread("third"),
     ]);
-    act(() =>
-      store.set(sidebarCollapsedThreadSectionsAtom, [
-        "chronological::first",
-        "chronological::second",
-        "chronological::third",
-      ]),
-    );
+    const collapsed = [
+      "chronological::first",
+      "chronological::second",
+      "chronological::third",
+    ];
+    act(() => store.set(sidebarCollapsedThreadSectionsAtom, collapsed));
     update({
       threads: [
         thread("first", { latestAttentionAt: 2 }),
@@ -131,40 +130,12 @@ describe("useSidebarThreadReveal", () => {
         thread("third"),
       ],
     });
+    expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual(collapsed);
+    update({ selectedThreadId: "second" });
     expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([
       "chronological::first",
       "chronological::third",
     ]);
-
-    act(() =>
-      store.set(sidebarCollapsedThreadSectionsAtom, ["chronological::second"]),
-    );
-    update({
-      threads: [
-        thread("first", { latestAttentionAt: 2 }),
-        thread("second", { latestAttentionAt: 3 }),
-        thread("third"),
-      ],
-    });
-    expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([
-      "chronological::second",
-    ]);
-
-    update({
-      threads: [
-        thread("first"),
-        thread("second", { lastReadAt: 3, latestAttentionAt: 3 }),
-        thread("third"),
-      ],
-    });
-    update({
-      threads: [
-        thread("first"),
-        thread("second", { lastReadAt: 3, latestAttentionAt: 4 }),
-        thread("third"),
-      ],
-    });
-    expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([]);
   });
 
   it("keeps initially unread threads collapsed and ignores hidden unread threads", () => {
@@ -189,7 +160,7 @@ describe("useSidebarThreadReveal", () => {
     ]);
   });
 
-  it("waits for the threads to be ready before establishing the unread baseline", () => {
+  it("preserves background collapse after readiness and reveals explicit navigation", () => {
     const { store, update } = setup([thread("first")], {
       threadsReady: false,
     });
@@ -211,11 +182,16 @@ describe("useSidebarThreadReveal", () => {
       threads: [thread("first"), thread("second", { latestAttentionAt: 2 })],
     });
     expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([
+      "chronological::second",
+      "chronological::third",
+    ]);
+    update({ selectedThreadId: "second" });
+    expect(store.get(sidebarCollapsedThreadSectionsAtom)).toEqual([
       "chronological::third",
     ]);
   });
 
-  it("reveals the pinned ancestors and environment of a newly unread child", () => {
+  it("keeps unread child ancestors collapsed until explicit navigation", () => {
     const parent = thread("parent", {
       pinnedAt: 1,
       environment: makeSidebarEnvironment({ id: "env_parent" }),
@@ -237,6 +213,13 @@ describe("useSidebarThreadReveal", () => {
         { ...child, latestAttentionAt: 2, isUnread: true },
       ],
     });
+    expect(store.get(collapsedSidebarSectionIdsAtom)).toEqual(["pinned"]);
+    expect(store.get(collapsedThreadIdsAtom)).toEqual(["parent"]);
+    expect(store.get(collapsedEnvironmentIdsAtom)).toEqual([
+      "env_parent",
+      "env_child",
+    ]);
+    update({ selectedThreadId: "child" });
     expect(store.get(collapsedSidebarSectionIdsAtom)).toEqual([]);
     expect(store.get(collapsedThreadIdsAtom)).toEqual([]);
     expect(store.get(collapsedEnvironmentIdsAtom)).toEqual([]);
