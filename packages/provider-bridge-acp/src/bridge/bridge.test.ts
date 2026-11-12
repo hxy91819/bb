@@ -1427,6 +1427,40 @@ describe("acp bridge", () => {
     ]);
   });
 
+  it("keeps ACP-native discovered models when per-model reasoning discovery errors", async () => {
+    const modelListId = sendModelList({
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+        FAKE_ACP_THOUGHT_LEVEL_CONFIG: "1",
+        FAKE_ACP_SET_CONFIG_MODEL_ERROR: "1",
+      },
+    });
+
+    expect((await waitForResponse(modelListId)).result).toMatchObject({
+      models: [
+        {
+          id: "fake/default",
+          model: "fake/default",
+          displayName: "Fake Default",
+          isDefault: true,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [],
+          reasoningDiscovery: "known",
+        },
+        {
+          id: "fake/strong",
+          model: "fake/strong",
+          displayName: "Fake Strong",
+          isDefault: false,
+          defaultReasoningEffort: "medium",
+          supportedReasoningEfforts: [],
+          reasoningDiscovery: "unknown",
+        },
+      ],
+      selectedOnlyModels: [],
+    });
+  });
+
   it("leaves unprobed models unknown when a large native catalog exceeds the discovery budget", async () => {
     const requestLog = join(workspaceDir, "large-catalog.jsonl");
     const id = sendModelList({
