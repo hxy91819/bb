@@ -148,6 +148,10 @@ interface UseThreadCreationOptionsResult<TExecutionInputSources> {
   modelCatalogIsVerified: boolean;
   modelCatalogIsSettled: boolean;
   reasoningOptions: PickerOption<ReasoningLevel>[];
+  resolveReasoningForModel: (
+    model: string,
+    preferredReasoningLevel: ReasoningLevel,
+  ) => ModelReasoningOptions;
   declaredSessionOptions: ThreadSessionOption[];
   sessionOptionSelections: SessionOptionSelections;
   setSessionOption: (optionId: string, value: SessionOptionValue) => void;
@@ -195,6 +199,11 @@ function resolveThreadCreationProviderRouting({
 }
 
 const NO_MODEL_LOAD_ERROR: SystemExecutionOptionsModelLoadError | null = null;
+
+interface ModelReasoningOptions {
+  reasoningLevel: ReasoningLevel;
+  reasoningOptions: PickerOption<ReasoningLevel>[];
+}
 
 type InitialReadyProviderResolution =
   | { status: "unresolved" }
@@ -570,6 +579,77 @@ export function useThreadCreationOptions(
     [visibleProviders],
   );
 
+  const baseCatalogSelection = useMemo(
+    () =>
+      resolveModelCatalogSelection({
+        models: executionOptionsQuery.data?.models ?? [],
+        selectedOnlyModels:
+          executionOptionsQuery.data?.selectedOnlyModels ?? [],
+        selectedModel: rawSelectedModel,
+        preferredReasoningLevel,
+        sessionOptionSelections: requestedSessionOptionSelections,
+        provider: selectedProviderInfo,
+        catalogIsVerified: modelCatalogIsVerified,
+        formatModelLabel,
+      }),
+    [
+      executionOptionsQuery.data?.models,
+      executionOptionsQuery.data?.selectedOnlyModels,
+      modelCatalogIsVerified,
+      preferredReasoningLevel,
+      rawSelectedModel,
+      requestedSessionOptionSelections,
+      selectedProviderInfo,
+    ],
+  );
+
+  const resolveReasoningForModel = useCallback(
+    (
+      model: string,
+      preferred: ReasoningLevel,
+    ): ModelReasoningOptions => {
+      const selection = resolveModelCatalogSelection({
+        models: executionOptionsQuery.data?.models ?? [],
+        selectedOnlyModels:
+          executionOptionsQuery.data?.selectedOnlyModels ?? [],
+        selectedModel: model,
+        preferredReasoningLevel: preferred,
+        sessionOptionSelections: requestedSessionOptionSelections,
+        provider: selectedProviderInfo,
+        catalogIsVerified: modelCatalogIsVerified,
+        formatModelLabel,
+      });
+      return {
+        reasoningLevel: selection.reasoningLevel,
+        reasoningOptions: selection.reasoningOptions,
+      };
+    },
+    [
+      executionOptionsQuery.data?.models,
+      executionOptionsQuery.data?.selectedOnlyModels,
+      modelCatalogIsVerified,
+      requestedSessionOptionSelections,
+      selectedProviderInfo,
+    ],
+  );
+
+  const needsSelectedModelDiscovery =
+    modelCatalogIsVerified &&
+    baseCatalogSelection.activeModel?.reasoningDiscovery === "unknown";
+  const selectedModelQuery = useSystemExecutionOptions({
+    enabled: executionOptionsQueryEnabled && needsSelectedModelDiscovery,
+    ...executionOptionsRouting,
+    providerId: effectiveProviderId,
+    projectId: executionOptionsProjectId,
+    selectedModel: baseCatalogSelection.selectedModel || undefined,
+  });
+  const selectedCatalog =
+    needsSelectedModelDiscovery &&
+    !selectedModelQuery.isPlaceholderData &&
+    selectedModelQuery.data?.modelLoadError === null
+      ? selectedModelQuery.data
+      : executionOptionsQuery.data;
+
   const activeProviderCapabilities = selectedProviderInfo?.capabilities;
   const selectedProviderComposerActions =
     selectedProviderInfo?.composerActions ?? EMPTY_COMPOSER_ACTIONS;
@@ -650,20 +730,22 @@ export function useThreadCreationOptions(
     isSessionOptionModelSwitch,
   } = useMemo(
     () =>
-      resolveModelCatalogSelection({
-        models: executionOptionsQuery.data?.models ?? [],
-        selectedOnlyModels:
-          executionOptionsQuery.data?.selectedOnlyModels ?? [],
-        selectedModel: rawSelectedModel,
-        preferredReasoningLevel,
-        sessionOptionSelections: requestedSessionOptionSelections,
-        provider: selectedProviderInfo,
-        catalogIsVerified: modelCatalogIsVerified,
-        formatModelLabel,
-      }),
+      selectedCatalog === executionOptionsQuery.data
+        ? baseCatalogSelection
+        : resolveModelCatalogSelection({
+            models: selectedCatalog?.models ?? [],
+            selectedOnlyModels: selectedCatalog?.selectedOnlyModels ?? [],
+            selectedModel: rawSelectedModel,
+            preferredReasoningLevel,
+            sessionOptionSelections: requestedSessionOptionSelections,
+            provider: selectedProviderInfo,
+            catalogIsVerified: modelCatalogIsVerified,
+            formatModelLabel,
+          }),
     [
-      executionOptionsQuery.data?.models,
-      executionOptionsQuery.data?.selectedOnlyModels,
+      baseCatalogSelection,
+      executionOptionsQuery.data,
+      selectedCatalog,
       modelCatalogIsVerified,
       preferredReasoningLevel,
       rawSelectedModel,
@@ -734,8 +816,13 @@ export function useThreadCreationOptions(
     selectedProviderIdBeforeReadyFallback.length > 0 &&
     preferredProviderId.length === 0 &&
     effectiveProviderId.length > 0;
+  const fellBackFromUnofferedProvider =
+    rawSelectedProviderId.length > 0 &&
+    effectiveProviderId.length > 0 &&
+    effectiveProviderId !== rawSelectedProviderId;
   const effectiveInitialProviderSource: ExecutionInputFieldSource | undefined =
     hiddenProviderFallback ||
+    fellBackFromUnofferedProvider ||
     (canResolveReadyProvider &&
       readyProviderId !== undefined &&
       effectiveProviderId === readyProviderId)
@@ -1107,6 +1194,7 @@ export function useThreadCreationOptions(
     modelCatalogIsVerified,
     modelCatalogIsSettled,
     reasoningOptions,
+    resolveReasoningForModel,
     declaredSessionOptions,
     sessionOptionSelections,
     setSessionOption,
