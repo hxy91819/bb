@@ -292,6 +292,7 @@ describe("child outcomes without provider completion", () => {
         hostId: environment.hostId,
         reason: "host-daemon-restarted",
         includeStopping: false,
+        resumingThreadIds: new Set(),
       });
       await vi.advanceTimersByTimeAsync(2_000);
 
@@ -391,6 +392,7 @@ describe("child outcomes without provider completion", () => {
         hostId: environment.hostId,
         reason: "host-daemon-restarted",
         includeStopping: false,
+        resumingThreadIds: new Set(),
       });
       await vi.advanceTimersByTimeAsync(2_000);
 
@@ -457,6 +459,7 @@ describe("child outcomes without provider completion", () => {
         hostId: environment.hostId,
         reason: "host-daemon-restarted",
         includeStopping: false,
+        resumingThreadIds: new Set(),
       });
       await vi.advanceTimersByTimeAsync(2_000);
 

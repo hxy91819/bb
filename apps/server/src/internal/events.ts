@@ -255,7 +255,6 @@ interface ParentTurnNotificationFollowUp {
   kind: "parent-turn-notification";
   author: ChildThreadTurnAuthor | null;
   childThreadId: string;
-  interruption?: ChildThreadOutcome["interruption"];
   projectId: string;
   parentThreadId: string;
   title: string | null;
