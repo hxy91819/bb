@@ -35,6 +35,11 @@ type AcpCompactionOutcome =
   | { status: "skipped"; detail: string }
   | { status: "failed"; error: string };
 
+export interface AcpDialectSteering {
+  midTurnPrompts: boolean;
+  textOnly?: boolean;
+}
+
 export interface AcpDialect {
   readonly id: string;
   toolIdentity?(event: AcpToolCallUpdateEvent): AcpToolIdentity | undefined;
@@ -56,6 +61,7 @@ export interface AcpDialect {
     params: unknown,
   ): AcpClientRequestOutcome | undefined;
   maintenance?: AcpMaintenanceDialect;
+  steering?: AcpDialectSteering;
   presentModel?(model: AvailableModel): AvailableModel;
 }
 
@@ -476,9 +482,15 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   presentModel: presentProviderPrefixedModel,
 };
 
+export const DEVIN_ACP_DIALECT: AcpDialect = {
+  id: "devin",
+  steering: { midTurnPrompts: true, textOnly: true },
+};
+
 const BUILT_IN_DIALECTS: readonly AcpDialect[] = [
   GENERIC_ACP_DIALECT,
   CURSOR_ACP_DIALECT,
+  DEVIN_ACP_DIALECT,
   GROK_ACP_DIALECT,
   OMP_ACP_DIALECT,
   OPENCODE_ACP_DIALECT,
@@ -502,6 +514,7 @@ export function registerAcpDialect(dialect: AcpDialect): void {
 
 const DIALECT_IDS_BY_COMMAND: Readonly<Record<string, string>> = {
   "cursor-agent": CURSOR_ACP_DIALECT.id,
+  devin: DEVIN_ACP_DIALECT.id,
   grok: GROK_ACP_DIALECT.id,
   omp: OMP_ACP_DIALECT.id,
   opencode: OPENCODE_ACP_DIALECT.id,
