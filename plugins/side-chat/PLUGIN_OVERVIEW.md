@@ -6,7 +6,7 @@ Ask a follow-up question about one message without adding noise to the main conv
 - A **Start side chat** panel action for a fork that starts from the current thread state.
 - A `/side` command in the thread input that opens a side chat directly. It appears only when the thread's provider can fork (for example Pi or Codex).
 - A panel that shows the quoted message and a compact chat with its own composer.
-- A **Send to main thread** action on side-chat replies. It queues the reply as a message in the original thread.
+- A **Send to main thread** action on side-chat replies. It sends the reply to the original thread, or queues it there if that thread is busy.
 
 ## How it works
 
