@@ -1,4 +1,7 @@
-import { waitForPluginTurnFailed } from "../plugins/plugin-thread-events.js";
+import {
+  pluginTurnFailureDeadline,
+  waitForPluginTurnFailed,
+} from "../plugins/plugin-thread-events.js";
 import { loadFailedTurn, retryChain } from "./turn-failed.js";
 import { isParentNotifiableChildThread } from "./thread-parent.js";
 import {
@@ -10,7 +13,11 @@ import {
   type ChildThreadOutcome,
   type ThreadQueuedMessage,
 } from "@bb/domain";
-import { getThread, getQueuedRetryOfTurnRequest, listActiveBackgroundTaskCountsByThreadIds } from "@bb/db";
+import {
+  getThread,
+  getQueuedRetryOfTurnRequest,
+  listActiveBackgroundTaskCountsByThreadIds,
+} from "@bb/db";
 import { renderTemplate } from "@bb/templates";
 import { z } from "zod";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
@@ -47,9 +54,20 @@ const childThreadTurnNotificationBatchItemSchema = z.object({
   failureContext: z.string().optional(),
   interruption: childThreadOutcomeSchema.shape.interruption,
 });
+const storedChildThreadTurnNotificationSchema =
+  childThreadTurnNotificationBatchItemSchema.extend({
+    sendAfter: z.number().default(0),
+    retryDecision: z
+      .object({ deadline: z.number(), requestId: z.string().nullable() })
+      .nullable()
+      .default(null),
+  });
 const childThreadTurnNotificationBatchSchema = z.array(
-  childThreadTurnNotificationBatchItemSchema,
+  storedChildThreadTurnNotificationSchema,
 );
+type StoredChildThreadTurnNotification = z.infer<
+  typeof storedChildThreadTurnNotificationSchema
+>;
 export type ChildThreadTurnNotificationBatchItem = z.infer<
   typeof childThreadTurnNotificationBatchItemSchema
 >;
@@ -402,10 +420,9 @@ function childThreadTurnNotificationLogMessage(
   }
 }
 
-function mergeChildThreadTurnNotificationItem(
-  items: readonly ChildThreadTurnNotificationBatchItem[],
-  item: ChildThreadTurnNotificationBatchItem,
-): ChildThreadTurnNotificationBatchItem[] {
+function mergeChildThreadTurnNotificationItem<
+  T extends ChildThreadTurnNotificationBatchItem,
+>(items: readonly T[], item: T): T[] {
   const existingIndex = items.findIndex(
     (entry) =>
       entry.childThread.id === item.childThread.id &&
@@ -431,19 +448,32 @@ async function queueChildThreadTurnNotificationBatchItem(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: QueueChildThreadTurnNotificationArgs,
 ): Promise<void> {
-  if (args.turnStatus === "failed" && !args.failureContext) {
-    const failedRequestId = loadFailedTurn(deps.db, args.childThread.id)?.request.requestId;
-    await waitForPluginTurnFailed(args.childThread.id);
+  const failedRequestId =
+    args.turnStatus === "failed" && !args.failureContext
+      ? (loadFailedTurn(deps.db, args.childThread.id)?.request.requestId ??
+        null)
+      : null;
+  const deadline =
+    args.turnStatus === "failed" && !args.failureContext
+      ? pluginTurnFailureDeadline(args.childThread.id)
+      : null;
+  const shouldNotifyFailure = () => {
     const failed = loadFailedTurn(deps.db, args.childThread.id);
-    if (failed?.request.requestId !== failedRequestId) return;
-    if (failed) {
-      const retry = getQueuedRetryOfTurnRequest(deps.db, {
-        threadId: args.childThread.id,
-        retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
-      });
-      if (retry !== null && retry.state !== "failed_exhausted") return;
-    }
-  }
+    if ((failed?.request.requestId ?? null) !== failedRequestId) return false;
+    if (!failed) return true;
+    const retry = getQueuedRetryOfTurnRequest(deps.db, {
+      threadId: args.childThread.id,
+      retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
+    });
+    return retry === null || retry.state === "failed_exhausted";
+  };
+  if (
+    args.turnStatus === "failed" &&
+    !args.failureContext &&
+    deadline === null &&
+    !shouldNotifyFailure()
+  )
+    return;
   const parentThread = getThread(deps.db, args.parentThreadId);
   if (
     !parentThread ||
@@ -452,7 +482,10 @@ async function queueChildThreadTurnNotificationBatchItem(
   ) {
     return;
   }
-  const item: ChildThreadTurnNotificationBatchItem = {
+  const item: StoredChildThreadTurnNotification = {
+    sendAfter: Date.now() + CHILD_THREAD_TURN_NOTIFICATION_BATCH_DELAY_MS,
+    retryDecision:
+      deadline === null ? null : { deadline, requestId: failedRequestId },
     activeWorkflowCount: getChildThreadActiveWorkflowCount(deps, args),
     childThread: args.childThread,
     terminalOutput: getChildThreadCompletionOutput(deps, args),
@@ -465,34 +498,78 @@ async function queueChildThreadTurnNotificationBatchItem(
     {},
     { threadId: parentThread.id },
   );
-  const row = postCoalescedSystemNotice<ChildThreadTurnNotificationBatchItem[]>(
-    deps,
-    {
-      coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
-      execution,
-      merge: (previous) => {
-        const items = mergeChildThreadTurnNotificationItem(
-          previous ?? [],
-          item,
-        );
-        const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
-        return {
-          input: buildChildThreadTurnStatusBatchInput({ items }),
-          notice: {
-            kind: taxonomy.systemMessageKind,
-            subject: taxonomy.systemMessageSubject,
-          },
-          state: items,
-        };
+  const settlement =
+    deadline === null ? null : waitForPluginTurnFailed(args.childThread.id);
+  const post = (
+    merge: (
+      previous: StoredChildThreadTurnNotification[] | null,
+    ) => StoredChildThreadTurnNotification[] | null,
+  ) => {
+    const row = postCoalescedSystemNotice<StoredChildThreadTurnNotification[]>(
+      deps,
+      {
+        coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
+        execution,
+        merge: (previous) => {
+          const items = merge(previous);
+          if (items === null || items.length === 0) return null;
+          const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
+          return {
+            input: buildChildThreadTurnStatusBatchInput({ items }),
+            notice: {
+              kind: taxonomy.systemMessageKind,
+              subject: taxonomy.systemMessageSubject,
+            },
+            state: items,
+            sendAt: Math.max(
+              Date.now(),
+              ...items.map((entry) =>
+                Math.max(entry.sendAfter, entry.retryDecision?.deadline ?? 0),
+              ),
+            ),
+          };
+        },
+        parseState: (stored) =>
+          childThreadTurnNotificationBatchSchema.parse(JSON.parse(stored)),
+        threadId: parentThread.id,
+        windowMs: 0,
       },
-      parseState: (stored) =>
-        childThreadTurnNotificationBatchSchema.parse(JSON.parse(stored)),
-      threadId: parentThread.id,
-      windowMs: CHILD_THREAD_TURN_NOTIFICATION_BATCH_DELAY_MS,
-    },
+    );
+    if (row !== null && row.state === "scheduled" && row.sendAt !== null)
+      requestQueuedMessageDispatchAt(deps, row.sendAt);
+  };
+  post((previous) =>
+    mergeChildThreadTurnNotificationItem(previous ?? [], item),
   );
-  if (row !== null && row.state === "scheduled" && row.sendAt !== null) {
-    requestQueuedMessageDispatchAt(deps, row.sendAt);
+  if (settlement !== null) {
+    void settlement
+      .then(() => {
+        post((previous) =>
+          previous === null
+            ? null
+            : previous.flatMap((entry) => {
+                if (
+                  entry.childThread.id !== args.childThread.id ||
+                  entry.retryDecision?.deadline !== deadline ||
+                  entry.retryDecision.requestId !== failedRequestId
+                )
+                  return [entry];
+                return shouldNotifyFailure()
+                  ? [{ ...entry, retryDecision: null }]
+                  : [];
+              }),
+        );
+      })
+      .catch((error) => {
+        deps.logger.error(
+          {
+            err: error,
+            childThreadId: args.childThread.id,
+            parentThreadId: args.parentThreadId,
+          },
+          "Failed to settle child retry notification",
+        );
+      });
   }
 }
 

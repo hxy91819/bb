@@ -105,6 +105,10 @@ export function emitPluginTurnFailed(threadId: string): void {
   void pending.settlement.then(clear, clear);
 }
 
+export function pluginTurnFailureDeadline(threadId: string): number | null {
+  return pendingTurnFailures.get(threadId)?.deadline ?? null;
+}
+
 export async function waitForPluginTurnFailed(threadId: string): Promise<void> {
   const pending = pendingTurnFailures.get(threadId);
   if (!pending) return;
