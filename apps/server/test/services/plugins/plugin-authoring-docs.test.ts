@@ -288,7 +288,6 @@ type SlotPropsByName = {
   experimental_sidebarNavigation: ExperimentalSidebarNavigationProps;
   experimental_threadListGrouping: experimental_ThreadListItemInput<unknown>;
   experimental_threadRowDecoration: experimental_ThreadListItemInput<unknown>;
-  experimental_threadHeaderAction: PluginThreadHeaderActionProps;
   experimental_threadContextSegment: ExperimentalThreadContextSegmentProps;
   experimental_threadRowMetadata: ExperimentalThreadRowMetadataProps;
   experimental_threadInfoRow: ExperimentalThreadInfoProps;
@@ -388,11 +387,6 @@ const FRONTEND_SLOT_PROP_FIELDS = {
   ],
   experimental_threadListGrouping: ["thread", "data", "groupingKey"],
   experimental_threadRowDecoration: ["thread", "data", "groupingKey"],
-  experimental_threadHeaderAction: [
-    "threadId",
-    "projectId",
-    "isCompactViewport",
-  ],
   experimental_threadContextSegment: [
     "threadId",
     "projectId",

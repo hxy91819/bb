@@ -1423,7 +1423,6 @@ function ContributedModeSections({
                     />
                   ) : undefined
                 }
-                collapsedActivity={group.item.group.activity}
                 collapsedThreads={group.threads}
                 collapseControl={{
                   isCollapsed: collapsed.includes(id),

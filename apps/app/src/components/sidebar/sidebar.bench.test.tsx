@@ -1,3 +1,5 @@
+import { setPluginSlotRegistrations } from "@/lib/plugin-slots";
+import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 // @vitest-environment jsdom
 
 import { ThreadListContributions } from "@/components/plugin/ThreadListContributions";
@@ -13,7 +15,7 @@ import type { SidebarBootstrapResponse } from "@bb/server-contract";
 import { sidebarNavigationQueryKey } from "@/hooks/queries/query-keys";
 import { updateCachedThreadListStatusState } from "@/hooks/cache-owners/query-cache";
 import { CORE_THREAD_ACTIONS } from "@/lib/thread-actions/core-thread-actions";
-import { ThreadActionCollectors } from "@/lib/thread-actions/thread-action-registry";
+import { ThreadActionCollectors, ThreadActionSurfaceVisibility, resetThreadActionRegistryForTest } from "@/lib/thread-actions/thread-action-registry";
 import {
   loadPluginThreadListReplacement,
   seedSidebarQueryClient,
@@ -401,7 +403,7 @@ describe.skipIf(!BENCH_ENABLED)("sidebar thread list benchmark", () => {
 describe("hidden sidebar thread list", () => {
   it("mounts no rows and subscribes no thread ids", async () => {
     resetThreadActionRegistryForTest();
-    stubPluginRpcFetch();
+    stubPluginRpcFetch(() => ({ result: { preferences: {} } }));
     vi.stubGlobal(
       "IntersectionObserver",
       class {
@@ -444,34 +446,14 @@ describe("hidden sidebar thread list", () => {
       }),
     );
     const rendered = render(
-      <TooltipProvider>
-        <JotaiProvider store={createStore()}>
-          <QueryClientProvider client={seedQueryClient(250)}>
-            <SidebarThreadEntriesTestProvider>
-              <MemoryRouter>
-                <SidebarProvider>
-                  <Sidebar>
-                    <SidebarContent>
-                      <ThreadListContributions>
-                        <ThreadActionCollectors
-                          coreRegistrations={CORE_THREAD_ACTIONS}
-                          requestRename={() => {}}
-                        />
-                        <ThreadActionSurfaceVisibility visible={false}>
-                          <PluginThreadList
-                            replacement={replacement}
-                            onNavigate={() => {}}
-                          />
-                        </ThreadActionSurfaceVisibility>
-                      </ThreadListContributions>
-                    </SidebarContent>
-                  </Sidebar>
-                </SidebarProvider>
-              </MemoryRouter>
-            </SidebarThreadEntriesTestProvider>
-          </QueryClientProvider>
-        </JotaiProvider>
-      </TooltipProvider>,
+      <SidebarThreadListHarness queryClient={seedSidebarQueryClient(250)}>
+        <ThreadListContributions>
+          <ThreadActionCollectors coreRegistrations={CORE_THREAD_ACTIONS} requestRename={() => {}} />
+          <ThreadActionSurfaceVisibility visible={false}>
+            <PluginThreadList replacement={replacement} onNavigate={() => {}} />
+          </ThreadActionSurfaceVisibility>
+        </ThreadListContributions>
+      </SidebarThreadListHarness>,
     );
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
