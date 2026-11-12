@@ -16,6 +16,7 @@ interface UseCommandSuggestionsArgs {
   activeTrigger: PromptMentionCommandTrigger | null;
   promptActions?: readonly CommandSuggestionPromptAction[];
   threadProviderCommands?: readonly ProviderCommand[] | null;
+  panelCommands?: readonly CommandSuggestionPanelCommand[];
   environmentId: string | null;
   hostId?: string | null;
   query: string | null;
@@ -40,6 +41,38 @@ interface CommandSuggestionPromptAction {
     name: string;
     trailingText: string;
   };
+}
+
+export interface CommandSuggestionPanelCommand {
+  name: string;
+  pluginId: string;
+  actionId: string;
+  description: string | null;
+}
+
+export function panelCommandSuggestions({
+  panelCommands,
+  query,
+}: {
+  panelCommands: readonly CommandSuggestionPanelCommand[] | undefined;
+  query: string;
+}): ProviderCommandSuggestion[] {
+  return filterCommandSuggestions(
+    (panelCommands ?? []).map((command): ProviderCommandSuggestion => ({
+      kind: "command",
+      name: command.name,
+      source: "command",
+      origin: "user",
+      description: command.description,
+      argumentHint: null,
+      pluginId: command.pluginId,
+      panelAction: {
+        pluginId: command.pluginId,
+        actionId: command.actionId,
+      },
+    })),
+    query,
+  );
 }
 
 export function promptActionCommandSuggestions({
@@ -180,6 +213,16 @@ export function useCommandSuggestions(
         : [],
     [args.promptActions, isActive, trigger, trimmedQuery],
   );
+  const localPanelCommandSuggestions = useMemo(
+    () =>
+      isActive
+        ? panelCommandSuggestions({
+            panelCommands: args.panelCommands,
+            query: trimmedQuery.toLowerCase(),
+          })
+        : [],
+    [args.panelCommands, isActive, trimmedQuery],
+  );
 
   const commandsQuery = useProjectCommands(
     {
@@ -203,7 +246,7 @@ export function useCommandSuggestions(
     });
     return mergeCommandSuggestions(
       mergeCommandSuggestions(
-        promptActionSuggestions,
+        [...promptActionSuggestions, ...localPanelCommandSuggestions],
         threadProviderCommandSuggestions({
           commands: args.threadProviderCommands,
           catalog,
@@ -219,6 +262,7 @@ export function useCommandSuggestions(
     args.commandScope,
     trigger,
     isActive,
+    localPanelCommandSuggestions,
     promptActionSuggestions,
     trimmedQuery,
   ]);
