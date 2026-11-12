@@ -6,6 +6,7 @@ import {
   type CodexExecutionContext,
 } from "../execution-context.js";
 
+import { experimental_selectedSkillMentions as selectedSkillMentions } from "@get-bb/plugin-sdk/provider-bridge";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,8 +58,12 @@ import {
 } from "@get-bb/plugin-sdk/provider-bridge";
 import { z } from "zod";
 import {
+  CODEX_GOAL_EXTENSION_KIND,
   CODEX_MACOS_PERMISSION_EXTENSION_KIND,
+  codexGoalStateSchema,
   summarizeCodexMacOsPermissions,
+  type CodexGoal,
+  type CodexGoalStatus,
 } from "../extension-kinds.js";
 import {
   buildCodexInteractiveResult,
@@ -77,6 +82,7 @@ import {
 import { resolveCodexMcpElicitationAppIcon } from "../mcp-elicitation-host.js";
 import { macOsPermissionPresentation } from "../presentation.js";
 import {
+  codexThreadGoalSchema,
   codexTurnSchema,
   codexRateLimitReadResponseSchema,
 } from "../schemas.js";
@@ -301,6 +307,12 @@ const CODEX_APP_SERVER_COMMAND_ENV = "BB_CODEX_BRIDGE_APP_SERVER_COMMAND";
 const CODEX_APP_SERVER_ARGS_ENV = "BB_CODEX_BRIDGE_APP_SERVER_ARGS";
 const CODEX_POOL_BASE_URL_ENV = "CODEX_OPENAI_BASE_URL";
 const CODEX_POOL_AUTH_TOKEN_ENV = "CODEX_POOL_AUTH_TOKEN";
+const CODEX_HOME_ENV = "CODEX_HOME";
+const APP_SERVER_LAUNCH_ENV_NAMES = [
+  CODEX_POOL_BASE_URL_ENV,
+  CODEX_POOL_AUTH_TOKEN_ENV,
+  CODEX_HOME_ENV,
+] as const;
 
 const CODEX_INITIALIZE_PARAMS = {
   clientInfo: { name: "bb", version: "1.0.0", title: null },
@@ -407,17 +419,12 @@ function appServerLaunchEnv(
   envVars: Readonly<Record<string, string>> | undefined,
   execution: CodexExecutionContext = resolveCodexExecution({}),
 ): NodeJS.ProcessEnv {
-  const poolBaseUrl = envVars?.[CODEX_POOL_BASE_URL_ENV];
-  const poolAuthToken = envVars?.[CODEX_POOL_AUTH_TOKEN_ENV];
-  return codexExecutionEnv(execution, {
-    ...process.env,
-    ...(poolBaseUrl === undefined
-      ? {}
-      : { [CODEX_POOL_BASE_URL_ENV]: poolBaseUrl }),
-    ...(poolAuthToken === undefined
-      ? {}
-      : { [CODEX_POOL_AUTH_TOKEN_ENV]: poolAuthToken }),
-  });
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const name of APP_SERVER_LAUNCH_ENV_NAMES) {
+    const value = envVars?.[name];
+    if (value !== undefined) env[name] = value;
+  }
+  return codexExecutionEnv(execution, env);
 }
 
 function buildAppServerEnv(
@@ -489,6 +496,7 @@ interface CodexBridgeSession {
   translator: CodexEventTranslator;
   construction: CodexSessionConstruction;
   constructionSignature: string;
+  environmentHash: string;
   turnPermissionSettings: ReturnType<typeof toCodexPermissionSettings>;
   openCodexTurnIds: Set<string>;
   responseOpenedTurns: Map<string, ResponseOpenedTurn>;
@@ -507,18 +515,11 @@ interface CodexBridgeSession {
   closing: boolean;
   previousChildExit: Promise<void> | null;
   releasePromise: Promise<void> | null;
+  goalStatus: CodexGoalStatus | null;
 }
 
 const sessionsByBbThreadId = new Map<string, CodexBridgeSession>();
 const maintenanceConnections = new Set<CodexAppServerConnection>();
-const modelListConnections = new Map<
-  string,
-  {
-    connection: CodexAppServerConnection | null;
-    promise: Promise<CodexAppServerConnection> | null;
-    credentialFingerprint: string | null;
-  }
->();
 let sessionSerialCounter = 0;
 let configuredSkillExtraRoots: string[] | null = null;
 
@@ -603,25 +604,27 @@ function requestedDaybreak(options: BridgeExecutionOptions): boolean | null {
   return typeof requested === "boolean" ? requested : null;
 }
 
+function environmentHash(
+  envVars: Readonly<Record<string, string>> | undefined,
+): string {
+  const entries = Object.entries(envVars ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+}
+
 function constructionSignature(
   cwd: string,
   sessionOptions: CodexSessionOptions,
+  envHash: string,
 ): string {
-  const poolBaseUrl = sessionOptions.envVars?.[CODEX_POOL_BASE_URL_ENV];
-  const poolToken = sessionOptions.envVars?.[CODEX_POOL_AUTH_TOKEN_ENV];
   return JSON.stringify({
     codexExecution: sessionOptions.codexExecution,
     cwd,
     reasoningLevel: sessionOptions.reasoningLevel ?? null,
     memoryEnabled: sessionOptions.memoryEnabled ?? null,
     providerSubagentsEnabled: sessionOptions.providerSubagentsEnabled ?? null,
-    poolRoute:
-      poolBaseUrl === undefined || poolToken === undefined
-        ? null
-        : {
-            baseUrl: poolBaseUrl,
-            tokenHash: createHash("sha256").update(poolToken).digest("hex"),
-          },
+    envHash,
   });
 }
 
@@ -642,6 +645,15 @@ function sendThreadDeltas(
     }
     if (delta.kind === "provider.rateLimits") {
       session.turnRateLimits = delta.rateLimits;
+    }
+    if (
+      delta.kind === "extension.state" &&
+      delta.extensionKind === CODEX_GOAL_EXTENSION_KIND
+    ) {
+      const goal = codexGoalStateSchema.safeParse(delta.payload);
+      if (goal.success) {
+        session.goalStatus = goal.data?.status ?? null;
+      }
     }
     if (delta.kind === "turn.open") {
       session.translator.resetRateLimits();
@@ -859,7 +871,6 @@ function handleChildRequest(
       callId: parsed.data.callId,
       tool: parsed.data.tool,
       arguments: parsed.data.arguments ?? {},
-      providerNativeIds: true,
     })
       .then((result) => {
         responder.result(result);
@@ -910,7 +921,6 @@ function handleChildRequest(
           threadId: session.bbThreadId,
           turnId: request.turnId,
           payload: request.payload,
-          providerNativeIds: true,
         }),
       ]);
       responder.result(
@@ -1063,18 +1073,42 @@ const codexThreadIdentityResultSchema = z
 const SESSION_OPTIONS_STATE_KIND = "bb/session-options";
 const SESSION_MODEL_CATALOG_TIMEOUT_MS = 10_000;
 
+async function loadModelCatalog(
+  connection: CodexAppServerConnection,
+  timeoutMs: number,
+): Promise<CodexModelCatalog> {
+  const result = await connection.request({
+    method: "model/list",
+    params: {},
+    resultSchema: ignoredChildResultSchema,
+    timeoutMs,
+  });
+  const catalog = parseModelCatalog(result);
+  const configuredModel = await connection
+    .request({
+      method: "config/read",
+      params: {},
+      resultSchema: z.object({
+        config: z.object({ model: z.string().nullish() }),
+      }),
+      timeoutMs,
+    })
+    .then((configResult) => configResult.config.model)
+    .catch(() => null);
+  if (catalog.models.some((model) => model.model === configuredModel)) {
+    for (const model of catalog.models) {
+      model.isDefault = model.model === configuredModel;
+    }
+  }
+  return catalog;
+}
+
 function loadSessionModelCatalog(
   connection: CodexAppServerConnection,
 ): Promise<CodexModelCatalog | null> {
-  return connection
-    .request({
-      method: "model/list",
-      params: {},
-      resultSchema: ignoredChildResultSchema,
-      timeoutMs: SESSION_MODEL_CATALOG_TIMEOUT_MS,
-    })
-    .then(parseModelCatalog)
-    .catch(() => null);
+  return loadModelCatalog(connection, SESSION_MODEL_CATALOG_TIMEOUT_MS).catch(
+    () => null,
+  );
 }
 
 function publishDaybreakState(
@@ -1233,6 +1267,7 @@ async function constructThreadSession(
     decoded.sessionOptions.envVars,
     decoded.sessionOptions.codexExecution,
   );
+  const envHash = environmentHash(decoded.sessionOptions.envVars);
   const session: CodexBridgeSession = {
     bbThreadId: args.threadId,
     codexThreadId:
@@ -1248,7 +1283,9 @@ async function constructThreadSession(
     constructionSignature: constructionSignature(
       args.cwd,
       decoded.sessionOptions,
+      envHash,
     ),
+    environmentHash: envHash,
     turnPermissionSettings: toCodexPermissionSettings({
       additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
       gitWritableRoots: [],
@@ -1273,6 +1310,7 @@ async function constructThreadSession(
     closing: false,
     previousChildExit: null,
     releasePromise: null,
+    goalStatus: existing?.goalStatus ?? null,
   };
   sessionsByBbThreadId.set(args.threadId, session);
   if (existing) {
@@ -1426,7 +1464,21 @@ async function constructThreadSession(
     }
     const modelCatalog = loadSessionModelCatalog(connection);
     session.modelCatalog = modelCatalog;
-    void modelCatalog.then((catalog) => publishDaybreakState(session, catalog));
+    void modelCatalog.then((catalog) => {
+      if (!session.closing && catalog !== null) {
+        sendThreadDeltas(session, [
+          {
+            kind: "extension.state",
+            extensionKind: "bb/provider-model-catalog",
+            payload: {
+              models: catalog.models,
+              selectedOnlyModels: catalog.selectedOnlyModels,
+            },
+          },
+        ]);
+      }
+      publishDaybreakState(session, catalog);
+    });
     return { session, codexThreadId };
   } catch (error) {
     const released = session.closing;
@@ -1462,6 +1514,7 @@ function registerResumableSession(session: CodexBridgeSession): void {
     translator: session.translator,
     construction: session.construction,
     constructionSignature: session.constructionSignature,
+    environmentHash: session.environmentHash,
     turnPermissionSettings: session.turnPermissionSettings,
     openCodexTurnIds: new Set(),
     responseOpenedTurns: new Map(),
@@ -1480,6 +1533,7 @@ function registerResumableSession(session: CodexBridgeSession): void {
     closing: false,
     previousChildExit: null,
     releasePromise: null,
+    goalStatus: session.goalStatus,
   });
 }
 
@@ -1524,8 +1578,10 @@ async function rebuildThreadSession(
 async function withMaintenanceChild<T>(
   fn: (connection: CodexAppServerConnection) => Promise<T>,
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<T> {
   const connection = spawnChildConnection({
+    envVars,
     execution,
     recordThreadId: null,
     onNotification: () => {},
@@ -1545,92 +1601,6 @@ async function withMaintenanceChild<T>(
     maintenanceConnections.delete(connection);
     await connection.kill();
   }
-}
-
-async function getModelListConnection(
-  execution: CodexExecutionContext,
-): Promise<CodexAppServerConnection> {
-  const key = JSON.stringify(execution);
-  let credentialFingerprint: string | null = null;
-  if (execution.codexHome !== null) {
-    try {
-      credentialFingerprint = createHash("sha256")
-        .update(await readFile(path.join(execution.codexHome, "auth.json")))
-        .digest("hex");
-    } catch (error) {
-      if (
-        !(error instanceof Error && "code" in error && error.code === "ENOENT")
-      )
-        throw error;
-      credentialFingerprint = "missing";
-    }
-  }
-  let cached = modelListConnections.get(key);
-  if (
-    cached === undefined ||
-    cached.credentialFingerprint !== credentialFingerprint
-  ) {
-    if (cached?.connection) retireModelListConnection(cached.connection);
-    if (cached?.promise)
-      void cached.promise
-        .then((connection) => connection.kill())
-        .catch(() => undefined);
-    cached = { connection: null, promise: null, credentialFingerprint };
-    modelListConnections.set(key, cached);
-  }
-  const entry = cached;
-  if (entry.connection !== null && !entry.connection.exited) {
-    return entry.connection;
-  }
-  if (entry.promise !== null) {
-    return entry.promise;
-  }
-
-  const connectionPromise = (async () => {
-    const connection = spawnChildConnection({
-      execution,
-      recordThreadId: null,
-      onNotification: () => {},
-      onRequest: (_method, _params, responder) => {
-        responder.error(
-          BRIDGE_JSON_RPC_ERRORS.METHOD_NOT_FOUND,
-          "model-list codex app-server does not serve requests",
-        );
-      },
-      onExit: () => {
-        maintenanceConnections.delete(connection);
-        if (entry.connection === connection) {
-          entry.connection = null;
-        }
-      },
-    });
-    maintenanceConnections.add(connection);
-    try {
-      await initializeChild(connection);
-      entry.connection = connection;
-      return connection;
-    } catch (error) {
-      maintenanceConnections.delete(connection);
-      await connection.kill();
-      throw error;
-    }
-  })();
-  entry.promise = connectionPromise;
-  try {
-    return await connectionPromise;
-  } finally {
-    if (entry.promise === connectionPromise) {
-      entry.promise = null;
-    }
-  }
-}
-
-function retireModelListConnection(connection: CodexAppServerConnection): void {
-  maintenanceConnections.delete(connection);
-  for (const entry of modelListConnections.values()) {
-    if (entry.connection === connection) entry.connection = null;
-  }
-  connection.kill();
 }
 
 async function withChildForThread<T>(
@@ -1677,41 +1647,20 @@ function handleInitialize(id: string | number): void {
 async function handleModelList(
   id: string | number,
   execution: CodexExecutionContext,
+  envVars?: Readonly<Record<string, string>>,
 ): Promise<void> {
-  let connection: CodexAppServerConnection | null = null;
   try {
-    connection = await getModelListConnection(execution);
-    const result = await connection.request({
-      method: "model/list",
-      params: {},
-      resultSchema: ignoredChildResultSchema,
-      timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
-    });
-    const { models, selectedOnlyModels } = parseModelCatalog(result);
-    const configuredModel = await connection
-      .request({
-        method: "config/read",
-        params: {},
-        resultSchema: z.object({
-          config: z.object({ model: z.string().nullish() }),
-        }),
-        timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
-      })
-      .then((configResult) => configResult.config.model)
-      .catch(() => null);
-    if (models.some((model) => model.model === configuredModel)) {
-      for (const model of models) {
-        model.isDefault = model.model === configuredModel;
-      }
-    }
-    sendResult(id, {
-      models,
-      selectedOnlyModels,
-    });
+    await withMaintenanceChild(async (connection) => {
+      const { models, selectedOnlyModels } = await loadModelCatalog(
+        connection,
+        CHILD_REQUEST_TIMEOUT_MS,
+      );
+      sendResult(id, {
+        models,
+        selectedOnlyModels,
+      });
+    }, execution, envVars);
   } catch (error) {
-    if (connection !== null) {
-      retireModelListConnection(connection);
-    }
     sendError(
       id,
       isCodexSpawnFailure(error)
@@ -1778,9 +1727,13 @@ async function requireLiveSessionForTurn(
   }
 
   const decoded = decodeCodexOptions(params.options);
+  const turnEnvVars = decoded.sessionOptions.envVars ?? {};
   const signature = constructionSignature(
     session.construction.cwd,
     decoded.sessionOptions,
+    Object.keys(turnEnvVars).length === 0
+      ? session.environmentHash
+      : environmentHash(turnEnvVars),
   );
   if (session.connection === null || session.connection.exited) {
     session = await rebuildThreadSession(
@@ -1833,7 +1786,12 @@ function settleAcceptedDispatch(args: {
   }
   const parsed = codexTurnStartResultSchema.safeParse(result);
   if (!parsed.success) {
-    scheduleZeroWorkTurnSettlement({ clientRequestId, prepared, session });
+    scheduleZeroWorkTurnSettlement({
+      clientRequestId,
+      prepared,
+      session,
+      graceMs: ZERO_WORK_SETTLEMENT_GRACE_MS,
+    });
     return;
   }
   if (prepared === null) {
@@ -1923,6 +1881,7 @@ function waitForNativeTurnStart(
 }
 
 const ZERO_WORK_SETTLEMENT_GRACE_MS = 250;
+const GOAL_RESUME_TURN_GRACE_MS = 5_000;
 
 let syntheticZeroWorkTurnCounter = 0;
 
@@ -1958,6 +1917,7 @@ function scheduleZeroWorkTurnSettlement(args: {
   clientRequestId: TurnStartParamsShape["clientRequestId"];
   prepared: PreparedProviderCommandDispatch | null;
   session: CodexBridgeSession;
+  graceMs: number;
 }): void {
   const { clientRequestId, prepared, session } = args;
   if (prepared === null) {
@@ -1974,7 +1934,7 @@ function scheduleZeroWorkTurnSettlement(args: {
       { clientRequestId, prepared },
       { status: "completed" },
     );
-  }, ZERO_WORK_SETTLEMENT_GRACE_MS);
+  }, args.graceMs);
   timer.unref?.();
 }
 
@@ -2037,6 +1997,44 @@ function settleCompactionDispatchesWhenCodexIsNotRunning(
   }
 }
 
+const skillListSchema = z.object({
+  data: z.array(
+    z.object({
+      cwd: z.string(),
+      skills: z.array(
+        z.object({ name: z.string(), path: z.string(), enabled: z.boolean() }),
+      ),
+    }),
+  ),
+});
+
+async function resolveCodexSkillInput(
+  session: CodexBridgeSession,
+  input: PromptInput[],
+) {
+  if (
+    !input.some(
+      (chunk) =>
+        chunk.type === "text" && selectedSkillMentions(chunk).length > 0,
+    )
+  )
+    return toCodexUserInput(input);
+  if (session.connection === null)
+    throw new Error("Codex session is disconnected");
+  const result = await session.connection.request({
+    method: "skills/list",
+    params: { cwds: [session.construction.cwd], forceReload: true },
+    resultSchema: skillListSchema,
+    timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+  });
+  return toCodexUserInput(
+    input,
+    result.data.flatMap((entry) =>
+      entry.skills.filter((skill) => skill.enabled),
+    ),
+  );
+}
+
 async function handleTurnStart(
   id: string | number,
   params: TurnStartParamsShape,
@@ -2067,6 +2065,32 @@ async function handleTurnStart(
     providerThreadId: codexThreadId,
   });
 
+  const goalCommand = parseCodexGoalCommand(input);
+  if (goalCommand !== null) {
+    try {
+      await runCodexGoalCommand(connection, codexThreadId, goalCommand);
+    } catch (error) {
+      prepared?.rollback();
+      sendError(
+        id,
+        BRIDGE_JSON_RPC_ERRORS.BRIDGE_ERROR,
+        error instanceof Error ? error.message : String(error),
+      );
+      return;
+    }
+    sendResult(id, { threadId: params.threadId });
+    scheduleZeroWorkTurnSettlement({
+      clientRequestId: params.clientRequestId,
+      prepared,
+      session,
+      graceMs:
+        goalCommand === "resume"
+          ? GOAL_RESUME_TURN_GRACE_MS
+          : ZERO_WORK_SETTLEMENT_GRACE_MS,
+    });
+    return;
+  }
+
   const compaction = isStandaloneBuiltinCompactCommand(input);
   try {
     let result: unknown;
@@ -2080,7 +2104,6 @@ async function handleTurnStart(
         method: "thread/compact/start",
         params: { threadId: codexThreadId },
         resultSchema: ignoredChildResultSchema,
-        timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
       });
     } else {
       const permissionSettings = toCodexPermissionSettings({
@@ -2103,7 +2126,7 @@ async function handleTurnStart(
           method: "turn/start",
           params: {
             threadId: codexThreadId,
-            input: toCodexUserInput(input),
+            input: await resolveCodexSkillInput(session, input),
             approvalPolicy: permissionSettings.approvalPolicy,
             approvalsReviewer: permissionSettings.approvalsReviewer,
             sandboxPolicy: permissionSettings.sandboxPolicy,
@@ -2112,7 +2135,6 @@ async function handleTurnStart(
             ...(cyberAccessProgram === null ? {} : { cyberAccessProgram }),
           },
           resultSchema: ignoredChildResultSchema,
-          timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
         })
         .catch((error: unknown) => {
           if (session.turnPermissionSettings === permissionSettings) {
@@ -2201,10 +2223,9 @@ async function handleTurnSteer(
       params: {
         threadId: session.codexThreadId,
         expectedTurnId: params.expectedTurnId,
-        input: toCodexUserInput(params.input),
+        input: await resolveCodexSkillInput(session, params.input),
       },
       resultSchema: ignoredChildResultSchema,
-      timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
     });
     sendThreadDeltas(session, [
       {
@@ -2245,6 +2266,9 @@ async function handleThreadStop(
     return;
   }
 
+  if (session.goalStatus === "active") {
+    await pauseActiveGoalForInterrupt(session, session.codexThreadId);
+  }
   const interruptFailure = await interruptCodexTurn(
     session,
     session.codexThreadId,
@@ -2280,6 +2304,109 @@ async function handleThreadStop(
   );
   await releaseSession(session);
   sendResult(id, { ok: true });
+}
+
+async function setCodexGoalStatus(
+  connection: CodexAppServerConnection,
+  codexThreadId: string,
+  status: "active" | "paused",
+): Promise<CodexGoal> {
+  const { goal } = await connection.request({
+    method: "thread/goal/set",
+    params: { threadId: codexThreadId, origin: "user", status },
+    resultSchema: z.object({ goal: codexThreadGoalSchema }).passthrough(),
+    timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+  });
+  return {
+    objective: goal.objective,
+    status: goal.status,
+    tokenBudget: goal.tokenBudget,
+    tokensUsed: goal.tokensUsed,
+    timeUsedSeconds: goal.timeUsedSeconds,
+  };
+}
+
+async function pauseActiveGoalForInterrupt(
+  session: CodexBridgeSession,
+  codexThreadId: string,
+): Promise<void> {
+  const connection = session.connection;
+  if (connection === null || connection.exited) {
+    return;
+  }
+  try {
+    const goal = await setCodexGoalStatus(connection, codexThreadId, "paused");
+    sendThreadDeltas(session, [
+      {
+        kind: "extension.state",
+        extensionKind: CODEX_GOAL_EXTENSION_KIND,
+        payload: goal,
+      },
+    ]);
+  } catch (error) {
+    process.stderr.write(
+      `codex goal pause before interrupt failed: ${describeCodexLaunchError(error)}\n`,
+    );
+  }
+}
+
+const codexGoalCommandSchema = z.enum(["resume", "pause", "clear"]);
+type CodexGoalCommand = z.infer<typeof codexGoalCommandSchema>;
+
+function parseCodexGoalCommand(
+  input: readonly PromptInput[],
+): CodexGoalCommand | null {
+  const texts = input.flatMap((chunk) =>
+    chunk.type === "text" ? [chunk.text] : [],
+  );
+  if (texts.length !== input.length) {
+    return null;
+  }
+  const match = /^\/goal\s+(\S+)$/u.exec(texts.join("").trim());
+  const command = codexGoalCommandSchema.safeParse(match?.[1]?.toLowerCase());
+  return command.success ? command.data : null;
+}
+
+async function runCodexGoalCommand(
+  connection: CodexAppServerConnection,
+  codexThreadId: string,
+  command: CodexGoalCommand,
+): Promise<void> {
+  const { goal } = await connection.request({
+    method: "thread/goal/get",
+    params: { threadId: codexThreadId },
+    resultSchema: z
+      .object({ goal: codexThreadGoalSchema.nullish() })
+      .passthrough(),
+    timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+  });
+  if (goal === null || goal === undefined) {
+    throw new Error(`This thread has no Goal to ${command}.`);
+  }
+  switch (command) {
+    case "clear":
+      await connection.request({
+        method: "thread/goal/clear",
+        params: { threadId: codexThreadId },
+        resultSchema: ignoredChildResultSchema,
+        timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+      });
+      return;
+    case "pause":
+      if (goal.status !== "active") {
+        throw new Error(
+          "The Goal is not active, so there is nothing to pause.",
+        );
+      }
+      await setCodexGoalStatus(connection, codexThreadId, "paused");
+      return;
+    case "resume":
+      if (goal.status === "active" || goal.status === "complete") {
+        throw new Error(`The Goal is already ${goal.status}.`);
+      }
+      await setCodexGoalStatus(connection, codexThreadId, "active");
+      return;
+  }
 }
 
 async function requestCodexTurnInterrupt(
@@ -2377,6 +2504,25 @@ interface ThreadRefParamsShape {
   threadId: string;
   providerThreadId: string;
   providerOptions?: Record<string, unknown>;
+}
+
+async function handleThreadGoalClear(
+  id: string | number,
+  params: ThreadRefParamsShape,
+): Promise<void> {
+  try {
+    const result = await withChildForThread(params.threadId, (connection) =>
+      connection.request({
+        method: "thread/goal/clear",
+        params: { threadId: params.providerThreadId },
+        resultSchema: z.object({ cleared: z.boolean() }),
+        timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+      }),
+    );
+    sendResult(id, result);
+  } catch (error) {
+    rejectWithCodexError(id, error);
+  }
 }
 
 async function handleThreadMaintenance(
@@ -2506,6 +2652,7 @@ async function handleRequest(
       await handleModelList(
         request.id,
         resolveCodexExecution(request.params.providerOptions),
+        request.params.envVars,
       );
       break;
     case "provider/health":
@@ -2625,10 +2772,7 @@ async function handleRequest(
       );
       break;
     case "thread/goal/clear":
-      await handleThreadMaintenance(request.id, request.params, {
-        method: "thread/goal/clear",
-        params: { threadId: request.params.providerThreadId },
-      });
+      await handleThreadGoalClear(request.id, request.params);
       break;
     case "skills/configure":
       await handleSkillsConfigure(request.id, request.params);
@@ -2679,7 +2823,6 @@ function killAllChildren(): void {
     session.connection = null;
   }
   sessionsByBbThreadId.clear();
-  modelListConnections.clear();
   for (const connection of maintenanceConnections) {
     connection.kill();
   }
