@@ -1024,27 +1024,35 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
   function emitThreadEvent<E extends PluginThreadEventName>(
     event: E,
     buildPayload: () => PluginThreadEventPayloads[E] | null,
-  ): void {
-    if (!hasThreadEventHandlers(event)) return;
-    setImmediate(() => {
-      let payload: PluginThreadEventPayloads[E] | null;
-      try {
-        payload = buildPayload();
-      } catch (error) {
-        logger.warn(
-          `failed to build ${event} plugin event payload: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        return;
-      }
-      if (payload === null) return;
-      const delivered = payload;
-      for (const plugin of loaded.values()) {
-        for (const handler of [...plugin.handle.threadEventHandlers[event]]) {
-          void invokeWrapped(plugin, `${event} handler`, () =>
-            handler(delivered),
+  ): Promise<void> {
+    if (!hasThreadEventHandlers(event)) return Promise.resolve();
+    return new Promise((resolve) => {
+      setImmediate(() => {
+        let payload: PluginThreadEventPayloads[E] | null;
+        try {
+          payload = buildPayload();
+        } catch (error) {
+          logger.warn(
+            `failed to build ${event} plugin event payload: ${error instanceof Error ? error.message : String(error)}`,
           );
+          resolve();
+          return;
         }
-      }
+        if (payload === null) {
+          resolve();
+          return;
+        }
+        const delivered = payload;
+        const pending: Promise<unknown>[] = [];
+        for (const plugin of loaded.values()) {
+          for (const handler of [...plugin.handle.threadEventHandlers[event]]) {
+            pending.push(
+              invokeWrapped(plugin, `${event} handler`, () => handler(delivered)),
+            );
+          }
+        }
+        void Promise.allSettled(pending).then(() => resolve());
+      });
     });
   }
 
