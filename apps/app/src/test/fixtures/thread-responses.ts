@@ -42,11 +42,12 @@ export function makeThreadTimelineResponse(
     activeWorkflows: [],
     activeBackgroundCommands: [],
     pendingTodos: null,
-    goal: null,
+    extensionStates: {},
     providerCommands: null,
     sessionOptions: null,
     modelFallback: null,
     maxSeq: 0,
+    tag: `timeline-${overrides.maxSeq ?? 0}`,
     timelinePage: {
       returnedSegmentCount: 0,
       olderCursor: null,
