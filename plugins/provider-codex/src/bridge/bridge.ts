@@ -2532,6 +2532,7 @@ async function handleThreadGoalClear(
         resultSchema: z.object({ cleared: z.boolean() }),
         timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
       }),
+      resolveCodexExecution(params.providerOptions),
     );
     sendResult(id, result);
   } catch (error) {
