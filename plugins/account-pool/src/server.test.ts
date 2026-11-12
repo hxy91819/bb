@@ -341,7 +341,7 @@ async function createFixture(args: {
       : accountSchema.parse(
           await host.harness.behavior.callRpc("account.add", {
             provider: "claude",
-            apiKey: args.apiKey ?? "sk-account",
+            source: { kind: "api-key", apiKey: args.apiKey ?? "sk-account" },
             label: null,
             priority: args.priority ?? 100,
           }),
@@ -432,7 +432,7 @@ async function addApiAccount(
   const added = accountSchema.parse(
     await fixture.host.harness.behavior.callRpc("account.add", {
       provider: "claude",
-      apiKey,
+      source: { kind: "api-key", apiKey },
       label: apiKey,
       priority,
     }),
@@ -478,9 +478,6 @@ describe("Account Pool config schema", () => {
       options: {
         codexUsageUrl: "https://upstream.example/usage",
         fetch: async () => Response.json({}),
-        importCodexCredentials: async () => {
-          throw new Error("Default credentials must not be read.");
-        },
       },
     });
     const source = path.join(fixture.dataDir, "disk-auth.json");
@@ -913,7 +910,7 @@ describe("Account Pool plugin", () => {
     });
     await host.harness.behavior.callRpc("account.add", {
       provider: "claude",
-      apiKey: "claude-key",
+      source: { kind: "api-key", apiKey: "claude-key" },
       label: "Claude first",
       priority: 0,
     });
@@ -1246,7 +1243,7 @@ describe("Account Pool plugin", () => {
     await expect(fs.access(goneTokenFile)).rejects.toThrow();
     await host.harness.behavior.callRpc("account.add", {
       provider: "claude",
-      apiKey: "sk-account",
+      source: { kind: "api-key", apiKey: "sk-account" },
       label: null,
       priority: 100,
     });
