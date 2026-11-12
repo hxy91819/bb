@@ -419,7 +419,7 @@ it("persists namespaced organization and canonical group state through CLI and R
     ).resolves.toEqual(value);
     expect(harness.realtimeSignals).toContainEqual({
       channel: "preferences",
-      payload: { key: preference, value },
+      payload: { key: preference, value, origin: null },
     });
   }
   for (const value of [

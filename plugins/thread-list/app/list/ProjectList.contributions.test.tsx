@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   act,
   cleanup,
@@ -224,9 +224,16 @@ describe("public thread-list contributions", () => {
     let rowMounts = 0;
     let groupIds: readonly string[] = [];
     let rowIds: readonly string[] = [];
-    let label = "Alpha group";
-    let throws = false;
-    let hookThrows = false;
+    let configuration = {
+      label: "Alpha group",
+      throws: false,
+      hookThrows: false,
+    };
+    let updateConfiguration: ((next: typeof configuration) => void) | undefined;
+    const update = (patch: Partial<typeof configuration>) => {
+      configuration = { ...configuration, ...patch };
+      act(() => updateConfiguration?.(configuration));
+    };
     const keys = new Map<string, string | null>();
     const adapter = await loadPluginApp(
       definePluginApp((app) => {
@@ -235,6 +242,12 @@ describe("public thread-list contributions", () => {
           title: "Adapter groups",
           useData({ threadIds }) {
             const owner = experimental_usePluginId();
+            const [current, setCurrent] = useState(configuration);
+            updateConfiguration = setCurrent;
+            const data = useMemo(
+              () => ({ ...current, owner }),
+              [current, owner],
+            );
             useEffect(() => {
               groupMounts++;
               return () => {
@@ -242,17 +255,17 @@ describe("public thread-list contributions", () => {
               };
             }, []);
             groupIds = threadIds;
-            if (hookThrows) throw new Error("group hook failed");
-            return owner;
+            if (current.hookThrows) throw new Error("group hook failed");
+            return data;
           },
           projection({ thread, data }) {
-            if (throws) throw new Error("projection failed");
-            if (data !== "adapter") return { status: "error" };
+            if (data.throws) throw new Error("projection failed");
+            if (data.owner !== "adapter") return { status: "error" };
             return {
               status: "ready",
               group: {
                 key: thread.id,
-                label: thread.id === "root-a" ? label : "Beta group",
+                label: thread.id === "root-a" ? data.label : "Beta group",
                 avatar: null,
               },
             };
@@ -337,27 +350,23 @@ describe("public thread-list contributions", () => {
     );
     await waitFor(() => expect(rowIds).toEqual(["root-b"]));
     expect(groupIds).toEqual(["root-a", "root-b"]);
-    label = "Renamed group";
-    slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
+    update({ label: "Renamed group" });
     await screen.findByText("Renamed group");
     expect(store.get(sidebarCollapsedContributionGroupsAtom)).toEqual([
       collapsedKey,
     ]);
     expect(screen.queryByText("Nested")).toBeNull();
-    throws = true;
-    slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
+    update({ throws: true });
     await screen.findByText("Alpha");
     expect(screen.queryByText("Renamed group")).toBeNull();
     expect(keys.get("root-a")).toBeNull();
     expect(store.get(sidebarOrganizationModeAtom)).toBe("adapter/roots");
-    throws = false;
-    slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
+    update({ throws: false });
     await screen.findByText("Renamed group");
     expect(keys.get("root-b")).toBe("adapter/roots");
-    hookThrows = true;
-    slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
+    update({ hookThrows: true });
     await screen.findByText("Alpha");
-    hookThrows = false;
+    configuration = { ...configuration, hookThrows: false };
     plugins[0].generation++;
     slot.lifecycle.rerender(<Harness store={store}>{ui}</Harness>);
     await screen.findByText("Renamed group");
