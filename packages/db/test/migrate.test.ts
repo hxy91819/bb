@@ -1576,6 +1576,8 @@ describe("migrate", () => {
       const db = createMigratedConnection();
       try {
         rewindQueuedMessageStateMigration(db);
+        dropThreadStatusChangedAtColumn(db);
+        restoreDiffViewedFilesTable(db);
         dropMarketplaceSourceGitSubdirectoryColumn(db);
         db.$client.exec("ALTER TABLE threads DROP COLUMN parent_notifications");
         db.$client.exec(
