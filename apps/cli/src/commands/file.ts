@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { buildVsCodeRemoteUrl } from "@bb/sdk";
 import { action } from "../action.js";
 import { createCliBbSdk } from "../client.js";
 import { confirmDestructiveAction, outputJson } from "./helpers.js";
@@ -71,6 +72,43 @@ export function registerFileCommands(
   const file = program
     .command("file")
     .description("Read and manage files on BB machines");
+
+  file
+    .command("vscode-url <path>")
+    .description("Print a VS Code Remote-SSH URL for an absolute path")
+    .requiredOption(
+      "--ssh-host <alias>",
+      "Host alias in this computer's SSH config",
+    )
+    .option("--file", "Open a file instead of a directory")
+    .option("--line <number>", "File line number")
+    .option("--column <number>", "File column number")
+    .action(
+      action(
+        async (
+          path: string,
+          opts: {
+            sshHost: string;
+            file?: boolean;
+            line?: string;
+            column?: string;
+          },
+        ) => {
+          const lineNumber = opts.line === undefined ? null : Number(opts.line);
+          const columnNumber =
+            opts.column === undefined ? null : Number(opts.column);
+          process.stdout.write(
+            `${buildVsCodeRemoteUrl({
+              sshHost: opts.sshHost,
+              path,
+              kind: opts.file ? "file" : "directory",
+              lineNumber,
+              columnNumber,
+            })}\n`,
+          );
+        },
+      ),
+    );
 
   file
     .command("read <path>")
