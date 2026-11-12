@@ -45,8 +45,8 @@ it("opens Git documents in the thread side panel instead of the header", async (
     ]) {
       (await slot.findByRole("button", { name })).click();
       await vi.waitFor(() =>
-        expect(slot.inspection.navigateCalls.at(-1)).toMatchObject({
-          method: "experimental_panel.openTab",
+        expect(slot.inspection.experimental_panelCalls.at(-1)).toMatchObject({
+          method: "openTab",
           options: { tab: { id: "document" }, params: { document } },
         }),
       );
