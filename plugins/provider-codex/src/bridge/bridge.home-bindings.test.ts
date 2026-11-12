@@ -65,7 +65,7 @@ async function children() {
     );
 }
 
-it("isolates concurrent model discovery and its cached processes by home, without inherited pool credentials", async () => {
+it("isolates each concurrent model probe by home, without inherited pool credentials", async () => {
   harness.sendRequest(1, "model/list", {
     providerOptions: providerOptions("a"),
   });
@@ -82,10 +82,12 @@ it("isolates concurrent model discovery and its cached processes by home, withou
   harness.sendRequest(3, "model/list", {
     providerOptions: providerOptions("a"),
   });
-  expect((await harness.waitForResponse(3)).result).toEqual(a.result);
+  const refreshed = await harness.waitForResponse(3);
+  expect(refreshed.error).toBeUndefined();
+  expect(refreshed.result).not.toEqual(a.result);
   const records = await children();
   expect(records.map((record) => record.codexHome).sort()).toEqual(
-    [join(directory, "a"), join(directory, "b")].sort(),
+    [join(directory, "a"), join(directory, "a"), join(directory, "b")].sort(),
   );
   expect(
     records.every(

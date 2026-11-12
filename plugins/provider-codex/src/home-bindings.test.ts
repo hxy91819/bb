@@ -29,7 +29,7 @@ async function load() {
   const host = createFakePluginHost({
     pluginId: "provider-codex",
     dataDir,
-    experimental_declaredIconNames: ["./icons/codex.svg"],
+    experimental_declaredIconNames: ["./icons/codex.svg", "ultrafast"],
   });
   hosts.push(host);
   await plugin(host.bb);
