@@ -45,7 +45,7 @@ it("rejects a missing lockfile snapshot before starting CI jobs", ({
     ],
     { cwd: root, encoding: "utf8", timeout: 30_000 },
   );
-  expect(result.status).toBe(1);
+  expect(result.status, result.stdout + result.stderr).toBe(1);
   expect(result.stdout + result.stderr).toContain(
     "ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY",
   );
@@ -72,7 +72,7 @@ it("isolates failed cache restores while preserving healthy caches through a rea
   );
   const env = {
     ...process.env,
-    npm_config_store_dir: join(root, "store"),
+    PNPM_CONFIG_STORE_DIR: join(root, "store"),
     GITHUB_STEP_SUMMARY: join(root, "summary.md"),
     GITHUB_ENV: join(root, "github-env"),
     RUNNER_TEMP: root,
@@ -130,14 +130,14 @@ it("isolates failed cache restores while preserving healthy caches through a rea
         return [line.slice(0, separator), line.slice(separator + 1)];
       }),
   );
-  expect(fallback.npm_config_store_dir).not.toBe(env.npm_config_store_dir);
+  expect(fallback.PNPM_CONFIG_STORE_DIR).not.toBe(env.PNPM_CONFIG_STORE_DIR);
   expect(fallback.TURBO_CACHE_DIR).toBeUndefined();
-  expect(existsSync(fallback.npm_config_store_dir)).toBe(true);
+  expect(existsSync(fallback.PNPM_CONFIG_STORE_DIR)).toBe(true);
   const nextStore = execFileSync("pnpm", ["store", "path", "--silent"], {
     ...options,
     env: { ...env, ...fallback },
   }).trim();
-  expect(nextStore.startsWith(fallback.npm_config_store_dir)).toBe(true);
+  expect(nextStore.startsWith(fallback.PNPM_CONFIG_STORE_DIR)).toBe(true);
   execFileSync("bash", [script], {
     ...options,
     env: {
