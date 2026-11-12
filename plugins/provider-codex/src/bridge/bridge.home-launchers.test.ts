@@ -327,7 +327,7 @@ it("shares one health deadline across startup and authentication and waits for c
   expect(await readFile(processLog, "utf8")).toContain("exit:");
 });
 
-it("reaps obsolete pool catalog processes before reusing the same execution on another route", async () => {
+it("reaps every pool catalog probe across route changes", async () => {
   stubFakeCodexAppServer(scriptPath);
   for (const token of ["before", "after", "third"]) {
     const id = token === "before" ? 1 : token === "after" ? 2 : 3;
@@ -338,13 +338,15 @@ it("reaps obsolete pool catalog processes before reusing the same execution on a
       },
     });
     expect((await harness.waitForResponse(id)).error).toBeUndefined();
-    const log = await readFile(processLog, "utf8");
-    expect(
-      log.split("\n").filter((line) => line.startsWith("spawn:")),
-    ).toHaveLength(id);
-    expect(
-      log.split("\n").filter((line) => line.startsWith("exit:")),
-    ).toHaveLength(id - 1);
+    await vi.waitFor(async () => {
+      const log = await readFile(processLog, "utf8");
+      expect(
+        log.split("\n").filter((line) => line.startsWith("spawn:")),
+      ).toHaveLength(id);
+      expect(
+        log.split("\n").filter((line) => line.startsWith("exit:")),
+      ).toHaveLength(id);
+    });
   }
 });
 
