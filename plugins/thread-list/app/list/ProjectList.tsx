@@ -11,7 +11,9 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -41,7 +43,6 @@ import {
   projectRootThreadGroups,
   type ProjectThreadNode,
 } from "../model/project-thread-groups.js";
-import { getCollapsedChildActivity } from "../model/thread-activity.js";
 import { useSectionThreadDnd } from "../dnd/useSectionThreadDnd.js";
 import { useNestDropPreview } from "../dnd/useNestDropPreview.js";
 import {
@@ -106,6 +107,8 @@ import {
   sidebarOrganizationModeAtom,
   sidebarCollapsedContributionGroupsAtom,
   sidebarEnvironmentGroupingAtom,
+
+  sidebarShowEmptyProjectsAtom,
 } from "../preferences/atoms.js";
 import { builtInOrganizationModeSchema } from "../../shared/preferences.js";
 import type {
@@ -440,6 +443,7 @@ function buildGroupSectionItem(
     compareThreads,
     groupThreadsByEnvironment,
   );
+  const hiddenThreads = getProjectThreadItemDescendants(items);
   return {
     kind: "section",
     group: {
@@ -447,8 +451,8 @@ function buildGroupSectionItem(
       key,
       name,
       items,
-      threadCount: getProjectThreadItemDescendants(items).length,
-      activity: getCollapsedChildActivity(threads),
+      threadCount: hiddenThreads.length,
+      hiddenThreads,
     },
   };
 }
@@ -576,10 +580,17 @@ function ProjectModeSections({
       ).map((group) => [group.key, group.threads]),
     );
   }, [effectivePinnedThreadIds, threads]);
+  const showEmptyProjects = useAtomValue(sidebarShowEmptyProjectsAtom);
   const projectRows = useMemo<ProjectListRowModel[]>(
     () =>
       projects
-        .filter((project) => !project.isPersonal)
+        .filter(
+          (project) =>
+            !project.isPersonal &&
+            (showEmptyProjects ||
+              status !== "ready" ||
+              threadsByProject.get(project.id)?.some(isSidebarProjectThread)),
+        )
         .map((project) => ({
           project,
           threadListState: getProjectThreadListState({
@@ -588,7 +599,7 @@ function ProjectModeSections({
           }),
           isActive: false,
         })),
-    [projects, status, threadsByProject],
+    [projects, showEmptyProjects, status, threadsByProject],
   );
   const projectSectionIds = useMemo(
     () =>
@@ -679,7 +690,6 @@ function ProjectModeSections({
     pinned: pinnedSection,
     threads: {
       ...threadsSection,
-      activity: getCollapsedChildActivity(personalThreads),
       collapsedThreads: personalThreads,
       content: (
         <ProjectThreadTree
@@ -1057,7 +1067,6 @@ export function MachineModeSections({
   const machineSections = useMemo(
     () =>
       buildMachineThreadGroups(nonPinnedThreads, hosts).map((group) => ({
-        activity: getCollapsedChildActivity(group.threads),
         key: group.key,
         label: group.label,
         threadListState: {
@@ -1152,7 +1161,6 @@ export function MachineModeSections({
     pinned: pinnedSection,
     threads: {
       ...threadsSection,
-      activity: getCollapsedChildActivity(nonPinnedThreads),
       collapsedThreads: nonPinnedThreads,
       content: (
         <ProjectThreadTree
@@ -1269,7 +1277,6 @@ export function MachineModeSections({
                 )}
                 actionsOpen={isSectionDisplayOptionsOpen(sectionId)}
                 actionsMobileAlways
-                collapsedActivity={section.activity}
                 collapsedThreads={section.threadListState.threads}
                 collapseControl={{
                   isCollapsed: collapsedMachineKeys.has(section.key),
@@ -1496,6 +1503,10 @@ function ProjectListComponent({
     },
     [sdk],
   );
+  const latestComposeTarget = useRef({ navigate, onProjectSelect });
+  useLayoutEffect(() => {
+    latestComposeTarget.current = { navigate, onProjectSelect };
+  });
   const openRootComposeForProject = useCallback(
     (
       projectId: string | null,
@@ -1503,15 +1514,16 @@ function ProjectListComponent({
       hostId?: string,
       pinned = false,
     ) => {
-      onProjectSelect?.();
-      navigate.toCompose({
+      const target = latestComposeTarget.current;
+      target.onProjectSelect?.();
+      target.navigate.toCompose({
         ...(projectId !== null ? { projectId } : {}),
         placement: { sectionId: sectionId ?? null, pinned },
         ...(hostId ? { hostId } : {}),
         focusPrompt: true,
       });
     },
-    [navigate, onProjectSelect],
+    [],
   );
   const handleCreateProjectThread = useCallback(
     (projectId: string) => {
@@ -1733,14 +1745,11 @@ function ProjectListComponent({
   );
   const sortDirection = useAtomValue(sidebarSortDirectionAtom);
   const activeRename = useSidebarRenameState();
+  const sortRename = chronologicalSort === "alpha" ? activeRename : null;
   const baseThreadComparator = useMemo<ThreadComparator>(
     () =>
-      getSidebarThreadComparator(
-        chronologicalSort,
-        sortDirection,
-        activeRename,
-      ),
-    [chronologicalSort, sortDirection, activeRename],
+      getSidebarThreadComparator(chronologicalSort, sortDirection, sortRename),
+    [chronologicalSort, sortDirection, sortRename],
   );
   const {
     comparator: sidebarThreadComparator,
@@ -1847,7 +1856,6 @@ function ProjectListComponent({
       isSidebarProjectThread(thread),
   );
   const pinnedSection: BuiltInSidebarSectionOptions = {
-    activity: getCollapsedChildActivity(pinnedSectionThreads),
     collapsedThreads: pinnedSectionThreads,
     label: "Pinned",
     content: pinnedSectionContent,

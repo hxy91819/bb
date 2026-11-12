@@ -117,18 +117,15 @@ export function useSidebarThreadReveal(): void {
 export interface SidebarThreadRevealState {
   previousThreadId: string | undefined;
   pendingNavigation: string | undefined;
-  previousUnreadIds: ReadonlySet<string> | null;
 }
 
 export const INITIAL_SIDEBAR_THREAD_REVEAL_STATE: SidebarThreadRevealState = {
   previousThreadId: undefined,
   pendingNavigation: undefined,
-  previousUnreadIds: null,
 };
 
 interface SidebarThreadRevealStepInputs {
   selectedThreadId: string | undefined;
-  threads: readonly SidebarThread[];
   threadById: ReadonlyMap<string, SidebarThread>;
   threadsReady: boolean;
   preferencesReady: boolean;
@@ -144,7 +141,6 @@ export function stepSidebarThreadReveal(
   state: SidebarThreadRevealState,
   {
     selectedThreadId,
-    threads,
     threadById,
     threadsReady,
     preferencesReady,
@@ -160,7 +156,6 @@ export function stepSidebarThreadReveal(
       state: {
         previousThreadId,
         pendingNavigation,
-        previousUnreadIds: state.previousUnreadIds,
       },
       revealIds: new Set(),
       navigationRevealId: undefined,
@@ -172,25 +167,10 @@ export function stepSidebarThreadReveal(
     revealIds.add(navigationRevealId);
     pendingNavigation = undefined;
   }
-  const unreadIds = new Set<string>();
-  for (const thread of threads) {
-    if (thread.isHidden || !thread.isUnread) {
-      continue;
-    }
-    unreadIds.add(thread.id);
-    if (
-      state.previousUnreadIds &&
-      !state.previousUnreadIds.has(thread.id) &&
-      thread.id !== selectedThreadId
-    ) {
-      revealIds.add(thread.id);
-    }
-  }
   return {
     state: {
       previousThreadId,
       pendingNavigation,
-      previousUnreadIds: unreadIds,
     },
     revealIds,
     navigationRevealId,
@@ -303,7 +283,6 @@ export function useSidebarThreadRevealCore({
   useEffect(() => {
     const step = stepSidebarThreadReveal(revealState.current, {
       selectedThreadId,
-      threads,
       threadById,
       threadsReady,
       preferencesReady,

@@ -37,11 +37,14 @@ thread list for registration behavior and examples.
 - `experimental_useBranches`
 - `experimental_useCheckoutState`
 - `experimental_SourceCode`
+- `experimental_FilePreview`
 - `experimental_Diff`
 - `experimental_InfoSection`
+- `experimental_CollapsibleStackCard`
 - `experimental_DetailRow`
 - `experimental_InfoList`
 - `experimental_InfoListRow`
+- `experimental_ThreadContextCardRow`
 - `useRpc`
 - `experimental_useRpcQuery`
 - `experimental_useRpcKeyedQuery`
@@ -50,11 +53,18 @@ thread list for registration behavior and examples.
 - `useRealtime`
 - `useRealtimeConnectionState`
 - `useSettings`
+- `experimental_useExperiment`
+- `experimental_useThreadContextKind`
+- `experimental_useThreadExtensionState`
 - `useBbContext`
 - `experimental_usePluginId`
 - `experimental_useQuestionFormHost`
 - `useBbNavigate`
+- `experimental_useCanOpenFileExternally`
+- `experimental_useTabVisible`
 - `experimental_useAppPanel`
+- `experimental_usePanelTabs`
+- `experimental_PanelTabIcon`
 - `experimental_useFixedTabTarget`
 - `useComposer`
 - `useComposers`
@@ -106,10 +116,15 @@ thread list for registration behavior and examples.
 - `useSidebarThreadShortcut`
 - `ThreadTitle`
 - `experimental_ThreadStatusGlyph`
+- `experimental_resolveThreadStatus`
+- `experimental_ThreadRowMetadata`
 - `useEnvironmentProviders`
 - `useSdk`
 - `experimental_useProviders`
 - `experimental_useCodeTheme`
+- `experimental_getApplicationLinkApprovals`
+- `experimental_revokeApplicationLinkApproval`
+- `experimental_useServers`
 - `experimental_copyToClipboard`
 - `experimental_saveFile`
 
@@ -133,6 +148,7 @@ thread list for registration behavior and examples.
 - `PluginNewThreadPanelProps`
 - `PluginPendingInteractionView`
 - `PluginPendingInteractionProps`
+- `ExperimentalQuestionFormAction`
 - `ExperimentalQuestionFormHost`
 - `ExperimentalQuestionShortcut`
 - `BranchPickerProps`
@@ -149,12 +165,15 @@ thread list for registration behavior and examples.
 - `PluginSidebarFooterActionProps`
 - `ExperimentalSidebarFooterDisclosureProps`
 - `PluginThreadListProps`
-- `PluginThreadHeaderActionProps`
 - `ExperimentalThreadInfoProps`
 - `ExperimentalThreadEnvironment`
 - `ExperimentalThreadContextSegmentInput`
 - `ExperimentalThreadContextSegmentProps`
 - `ExperimentalThreadContextSegmentReference`
+- `ExperimentalCollapsibleStackCardProps`
+- `ExperimentalCollapsibleStackCardDismiss`
+- `ExperimentalThreadRowMetadataProps`
+- `ExperimentalThreadRowMetadataLineProps`
 - `ExperimentalInfoSectionProps`
 - `ExperimentalDetailRowProps`
 - `ExperimentalInfoListProps`
@@ -188,7 +207,6 @@ thread list for registration behavior and examples.
 - `ExperimentalPageBreadcrumb`
 - `ExperimentalBadge`
 - `ExperimentalBadgeTone`
-- `PluginPanelActionOpenOptions`
 - `PluginNewThreadPanelActionContext`
 - `PluginNewThreadPanelActionRegistration`
 - `PluginPendingInteractionRegistration`
@@ -211,6 +229,8 @@ thread list for registration behavior and examples.
 - `PluginCodeThemeTokenRule`
 - `PluginCodeThemeData`
 - `PluginCodeThemeState`
+- `ExperimentalServer`
+- `ExperimentalServers`
 - `ExperimentalClipboardContent`
 - `ExperimentalSaveFileRequest`
 - `ExperimentalSaveFileOutcome`
@@ -219,14 +239,22 @@ thread list for registration behavior and examples.
 - `PluginSidebarThreadShortcut`
 - `PluginThreadTitleProps`
 - `PluginThreadStatusGlyphProps`
+- `PluginThreadStatusInput`
+- `PluginThreadStatusThread`
+- `PluginThreadStatus`
 - `PluginEnvironmentProvider`
 - `PluginEnvironmentProvidersState`
 - `PluginBoundThreadsArea`
 - `PluginBrowserBbSdk`
-- `PluginThreadHeaderActionRegistration`
 - `ExperimentalThreadContextSegmentRegistration`
 - `ExperimentalThreadInfoRowRegistration`
+- `ExperimentalThreadRowMetadataRegistration`
 - `ExperimentalThreadInfoSectionRegistration`
+- `ExperimentalThreadContextCardRowRegistration`
+- `ExperimentalThreadContextCardSectionRegistration`
+- `ExperimentalThreadContextKind`
+- `ExperimentalThreadContextCardProps`
+- `ExperimentalThreadContextCardRowProps`
 - `PluginThreadActionTarget`
 - `PluginThreadActionChoice`
 - `PluginThreadActionChoices`
@@ -234,7 +262,9 @@ thread list for registration behavior and examples.
 - `PluginThreadAction`
 - `PluginThreadActionDataInput`
 - `PluginThreadActionItemInput`
+- `PluginThreadActionBulkItemInput`
 - `PluginThreadActionRegistration`
+- `PluginThreadActionPlacement`
 - `PluginBoundThreadAction`
 - `PluginThreadActionEntry`
 - `PluginThreadActionRegistrationInfo`
@@ -247,6 +277,7 @@ thread list for registration behavior and examples.
 - `PluginSidebarSplitPane`
 - `PluginSidebarSplitLayout`
 - `PluginSidebarThreadSplit`
+- `PluginSidebarThreadSplitOptions`
 - `PluginThreadListRegistration`
 - `ExperimentalSidebarNavigationShortcut`
 - `ExperimentalSidebarNavigationAction`
@@ -270,9 +301,12 @@ thread list for registration behavior and examples.
 - `ExperimentalCodeFenceRendererRegistration`
 - `ExperimentalCodeFenceStatus`
 - `ThreadChatMessageReference`
-- `PluginTargetedPanelActionOpenOptions`
 - `PluginMessageActionContext`
 - `PluginMessageActionRegistration`
+- `ExperimentalMessageMetadataContext`
+- `ExperimentalMessageMetadataPlacement`
+- `ExperimentalMessageMetadataProps`
+- `ExperimentalMessageMetadataRegistration`
 - `PluginAppCommands`
 - `PluginCommandContext`
 - `PluginCommandShortcut`
@@ -328,7 +362,6 @@ thread list for registration behavior and examples.
 - `ExperimentalComposerInput`
 - `ExperimentalComposerThreadLinks`
 - `ExperimentalComposerClipboard`
-- `ExperimentalComposerView`
 - `ExperimentalComposerContribution`
 - `ExperimentalComposerPlusMenuContribution`
 - `ExperimentalComposerSendMenuContribution`
@@ -386,17 +419,20 @@ thread list for registration behavior and examples.
 - `ExperimentalFileLocation`
 - `ExperimentalFileOpenOptions`
 - `ExperimentalFileLinkProps`
-- `ExperimentalAppPanelSurface`
 - `ExperimentalFixedTabTargetState`
-- `ExperimentalOpenFixedTabOptions`
 - `ExperimentalTabRegistration`
 - `ExperimentalTabContext`
 - `ExperimentalTabReference`
-- `ExperimentalTabOpenOptions`
+- `ExperimentalOpenTabOptions`
 - `ExperimentalTabTargetReference`
 - `ExperimentalThreadActionTabProps`
+- `ExperimentalThreadTabProps`
 - `ExperimentalThreadTabActionContext`
-- `ExperimentalAppPanel`
+- `ExperimentalPanelController`
+- `ExperimentalPanelTab`
+- `ExperimentalPanelTabDetail`
+- `ExperimentalPanelTabs`
+- `ExperimentalPanelTabIconProps`
 - `BbContext`
 - `BbNavigate`
 - `PluginSdkApp`
@@ -429,7 +465,7 @@ Read-state and error behavior is documented in [Frontend hooks and UI](frontend-
 
 For `app.slots.experimental_tab`, `ExperimentalTabRegistration`,
 `ExperimentalTabReference`, `ExperimentalTabContext`, and
-`experimental_useAppPanel().experimental_openTab`, see
+`experimental_useAppPanel().openTab`, see
 [Thread side-panel tabs in the Plugin Guide](https://getbb.app/plugin-guide#surface-thread-panel).
 Source upgrades are in [Tab API migration](frontend-registration.md#tab-api-migration).
 
