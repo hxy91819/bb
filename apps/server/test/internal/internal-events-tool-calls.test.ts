@@ -1277,6 +1277,7 @@ describe("internal event and tool-call routes", () => {
                   threadId: fixture.threadId,
                   environmentId: fixture.targetEnvironmentId,
                   input: textInput("Replace the remaining task"),
+                  originPluginId: null,
                   initiator: "user",
                   senderThreadId: null,
                   source: "tell",
