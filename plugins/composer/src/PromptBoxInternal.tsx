@@ -2559,6 +2559,7 @@ export function PromptBoxInternal({
           start: activeTrigger.from,
           end: activeTrigger.to,
           hasLeftRange: false,
+          reopenBeforeOffset: null,
         };
         setComposerMenu(null);
         currentEditor

@@ -3,8 +3,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EMPTY_ORDERED_MENTION_SUGGESTIONS } from "@bb/client-core";
-import type { PluginPanelActionOpenOptions } from "@get-bb/plugin-sdk";
+import type { ExperimentalThreadTabActionContext } from "@get-bb/plugin-sdk";
 import type { TypeaheadConfig } from "@/components/promptbox/ComposerBox";
 import {
   PluginThreadPanelNavigationProvider,
@@ -85,10 +84,7 @@ function lastCommandSuggestionsArgs(): {
 function registerSideChatAction({
   run,
 }: {
-  run?: (context: {
-    threadId: string;
-    openPanel: (options?: PluginPanelActionOpenOptions) => boolean;
-  }) => void;
+  run?: (context: ExperimentalThreadTabActionContext) => void;
 } = {}) {
   setPluginSlotRegistrations(
     "side-chat",
@@ -111,7 +107,7 @@ describe("useComposerTypeahead /side command", () => {
       query: null,
       triggers: [],
       setQuery: vi.fn(),
-      results: EMPTY_ORDERED_MENTION_SUGGESTIONS,
+      results: { groups: [], suggestions: [] },
       isLoading: false,
       isError: false,
     });
@@ -172,10 +168,7 @@ describe("useComposerTypeahead /side command", () => {
     const run = vi.fn(
       ({
         openPanel,
-      }: {
-        threadId: string;
-        openPanel: (options?: PluginPanelActionOpenOptions) => boolean;
-      }) => {
+      }: ExperimentalThreadTabActionContext) => {
         openPanel({ title: "Side chat", params: { source: "command" } });
       },
     );
