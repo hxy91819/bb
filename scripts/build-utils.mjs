@@ -167,6 +167,7 @@ export async function pruneUnreferencedChunks({ chunkDir, entry }) {
 }
 
 export async function buildNodeEsmEntry({
+  alias = {},
   cleanDist,
   entryPoint,
   executable = false,
@@ -190,6 +191,7 @@ export async function buildNodeEsmEntry({
   }
 
   await build({
+    alias,
     banner: {
       js: NODE_ESM_REQUIRE_BANNER,
     },

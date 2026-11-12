@@ -29,4 +29,20 @@ await Promise.all([
     packageRoot,
     sourcemap: false,
   }),
+  buildNodeEsmEntry({
+    cleanDist: false,
+    alias: {
+      "@anthropic-ai/claude-agent-sdk": resolve(
+        packageRoot,
+        "src/test/bridges/fake-claude-sdk.ts",
+      ),
+    },
+    entryPoint: resolve(
+      workspaceRoot,
+      "plugins/provider-claude-code/src/host.ts",
+    ),
+    outfile: resolve(outputDir, "claude-home-provider.mjs"),
+    packageRoot,
+    sourcemap: false,
+  }),
 ]);
