@@ -35,7 +35,7 @@ function extractText(input: PromptInput[]): string | undefined {
 
 it("preserves local file paths with and without text", () => {
   const path = "/workspace/notes.md";
-  const marker = `[Attached file: ${path}]`;
+  const marker = `[Attached file "notes.md": ${path}]`;
   const file = {
     type: "localFile" as const,
     path,
@@ -52,6 +52,38 @@ it("preserves local file paths with and without text", () => {
   ).toBe(`Read this file.\n${marker}`);
   expect(extractText([file])).toBe(marker);
 });
+
+it.each(["URL", "unreadable local"] as const)(
+  "preserves %s image attachments as text notes",
+  (kind) => {
+    const workspaceDir = mkdtempSync(join(tmpdir(), "bb-pi-image-fallback-"));
+    try {
+      const location =
+        kind === "URL"
+          ? "https://example.com/screenshot.png"
+          : join(workspaceDir, "missing.png");
+      const input: PromptInput =
+        kind === "URL"
+          ? { type: "image", url: location }
+          : { type: "localImage", path: location };
+      const note = `[Attached image: ${location}]`;
+
+      expect(extractPiPromptInput([input])).toEqual({
+        text: note,
+        images: [],
+      });
+      expect(
+        extractPiPromptInput([
+          { type: "text", text: "Before", mentions: [] },
+          input,
+          { type: "text", text: "After", mentions: [] },
+        ]),
+      ).toEqual({ text: `Before\n${note}\nAfter`, images: [] });
+    } finally {
+      rmSync(workspaceDir, { recursive: true, force: true });
+    }
+  },
+);
 
 it("invokes a selected skill through Pi's native command", () => {
   expect(

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { createStore, Provider as JotaiProvider } from "jotai";
+import { createStore, getDefaultStore, Provider as JotaiProvider } from "jotai";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -14,9 +14,11 @@ import {
   setPluginSlotRegistrations,
 } from "@/lib/plugin-slots";
 import { resetAllCrashedPluginSlotsForTest } from "@/components/plugin/PluginSlotMount";
-import { parseGitDiffFiles } from "@/components/git-diff/git-diff-parsing";
+import { parseGitDiffFiles } from "@bb/shared-ui/git-diff/parsing";
 import { PluginDiff } from "@/components/plugin/PluginDiff";
+import { SelectionAddToChatContext } from "@/components/thread/SelectionAddToChatContext";
 import {
+  AUTOMATIC_REPLACEMENT_PROVIDER,
   BUILT_IN_REPLACEMENT_PROVIDER,
   replacementProviderKey,
 } from "@/lib/plugin-replacement-preference";
@@ -25,14 +27,12 @@ import { DiffHost } from "./DiffHost";
 import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 
 const bbDiff = vi.hoisted(() => ({
-  loaded: false,
   renderFails: false,
   lastProps: null as Record<string, unknown> | null,
 }));
 
 vi.mock("./BbDiff", async () => {
   const React = await import("react");
-  bbDiff.loaded = true;
   return {
     default: (props: Record<string, unknown>) => {
       if (bbDiff.renderFails) throw new Error("renderer exploded");
@@ -101,7 +101,11 @@ function registerDiffRenderer(
 }
 
 beforeEach(() => {
-  bbDiff.loaded = false;
+  window.localStorage.clear();
+  getDefaultStore().set(
+    diffRendererProviderAtom,
+    AUTOMATIC_REPLACEMENT_PROVIDER,
+  );
   bbDiff.renderFails = false;
   bbDiff.lastProps = null;
   receivedProps.length = 0;
@@ -117,31 +121,6 @@ afterEach(() => {
 });
 
 describe("DiffHost", () => {
-  it("skips BB's renderer and full-file enrichment when a replacement never delegates", async () => {
-    registerDiffRenderer((props) => {
-      receivedProps.push(props);
-      return <div data-testid="plugin-diff">plugin diff</div>;
-    });
-
-    render(
-      <DiffHost
-        file={parseFixture()}
-        patchText={PATCH}
-        fullFileContents={FULL_FILE_CONTENTS}
-        view="split"
-      />,
-    );
-
-    expect(await screen.findByTestId("plugin-diff")).toBeDefined();
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(bbDiff.loaded).toBe(false);
-    expect(receivedProps.at(-1)?.experimental_fullFileContents).toBe(
-      FULL_FILE_CONTENTS,
-    );
-  });
-
   it("hands the replacement resolved semantic props, not BB's host-only inputs", async () => {
     registerDiffRenderer((props) => {
       receivedProps.push(props);
@@ -161,6 +140,10 @@ describe("DiffHost", () => {
     );
 
     await screen.findByTestId("plugin-diff");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(bbDiff.lastProps).toBeNull();
     const props = receivedProps.at(-1);
     expect(props?.patch).toBe(PATCH);
     expect(props?.path).toBe("src/app.ts");
@@ -206,7 +189,6 @@ describe("DiffHost", () => {
     );
 
     expect(await screen.findByTestId("bb-diff")).toBeDefined();
-    expect(bbDiff.loaded).toBe(true);
     expect(bbDiff.lastProps?.file).toBeDefined();
   });
 
@@ -319,7 +301,7 @@ describe("experimental_Diff", () => {
     await screen.findByTestId("plugin-diff");
     expect(receivedProps.at(-1)?.path).toBe("src/app.ts");
     expect(receivedProps.at(-1)?.experimental_fullFileContents).toBeNull();
-    expect(bbDiff.loaded).toBe(false);
+    expect(bbDiff.lastProps).toBeNull();
   });
 
   it("completes a header-less patch before handing it to a replacement", async () => {
@@ -362,11 +344,41 @@ describe("experimental_Diff", () => {
     expect(bbDiff.lastProps).not.toHaveProperty("expansionLineCount");
   });
 
+  it("offers Add to chat only inside a thread", async () => {
+    const addToChat = vi.fn();
+    const { unmount } = render(<PluginDiff patch={PATCH} path="src/app.ts" />);
+    await screen.findByTestId("bb-diff");
+    expect(bbDiff.lastProps?.onSelectionAddToChat).toBeUndefined();
+    unmount();
+
+    render(
+      <SelectionAddToChatContext.Provider value={addToChat}>
+        <PluginDiff patch={PATCH} path="src/app.ts" />
+      </SelectionAddToChatContext.Provider>,
+    );
+    await screen.findByTestId("bb-diff");
+    expect(bbDiff.lastProps?.onSelectionAddToChat).toBe(addToChat);
+  });
+
+  it("renders a mode-only git diff as a diff instead of raw text", async () => {
+    render(
+      <PluginDiff
+        patch={
+          "diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n"
+        }
+        path="run.sh"
+      />,
+    );
+
+    await screen.findByTestId("bb-diff");
+    expect(screen.queryByText(/diff --git/)).toBeNull();
+  });
+
   it("degrades to plain text instead of an empty diff when the patch will not parse", () => {
     render(<PluginDiff patch="not a patch at all" path="notes.txt" />);
 
     expect(screen.getByText("not a patch at all")).toBeDefined();
     expect(screen.queryByTestId("bb-diff")).toBeNull();
-    expect(bbDiff.loaded).toBe(false);
+    expect(bbDiff.lastProps).toBeNull();
   });
 });

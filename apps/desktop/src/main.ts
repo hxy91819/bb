@@ -1,9 +1,17 @@
+import { resolveBbAppRuntimeState } from "../../../packages/bb-app/src/launcher.js";
+import { pathToFileURL } from "node:url";
+import { spawnHostProcess as spawn, hostToolchain } from "@bb/process-utils";
+import { openApplicationUrl } from "./application-url.js";
+import { createDesktopLogger } from "./desktop-logger.js";
+import { attachServerUpdateControl } from "./server-update-control.js";
+import { registerServerChoiceIpc } from "./server-choice-ipc.js";
 import { randomUUID } from "node:crypto";
 import { accessSync, constants as fsConstants } from "node:fs";
 import { arch, homedir, release, type as osType } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   app,
+  autoUpdater as nativeAutoUpdater,
   BrowserWindow,
   clipboard,
   dialog,
@@ -28,7 +36,11 @@ import {
 } from "@bb/config/app-surface";
 import { findMachineServiceFile } from "@bb/config/machine-service";
 import {
+  DEFAULT_CONNECT_BASE_URL,
   deriveConnectBaseUrl,
+  resolveDefaultConnectBaseUrl,
+  serverUrlForHandle,
+  type ConnectAccountSession,
   type ConnectCredential,
 } from "@bb/connect-client";
 import {
@@ -47,6 +59,8 @@ import {
   type ClientMessage,
 } from "@bb/server-contract";
 import { z } from "zod";
+import { registerDesktopClipboardIpc } from "./desktop-clipboard.js";
+import { registerDesktopAttentionIpc } from "./desktop-attention.js";
 import { registerDesktopWindowFocusIpc } from "./desktop-window-focus.js";
 import {
   assertPathExists,
@@ -131,6 +145,7 @@ import {
   type ConnectServerRef,
   type ServerTargetStore,
 } from "./server-target.js";
+import { buildDesktopServerChoices, customServerId } from "./server-list.js";
 import { openServerUrlDialog } from "./server-url-dialog.js";
 import {
   createConnectServerSync,
@@ -188,7 +203,6 @@ import {
   createDesktopAutoUpdateService,
   createElectronAutoUpdaterAdapter,
   shouldEnableDesktopAutoUpdate,
-  type DesktopAutoUpdateLogger,
   type DesktopAutoUpdateService,
 } from "./desktop-auto-update.js";
 import { mergeDesktopUpdateInfo } from "./desktop-update-info.js";
@@ -198,12 +212,15 @@ import {
   BB_DESKTOP_INFO_CHANGED_CHANNEL,
   BB_DESKTOP_INSTALL_UPDATE_CHANNEL,
   BB_DESKTOP_OPEN_EXTERNAL_URL_CHANNEL,
+  BB_DESKTOP_OPEN_APPLICATION_URL_CHANNEL,
   BB_DESKTOP_SET_THEME_CHANNEL,
   BB_DESKTOP_ZOOM_COMMAND_CHANNEL,
 } from "./desktop-update-ipc.js";
 import {
+  BB_DESKTOP_SERVER_CHOICES_CHANGED_CHANNEL,
   BB_DESKTOP_APP_COMMAND_CHANNEL,
   BB_DESKTOP_OPEN_WINDOW_FIND_CHANNEL,
+  BB_DESKTOP_RELOAD_WINDOW_CHANNEL,
   BB_DESKTOP_SET_SPLIT_NAVIGATION_ENABLED_CHANNEL,
   BB_DESKTOP_CLOSE_WINDOW_REQUEST_CHANNEL,
   BB_DESKTOP_CLOSE_WINDOW_RESPONSE_CHANNEL,
@@ -215,6 +232,7 @@ import {
   CLOSE_WINDOW_REQUEST_TIMEOUT_MS,
 } from "./desktop-window-command-ipc.js";
 import {
+  BB_BROWSER_PARTITION,
   createDesktopBrowserViewManager,
   type DesktopBrowserViewManager,
 } from "./desktop-browser-view.js";
@@ -249,7 +267,6 @@ import {
   BB_DESKTOP_BROWSER_OPEN_FULL_DISK_ACCESS_SETTINGS_CHANNEL,
 } from "./desktop-browser-ipc.js";
 import { parseDesktopSystemConfig } from "./desktop-system-config.js";
-import { ensurePackagedUserShellPath } from "./desktop-shell-path.js";
 import { resolveDesktopReloadShortcut } from "./desktop-reload-shortcut.js";
 import {
   createLogTailer,
@@ -279,12 +296,18 @@ import {
   type RuntimeOwnership,
   type WindowStateKey,
 } from "./types.js";
+import {
+  createWindowsInstallerWaitCommand,
+  waitForWindowsInstaller,
+} from "./windows-installer.js";
 
 const OWNED_RUNTIME_STOP_TIMEOUT_MS = 6_000;
 const OWNED_RUNTIME_KILL_TIMEOUT_MS = 1_000;
 const FOREIGN_RUNTIME_STOP_TIMEOUT_MS = 15_000;
 const FOREIGN_RUNTIME_KILL_TIMEOUT_MS = 3_000;
+const WINDOWS_INSTALLER_WAIT_TIMEOUT_MS = 10 * 60 * 1000;
 const REMOTE_SYSTEM_CONFIG_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const CONNECT_ACCOUNT_API_HANDLE = "connect";
 
 interface DesktopRuntime {
   bbProcess: BbAppProcess | null;
@@ -355,10 +378,6 @@ interface ResolveDataDirFromEnvArgs {
   homeDir: string;
 }
 
-interface ResolveDesktopServerUrlArgs {
-  env: NodeJS.ProcessEnv;
-}
-
 interface ResolveDesktopWindowUrlArgs {
   env: NodeJS.ProcessEnv;
   serverUrl: string;
@@ -415,6 +434,7 @@ let startupErrorPage: StartupErrorPage | null = null;
 let startupActionPending = false;
 let connectSignInWindow: BrowserWindow | null = null;
 let stoppingForQuit = false;
+let appImageRelaunchPath: string | null = null;
 let quitting = false;
 let serverTargetStore: ServerTargetStore | null = null;
 let connectServerSync: ConnectServerSync | null = null;
@@ -436,20 +456,6 @@ let localServerMove: DesktopServerMove | null = null;
 let serverMovedWatcher: ServerMovedWatcher | null = null;
 let serverUrlDialogPreloadPath: string | null = null;
 let existingServerDialogPreloadPath: string | null = null;
-
-function resolveDesktopServerUrl(args: ResolveDesktopServerUrlArgs): string {
-  const rawPort = args.env.BB_SERVER_PORT?.trim();
-  if (rawPort === undefined || rawPort.length === 0) {
-    return DEFAULT_BB_SERVER_URL;
-  }
-
-  const port = Number(rawPort);
-  if (Number.isInteger(port) && port >= 1 && port <= 65_535) {
-    return `http://127.0.0.1:${port}`;
-  }
-
-  throw new Error("BB_SERVER_PORT must be a valid TCP port");
-}
 
 function resolveDesktopWindowUrl(args: ResolveDesktopWindowUrlArgs): string {
   const rawAppUrl = args.env.BB_DESKTOP_APP_URL?.trim();
@@ -539,7 +545,7 @@ function getCurrentDesktopInfo(): BbDesktopInfo | null {
   }
   return {
     ...info,
-    serverDaemonLogsAvailable: shouldEnableServerDaemonLogsMenu(),
+    serverDaemonLogsAvailable: true,
   };
 }
 
@@ -556,6 +562,7 @@ function zoomWebContents(
   if (!target) {
     return;
   }
+  if (desktopWindowFactory?.zoom(target.id, command)) return;
   target.setZoomFactor(nextZoomFactor(target.getZoomFactor(), command));
 }
 
@@ -580,14 +587,21 @@ function registerApplicationRendererReloadShortcut(
     event.preventDefault();
     const browserWindow = resolveApplicationWindow(webContents);
     if (browserWindow !== null) {
-      desktopBrowserViewManager?.prepareWindowReload(browserWindow);
-    }
-    if (shortcut === "force-reload") {
-      webContents.reloadIgnoringCache();
-    } else {
-      webContents.reload();
+      reloadApplicationWindow(browserWindow, shortcut === "force-reload");
     }
   });
+}
+
+function reloadApplicationWindow(
+  browserWindow: BrowserWindow,
+  ignoreCache: boolean,
+): void {
+  desktopBrowserViewManager?.prepareWindowReload(browserWindow);
+  if (ignoreCache) {
+    browserWindow.webContents.reloadIgnoringCache();
+  } else {
+    browserWindow.webContents.reload();
+  }
 }
 
 function sendDesktopInfoChanged(): void {
@@ -632,17 +646,7 @@ function sendDesktopWindowStateChanged(
   );
 }
 
-const desktopLogger: DesktopAutoUpdateLogger = {
-  error(message) {
-    process.stderr.write(`${message}\n`);
-  },
-  info(message) {
-    process.stderr.write(`${message}\n`);
-  },
-  warn(message) {
-    process.stderr.write(`${message}\n`);
-  },
-};
+const desktopLogger = createDesktopLogger({ logDir: formatLogDirectory() });
 
 function resolveDataDirFromEnv(args: ResolveDataDirFromEnvArgs): string {
   const rawDataDir = args.env.BB_DATA_DIR?.trim();
@@ -683,13 +687,6 @@ function createDesktopPathContext(): DesktopPathContext {
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
   };
-}
-
-function shouldEnableServerDaemonLogsMenu(): boolean {
-  return (
-    (process.platform === "darwin" || process.platform === "win32") &&
-    currentRuntime?.ownership === "spawned"
-  );
 }
 
 const pendingCloseWindowRequests = new Map<number, NodeJS.Timeout>();
@@ -745,19 +742,6 @@ function getFocusedApplicationWindow(): BrowserWindow | null {
   return null;
 }
 
-function formatCustomServerName(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return parsed.host.length > 0 ? parsed.host : url;
-  } catch {
-    return url;
-  }
-}
-
-function connectServerMenuId(handle: string): string {
-  return `connect:${handle}`;
-}
-
 function listMenuConnectServers(): ConnectServerRef[] {
   const servers: ConnectServerRef[] = connectAccountServers.map((server) => ({
     handle: server.handle,
@@ -774,51 +758,52 @@ function listMenuConnectServers(): ConnectServerRef[] {
   return servers;
 }
 
-function buildMenuServerItems(connectServers: ConnectServerRef[]): Array<{
-  checked: boolean;
-  id: string;
-  name: string;
-}> {
-  const target = serverTargetStore?.getTarget() ?? { kind: "builtin" as const };
-  const items = [
-    {
-      checked: target.kind === "builtin",
-      id: "builtin",
-      name: BUILTIN_SERVER_NAME,
-    },
-  ];
-  for (const server of connectServers) {
-    items.push({
-      checked:
-        target.kind === "connect" && target.server.handle === server.handle,
-      id: connectServerMenuId(server.handle),
-      name: server.name,
-    });
-  }
-  for (const customUrl of serverTargetStore?.getCustomServerUrls() ?? []) {
-    items.push({
-      checked: target.kind === "custom" && target.url === customUrl,
-      id: `custom:${customUrl}`,
-      name: formatCustomServerName(customUrl),
-    });
-  }
-  return items;
+function listServerChoices() {
+  return buildDesktopServerChoices(
+    serverTargetStore,
+    listMenuConnectServers(),
+    builtinServerUrl,
+  );
+}
+
+function buildMenuServerItems(connectServers: ConnectServerRef[]) {
+  return buildDesktopServerChoices(
+    serverTargetStore,
+    connectServers,
+    builtinServerUrl,
+  ).map(({ active, id, name }) => ({ checked: active, id, name }));
 }
 
 function buildServerMenuArgs(): ServerMenuArgs {
   const connectServers = listMenuConnectServers();
   return {
+    isMac: process.platform === "darwin",
+    showBuiltinServer: serverTargetStore?.getShowBuiltinServer() ?? true,
+    toggleBuiltinServer() {
+      if (serverTargetStore === null) return;
+      void serverTargetStore
+        .setShowBuiltinServer(!serverTargetStore.getShowBuiltinServer())
+        .then(refreshApplicationMenu)
+        .catch((error: unknown) => {
+          desktopLogger.warn(
+            `[desktop] could not save server visibility: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          refreshApplicationMenu();
+        });
+    },
     addServer() {
       void openSetServerUrlDialog(true);
     },
-    connectServersSkipReason:
-      connectServers.length === 0 ? connectServerSyncSkipReason : null,
+    connectServersSkipReason: connectServerSyncSkipReason,
     selectServer(serverId) {
       void setActiveServerTarget(serverId);
     },
     servers: buildMenuServerItems(connectServers),
     setServerUrl() {
       void openSetServerUrlDialog();
+    },
+    signInToConnect() {
+      openConnectSignIn(getFocusedApplicationWindow());
     },
   };
 }
@@ -831,6 +816,16 @@ function popupServerMenu(browserWindow: BrowserWindow | null): void {
 }
 
 function refreshApplicationMenu(): void {
+  const choices = listServerChoices();
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    if (applicationWindowWebContentsIds.has(browserWindow.webContents.id)) {
+      sendToApplicationRenderer(
+        browserWindow,
+        BB_DESKTOP_SERVER_CHOICES_CHANGED_CHANNEL,
+        choices,
+      );
+    }
+  }
   installApplicationMenu({
     ...buildServerMenuArgs(),
     accelerators: currentApplicationMenuAccelerators,
@@ -896,12 +891,7 @@ function refreshApplicationMenu(): void {
       if (!(browserWindow instanceof BrowserWindow)) {
         return;
       }
-      desktopBrowserViewManager?.prepareWindowReload(browserWindow);
-      if (ignoreCache) {
-        browserWindow.webContents.reloadIgnoringCache();
-      } else {
-        browserWindow.webContents.reload();
-      }
+      reloadApplicationWindow(browserWindow, ignoreCache);
     },
     closeWindowOrSideTab(browserWindow) {
       if (browserWindow === undefined) {
@@ -917,13 +907,12 @@ function refreshApplicationMenu(): void {
       }
       requestRendererWindowClose(browserWindow);
     },
-    openServerDaemonLogs() {
-      void openServerDaemonLogs();
+    openLocalLogs() {
+      void openLocalLogs();
     },
     onServerMenuWillShow() {
       connectServerSync?.onListRequested();
     },
-    serverDaemonLogsMenuEnabled: shouldEnableServerDaemonLogsMenu(),
   });
 }
 
@@ -935,9 +924,6 @@ function setCurrentRuntime(runtime: DesktopRuntime | null): void {
     connectServerSync?.onRuntimeReady();
   }
   refreshApplicationMenu();
-  if (runtime?.ownership !== "spawned") {
-    closeServerDaemonLogsWindow();
-  }
   sendDesktopInfoChanged();
 }
 
@@ -1067,7 +1053,7 @@ async function refreshSystemConfig(
       return;
     }
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`Could not refresh system config: ${message}\n`);
+    desktopLogger.warn(`Could not refresh system config: ${message}`);
   }
 }
 
@@ -1197,11 +1183,14 @@ async function authenticateConnectTarget(
   targetHandle: string,
   isCurrent: () => boolean,
 ): Promise<ConnectDesktopSessionResult> {
-  const cookieStore = session.defaultSession.cookies;
+  const cookieStores = [
+    session.defaultSession.cookies,
+    session.fromPartition(BB_BROWSER_PARTITION).cookies,
+  ] as const;
   let cachedFailure: ConnectDesktopSessionResult | null = null;
   if (cachedConnectCredential !== null) {
     const cachedResult = await installConnectDesktopSession({
-      cookieStore,
+      cookieStores,
       mintCookie: createCredentialCookieSource({
         credential: cachedConnectCredential,
       }),
@@ -1233,7 +1222,7 @@ async function authenticateConnectTarget(
   const movedCredential = await readLocalServerMoveCredential(remoteServerUrl);
   if (movedCredential !== null) {
     const movedResult = await installConnectDesktopSession({
-      cookieStore,
+      cookieStores,
       mintCookie: createCredentialCookieSource({
         credential: movedCredential,
       }),
@@ -1244,21 +1233,12 @@ async function authenticateConnectTarget(
     }
     cachedFailure = movedResult;
   }
-  const accountUrl = deriveConnectBaseUrl(remoteServerUrl);
-  const accountCookieName =
-    new URL(accountUrl).protocol === "http:"
-      ? "better-auth.session_token"
-      : "__Secure-better-auth.session_token";
-  const accountCookies = await cookieStore.get({
-    name: accountCookieName,
-    url: accountUrl,
-  });
-  const accountCookie = accountCookies.find(
-    (cookie) => cookie.name === accountCookieName,
+  const accountCookie = await readConnectAccountCookie(
+    deriveConnectBaseUrl(remoteServerUrl),
   );
-  if (accountCookie !== undefined) {
+  if (accountCookie !== null) {
     const accountResult = await installConnectDesktopSession({
-      cookieStore,
+      cookieStores,
       mintCookie: createAccountCookieSource({
         accountCookie,
         remoteServerUrl,
@@ -1292,7 +1272,7 @@ async function authenticateConnectTarget(
     );
   }
   const localResult = await installConnectDesktopSession({
-    cookieStore,
+    cookieStores,
     mintCookie: createLocalServerCookieSource({
       localServerUrl: currentRuntime.serverUrl,
     }),
@@ -1302,6 +1282,82 @@ async function authenticateConnectTarget(
     void ensureDesktopMachineEnrolled();
   }
   return localResult;
+}
+
+function connectAccountCookieName(accountUrl: string): string {
+  return new URL(accountUrl).protocol === "http:"
+    ? "better-auth.session_token"
+    : "__Secure-better-auth.session_token";
+}
+
+async function readConnectAccountCookie(
+  accountUrl: string,
+): Promise<{ name: string; value: string } | null> {
+  const name = connectAccountCookieName(accountUrl);
+  const cookies = await session.defaultSession.cookies.get({
+    name,
+    url: accountUrl,
+  });
+  const cookie = cookies.find((candidate) => candidate.name === name);
+  return cookie === undefined ? null : { name, value: cookie.value };
+}
+
+function resolveConnectAccountUrl(): string {
+  const target = serverTargetStore?.getTarget();
+  const serverUrl =
+    target?.kind === "connect"
+      ? target.server.url
+      : (listMenuConnectServers()[0]?.url ??
+        cachedConnectCredential?.serverUrl ??
+        null);
+  if (serverUrl !== null) {
+    return deriveConnectBaseUrl(serverUrl);
+  }
+  try {
+    return resolveDefaultConnectBaseUrl(process.env);
+  } catch (error) {
+    desktopLogger.warn(
+      `[desktop] using ${DEFAULT_CONNECT_BASE_URL} for bb Connect: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return DEFAULT_CONNECT_BASE_URL;
+  }
+}
+
+async function readConnectAccountSession(): Promise<ConnectAccountSession | null> {
+  const serverUrls = listMenuConnectServers().map(
+    (server) => new URL(server.url).origin,
+  );
+  if (serverUrls.length === 0) {
+    serverUrls.push(
+      serverUrlForHandle(
+        resolveConnectAccountUrl(),
+        CONNECT_ACCOUNT_API_HANDLE,
+      ),
+    );
+  }
+  for (const serverUrl of serverUrls) {
+    const cookie = await readConnectAccountCookie(
+      deriveConnectBaseUrl(serverUrl),
+    );
+    if (cookie !== null) {
+      return { serverUrl, cookie };
+    }
+  }
+  return null;
+}
+
+async function adoptSavedConnectServers(): Promise<void> {
+  if (serverTargetStore === null) {
+    return;
+  }
+  const switched = await serverTargetStore.adoptConnectServers(
+    listMenuConnectServers(),
+  );
+  if (switched) {
+    await applyServerTarget();
+    return;
+  }
+  refreshApplicationMenu();
 }
 
 async function clearCachedConnectCredential(): Promise<void> {
@@ -1434,11 +1490,13 @@ function connectMovedMachine(args: {
         desktopLogger.info(message);
       },
       async startLocalRuntime() {
-        await spawnOwnedRuntime({
-          bridgePath: args.bridgePath,
-          serverUrl: builtinServerUrl,
-          userDataPath: args.userDataPath,
-        });
+        reportOwnedRuntimeExit(
+          await spawnOwnedRuntime({
+            bridgePath: args.bridgePath,
+            serverUrl: builtinServerUrl,
+            userDataPath: args.userDataPath,
+          }),
+        );
       },
     });
     refreshApplicationMenu();
@@ -1571,6 +1629,7 @@ async function handleWatchedServerMove(move: DesktopServerMove): Promise<void> {
       fetchImpl: (input, init) => net.fetch(input, init),
       intervalMs: SERVER_MOVE_DESTINATION_INTERVAL_MS,
       isCancelled: () => quitting || serverTargetGeneration !== generation,
+      moveId: move.moveId,
       serverUrl: move.target.url,
       timeoutMs: SERVER_MOVE_DESTINATION_TIMEOUT_MS,
     });
@@ -1658,25 +1717,24 @@ async function runStartupAction(
 }
 
 function openConnectSignIn(parentWindow: BrowserWindow | null): void {
-  const target = serverTargetStore?.getTarget();
-  if (target?.kind !== "connect") return;
-  const targetUrl = target.server.url;
   if (connectSignInWindow !== null && !connectSignInWindow.isDestroyed()) {
     connectSignInWindow.focus();
     return;
   }
-  const accountUrl = deriveConnectBaseUrl(targetUrl);
+  const target = serverTargetStore?.getTarget();
+  const targetUrl = target?.kind === "connect" ? target.server.url : null;
+  const accountUrl = resolveConnectAccountUrl();
   const accountHost = new URL(accountUrl).hostname;
-  const cookieName =
-    new URL(accountUrl).protocol === "http:"
-      ? "better-auth.session_token"
-      : "__Secure-better-auth.session_token";
+  const cookieName = connectAccountCookieName(accountUrl);
   const signInUrl = new URL("/dashboard", accountUrl);
-  signInUrl.searchParams.set("returnTo", targetUrl);
+  if (targetUrl !== null) {
+    signInUrl.searchParams.set("returnTo", targetUrl);
+  }
   const signInWindow = new BrowserWindow({
     height: 720,
     parent: parentWindow ?? undefined,
-    title: "Reconnect bb Connect",
+    title:
+      targetUrl === null ? "Sign in to bb Connect" : "Reconnect bb Connect",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -1702,8 +1760,10 @@ function openConnectSignIn(parentWindow: BrowserWindow | null): void {
     completed = true;
     session.defaultSession.cookies.removeListener("changed", onCookieChanged);
     if (!signInWindow.isDestroyed()) signInWindow.close();
+    connectServerSync?.syncNow().catch(() => {});
     const currentTarget = serverTargetStore?.getTarget();
     if (
+      targetUrl !== null &&
       currentTarget?.kind === "connect" &&
       currentTarget.server.url === targetUrl
     ) {
@@ -1770,7 +1830,6 @@ async function loadServerMovedView(move: DesktopServerMove): Promise<void> {
 
 async function applyServerTarget(): Promise<void> {
   startupErrorPage = null;
-  desktopBrowserBrokerClient?.reconnect();
   if (serverTargetStore === null) {
     return;
   }
@@ -1778,6 +1837,13 @@ async function applyServerTarget(): Promise<void> {
   serverTargetGeneration += 1;
   const generation = serverTargetGeneration;
   const isCurrent = (): boolean => serverTargetGeneration === generation;
+  desktopBrowserBrokerClient?.suspend();
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (applicationWindowWebContentsIds.has(window.webContents.id))
+      desktopBrowserViewManager?.prepareWindowReload(window);
+  }
+  await loadLoadingView();
+  if (!isCurrent()) return;
   if (serverTargetStore.getTarget().kind === "builtin") {
     await activateLocalServerMoveIfLocked();
     if (!isCurrent()) {
@@ -1785,6 +1851,7 @@ async function applyServerTarget(): Promise<void> {
     }
   }
   const target = serverTargetStore.getTarget();
+  desktopBrowserBrokerClient?.reconnect();
 
   if (target.kind === "builtin") {
     startServerMovedWatcher();
@@ -1845,7 +1912,7 @@ async function applyServerTarget(): Promise<void> {
         details: unauthorized
           ? "The desktop app could not establish a session for this Connect server. " +
             (result.detail === "this account does not own the selected server"
-              ? `(unauthorized: This account does not own ${target.server.name}.)`
+              ? `(unauthorized: This account does not own ${new URL(target.server.url).host}.)`
               : "(unauthorized: The app was rejected.)")
           : "The desktop app could not establish a session for this Connect server. " +
             `(${result.code}: ${result.detail})`,
@@ -1898,7 +1965,12 @@ async function loadRemoteServerTarget(
 }
 
 async function setActiveServerTarget(serverId: string): Promise<void> {
-  if (serverTargetStore === null) {
+  if (
+    serverTargetStore === null ||
+    !listServerChoices().some(
+      (choice) => choice.id === serverId && !choice.active,
+    )
+  ) {
     return;
   }
   if (serverId.startsWith("connect:")) {
@@ -1915,36 +1987,53 @@ async function setActiveServerTarget(serverId: string): Promise<void> {
     return;
   }
   if (serverId.startsWith("custom:")) {
-    const url = serverId.slice("custom:".length);
-    if (!serverTargetStore.getCustomServerUrls().includes(url)) {
+    const url = serverTargetStore
+      .getCustomServerUrls()
+      .find((url) => customServerId(url) === serverId);
+    if (url === undefined) {
       return;
     }
     await serverTargetStore.setCustomServerUrl(url);
     await applyServerTarget();
     return;
   }
-  if (serverId !== "builtin" && serverId !== "custom") {
-    return;
-  }
-  if (serverId === "builtin") {
-    await selectBuiltinServer();
-    return;
-  }
-  const switched = await serverTargetStore.setTarget(serverId);
-  if (!switched) {
-    refreshApplicationMenu();
-    return;
-  }
-  await applyServerTarget();
+  if (serverId === "builtin") await selectBuiltinServer();
 }
 
 async function openSetServerUrlDialog(add = false): Promise<void> {
   if (serverTargetStore === null || serverUrlDialogPreloadPath === null) {
     return;
   }
-  const previousUrl = add ? null : serverTargetStore.getCustomServerUrl();
+  const target = serverTargetStore.getTarget();
+  if (!add && target.kind === "connect") {
+    const result = await openServerUrlDialog({
+      initialName: serverTargetStore.getConnectServerName(target.server.handle),
+      initialUrl: target.server.url,
+      mode: "rename",
+      parentWindow: getFocusedApplicationWindow(),
+      preloadPath: serverUrlDialogPreloadPath,
+    });
+    if (result.kind !== "set") {
+      return;
+    }
+    await serverTargetStore.setConnectServerName(
+      target.server.handle,
+      result.name,
+    );
+    refreshApplicationMenu();
+    return;
+  }
+  if (!add && target.kind !== "custom") {
+    return;
+  }
+  const previousUrl = !add && target.kind === "custom" ? target.url : null;
   const result = await openServerUrlDialog({
+    initialName:
+      serverTargetStore
+        .getCustomServers()
+        .find((server) => server.url === previousUrl)?.name ?? null,
     initialUrl: previousUrl,
+    mode: add ? "add" : "edit",
     parentWindow: getFocusedApplicationWindow(),
     preloadPath: serverUrlDialogPreloadPath,
   });
@@ -1957,10 +2046,22 @@ async function openSetServerUrlDialog(add = false): Promise<void> {
   ) {
     return;
   }
+  if (result.kind === "set" && result.url === previousUrl) {
+    await serverTargetStore.setCustomServerName(previousUrl, result.name);
+    refreshApplicationMenu();
+    return;
+  }
   await serverTargetStore.setCustomServerUrl(
     result.kind === "set" ? result.url : null,
-    previousUrl ?? undefined,
+    {
+      availableConnectServers: listMenuConnectServers(),
+      ...(previousUrl === null ? {} : { replacedUrl: previousUrl }),
+      ...(result.kind === "set" && !(add && result.name === null)
+        ? { name: result.name }
+        : {}),
+    },
   );
+  await serverTargetStore.adoptConnectServers(listMenuConnectServers());
   await applyServerTarget();
 }
 
@@ -1974,26 +2075,7 @@ function sendLogViewerSnapshot(args: SendLogViewerSnapshotArgs): void {
   });
 }
 
-function closeServerDaemonLogsWindow(): void {
-  logViewerTailer?.stop();
-  logViewerTailer = null;
-  logViewerLineBuffer?.stop();
-  logViewerLineBuffer = null;
-
-  const browserWindow = logViewerWindow;
-  logViewerWindow = null;
-  if (browserWindow !== null && !browserWindow.isDestroyed()) {
-    browserWindow.close();
-  }
-}
-
 async function handleOpenLogsFolder(): Promise<LogViewerOpenLogsFolderResult> {
-  if (!shouldEnableServerDaemonLogsMenu()) {
-    throw new Error(
-      "Server and daemon logs are only available for owned runtimes",
-    );
-  }
-
   const logDir = formatLogDirectory();
   const errorMessage = await shell.openPath(logDir);
   if (errorMessage.length > 0) {
@@ -2024,7 +2106,7 @@ async function loadLogViewerWindow(
     minHeight: 520,
     minWidth: 840,
     show: false,
-    title: "bb - Server & Daemon Logs",
+    title: "bb - Local Logs",
     titleBarStyle: "default",
     webPreferences: {
       contextIsolation: true,
@@ -2084,8 +2166,8 @@ async function loadLogViewerWindow(
   await tailer.start();
 }
 
-async function openServerDaemonLogs(): Promise<void> {
-  if (!shouldEnableServerDaemonLogsMenu() || logViewerPreloadPath === null) {
+async function openLocalLogs(): Promise<void> {
+  if (logViewerPreloadPath === null) {
     return;
   }
 
@@ -2136,7 +2218,25 @@ async function loadLoadingView(): Promise<void> {
   });
 }
 
+async function loadWindowsInstallerWaitView(): Promise<void> {
+  bbAppLoaded = false;
+  await loadWindowUrl({
+    url: createLocalViewUrl({
+      viewModel: {
+        kind: "loading",
+        message: "bb opens when the installer is done.",
+        title: "Finishing the bb update",
+      },
+    }),
+  });
+}
+
 async function loadStartupError(args: LoadStartupErrorArgs): Promise<void> {
+  desktopLogger.error(
+    args.logs.length === 0
+      ? `[desktop] ${args.title}: ${args.details}`
+      : `[desktop] ${args.title}: ${args.details}\nbb-app output:\n${args.logs}`,
+  );
   await loadActionView({
     ...args,
     details:
@@ -2188,7 +2288,6 @@ async function createApplicationWindow(
     initialUrl: args.initialUrl,
     stateKey: args.stateKey,
   });
-  registerApplicationWindow(browserWindow);
   if (bbAppLoaded && shouldOpenDevTools()) {
     browserWindow.webContents.openDevTools({ mode: "detach" });
   }
@@ -2226,6 +2325,15 @@ function handleBeforeQuit(event: Event): void {
   event.preventDefault();
   stoppingForQuit = true;
   void finishQuit().finally(() => {
+    if (appImageRelaunchPath !== null) {
+      app.releaseSingleInstanceLock();
+      const replacement = spawn(appImageRelaunchPath, process.argv.slice(1), {
+        detached: true,
+        stdio: "ignore",
+      });
+      replacement.on("error", (error) => desktopLogger.error(error.message));
+      replacement.unref();
+    }
     app.quit();
   });
 }
@@ -2240,12 +2348,55 @@ async function finishQuit(): Promise<void> {
   desktopAutoUpdateService?.stop();
   desktopBrowserViewManager?.destroyAll();
   desktopFindViewManager?.destroyAll();
-  await desktopWindowFactory?.persistOpenWindows();
+  await desktopWindowFactory
+    ?.persistOpenWindows()
+    .catch((error) =>
+      desktopLogger.error(
+        `Could not save desktop window state: ${String(error)}`,
+      ),
+    );
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    browserWindow.hide();
+  }
   await stopOwnedRuntime();
 }
 
+async function checkDesktopUpdates(): Promise<void> {
+  await Promise.all([
+    desktopUpdateService?.checkForUpdates(),
+    desktopAutoUpdateService?.checkForUpdates(),
+  ]);
+}
+
+async function installDesktopUpdate(): Promise<void> {
+  if (
+    desktopAutoUpdateService === null ||
+    !desktopAutoUpdateService.getInfo().updateDownloaded
+  )
+    return;
+  const appImagePath = process.env.APPIMAGE?.trim() ?? "";
+  if (
+    process.platform === "linux" &&
+    (appImagePath.length === 0 || !canReplaceAppImage(appImagePath))
+  ) {
+    throw new Error("This AppImage cannot be replaced in place.");
+  }
+  await desktopWindowFactory?.persistOpenWindows();
+  await desktopAutoUpdateService.installUpdate();
+}
+
 function registerDesktopUpdateIpc(): void {
+  registerServerChoiceIpc({
+    applicationWindowWebContentsIds,
+    onListRequested: () => connectServerSync?.onListRequested(),
+    list: listServerChoices,
+    select: setActiveServerTarget,
+    onError: (error) =>
+      desktopLogger.error(`Could not switch server: ${String(error)}`),
+  });
   registerDesktopWindowFocusIpc(applicationWindowWebContentsIds);
+  registerDesktopAttentionIpc(applicationWindowWebContentsIds);
+  registerDesktopClipboardIpc(applicationWindowWebContentsIds);
   ipcMain.on(BB_DESKTOP_ZOOM_COMMAND_CHANNEL, (event, payload: unknown) => {
     const parsed = bbDesktopZoomCommandSchema.safeParse(payload);
     if (parsed.success) {
@@ -2262,41 +2413,16 @@ function registerDesktopUpdateIpc(): void {
     return getSenderDesktopWindowState(event);
   });
   ipcMain.handle(BB_DESKTOP_OPEN_SERVER_DAEMON_LOGS_CHANNEL, async () => {
-    await openServerDaemonLogs();
+    await openLocalLogs();
   });
   ipcMain.handle(BB_DESKTOP_OPEN_DATA_DIRECTORY_CHANNEL, async () => {
     await openDataDirectory();
   });
   ipcMain.handle(BB_DESKTOP_CHECK_FOR_UPDATES_CHANNEL, async () => {
-    await Promise.all([
-      desktopUpdateService?.checkForUpdates() ?? Promise.resolve(null),
-      desktopAutoUpdateService?.checkForUpdates() ?? Promise.resolve(null),
-    ]);
+    await checkDesktopUpdates();
     return getCurrentDesktopInfo();
   });
-  ipcMain.handle(BB_DESKTOP_INSTALL_UPDATE_CHANNEL, async () => {
-    if (desktopAutoUpdateService === null) {
-      return;
-    }
-    if (!desktopAutoUpdateService.getInfo().updateDownloaded) {
-      desktopAutoUpdateService.installUpdate();
-      return;
-    }
-    const appImagePath = process.env.APPIMAGE?.trim() ?? "";
-    if (
-      process.platform === "linux" &&
-      (appImagePath.length === 0 || !canReplaceAppImage(appImagePath))
-    ) {
-      desktopLogger.error(
-        `Desktop update install skipped: ${appImagePath || "this build"} cannot be replaced in place. The runtime stays up; download the new AppImage instead.`,
-      );
-      return;
-    }
-    quitting = true;
-    stoppingForQuit = true;
-    await finishQuit();
-    desktopAutoUpdateService.installUpdate();
-  });
+  ipcMain.handle(BB_DESKTOP_INSTALL_UPDATE_CHANNEL, installDesktopUpdate);
   ipcMain.on(
     BB_DESKTOP_SET_SPLIT_NAVIGATION_ENABLED_CHANNEL,
     (event, enabled: unknown, directionalCommands: unknown) => {
@@ -2359,6 +2485,20 @@ function registerDesktopUpdateIpc(): void {
       resolveApplicationWindow(event.sender)?.close();
     }
   });
+  ipcMain.handle(
+    BB_DESKTOP_OPEN_APPLICATION_URL_CHANNEL,
+    async (event, value: unknown) => {
+      const owner = resolveApplicationWindow(event.sender);
+      if (
+        owner === null ||
+        owner.webContents !== event.sender ||
+        event.senderFrame !== event.sender.mainFrame
+      )
+        throw new Error("Application window is unavailable.");
+      await openApplicationUrl(value);
+    },
+  );
+
   ipcMain.on(
     BB_DESKTOP_OPEN_EXTERNAL_URL_CHANNEL,
     (_event, payload: unknown) => {
@@ -2427,6 +2567,29 @@ async function spawnOwnedRuntime(
       processExecPath: process.execPath,
     }),
   });
+  const updater = desktopAutoUpdateService;
+  if (updater !== null) {
+    attachServerUpdateControl({
+      child: bbProcess.childProcess,
+      getInfo: () => ({
+        ...updater.getInfo(),
+        downloadState: updater.getInfo().downloadState ?? "idle",
+        supported:
+          shouldEnableDesktopAutoUpdate({
+            env: process.env,
+            isPackaged: app.isPackaged,
+          }) &&
+          resolveDesktopUpdateSupport({
+            canReplaceAppImage,
+            env: process.env,
+            platform: resolveBbDesktopPlatform(process.platform),
+          }).autoUpdate,
+      }),
+      check: checkDesktopUpdates,
+      install: installDesktopUpdate,
+      subscribe: (listener) => updater.subscribe(listener),
+    });
+  }
   const runtime: DesktopRuntime = {
     bbProcess,
     ownership: "spawned",
@@ -2440,9 +2603,14 @@ async function spawnOwnedRuntime(
     userDataPath: args.userDataPath,
   });
   setCurrentRuntime(runtime);
-
-  void bbProcess.exit.then((exit) => {
+  void bbProcess.exit.then(() => {
     void clearOwnedRuntimePidFile({ userDataPath: args.userDataPath });
+  });
+  return { bbProcess, runtime };
+}
+
+function reportOwnedRuntimeExit({ bbProcess, runtime }: OwnedRuntime): void {
+  void bbProcess.exit.then((exit) => {
     if (quitting || currentRuntime !== runtime) {
       return;
     }
@@ -2462,13 +2630,37 @@ async function spawnOwnedRuntime(
       title: "bb stopped",
     });
   });
-  return { bbProcess, runtime };
+}
+
+async function waitForWindowsInstallerToFinish(): Promise<boolean> {
+  if (!app.isPackaged || process.platform !== "win32") {
+    return false;
+  }
+  const result = await waitForWindowsInstaller({
+    command: createWindowsInstallerWaitCommand({
+      appId: DESKTOP_RELEASE_INFO.appId,
+      systemRoot: process.env.SystemRoot,
+      timeoutMs: WINDOWS_INSTALLER_WAIT_TIMEOUT_MS,
+    }),
+    onWaiting: () => {
+      desktopLogger.info(
+        "[desktop] bb-app exited while a bb installer is running; waiting for it to finish",
+      );
+      void loadWindowsInstallerWaitView();
+    },
+    timeoutMs: WINDOWS_INSTALLER_WAIT_TIMEOUT_MS,
+  });
+  if (result !== "not-running") {
+    desktopLogger.info(`[desktop] bb installer wait ended: ${result}`);
+  }
+  return result === "finished" && !quitting;
 }
 
 async function startOwnedRuntime(
   args: StartOwnedRuntimeArgs,
 ): Promise<DesktopRuntime | null> {
-  const { bbProcess, runtime } = await spawnOwnedRuntime(args);
+  const ownedRuntime = await spawnOwnedRuntime(args);
+  const { bbProcess, runtime } = ownedRuntime;
 
   const raceResult = await Promise.race<StartupRaceResult>([
     waitForCompatibleServer({
@@ -2486,6 +2678,10 @@ async function startOwnedRuntime(
   ]);
 
   if (raceResult.kind === "process-exited") {
+    setCurrentRuntime(null);
+    if (await waitForWindowsInstallerToFinish()) {
+      return startOwnedRuntime(args);
+    }
     await loadStartupError({
       details: `bb-app exited before the server was ready with ${formatExitResult(
         raceResult.exit,
@@ -2494,11 +2690,11 @@ async function startOwnedRuntime(
       actions: [],
       title: "Could not start bb",
     });
-    setCurrentRuntime(null);
     return null;
   }
 
   if (raceResult.result.kind === "compatible") {
+    reportOwnedRuntimeExit(ownedRuntime);
     return runtime;
   }
 
@@ -2695,13 +2891,6 @@ async function initializeRuntime(args: InitializeRuntimeArgs): Promise<void> {
 }
 
 async function runDesktopApp(): Promise<void> {
-  ensurePackagedUserShellPath({
-    env: process.env,
-    isPackaged: app.isPackaged,
-    logger: desktopLogger,
-    platform: process.platform,
-  });
-
   const applicationName = app.isPackaged
     ? DESKTOP_RELEASE_INFO.applicationName
     : "bb-dev";
@@ -2765,13 +2954,24 @@ async function runDesktopApp(): Promise<void> {
     },
   });
 
+  app.setAppUserModelId(
+    DESKTOP_RELEASE_CHANNEL === "nightly"
+      ? "dev.bb.desktop.nightly"
+      : "dev.bb.desktop",
+  );
+  if (app.isPackaged) {
+    await hostToolchain.refresh();
+    Object.assign(process.env, hostToolchain.environment());
+  }
   await app.whenReady();
   if (app.isPackaged) {
     await session.defaultSession.clearCache();
   }
 
   const paths = createDesktopPathContext();
+  const devIcon = !paths.isPackaged || process.env.BB_DESKTOP_DEV_ICON === "1";
   const iconPath = resolveDesktopIconPath({
+    devIcon,
     packagedIconFileName: DESKTOP_RELEASE_INFO.iconFileName,
     paths,
   });
@@ -2802,7 +3002,15 @@ async function runDesktopApp(): Promise<void> {
     "dist",
     "server-url-dialog-preload.cjs",
   );
-  const serverUrl = resolveDesktopServerUrl({ env: process.env });
+  const {
+    context: { serverUrl },
+  } = await resolveBbAppRuntimeState({
+    entrypointUrl: pathToFileURL(bridgePath).href,
+    env: process.env,
+    homeDir: homedir(),
+    options: { help: false },
+    serverUrlMode: "local",
+  });
   builtinServerUrl = serverUrl;
   desktopBridgePath = bridgePath;
   const desktopVersion = getDesktopVersion(process.env.BB_DESKTOP_VERSION);
@@ -2838,11 +3046,7 @@ async function runDesktopApp(): Promise<void> {
   });
   assertPathExists({ label: "app icon", path: iconPath });
 
-  if (
-    process.platform === "darwin" &&
-    app.dock !== undefined &&
-    !paths.isPackaged
-  ) {
+  if (process.platform === "darwin" && app.dock !== undefined && devIcon) {
     app.dock.setIcon(iconPath);
   }
   await reapStaleOwnedRuntime({
@@ -2855,6 +3059,7 @@ async function runDesktopApp(): Promise<void> {
     storagePath: join(userDataPath, SERVER_TARGET_FILE_NAME),
   });
   await serverTargetStore.load();
+  await serverTargetStore.adoptConnectServers(listMenuConnectServers());
   const dataDir = resolveDataDirFromEnv({
     env: process.env,
     homeDir: homedir(),
@@ -2872,6 +3077,7 @@ async function runDesktopApp(): Promise<void> {
   });
   cachedConnectCredential = await connectCredentialCache.read();
   connectServerSync = createConnectServerSync({
+    getAccountSession: readConnectAccountSession,
     getCredential: () => cachedConnectCredential,
     getLocalServerUrl: () =>
       localServerMove === null ? (currentRuntime?.serverUrl ?? null) : null,
@@ -2896,7 +3102,7 @@ async function runDesktopApp(): Promise<void> {
           url: synced.url,
         });
       }
-      refreshApplicationMenu();
+      void adoptSavedConnectServers();
     },
     log: (message) => {
       desktopLogger.info(`[desktop] ${message}`);
@@ -2950,7 +3156,18 @@ async function runDesktopApp(): Promise<void> {
       !app.isPackaged && process.env.BB_DESKTOP_AUTO_UPDATE === "1",
     logger: desktopLogger,
     platform: desktopPlatform,
-    updater: createElectronAutoUpdaterAdapter(autoUpdater),
+    updater: createElectronAutoUpdaterAdapter(
+      autoUpdater,
+      nativeAutoUpdater,
+      process.platform === "linux" && process.env.APPIMAGE
+        ? {
+            path: process.env.APPIMAGE,
+            relaunch: (execPath) => {
+              appImageRelaunchPath = execPath;
+            },
+          }
+        : null,
+    ),
   });
   desktopUpdateService.subscribe(() => {
     sendDesktopInfoChanged();
@@ -2975,6 +3192,18 @@ async function runDesktopApp(): Promise<void> {
       return;
     }
     desktopFindViewManager?.open(browserWindow, parsed.data);
+  });
+  ipcMain.on(BB_DESKTOP_RELOAD_WINDOW_CHANNEL, (event) => {
+    if (
+      !applicationWindowWebContentsIds.has(event.sender.id) ||
+      event.senderFrame !== event.sender.mainFrame
+    ) {
+      return;
+    }
+    const browserWindow = resolveApplicationWindow(event.sender);
+    if (browserWindow !== null) {
+      reloadApplicationWindow(browserWindow, false);
+    }
   });
   void removeLegacyAutomationPartitions(userDataPath).catch(() => {});
   desktopBrowserViewManager = createDesktopBrowserViewManager({
@@ -3104,6 +3333,8 @@ async function runDesktopApp(): Promise<void> {
   );
   desktopBrowserBrokerClient = createDesktopBrowserBrokerClient({
     broker: desktopBrowserBroker,
+    fetchImpl: (input, init) =>
+      net.fetch(input instanceof URL ? input.toString() : input, init),
     dataDir,
     homeDir: homedir(),
     getServerUrl() {
@@ -3137,6 +3368,9 @@ async function runDesktopApp(): Promise<void> {
     createWindowStateKey() {
       return `window-${randomUUID()}`;
     },
+    shouldUseDarkColors() {
+      return nativeTheme.shouldUseDarkColors;
+    },
     displayWorkAreas: null,
     icon: nativeImage.createFromPath(iconPath),
     isLinuxTransparent: hasLinuxWindowArgument({
@@ -3156,6 +3390,7 @@ async function runDesktopApp(): Promise<void> {
     openExternalUrl(openArgs) {
       void shell.openExternal(openArgs.url);
     },
+    onWindowCreated: registerApplicationWindow,
     preloadPath,
     userDataPath,
   });
@@ -3163,12 +3398,9 @@ async function runDesktopApp(): Promise<void> {
 
   refreshApplicationMenu();
   await loadLoadingView();
-  const restoredWindows = await desktopWindowFactory.restoreSavedWindows({
+  await desktopWindowFactory.restoreSavedWindows({
     initialUrl: currentWindowUrl,
   });
-  for (const browserWindow of restoredWindows) {
-    registerApplicationWindow(browserWindow);
-  }
   await activateLocalServerMoveIfLocked();
   if (
     serverTargetStore.getTarget().kind === "builtin" &&
@@ -3185,7 +3417,6 @@ async function runDesktopApp(): Promise<void> {
 void runDesktopApp().catch((error) => {
   const message =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
-  process.stderr.write(`${message}\n`);
   void loadStartupError({
     details: message,
     logs: "",

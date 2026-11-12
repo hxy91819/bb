@@ -1,19 +1,16 @@
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  createConnection,
-  migrate,
-  getAppSettings,
-  setAppSettings,
-} from "@bb/db";
+import { getAppSettings, setAppSettings } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import { defaultAppSettings } from "@bb/domain";
 import { withTestHarness } from "../helpers/test-app.js";
 import { DEFAULTS } from "@bb/config/defaults";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  appInstallFromServerConfig,
   createTelemetryService,
-  runWithTelemetryAppSurface,
+  runWithTelemetryRequest,
 } from "../../src/services/system/telemetry.js";
 
 function createTestLogger() {
@@ -43,6 +40,7 @@ describe("telemetry service", () => {
   it("sends events with a stable anonymous install id", async () => {
     const telemetry = await createTelemetryService({
       apiKey: "phc_test",
+      appInstall: null,
       appSurface: "web",
       appVersion: "1.2.3",
       dataDir,
@@ -52,15 +50,18 @@ describe("telemetry service", () => {
     });
 
     telemetry.capture({ name: "app_started" });
-    runWithTelemetryAppSurface("desktop", () => {
-      telemetry.capture({
-        name: "thread_created",
-        properties: {
-          is_child_thread: true,
-          provider: "claude-code",
-        },
-      });
-    });
+    runWithTelemetryRequest(
+      { appSurface: "desktop", accessRoute: "connect" },
+      () => {
+        telemetry.capture({
+          name: "thread_created",
+          properties: {
+            is_child_thread: true,
+            provider: "claude-code",
+          },
+        });
+      },
+    );
     telemetry.capture({
       name: "user_message_sent",
       properties: {
@@ -101,10 +102,12 @@ describe("telemetry service", () => {
       properties: {
         app_version: "1.2.3",
         app_surface: "desktop",
+        access_route: "connect",
         is_child_thread: true,
         provider: "claude-code",
       },
     });
+    expect(calls[2]?.payload.properties).not.toHaveProperty("access_route");
     expect(calls[2]?.payload).toMatchObject({
       event: "user_message_sent",
       properties: {
@@ -117,9 +120,109 @@ describe("telemetry service", () => {
     });
   });
 
+  it("adds shared properties such as a flag variant to later events", async () => {
+    const telemetry = await createTelemetryService({
+      apiKey: "phc_test",
+      appInstall: null,
+      appSurface: "web",
+      appVersion: "1.2.3",
+      dataDir,
+      telemetryEnabled: true,
+      enabled: true,
+      logger: createTestLogger(),
+    });
+    telemetry.capture({ name: "app_started" });
+    telemetry.setSharedProperty("$feature/setup-guide-redesign", "new");
+    telemetry.capture({
+      name: "turn_finished",
+      properties: {
+        outcome: "succeeded",
+        error_category: "none",
+        provider: "codex",
+        install_turn_number: 1,
+        execution_location: "server_machine",
+      },
+    });
+
+    const payloads = fetchMock.mock.calls.map((call) => {
+      const [, init] = call as [string, { body: string }];
+      return JSON.parse(init.body) as { properties: Record<string, unknown> };
+    });
+    expect(payloads[0]?.properties).not.toHaveProperty(
+      "$feature/setup-guide-redesign",
+    );
+    expect(payloads[1]?.properties).toMatchObject({
+      "$feature/setup-guide-redesign": "new",
+      install_turn_number: 1,
+      outcome: "succeeded",
+    });
+    expect(telemetry.featureFlagIdentity()).toEqual({
+      apiKey: "phc_test",
+      distinctId: (
+        await readFile(join(dataDir, "telemetry-id"), "utf8")
+      ).trim(),
+    });
+  });
+
+  it("tags events with how bb was installed without sending any commits", async () => {
+    const commit = "a".repeat(40);
+    const installs = [
+      appInstallFromServerConfig({}),
+      appInstallFromServerConfig({ BB_APP_INSTALL_KIND: "npm" }),
+      appInstallFromServerConfig({
+        BB_APP_INSTALL_KIND: "source",
+        BB_APP_SOURCE_COMMIT: commit,
+        BB_APP_SOURCE_ORIGIN: "official",
+      }),
+      appInstallFromServerConfig({
+        BB_APP_INSTALL_KIND: "source",
+        BB_APP_SOURCE_COMMIT: commit,
+        BB_APP_SOURCE_ORIGIN: "fork",
+      }),
+    ];
+    for (const appInstall of installs) {
+      const telemetry = await createTelemetryService({
+        apiKey: "phc_test",
+        appInstall,
+        appSurface: "web",
+        appVersion: "1.2.3",
+        dataDir,
+        telemetryEnabled: true,
+        enabled: true,
+        logger: createTestLogger(),
+      });
+      telemetry.capture({ name: "app_started" });
+    }
+
+    const properties = fetchMock.mock.calls.map((call) => {
+      const [, init] = call as [string, { body: string }];
+      return (JSON.parse(init.body) as { properties: Record<string, unknown> })
+        .properties;
+    });
+    expect(properties[0]).toMatchObject({
+      install_kind: "unmanaged",
+      node_version: process.version,
+    });
+    expect(properties[0]).not.toHaveProperty("source_origin");
+    expect(properties[1]).toMatchObject({ install_kind: "npm" });
+    expect(properties[2]).toMatchObject({
+      install_kind: "source",
+      source_origin: "official",
+    });
+    expect(properties[3]).toMatchObject({
+      install_kind: "source",
+      source_origin: "fork",
+    });
+    for (const payload of properties) {
+      expect(payload).not.toHaveProperty("source_commit");
+      expect(JSON.stringify(payload)).not.toContain(commit);
+    }
+  });
+
   it("reuses the persisted install id across restarts", async () => {
     const args = {
       apiKey: "phc_test",
+      appInstall: null,
       appSurface: "web" as const,
       appVersion: "1.2.3",
       dataDir,
@@ -161,6 +264,7 @@ describe("telemetry service", () => {
   ])("is fully inert when $label", async ({ apiKey, appVersion, enabled }) => {
     const telemetry = await createTelemetryService({
       apiKey,
+      appInstall: null,
       appSurface: "web",
       appVersion,
       dataDir,
@@ -176,12 +280,12 @@ describe("telemetry service", () => {
   });
 
   it("honors persisted opt-out at startup and changes without restarting", async () => {
-    const db = createConnection(":memory:");
-    migrate(db);
+    const db = createMigratedConnection();
     try {
       setAppSettings(db, { ...getAppSettings(db), telemetryEnabled: false });
       const args = {
         apiKey: "phc_test",
+        appInstall: null,
         appSurface: "web" as const,
         appVersion: "1.2.3",
         dataDir,
@@ -214,6 +318,7 @@ describe("telemetry service", () => {
     await withTestHarness(async (harness) => {
       const telemetry = await createTelemetryService({
         apiKey: "phc_test",
+        appInstall: null,
         appSurface: "web",
         appVersion: "1.2.3",
         dataDir,
@@ -278,6 +383,7 @@ describe("telemetry service", () => {
     fetchMock.mockRejectedValue(new Error("offline"));
     const telemetry = await createTelemetryService({
       apiKey: "phc_test",
+      appInstall: null,
       appSurface: "desktop",
       appVersion: "1.2.3",
       dataDir,

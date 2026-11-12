@@ -35,8 +35,8 @@ function MemoryEditor({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
-      <div className="grid gap-3 lg:grid-cols-2">
+    <div className="@container/memory-editor space-y-3 rounded-md border border-border bg-muted/20 p-3">
+      <div className="grid gap-3 @min-[36rem]/memory-editor:grid-cols-2">
         <label className="space-y-1 text-xs text-muted-foreground">
           Summary
           <Input
@@ -70,7 +70,7 @@ function MemoryEditor({
           }
         />
       </label>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 @min-[32rem]/memory-editor:grid-cols-3">
         <label className="space-y-1 text-xs text-muted-foreground">
           Kind
           <select
@@ -186,8 +186,8 @@ function MemorySettings() {
     <div className="space-y-4">
       <div className="rounded-md border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
         This plugin shares memory across providers. We recommend disabling
-        provider-native memory under Settings → Providers to avoid duplicate or
-        conflicting stores.
+        provider-native memory under Settings → Plugins → Claude Code provider
+        and Codex provider to avoid duplicate or conflicting stores.
       </div>
       {error ? (
         <p className="text-sm text-destructive" role="alert">

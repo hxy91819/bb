@@ -1,8 +1,12 @@
 import ReconnectingWebSocket from "partysocket/ws";
 import {
   type HostDaemonActiveThread,
+  type HostDaemonInteractiveRequestKey,
+  type HostDaemonOpenThreadWork,
   type HostDaemonLoadedEnvironment,
+  type HostDaemonConnectNextReplaceMessage,
   type HostDaemonConnectSharesReplaceMessage,
+  type HostDaemonOnlineRpcCancelMessage,
   type HostDaemonOnlineRpcRequestMessage,
   type HostDaemonServerWsMessage,
   type HostDaemonSessionOpenResponse,
@@ -43,13 +47,17 @@ export type CreateReconnectingWebSocket = (
 export type HostDaemonServerTerminalMessage = Exclude<
   HostDaemonServerWsMessage,
   | { type: "machine.shutdown" }
+  | { type: "interactive-requests.end" }
   | { type: "server.moved" }
   | { type: "session-close" }
   | { type: "heartbeat-ack" }
   | { type: "machine-environment.replace" }
+  | { type: "provider-session-policy.replace" }
   | HostDaemonOnlineRpcRequestMessage
+  | HostDaemonOnlineRpcCancelMessage
   | HostDaemonWatchSetReplaceMessage
   | HostDaemonConnectSharesReplaceMessage
+  | HostDaemonConnectNextReplaceMessage
 >;
 
 export type ServerMovedNotice =
@@ -84,6 +92,7 @@ export interface ServerConnectionOptions {
     | HostDaemonActiveThread[]
     | Promise<HostDaemonActiveThread[]>;
   getUndeliveredEventThreadIds?: () => string[];
+  getOpenThreadWork?: () => HostDaemonOpenThreadWork[];
   getLoadedEnvironments?: () =>
     | HostDaemonLoadedEnvironment[]
     | Promise<HostDaemonLoadedEnvironment[]>;
@@ -93,19 +102,26 @@ export interface ServerConnectionOptions {
   onHostRpcRequest?: (
     message: HostDaemonOnlineRpcRequestMessage,
   ) => void | Promise<void>;
+  onHostRpcCancel?: (message: HostDaemonOnlineRpcCancelMessage) => void;
   onWatchSetReplace?: (
     message: HostDaemonWatchSetReplaceMessage,
   ) => void | Promise<void>;
   onConnectSharesReplace?: (
     message: HostDaemonConnectSharesReplaceMessage,
   ) => void | Promise<void>;
+  onConnectNextReplace?: (message: HostDaemonConnectNextReplaceMessage) => void;
   onSessionOpened?: (
     session: HostDaemonSessionOpenResponse,
   ) => void | Promise<void>;
+  onIdleProviderSessionTimeout?: (minutes: number) => void;
   onMachineEnvironment?: (
     environment: HostDaemonSessionOpenResponse["machineEnvironment"],
   ) => void;
   onMachineShutdown?: () => void | Promise<void>;
+  onInteractiveRequestsEnded?: (args: {
+    reason: string;
+    requests: HostDaemonInteractiveRequestKey[];
+  }) => void;
   onServerMoved?: (move: ServerMovedNotice) => Promise<void>;
   createWebSocket?: CreateReconnectingWebSocket;
   startupTimeoutMs?: number;

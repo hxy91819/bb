@@ -10,6 +10,7 @@ import {
   listLiveThreadsInEnvironment,
   listLifecycleThreadDependents,
   archiveThread,
+  deleteThreadScopedPruningCursors,
   getEnvironment,
   listNonDeletedChildThreads,
   listNonDeletedHiddenSourceThreads,
@@ -17,10 +18,6 @@ import {
 import type { EnvironmentRow } from "@bb/db";
 import type { Thread } from "@bb/domain";
 import type { AppDeps } from "../../types.js";
-import {
-  threadEnvironmentUnavailableDetails,
-  throwThreadEnvironmentUnavailable,
-} from "../lib/lifecycle-api-errors.js";
 import {
   pruneThreadEventHistoryBestEffort,
   resetActiveThreadEventPruningState,
@@ -35,9 +32,7 @@ import {
   archiveUndoGraceKeepsTurnRunning,
 } from "./archive-undo-grace.js";
 import { archiveThreadAndReleaseChildren } from "./thread-ownership.js";
-import { requireThreadHostCommandEnvironment } from "./thread-command-environment.js";
-import { getThreadProvisionContext } from "./thread-startup-store.js";
-import { isPreStartThreadStatus } from "./thread-status.js";
+import { resolveThreadHostCommandEnvironment } from "./thread-command-environment.js";
 
 interface ArchiveThreadEnvironment {
   hostId: string;
@@ -49,38 +44,12 @@ interface ArchiveThreadWithLifecycleEffectsArgs {
   thread: Pick<Thread, "environmentId" | "id" | "status">;
 }
 
-interface ResolveArchiveThreadEnvironmentArgs {
-  thread: ArchiveThreadWithLifecycleEffectsArgs["thread"];
-}
-
 interface ArchiveEnvironmentThreadsArgs {
   environment: EnvironmentRow;
 }
 
 interface ArchiveThreadAndChildrenArgs {
   parentThread: Thread;
-}
-
-export function resolveArchiveThreadEnvironment(
-  deps: Pick<AppDeps, "db">,
-  args: ResolveArchiveThreadEnvironmentArgs,
-): ArchiveThreadEnvironment | null {
-  if (args.thread.environmentId !== null) {
-    return requireThreadHostCommandEnvironment({
-      db: deps.db,
-      thread: args.thread,
-    });
-  }
-  if (
-    isPreStartThreadStatus(args.thread.status) ||
-    args.thread.status === "stopping" ||
-    getThreadProvisionContext(deps.db, args.thread.id) !== null
-  ) {
-    throwThreadEnvironmentUnavailable(
-      threadEnvironmentUnavailableDetails("never_attached", null),
-    );
-  }
-  return null;
 }
 
 function archiveThreadWithLifecycleEffects(
@@ -111,6 +80,7 @@ function archiveThreadWithLifecycleEffects(
     mode: "archived",
     threadId: archivedThread.id,
   });
+  deleteThreadScopedPruningCursors(deps.db, archivedThread.id);
   void cancelProviderEnvironmentCreation(deps, archivedThread.id).catch(
     (error) =>
       deps.logger.warn({ error }, "Environment launch cancellation failed"),
@@ -150,7 +120,8 @@ export function archiveThreadAndChildren(
   deps: AppDeps,
   args: ArchiveThreadAndChildrenArgs,
 ): string[] {
-  const environment = resolveArchiveThreadEnvironment(deps, {
+  const environment = resolveThreadHostCommandEnvironment({
+    db: deps.db,
     thread: args.parentThread,
   });
   return archiveThreadTrees(deps, [args.parentThread], (thread) =>
@@ -198,17 +169,26 @@ function archiveThreadTrees(
   return archivedThreadIds;
 }
 
+export function listArchiveCascadeThreadIds(
+  db: AppDeps["db"],
+  thread: Thread,
+): string[] {
+  return listArchiveCandidates(db, [thread])
+    .filter(
+      (candidate) =>
+        candidate.id !== thread.id &&
+        candidate.visibility === "visible" &&
+        candidate.deletedAt === null &&
+        candidate.archivedAt === null,
+    )
+    .map((candidate) => candidate.id);
+}
+
 export function countUnarchivedThreadDescendants(
   db: AppDeps["db"],
   thread: Thread,
 ): number {
-  return listArchiveCandidates(db, [thread]).filter(
-    (candidate) =>
-      candidate.id !== thread.id &&
-      candidate.visibility === "visible" &&
-      candidate.deletedAt === null &&
-      candidate.archivedAt === null,
-  ).length;
+  return listArchiveCascadeThreadIds(db, thread).length;
 }
 
 function listArchiveCandidates(db: AppDeps["db"], roots: Thread[]) {

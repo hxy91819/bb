@@ -21,7 +21,12 @@ import { mapProviderMaintenanceRequests } from "./provider-maintenance-concurren
 import { resolvePluginProviderEnvHealth } from "../plugins/plugin-agent-contributions.js";
 import { isSuspendedHostUnavailableError } from "../lib/lifecycle-api-errors.js";
 
+function guidedSignIn(deps: AppDeps, providerId: string): boolean {
+  return deps.providerRegistry.get(providerId)?.guidedSignIn ?? false;
+}
+
 function unknownProviderState(
+  deps: AppDeps,
   provider: ProviderInfo,
   statusMessage: string,
 ): SystemProviderState {
@@ -37,6 +42,9 @@ function unknownProviderState(
     canInstall: false,
     canUpdate: false,
     loginCommand: null,
+    localLoginCommand: null,
+    internal_DO_NOT_USE_guidedSignIn: guidedSignIn(deps, provider.id),
+    internal_DO_NOT_USE_setupGuidePlanLabel: null,
   };
 }
 
@@ -46,6 +54,7 @@ async function getProviderState(
 ): Promise<SystemProviderState> {
   if (!args.provider.maintenance.health) {
     return unknownProviderState(
+      deps,
       args.provider,
       "This provider does not report readiness.",
     );
@@ -53,6 +62,7 @@ async function getProviderState(
   const bridgeLaunch = resolveBridgeLaunchForProviderId(deps, args.provider.id);
   if (bridgeLaunch === null) {
     return unknownProviderState(
+      deps,
       args.provider,
       "The provider bridge is unavailable.",
     );
@@ -71,6 +81,7 @@ async function getProviderState(
     });
     if (!result.supported) {
       return unknownProviderState(
+        deps,
         args.provider,
         "Provider readiness was not reported.",
       );
@@ -79,6 +90,10 @@ async function getProviderState(
       providerId: args.provider.id,
       displayName: args.provider.displayName,
       ...result.health,
+      localLoginCommand: result.health.localLoginCommand ?? null,
+      internal_DO_NOT_USE_guidedSignIn: guidedSignIn(deps, args.provider.id),
+      internal_DO_NOT_USE_setupGuidePlanLabel:
+        result.health.internal_DO_NOT_USE_setupGuidePlanLabel ?? null,
     };
     if (health.status !== "unauthenticated" && health.status !== "expired") {
       return health;
@@ -95,9 +110,12 @@ async function getProviderState(
       accountEmail: null,
       planLabel: contributed.label,
       loginCommand: null,
+      localLoginCommand: null,
+      internal_DO_NOT_USE_setupGuidePlanLabel: null,
     };
   } catch {
     return unknownProviderState(
+      deps,
       args.provider,
       "Provider readiness could not be checked.",
     );
@@ -125,7 +143,7 @@ export async function getProviderStates(
       : "Provider readiness could not be checked.";
     return {
       providers: providers.map((provider) =>
-        unknownProviderState(provider, statusMessage),
+        unknownProviderState(deps, provider, statusMessage),
       ),
     };
   }

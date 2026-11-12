@@ -28,7 +28,11 @@ import { ThreadTimelineRows } from "./ThreadTimelineRows";
 import { makePluginRegistrationSet as registrationSet } from "@/test/fixtures/plugins";
 
 const toMarkup = (ui: ReactElement) =>
-  renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>);
+  renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 
 function renderRows(
   ui: ReactElement,
@@ -64,7 +68,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,
@@ -81,7 +84,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[
           toolRow({
             id: "tool_js",
@@ -121,7 +123,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[
           commandRow({
             id: "cmd_escaped",
@@ -174,7 +175,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
       />,
     );
@@ -187,7 +187,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
       />,
     );
@@ -200,7 +199,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[
           extensionRow({
             presentation: {
@@ -222,7 +220,6 @@ describe("presentation-driven timeline rows", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,
@@ -270,7 +267,6 @@ describe("plugin timeline renderers", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,
@@ -298,7 +294,6 @@ describe("plugin timeline renderers", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,
@@ -310,7 +305,6 @@ describe("plugin timeline renderers", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,
@@ -334,7 +328,6 @@ describe("plugin timeline renderers", () => {
       <ThreadTimelineRows
         threadId="thr_main"
         threadRuntimeDisplayStatus="idle"
-        workspaceRootPath={undefined}
         timelineRows={[row]}
         initialExpanded={new Set([row.id])}
       />,

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatRelativeTime, formatScheduledTime } from "./relative-time";
+import {
+  formatRelativeTime,
+  formatScheduledTime,
+} from "./relative-time";
 
 const NOW = 1_700_000_000_000;
 const MINUTE = 60 * 1000;

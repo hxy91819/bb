@@ -5,9 +5,10 @@ import {
   cleanup,
   fireEvent,
   render,
+  screen,
   waitFor,
 } from "@testing-library/react";
-import { useContext, useLayoutEffect } from "react";
+import { useContext, useLayoutEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { threadsQueryKey } from "@/hooks/queries/query-keys";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,16 +45,36 @@ const bottomAnchorMocks = vi.hoisted(() => ({
 function QueuedMessagesList({
   attachedToComposer = true,
   sendAction = "send-now",
+  defaultExpanded = false,
+  onExpandedChange,
+  threadStatus = "active",
   ...props
-}: Omit<QueuedMessagesListProps, "attachedToComposer" | "sendAction"> & {
+}: Omit<
+  QueuedMessagesListProps,
+  | "attachedToComposer"
+  | "sendAction"
+  | "expanded"
+  | "onExpandedChange"
+  | "threadStatus"
+> & {
   attachedToComposer?: boolean;
   sendAction?: QueuedMessagesListProps["sendAction"];
+  defaultExpanded?: boolean;
+  onExpandedChange?: QueuedMessagesListProps["onExpandedChange"];
+  threadStatus?: QueuedMessagesListProps["threadStatus"];
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return (
     <QueuedMessagesListComponent
       {...props}
       attachedToComposer={attachedToComposer}
       sendAction={sendAction}
+      threadStatus={threadStatus}
+      expanded={expanded}
+      onExpandedChange={(nextExpanded) => {
+        setExpanded(nextExpanded);
+        onExpandedChange?.(nextExpanded);
+      }}
     />
   );
 }
@@ -68,6 +89,7 @@ vi.mock("@/components/ui/bottom-anchored-scroll-body", () => ({
 }));
 
 const noop = () => {};
+const noopAsync = async () => {};
 
 function TypeaheadLayoutFixture({
   layout,
@@ -133,6 +155,7 @@ function renderQueuedMessages(
       onReorder={noop}
       onSetGroupBoundary={noop}
       onEdit={noop}
+      onChangeSendTime={noopAsync}
       onDelete={noop}
     />,
   );
@@ -155,8 +178,37 @@ function renderQueuedMessagesWithOptions(
       onReorder={noop}
       onSetGroupBoundary={noop}
       onEdit={noop}
+      onChangeSendTime={noopAsync}
       onDelete={noop}
     />,
+  );
+}
+
+function renderQueuedMessagesWithExpandedSpy(
+  queuedMessages: readonly ThreadQueuedMessage[],
+  onExpandedChange: QueuedMessagesListProps["onExpandedChange"],
+) {
+  return render(
+    <QueuedMessagesList
+      queuedMessages={queuedMessages}
+      sendDisabled={false}
+      actionDisabled={false}
+      processingMessageId={null}
+      processingAction={null}
+      onSend={noop}
+      onReorder={noop}
+      onSetGroupBoundary={noop}
+      onEdit={noop}
+      onChangeSendTime={noopAsync}
+      onDelete={noop}
+      onExpandedChange={onExpandedChange}
+    />,
+  );
+}
+
+function expandQueue() {
+  fireEvent.click(
+    screen.getByRole("button", { name: "Toggle queued messages" }),
   );
 }
 
@@ -194,9 +246,11 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
+    expandQueue();
     expect(getByText("Provider unavailable")).toBeTruthy();
     const button = getByRole("button", { name: "Send queued message 1 now" });
     expect(button.hasAttribute("disabled")).toBe(false);
@@ -216,6 +270,10 @@ describe("QueuedMessagesList", () => {
       makeThreadQueuedMessage({
         id: "q_system",
         initiator: "system",
+        systemNotice: {
+          kind: "child-outcome-batch",
+          subject: { kind: "thread-batch", count: 3 },
+        },
         waitingOn: { kind: "provisioning" },
       }),
     ];
@@ -231,10 +289,12 @@ describe("QueuedMessagesList", () => {
           onReorder={noop}
           onSetGroupBoundary={noop}
           onEdit={noop}
+          onChangeSendTime={noopAsync}
           onDelete={noop}
         />
       </QueryClientProvider>,
     );
+    expandQueue();
     expect(
       container.querySelector(
         '[data-queued-message-id="q_user"] [data-queued-message-sender]',
@@ -244,10 +304,15 @@ describe("QueuedMessagesList", () => {
       getByText("thr_sender").closest("[data-queued-message-metadata]"),
     ).not.toBeNull();
     expect(
-      getByText("System")
-        .closest("[data-queued-message-metadata]")
-        ?.querySelector("[data-queued-message-wait]"),
-    ).not.toBeNull();
+      container.querySelector(
+        '[data-queued-message-id="q_system"] [data-queued-message-sender]',
+      ),
+    ).toBeNull();
+    expect(
+      container.querySelector(
+        '[data-queued-message-id="q_system"] [data-queued-message-wait]',
+      )?.textContent,
+    ).toContain("Waiting for workspace");
     expect(
       getByText("thr_sender").closest(".prompt-mention-pill"),
     ).not.toBeNull();
@@ -257,35 +322,53 @@ describe("QueuedMessagesList", () => {
       ]);
     });
     await waitFor(() => expect(getByText("Code review")).toBeTruthy());
-    fireEvent.keyDown(
-      getByRole("button", { name: "Drag up to open the queue workspace" }),
-      { key: "ArrowUp" },
-    );
+    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
+    fireEvent.click(getByRole("button", { name: "Toggle queued messages" }));
     expect(getByText("Code review")).toBeTruthy();
-    expect(getByText("System")).toBeTruthy();
+    expect(getByText("3 threads updated")).toBeTruthy();
     queryClient.clear();
   });
 
   it.each([
-    { initiator: "system" as const, senderThreadId: null, height: "104px" },
     {
-      initiator: "agent" as const,
-      senderThreadId: "thr_sender",
-      height: "110px",
+      label: "a system notice with nothing to wait on",
+      message: {
+        initiator: "system" as const,
+        senderThreadId: null,
+        systemNotice: { kind: "child-completed" as const, subject: null },
+        waitingOn: { kind: "thread-busy" as const },
+      },
+      height: "102px",
     },
-  ])(
-    "reserves the metadata height for $initiator senders",
-    ({ initiator, senderThreadId, height }) => {
-      const { container } = renderQueuedMessages([
-        makeThreadQueuedMessage({ initiator, senderThreadId }),
-      ]);
-      expect(
-        container.querySelector<HTMLElement>(
-          'section[aria-label="Queued messages"]',
-        )?.style.height,
-      ).toBe(height);
+    {
+      label: "a system notice waiting on its host",
+      message: {
+        initiator: "system" as const,
+        senderThreadId: null,
+        systemNotice: { kind: "child-completed" as const, subject: null },
+        waitingOn: { kind: "host-offline" as const, hostName: "M4" },
+      },
+      height: "118px",
     },
-  );
+    {
+      label: "an agent sender",
+      message: {
+        initiator: "agent" as const,
+        senderThreadId: "thr_sender",
+      },
+      height: "124px",
+    },
+  ])("reserves the metadata height for $label", ({ message, height }) => {
+    const { container } = renderQueuedMessages([
+      makeThreadQueuedMessage(message),
+    ]);
+    expandQueue();
+    expect(
+      container.querySelector<HTMLElement>(
+        'section[aria-label="Queued messages"]',
+      )?.style.height,
+    ).toBe(height);
+  });
 
   it("renders as a standalone card when it is not attached to the composer", () => {
     const { container } = renderQueuedMessages(
@@ -302,7 +385,7 @@ describe("QueuedMessagesList", () => {
     expect(surface?.classList.contains("border-b-0")).toBe(false);
   });
 
-  it("toggles a few messages between the fitted drawer and collapsed modes", () => {
+  it("starts collapsed and toggles a few messages through the fitted drawer", () => {
     const { container, getByRole, getByText } = renderQueuedMessages([
       makeQueuedMessage("q_one", "First queued message"),
       makeQueuedMessage("q_two", "Second queued message"),
@@ -313,34 +396,44 @@ describe("QueuedMessagesList", () => {
     const surface = container.querySelector<HTMLElement>(
       'section[aria-label="Queued messages"]',
     );
+    const toggle = getByRole("button", { name: "Toggle queued messages" });
 
     expect(getByText("Queue")).not.toBeNull();
+    expect(header?.getAttribute("data-queued-messages-mode")).toBe("collapsed");
+    expect(surface?.style.height).toBe("44px");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(toggle);
     expect(header?.getAttribute("data-queued-messages-mode")).toBe("drawer");
-    expect(surface?.style.height).toBe("121px");
+    expect(surface?.style.height).toBe("135px");
     expect(
       getByRole("button", { name: "Collapse queued messages" }).querySelector(
-        '[data-icon="ChevronDown"]',
-      ),
-    ).not.toBeNull();
-
-    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
-    expect(header?.getAttribute("data-queued-messages-mode")).toBe("collapsed");
-    expect(
-      getByRole("button", { name: "Show queued messages" }).querySelector(
         '[data-icon="ChevronUp"]',
       ),
     ).not.toBeNull();
-    expect(surface?.style.height).toBe("44px");
+    expect(document.activeElement).toBe(
+      getByRole("button", { name: "Collapse queued messages" }),
+    );
 
-    fireEvent.click(getByRole("button", { name: "Show queued messages" }));
-    expect(header?.getAttribute("data-queued-messages-mode")).toBe("drawer");
-    expect(surface?.style.height).toBe("121px");
+    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
+    expect(header?.getAttribute("data-queued-messages-mode")).toBe("collapsed");
+    expect(surface?.style.height).toBe("44px");
+    expect(document.activeElement).toBe(toggle);
+
+    fireEvent.click(toggle);
+    expect(surface?.style.height).toBe("135px");
+    toggle.focus();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(surface?.style.height).toBe("44px");
+    expect(document.activeElement).toBe(toggle);
   });
 
   it("gives a row that renders a wait line room for it", () => {
     const plain = renderQueuedMessages([
       makeQueuedMessage("q_one", "First queued message"),
     ]);
+    expandQueue();
     const plainHeight = plain.container.querySelector<HTMLElement>(
       'section[aria-label="Queued messages"]',
     )?.style.height;
@@ -357,15 +450,16 @@ describe("QueuedMessagesList", () => {
         sendAt: Date.now() + 60_000,
       },
     ]);
+    expandQueue();
     const waitingHeight = waiting.container.querySelector<HTMLElement>(
       'section[aria-label="Queued messages"]',
     )?.style.height;
 
-    expect(plainHeight).toBe("88px");
-    expect(waitingHeight).toBe("104px");
+    expect(plainHeight).toBe("102px");
+    expect(waitingHeight).toBe("118px");
   });
 
-  it("toggles an overflowing queue between the workspace and collapsed modes", () => {
+  it("toggles an overflowing queue with the same disclosure as a fitted queue", () => {
     const { container, getByRole } = renderQueuedMessages(
       Array.from({ length: 5 }, (_, index) =>
         makeQueuedMessage(`q_${index}`, `Queued message ${index + 1}`),
@@ -375,16 +469,14 @@ describe("QueuedMessagesList", () => {
       "[data-queued-messages-mode]",
     );
 
+    expect(header?.getAttribute("data-queued-messages-mode")).toBe("collapsed");
+    fireEvent.click(getByRole("button", { name: "Toggle queued messages" }));
     expect(header?.getAttribute("data-queued-messages-mode")).toBe("drawer");
-    fireEvent.click(getByRole("button", { name: "Expand queued messages" }));
-    expect(header?.getAttribute("data-queued-messages-mode")).toBe("workspace");
     fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
     expect(header?.getAttribute("data-queued-messages-mode")).toBe("collapsed");
-    fireEvent.click(getByRole("button", { name: "Expand queued messages" }));
-    expect(header?.getAttribute("data-queued-messages-mode")).toBe("workspace");
   });
 
-  it("opens the fitted drawer when a queued message arrives while collapsed", async () => {
+  it("stays collapsed and bumps the count when a queued message arrives", () => {
     const sharedProps = {
       sendDisabled: false,
       actionDisabled: false,
@@ -394,93 +486,229 @@ describe("QueuedMessagesList", () => {
       onReorder: noop,
       onSetGroupBoundary: noop,
       onEdit: noop,
+      onChangeSendTime: noopAsync,
       onDelete: noop,
     } as const;
     const firstMessage = makeQueuedMessage("q_one", "First queued message");
-    const { container, getByRole, rerender } = render(
+    const { container, rerender } = render(
       <QueuedMessagesList {...sharedProps} queuedMessages={[firstMessage]} />,
     );
 
-    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
     expect(
       container
         .querySelector("[data-queued-messages-mode]")
         ?.getAttribute("data-queued-messages-mode"),
     ).toBe("collapsed");
+
+    const count = () =>
+      container.querySelector<HTMLElement>("[data-queued-messages-count]");
+    expect(count()?.classList.contains("bb-count-flash")).toBe(false);
+
+    const secondMessage = makeQueuedMessage("q_two", "Second queued message");
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[firstMessage, secondMessage]}
+      />,
+    );
+
+    expect(
+      container
+        .querySelector("[data-queued-messages-mode]")
+        ?.getAttribute("data-queued-messages-mode"),
+    ).toBe("collapsed");
+    expect(
+      container.querySelector<HTMLElement>(
+        'section[aria-label="Queued messages"]',
+      )?.style.height,
+    ).toBe("44px");
+    expect(count()?.classList.contains("bb-count-flash")).toBe(true);
+    const previousCount = container.querySelector<HTMLElement>(
+      "[data-queued-messages-previous-count]",
+    );
+    expect(previousCount?.textContent).toBe("1");
+    expect(count()?.lastElementChild?.textContent).toBe("2");
+
+    rerender(
+      <QueuedMessagesList {...sharedProps} queuedMessages={[secondMessage]} />,
+    );
+    expect(count()?.textContent).toBe("1");
+    expect(
+      container.querySelector("[data-queued-messages-previous-count]"),
+    ).toBeNull();
+  });
+
+  it("does not replay the arrival flash for restored or replaced messages", () => {
+    const sharedProps = {
+      sendDisabled: false,
+      actionDisabled: false,
+      processingMessageId: null,
+      processingAction: null,
+      onSend: noop,
+      onReorder: noop,
+      onSetGroupBoundary: noop,
+      onEdit: noop,
+      onChangeSendTime: noopAsync,
+      onDelete: noop,
+    } as const;
+    const firstMessage = makeQueuedMessage("q_one", "First queued message");
+    const secondMessage = makeQueuedMessage("q_two", "Second queued message");
+    const { container, rerender } = render(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[firstMessage, secondMessage]}
+      />,
+    );
+    const count = () =>
+      container.querySelector<HTMLElement>("[data-queued-messages-count]");
+    const restingPill = count();
+
+    rerender(
+      <QueuedMessagesList {...sharedProps} queuedMessages={[firstMessage]} />,
+    );
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[firstMessage, secondMessage]}
+      />,
+    );
+    expect(count()).toBe(restingPill);
+    expect(count()?.classList.contains("bb-count-flash")).toBe(false);
 
     rerender(
       <QueuedMessagesList
         {...sharedProps}
         queuedMessages={[
           firstMessage,
-          makeQueuedMessage("q_two", "Second queued message"),
+          secondMessage,
+          makeQueuedMessage("optimistic-queued-1", "Third queued message"),
         ]}
       />,
     );
+    const bumpedPill = count();
+    expect(bumpedPill?.classList.contains("bb-count-flash")).toBe(true);
 
-    await waitFor(() => {
-      expect(
-        container
-          .querySelector("[data-queued-messages-mode]")
-          ?.getAttribute("data-queued-messages-mode"),
-      ).toBe("drawer");
-    });
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[
+          firstMessage,
+          secondMessage,
+          makeQueuedMessage("q_three", "Third queued message"),
+        ]}
+      />,
+    );
+    expect(count()).toBe(bumpedPill);
+    expect(count()?.lastElementChild?.textContent).toBe("3");
   });
 
-  it("moves through all three modes with the header drag handle", () => {
-    const { container, getByRole } = renderQueuedMessages([
-      makeQueuedMessage("q_one", "First queued message"),
-      makeQueuedMessage("q_two", "Second queued message"),
+  it("names the newest failure, else the newest wait, in the collapsed header", () => {
+    const sharedProps = {
+      sendDisabled: false,
+      actionDisabled: false,
+      processingMessageId: null,
+      processingAction: null,
+      onSend: noop,
+      onReorder: noop,
+      onSetGroupBoundary: noop,
+      onEdit: noop,
+      onChangeSendTime: noopAsync,
+      onDelete: noop,
+    } as const;
+    const plainMessage = makeQueuedMessage("q_plain", "Plain follow-up");
+    const retryMessage = makeThreadQueuedMessage({
+      id: "q_retry",
+      payload: {
+        kind: "retry",
+        retryOfTurnRequestId: "req_1",
+        attempt: 2,
+        reason: "Rate limited",
+      },
+      waitingOn: { kind: "time" },
+      sendAt: 0,
+      createdAt: 2,
+    });
+    const failedMessage = {
+      ...makeQueuedMessage("q_failed", "Post the summary"),
+      failureReason: "Provider unavailable",
+      createdAt: 1,
+    };
+    const draftMessage = {
+      ...makeQueuedMessage("q_draft", "Release notes outline"),
+      waitingOn: {
+        kind: "plugin" as const,
+        pluginId: "drafts",
+        reason: "Draft",
+      },
+      createdAt: 3,
+    };
+    const { container, rerender } = render(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[plainMessage, retryMessage, failedMessage]}
+      />,
+    );
+    const headerWait = () =>
+      container.querySelector<HTMLElement>("header [data-queued-message-wait]");
+
+    expect(headerWait()?.textContent).toBe("Provider unavailable");
+    expect(headerWait()?.hasAttribute("data-queued-message-failed")).toBe(true);
+
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[plainMessage, retryMessage]}
+      />,
+    );
+    expect(headerWait()?.textContent).toMatch(
+      /^Rate limited · retrying at .* · attempt 2$/u,
+    );
+
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[retryMessage, plainMessage, draftMessage]}
+      />,
+    );
+    expect(headerWait()?.textContent).toMatch(/· Draft$/u);
+
+    expandQueue();
+    expect(headerWait()).toBeNull();
+  });
+
+  it("shows no header wait for ordinary queued messages", () => {
+    const { container } = renderQueuedMessages([
+      {
+        ...makeQueuedMessage("q_busy", "Ordinary queued"),
+        waitingOn: { kind: "thread-busy" },
+      },
     ]);
-    const handle = getByRole("button", {
-      name: "Drag up to open the queue workspace",
-    });
-    Object.defineProperty(handle, "setPointerCapture", {
-      configurable: true,
-      value: vi.fn(),
-    });
-
-    fireEvent.pointerDown(handle, {
-      button: 0,
-      clientY: 200,
-      pointerId: 1,
-    });
-    fireEvent.pointerMove(handle, { clientY: 100, pointerId: 1 });
-    fireEvent.pointerUp(handle, { clientY: 100, pointerId: 1 });
-
     expect(
+      container.querySelector("header [data-queued-message-wait]"),
+    ).toBeNull();
+  });
+
+  it("reports each open and close to its owner", () => {
+    const onExpandedChange = vi.fn();
+    const { container, getByRole } = renderQueuedMessagesWithExpandedSpy(
+      [
+        makeQueuedMessage("q_one", "First queued message"),
+        makeQueuedMessage("q_two", "Second queued message"),
+      ],
+      onExpandedChange,
+    );
+    const mode = () =>
       container
         .querySelector("[data-queued-messages-mode]")
-        ?.getAttribute("data-queued-messages-mode"),
-    ).toBe("workspace");
+        ?.getAttribute("data-queued-messages-mode");
 
-    fireEvent.pointerDown(handle, {
-      button: 0,
-      clientY: 100,
-      pointerId: 2,
-    });
-    fireEvent.pointerMove(handle, { clientY: 200, pointerId: 2 });
-    fireEvent.pointerUp(handle, { clientY: 200, pointerId: 2 });
+    fireEvent.click(getByRole("button", { name: "Toggle queued messages" }));
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+    expect(mode()).toBe("drawer");
 
-    expect(
-      container
-        .querySelector("[data-queued-messages-mode]")
-        ?.getAttribute("data-queued-messages-mode"),
-    ).toBe("drawer");
-
-    fireEvent.pointerDown(handle, {
-      button: 0,
-      clientY: 100,
-      pointerId: 3,
-    });
-    fireEvent.pointerMove(handle, { clientY: 200, pointerId: 3 });
-    fireEvent.pointerUp(handle, { clientY: 200, pointerId: 3 });
-
-    expect(
-      container
-        .querySelector("[data-queued-messages-mode]")
-        ?.getAttribute("data-queued-messages-mode"),
-    ).toBe("collapsed");
+    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+    expect(mode()).toBe("collapsed");
   });
 
   it("uses labeled inline icon actions with tooltips", async () => {
@@ -488,6 +716,7 @@ describe("QueuedMessagesList", () => {
       renderQueuedMessages([
         makeQueuedMessage("q_one", "First queued message"),
       ]);
+    expandQueue();
 
     const sendButton = getByRole("button", {
       name: "Send queued message 1 now",
@@ -528,6 +757,82 @@ describe("QueuedMessagesList", () => {
     }
   });
 
+  it("changes, removes, or reports a failed change to a scheduled row's send time", async () => {
+    const sendAtDate = new Date(Date.now() + 2 * 24 * 3_600_000);
+    sendAtDate.setHours(14, 30, 0, 0);
+    const scheduled: ThreadQueuedMessage = {
+      ...makeQueuedMessage("q_scheduled", "Scheduled message"),
+      sendAt: sendAtDate.getTime(),
+      state: "scheduled",
+      updatedAt: 42,
+      waitingOn: { kind: "time" },
+    };
+    const onChangeSendTime = vi.fn(async () => {});
+    const { getByLabelText, getByRole, queryByRole, findByRole } = render(
+      <QueuedMessagesList
+        queuedMessages={[
+          makeQueuedMessage("q_plain", "Plain message"),
+          scheduled,
+        ]}
+        sendDisabled={false}
+        actionDisabled={false}
+        processingMessageId={null}
+        processingAction={null}
+        onSend={noop}
+        onReorder={noop}
+        onSetGroupBoundary={noop}
+        onEdit={noop}
+        onChangeSendTime={onChangeSendTime}
+        onDelete={noop}
+      />,
+    );
+    expandQueue();
+
+    expect(
+      queryByRole("button", { name: "Change when queued message 1 sends" }),
+    ).toBeNull();
+    const openDialog = () =>
+      fireEvent.click(
+        getByRole("button", { name: "Change when queued message 2 sends" }),
+      );
+
+    openDialog();
+    expect((getByLabelText("Time") as HTMLInputElement).value).toBe("14:30");
+    fireEvent.change(getByLabelText("Time"), { target: { value: "10:15" } });
+    fireEvent.click(getByRole("button", { name: "Save" }));
+    const moved = new Date(sendAtDate);
+    moved.setHours(10, 15, 0, 0);
+    await waitFor(() =>
+      expect(onChangeSendTime).toHaveBeenLastCalledWith({
+        expectedUpdatedAt: 42,
+        queuedMessageId: "q_scheduled",
+        sendAt: moved.getTime(),
+      }),
+    );
+    await waitFor(() => expect(queryByRole("dialog")).toBeNull());
+
+    openDialog();
+    fireEvent.click(getByRole("button", { name: "Remove send time" }));
+    await waitFor(() =>
+      expect(onChangeSendTime).toHaveBeenLastCalledWith({
+        expectedUpdatedAt: 42,
+        queuedMessageId: "q_scheduled",
+        sendAt: null,
+      }),
+    );
+    await waitFor(() => expect(queryByRole("dialog")).toBeNull());
+
+    onChangeSendTime.mockRejectedValueOnce(
+      new Error("Queued message is already being sent"),
+    );
+    openDialog();
+    fireEvent.click(getByRole("button", { name: "Save" }));
+    expect((await findByRole("alert")).textContent).toBe(
+      "Queued message is already being sent",
+    );
+    expect(getByRole("dialog")).toBeTruthy();
+  });
+
   it("limits collapsed action hiding to compact widths", () => {
     const { container } = renderQueuedMessages([
       makeQueuedMessage("q_one", "First queued message"),
@@ -544,6 +849,7 @@ describe("QueuedMessagesList", () => {
       makeQueuedMessage("q_one", "First queued message"),
       makeQueuedMessage("q_two", "Second queued message"),
     ]);
+    expandQueue();
     const firstActions = getByRole("button", {
       name: "Queued message 1 actions",
     });
@@ -567,7 +873,7 @@ describe("QueuedMessagesList", () => {
 
     fireEvent.click(firstActions);
     fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
-    fireEvent.click(getByRole("button", { name: "Show queued messages" }));
+    fireEvent.click(getByRole("button", { name: "Toggle queued messages" }));
     expect(firstActions.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -588,9 +894,11 @@ describe("QueuedMessagesList", () => {
           onReorder={noop}
           onSetGroupBoundary={noop}
           onEdit={noop}
+          onChangeSendTime={noopAsync}
           onDelete={noop}
         />,
       );
+      expandQueue();
       const trigger = getByRole("button", {
         name: "Queued message 1 actions",
       });
@@ -608,6 +916,7 @@ describe("QueuedMessagesList", () => {
     const { getByRole } = renderQueuedMessages([
       makeQueuedMessage("q_one", "First queued message"),
     ]);
+    expandQueue();
     const reorderButton = getByRole("button", {
       name: "Reorder queued message 1",
     });
@@ -644,6 +953,7 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
@@ -703,6 +1013,7 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
@@ -728,6 +1039,7 @@ describe("QueuedMessagesList", () => {
     );
     const sharedProps = {
       queuedMessages,
+      defaultExpanded: true,
       sendDisabled: false,
       actionDisabled: false,
       processingMessageId: null,
@@ -736,6 +1048,7 @@ describe("QueuedMessagesList", () => {
       onReorder: noop,
       onSetGroupBoundary: noop,
       onEdit: noop,
+      onChangeSendTime: noopAsync,
       onDelete: noop,
     } as const;
     const { container, rerender } = render(
@@ -763,7 +1076,7 @@ describe("QueuedMessagesList", () => {
           .querySelector("[data-queued-messages-mode]")
           ?.getAttribute("data-queued-messages-mode"),
       ).toBe("drawer");
-      expect(surface?.style.height).toBe("174px");
+      expect(surface?.style.height).toBe("201px");
     });
   });
 
@@ -783,6 +1096,7 @@ describe("QueuedMessagesList", () => {
       onReorder: noop,
       onSetGroupBoundary: noop,
       onEdit: noop,
+      onChangeSendTime: noopAsync,
       onDelete: noop,
     } as const;
     const { container, getByRole, rerender } = render(
@@ -836,6 +1150,7 @@ describe("QueuedMessagesList", () => {
     ];
     const sharedProps = {
       queuedMessages,
+      defaultExpanded: true,
       sendDisabled: false,
       actionDisabled: false,
       processingMessageId: null,
@@ -844,6 +1159,7 @@ describe("QueuedMessagesList", () => {
       onReorder: noop,
       onSetGroupBoundary: noop,
       onEdit: noop,
+      onChangeSendTime: noopAsync,
       onDelete: noop,
     } as const;
     const renderSurface = (editing: boolean) => (
@@ -880,7 +1196,7 @@ describe("QueuedMessagesList", () => {
     rerender(renderSurface(false));
 
     await waitFor(() => {
-      expect(surface?.style.height).toBe("121px");
+      expect(surface?.style.height).toBe("135px");
       expect(
         container
           .querySelector("[data-queued-messages-mode]")
@@ -946,6 +1262,7 @@ describe("QueuedMessagesList", () => {
             onReorder={noop}
             onSetGroupBoundary={noop}
             onEdit={noop}
+            onChangeSendTime={noopAsync}
             onDelete={noop}
           />
           <div>Bottom composer</div>
@@ -1032,6 +1349,7 @@ describe("QueuedMessagesList", () => {
             onReorder={noop}
             onSetGroupBoundary={noop}
             onEdit={noop}
+            onChangeSendTime={noopAsync}
             onDelete={noop}
           />
           <div>Bottom composer</div>
@@ -1136,6 +1454,7 @@ describe("QueuedMessagesList", () => {
               onReorder={noop}
               onSetGroupBoundary={noop}
               onEdit={noop}
+              onChangeSendTime={noopAsync}
               onDelete={noop}
             />
             <div>Bottom composer</div>
@@ -1215,24 +1534,13 @@ describe("QueuedMessagesList", () => {
     expect(container.textContent).not.toContain("`code`");
   });
 
-  it("does not add hard-break elements for multi-line queued markdown", () => {
-    const { container } = renderQueuedMessages([
-      makeQueuedMessage("q_multiline", "first line\nsecond line"),
-    ]);
-
-    expect(container.querySelector("br")).toBeNull();
-    expect(container.textContent?.replace(/\s+/gu, " ")).toContain(
-      "first line second line",
-    );
-  });
-
   it("does not render full markdown preview controls in queued rows", () => {
     const { container, queryByLabelText } = renderQueuedMessages([
       makeQueuedMessage("q_code_block", "```ts\nconst value = 1;\n```"),
     ]);
 
     expect(queryByLabelText("Copy code")).toBeNull();
-    expect(queryByLabelText("Wrap long lines")).toBeNull();
+    expect(queryByLabelText("Wrap lines")).toBeNull();
     expect(container.querySelector("pre")).toBeNull();
     expect(container.querySelector("code")?.textContent).toContain(
       "const value = 1;",
@@ -1293,9 +1601,11 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
+    expandQueue();
 
     const attachment = getByRole("img", { name: "2 attachments" });
     expect(attachment.textContent).toBe("2");
@@ -1392,6 +1702,7 @@ describe("QueuedMessagesList", () => {
         ),
       ),
     );
+    expandQueue();
     const scroll = container.querySelector<HTMLDivElement>(
       "[data-queued-messages-scroll]",
     );
@@ -1466,22 +1777,42 @@ describe("QueuedMessagesList", () => {
     );
   });
 
-  it("preserves grouping when reordering a row across the divider", () => {
+  it("keeps the lead group for reorders inside it and dissolves it when a row crosses the divider", () => {
     const queuedMessages = [
-      makeQueuedMessage("q_one", "First queued message"),
+      {
+        ...makeQueuedMessage("q_one", "First queued message"),
+        groupWithNext: true,
+      },
       makeQueuedMessage("q_two", "Second queued message"),
       makeQueuedMessage("q_three", "Third queued message"),
     ];
+    const combinedIds = [
+      "q_one",
+      "q_two",
+      "__queued_message_group_divider__",
+      "q_three",
+    ];
+
+    expect(
+      resolveQueuedMessageDrag({
+        activeId: "q_two",
+        overId: "q_one",
+        combinedIds,
+        orderedMessages: queuedMessages,
+      }),
+    ).toMatchObject({
+      kind: "row",
+      orderedMessages: [
+        { id: "q_two", groupWithNext: true },
+        { id: "q_one", groupWithNext: false },
+        { id: "q_three", groupWithNext: false },
+      ],
+    });
 
     const result = resolveQueuedMessageDrag({
       activeId: "q_three",
       overId: "q_one",
-      combinedIds: [
-        "q_one",
-        "__queued_message_group_divider__",
-        "q_two",
-        "q_three",
-      ],
+      combinedIds,
       orderedMessages: queuedMessages,
     });
 
@@ -1682,6 +2013,7 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
@@ -1706,6 +2038,7 @@ describe("QueuedMessagesList", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
@@ -1764,6 +2097,7 @@ describe("QueuedMessagesList", () => {
     const { container } = renderQueuedMessages([
       makeQueuedMessage("q_one", "single queued message"),
     ]);
+    expandQueue();
     const scroll = container.querySelector<HTMLDivElement>(
       "[data-queued-messages-scroll]",
     );
@@ -1831,6 +2165,7 @@ describe("queued row affordances", () => {
         },
       },
     ]);
+    expandQueue();
 
     const waitLine = getByText("Held by Drafts · Draft").closest(
       "[data-queued-message-wait]",
@@ -1858,6 +2193,7 @@ describe("queued row affordances", () => {
         },
       },
     ]);
+    expandQueue();
 
     expect(getByText("Waiting for workspace")).toBeDefined();
     expect(
@@ -1907,6 +2243,7 @@ describe("queued row affordances", () => {
         onReorder={noop}
         onSetGroupBoundary={noop}
         onEdit={noop}
+        onChangeSendTime={noopAsync}
         onDelete={noop}
       />,
     );
@@ -1922,6 +2259,7 @@ describe("queued row affordances", () => {
         waitingOn: { kind: "host-offline", hostName: "M4" },
       },
     ]);
+    expandQueue();
     expect(getByText("Waiting for M4 to be ready")).toBeDefined();
     expect(queryByLabelText("Send queued message 1 now")).toBeNull();
   });
@@ -1934,6 +2272,7 @@ describe("queued row affordances", () => {
         failureReason: "Thread stopped before the message could dispatch",
       },
     ]);
+    expandQueue();
     expect(
       getByText("Thread stopped before the message could dispatch"),
     ).toBeDefined();
@@ -1966,6 +2305,7 @@ describe("queued row affordances", () => {
         sendAt: 0,
       },
     ]);
+    expandQueue();
     expect(getByText(/^Retry failed turn from /u)).toBeDefined();
     expect(
       getByText(/^Rate limited · retrying at .* · attempt 2$/u),
@@ -1987,6 +2327,7 @@ describe("queued row affordances", () => {
         sendAt: 0,
       }),
     ]);
+    expandQueue();
     expect(container.querySelector("[data-queued-message-sender]")).toBeNull();
     expect(
       getByText(/^Rate limited · retrying at .* · attempt 2$/u),
@@ -2008,7 +2349,73 @@ describe("queued row affordances", () => {
         sendAt: 0,
       },
     ]);
+    expandQueue();
     expect(queryByLabelText("Edit queued message 1")).toBeNull();
     expect(queryByLabelText("Delete queued message 1")).not.toBeNull();
+  });
+
+  it("shows a bb notice by its title and offers only send and delete", () => {
+    const { container, getByText, queryByLabelText } = renderQueuedMessages([
+      makeThreadQueuedMessage({
+        id: "q_notice",
+        initiator: "system",
+        content: [
+          {
+            type: "text",
+            text: "[bb system]\n\nChild thread updates:\n\n- @thread:thr_a completed.",
+            mentions: [],
+          },
+        ],
+        systemNotice: {
+          kind: "child-outcome-batch",
+          subject: { kind: "thread-batch", count: 2 },
+        },
+        state: "scheduled",
+        waitingOn: { kind: "plugin", pluginId: "gate", reason: "At capacity" },
+        sendAt: Date.now() + 60_000,
+        editable: false,
+      }),
+      makeQueuedMessage("q_user", "User follow-up"),
+    ]);
+    expandQueue();
+    expect(getByText("2 threads updated")).toBeDefined();
+    expect(container.textContent).not.toContain("[bb system]");
+    expect(container.textContent).not.toContain("From");
+    expect(queryByLabelText("Send queued message 1 now")).not.toBeNull();
+    expect(queryByLabelText("Delete queued message 1")).not.toBeNull();
+    expect(queryByLabelText("Edit queued message 1")).toBeNull();
+    expect(queryByLabelText("Change when queued message 1 sends")).toBeNull();
+    expect(
+      queryByLabelText("Reorder queued message 1")?.hasAttribute("disabled"),
+    ).toBe(true);
+    expect(
+      queryByLabelText("Reorder queued message 2")?.hasAttribute("disabled"),
+    ).toBe(false);
+  });
+
+  it("summarizes bb notices when collapsed and leads with the user's own wait", () => {
+    const { container } = renderQueuedMessages([
+      makeThreadQueuedMessage({
+        id: "q_user_scheduled",
+        createdAt: 1,
+        state: "scheduled",
+        waitingOn: { kind: "time" },
+        sendAt: Date.now() + 45 * 60_000,
+      }),
+      makeThreadQueuedMessage({
+        id: "q_notice",
+        createdAt: 2,
+        initiator: "system",
+        systemNotice: { kind: "child-completed", subject: null },
+        waitingOn: { kind: "host-offline", hostName: "M4" },
+      }),
+    ]);
+    const header = container.querySelector("header");
+    expect(
+      header?.querySelector("[data-queued-messages-system-count]")?.textContent,
+    ).toBe("· 1 from bb");
+    expect(
+      header?.querySelector("[data-queued-message-wait]")?.textContent,
+    ).toMatch(/^Scheduled for /u);
   });
 });

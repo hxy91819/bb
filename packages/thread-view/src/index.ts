@@ -37,18 +37,28 @@ export type {
   TimelineTitleTone,
 } from "./timeline-row-title.js";
 export { THREAD_TIMELINE_EXCLUDED_EVENT_TYPES } from "./timeline-noise-events.js";
-export { extractShellCommandFromString } from "./tool-call-parsing.js";
+export {
+  extractShellCommandFromString,
+  parseSentThreadMessage,
+  type ThreadTellCommand,
+} from "./tool-call-parsing.js";
+export { formatShellCommandForDisplay } from "./shell-command-display.js";
 export {
   getFileChangeAction,
-  isPatchMetadataLine,
+  getFileChangeDiffLines,
+  isPlainFileContentDiff,
 } from "./file-change-summary.js";
 export type { FileChangeAction } from "./file-change-summary.js";
 export {
   buildThreadTimelineFromEvents,
+  startThreadTimelineProjectionFold,
   buildThreadTimelineTurnDetailsFromEvents,
 } from "./build-thread-timeline.js";
 export { extractThreadTimelineActivePlanTurn } from "./active-prompt-mode-extraction.js";
-export { extractThreadTimelineGoal } from "./goal-snapshot-extraction.js";
+export {
+  extractThreadProviderCommands,
+  extractThreadSessionOptions,
+} from "./provider-state-extraction.js";
 export type { AcceptedClientRequestContext } from "./accepted-client-request-context.js";
 export {
   buildTimelineViewRows,
@@ -58,6 +68,7 @@ export type {
   BuildTimelineViewRowsOptions,
   ThreadTimelineViewRow,
   TimelineQuestionViewWorkRow,
+  TimelineViewDelegationWorkRow,
   TimelineViewTurnRow,
   TimelineViewWorkflowWorkRow,
   TimelineViewWorkRow,
@@ -68,6 +79,10 @@ export {
   MIN_AGENT_MESSAGE_DELTAS_FOR_SUMMARY_COMPACTION,
 } from "./summary-event-compaction.js";
 export type { ThreadEventWithMeta } from "./group-event-projection-turns.js";
+export {
+  resumeEventProjectionFold,
+  type EventProjectionFold,
+} from "./build-event-projection.js";
 
 export { extractThreadContextWindowUsage } from "./thread-context-window-usage.js";
 export {

@@ -17,7 +17,7 @@ import {
   type ExperimentalProviderModelPickerValue,
 } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
-import { COARSE_POINTER_HOVER_REVEAL_VISIBLE_CLASS } from "@/components/ui/coarse-pointer-visibility";
+import { HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS } from "@/components/ui/hover-reveal";
 import { DelayedLoading } from "@/components/ui/delayed-loading";
 import { Icon, type IconName } from "@/components/ui/icon";
 import {
@@ -30,7 +30,6 @@ import {
   ResourcePromptPreview,
   ResourceDetailStack,
   ResourceMeta,
-  useResourceRouteLabel,
 } from "@/components/ui/resource-list";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,7 +51,7 @@ import {
   oneShotLifecycleAllowsToggle,
   PERSONAL_PROJECT_ID,
 } from "./lib/format-schedule";
-import { AutomationMetadataItem } from "./metadata";
+import { AutomationMetadataItem, automationErrorMessage } from "./metadata";
 import { AutomationActionsMenu } from "./actions-menu";
 
 interface AutomationRunsViewState {
@@ -398,8 +397,8 @@ export function RunRow({
   const duration = formatRunDuration(run);
   const silent = isSilentRun(run);
   const showOutput =
-    run.runMode === "script" &&
-    (run.output !== null || run.error !== null || silent);
+    run.error !== null ||
+    (run.runMode === "script" && (run.output !== null || silent));
   const visual = AUTOMATION_RUN_STATUS_VISUALS[run.status];
   const running = run.status === "running";
   const openable = run.runMode === "agent" && run.threadId !== null;
@@ -458,7 +457,7 @@ export function RunRow({
           name="ChevronRight"
           className={cn(
             "size-3.5 shrink-0 text-subtle-foreground opacity-0 transition-opacity group-hover/run:opacity-100 group-focus-visible/run:opacity-100",
-            COARSE_POINTER_HOVER_REVEAL_VISIBLE_CLASS,
+            HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS,
           )}
           aria-hidden
         />
@@ -748,7 +747,6 @@ export function AutomationDetailView({
   onOpenThread,
   footer,
 }: AutomationDetailViewProps) {
-  useResourceRouteLabel(automation.name);
   const oneShotLifecycle = getOneShotLifecycle({
     enabled: automation.enabled,
     trigger: automation.trigger,
@@ -770,6 +768,7 @@ export function AutomationDetailView({
   const execution = automation.execution;
   const projectContextLabel = projectLabel;
   const personalProject = automation.projectId === PERSONAL_PROJECT_ID;
+  const errorMessage = automationErrorMessage(automation);
 
   return (
     <ResourceDetailPage
@@ -782,23 +781,45 @@ export function AutomationDetailView({
       }
       title={automation.name}
       metadata={
-        <ResourceMeta
-          items={[
-            <AutomationMetadataItem
-              icon="Folder"
-              iconLabel={
-                personalProject ? `Project: ${projectContextLabel}` : "Project"
-              }
-              title={projectContextLabel}
+        <>
+          <ResourceMeta
+            items={[
+              <AutomationMetadataItem
+                icon="Folder"
+                iconLabel={
+                  personalProject
+                    ? `Project: ${projectContextLabel}`
+                    : "Project"
+                }
+                title={projectContextLabel}
+              >
+                {projectContextLabel}
+              </AutomationMetadataItem>,
+              <AutomationMetadataItem icon="DateTime" iconLabel="Schedule">
+                {formatAutomationTrigger(automation.trigger)}
+              </AutomationMetadataItem>,
+              automationDetailNextRun(automation),
+            ]}
+          />
+          {errorMessage !== null ? (
+            <p
+              data-automation-error=""
+              className="mt-1.5 flex min-w-0 items-start gap-1.5 text-destructive"
             >
-              {projectContextLabel}
-            </AutomationMetadataItem>,
-            <AutomationMetadataItem icon="DateTime" iconLabel="Schedule">
-              {formatAutomationTrigger(automation.trigger)}
-            </AutomationMetadataItem>,
-            automationDetailNextRun(automation),
-          ]}
-        />
+              <Icon
+                name="CircleX"
+                className="mt-px size-3.5 shrink-0"
+                aria-hidden
+              />
+              <span
+                className="min-w-0 break-words line-clamp-3"
+                title={errorMessage}
+              >
+                {errorMessage}
+              </span>
+            </p>
+          ) : null}
+        </>
       }
       lifecycleControl={
         <AutomationLifecycleControl

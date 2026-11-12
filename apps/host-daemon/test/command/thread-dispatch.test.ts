@@ -11,22 +11,20 @@ import {
   type ClientTurnRequestId,
   type PromptInput,
 } from "@bb/domain";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { makeTempDir } from "@bb/test-helpers";
+import { describe, expect, it, vi } from "vitest";
 import { dispatchCommand } from "../../src/command-dispatch.js";
 import { CommandDispatchError } from "../../src/command-dispatch-support.js";
 import type { FetchProjectAttachment } from "../../src/project-attachments.js";
 import { RuntimeManager } from "../../src/runtime-manager.js";
 import {
-  cleanupTempDirs,
+  artifactBody,
   createFakeRuntime,
   createFakeWorkspace,
   createHarness,
   makeDispatchOptions,
-  makeTempDir,
   DISPATCH_TEST_BRIDGE_LAUNCH,
 } from "./dispatch-helpers.js";
-
-afterEach(cleanupTempDirs);
 
 let nextClientRequestIdValue = 1;
 
@@ -51,6 +49,10 @@ function nextClientRequestId(): ClientTurnRequestId {
   });
   nextClientRequestIdValue += 1;
   return requestId;
+}
+
+async function* attachmentContent(content: string): AsyncGenerator<Uint8Array> {
+  yield Buffer.from(content);
 }
 
 describe("thread command dispatch", () => {
@@ -173,7 +175,7 @@ describe("thread command dispatch", () => {
     const uploadedNotesContent = "content:notes-uploaded.txt";
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(
       async (args) => ({
-        bytes: Buffer.from(`content:${args.path}`),
+        content: attachmentContent(`content:${args.path}`),
       }),
     );
 
@@ -293,7 +295,7 @@ describe("thread command dispatch", () => {
     const requestId = nextClientRequestId();
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(
       async (args) => ({
-        bytes: Buffer.from(`content:${args.path}`),
+        content: attachmentContent(`content:${args.path}`),
       }),
     );
 
@@ -368,8 +370,8 @@ describe("thread command dispatch", () => {
     const bridgeBytes = Buffer.from("export const bridge = true;\n");
     const sha256 = createHash("sha256").update(bridgeBytes).digest("hex");
     const harness = createHarness({ workspacePath: "/tmp/env-bridge-start" });
-    const fetchPluginHostArtifact = vi.fn(
-      async () => new Uint8Array(bridgeBytes),
+    const fetchPluginHostArtifact = vi.fn(async () =>
+      artifactBody(new Uint8Array(bridgeBytes)),
     );
 
     await dispatchCommand(
@@ -455,8 +457,8 @@ describe("thread command dispatch", () => {
     const bridgeBytes = Buffer.from("export const archiveBridge = true;\n");
     const sha256 = createHash("sha256").update(bridgeBytes).digest("hex");
     const harness = createHarness({ workspacePath: "/tmp/env-bridge-archive" });
-    const fetchPluginHostArtifact = vi.fn(
-      async () => new Uint8Array(bridgeBytes),
+    const fetchPluginHostArtifact = vi.fn(async () =>
+      artifactBody(new Uint8Array(bridgeBytes)),
     );
     const bridgeLaunch: HostDaemonBridgeLaunch = {
       pluginId: "provider-echo",
@@ -542,8 +544,8 @@ describe("thread command dispatch", () => {
     const bridgeBytes = Buffer.from("export const resumeBridge = true;\n");
     const sha256 = createHash("sha256").update(bridgeBytes).digest("hex");
     const harness = createHarness({ workspacePath: "/tmp/env-bridge-resume" });
-    const fetchPluginHostArtifact = vi.fn(
-      async () => new Uint8Array(bridgeBytes),
+    const fetchPluginHostArtifact = vi.fn(async () =>
+      artifactBody(new Uint8Array(bridgeBytes)),
     );
 
     await dispatchCommand(
@@ -647,7 +649,7 @@ describe("thread command dispatch", () => {
     const originalRunTurn = harness.runtime.runTurn;
     harness.runtime.runTurn = async (args) => {
       expect(harness.runtime.hasThread(args.threadId)).toBe(true);
-      await originalRunTurn(args);
+      return originalRunTurn(args);
     };
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(
       async (args) => {
@@ -656,7 +658,7 @@ describe("thread command dispatch", () => {
         expect(harness.runtimeState.resumedThreadId).toBeUndefined();
         harness.threadControls.clearProviderSession(threadId);
         return {
-          bytes: Buffer.from("content:follow-up-uploaded.txt"),
+          content: attachmentContent("content:follow-up-uploaded.txt"),
         };
       },
     );
@@ -701,7 +703,7 @@ describe("thread command dispatch", () => {
           fetchProjectAttachment,
         },
       ),
-    ).resolves.toEqual({});
+    ).resolves.toEqual({ trace: { spans: [] } });
 
     expect(fetchProjectAttachment).toHaveBeenCalledTimes(1);
     expect(harness.runtimeState.resumedThreadId).toBe(threadId);
@@ -762,7 +764,7 @@ describe("thread command dispatch", () => {
     ).rejects.toThrow();
   });
 
-  it("stages prompt attachments in a readable flat attachments directory", async () => {
+  it("stages beside an earlier turn's differing attachment instead of overwriting it", async () => {
     const threadStorageRootPath = await makeTempDir("bb-restage-attachments-");
     const harness = createHarness();
     const requestId = nextClientRequestId();
@@ -775,7 +777,7 @@ describe("thread command dispatch", () => {
     await fs.mkdir(stagingDir, { recursive: true });
     await fs.writeFile(restagedPath, "stale");
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
-      bytes: Buffer.from("fresh"),
+      content: attachmentContent("fresh"),
     }));
 
     await dispatchCommand(
@@ -816,11 +818,77 @@ describe("thread command dispatch", () => {
       },
     );
 
-    await expect(fs.readFile(restagedPath, "utf8")).resolves.toBe("fresh");
+    await expect(fs.readFile(restagedPath, "utf8")).resolves.toBe("stale");
     await expect(fs.readdir(stagingDir)).resolves.toEqual([
       "fresh-uploaded-2.txt",
+      "fresh-uploaded-3.txt",
       "fresh-uploaded.txt",
     ]);
+    expect(
+      harness.runtimeState.startedInput?.map((input) =>
+        "path" in input ? path.basename(input.path) : input.type,
+      ),
+    ).toEqual(["fresh-uploaded-2.txt", "fresh-uploaded-3.txt"]);
+  });
+
+  it("reuses an identical earlier attachment and keeps it when the runtime fails", async () => {
+    const threadStorageRootPath = await makeTempDir("bb-reuse-attachments-");
+    const harness = createHarness();
+    harness.runtime.startThread = async () => {
+      throw new Error("runtime start failed");
+    };
+    const stagingDir = path.join(
+      threadStorageRootPath,
+      "thread-reuse-attachments",
+      "Attachments",
+    );
+    const earlierPath = path.join(stagingDir, "same-uploaded.txt");
+    await fs.mkdir(stagingDir, { recursive: true });
+    await fs.writeFile(earlierPath, "same");
+    const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
+      content: attachmentContent("same"),
+    }));
+
+    await expect(
+      dispatchCommand(
+        {
+          bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+          type: "thread.start",
+          environmentId: "env-reuse-attachments",
+          threadId: "thread-reuse-attachments",
+          workspaceContext: {
+            workspacePath: "/tmp/env-reuse-attachments",
+          },
+          projectId: "project-reuse-attachments",
+          providerId: "fake",
+          requestId: nextClientRequestId(),
+          input: [{ type: "localFile", path: "same-uploaded.txt" }],
+          options: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            providerOptions: {},
+            permissionMode: "full",
+            permissionScope: "full",
+            approvalReviewer: null,
+            permissionEscalation: null,
+          },
+          instructions: "Be a helpful coding agent.",
+          dynamicTools: [],
+          contributedEnv: [],
+          injectedSkillSources: [],
+          instructionMode: "append",
+        },
+        {
+          ...harness.dispatchOptions({ threadStorageRootPath }),
+          fetchProjectAttachment,
+        },
+      ),
+    ).rejects.toThrow("runtime start failed");
+    await expect(fs.readdir(stagingDir)).resolves.toEqual([
+      "same-uploaded.txt",
+    ]);
+    await expect(fs.readFile(earlierPath, "utf8")).resolves.toBe("same");
   });
 
   it("stages grouped prompt attachments with shared filename uniqueness", async () => {
@@ -831,7 +899,7 @@ describe("thread command dispatch", () => {
     const requestId = nextClientRequestId();
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(
       async (args) => ({
-        bytes: Buffer.from(`content:${args.path}`),
+        content: attachmentContent(`content:${args.path}`),
       }),
     );
 
@@ -911,7 +979,7 @@ describe("thread command dispatch", () => {
           throw new Error("server unavailable");
         }
         return {
-          bytes: Buffer.from(`content:${args.path}`),
+          content: attachmentContent(`content:${args.path}`),
         };
       },
     );
@@ -983,7 +1051,7 @@ describe("thread command dispatch", () => {
     const harness = createHarness();
     const requestId = nextClientRequestId();
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
-      bytes: Buffer.from("too-large"),
+      content: attachmentContent("too-large"),
     }));
 
     await expect(
@@ -1030,15 +1098,76 @@ describe("thread command dispatch", () => {
     ).rejects.toMatchObject({ code: "attachment_unavailable" });
     expect(harness.provisions).toEqual([]);
     await expect(
-      fs.stat(
+      fs.readdir(
         path.join(
           threadStorageRootPath,
           "thread-oversized-stage-attachments",
           "Attachments",
-          "oversized-uploaded.txt",
         ),
       ),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("removes a partially downloaded attachment when its stream fails", async () => {
+    const threadStorageRootPath = await makeTempDir(
+      "bb-interrupted-stage-attachments-",
+    );
+    const harness = createHarness();
+    const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
+      content: (async function* () {
+        yield Buffer.from("partial");
+        throw new Error("connection reset");
+      })(),
+    }));
+
+    await expect(
+      dispatchCommand(
+        {
+          bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+          type: "thread.start",
+          environmentId: "env-interrupted-stage-attachments",
+          threadId: "thread-interrupted-stage-attachments",
+          workspaceContext: {
+            workspacePath: "/tmp/env-interrupted-stage-attachments",
+          },
+          projectId: "project-interrupted-stage-attachments",
+          providerId: "fake",
+          requestId: nextClientRequestId(),
+          input: [{ type: "localFile", path: "interrupted-uploaded.txt" }],
+          options: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            providerOptions: {},
+            permissionMode: "full",
+            permissionScope: "full",
+            approvalReviewer: null,
+            permissionEscalation: null,
+          },
+          instructions: "Be a helpful coding agent.",
+          dynamicTools: [],
+          contributedEnv: [],
+          injectedSkillSources: [],
+          instructionMode: "append",
+        },
+        {
+          ...harness.dispatchOptions({ threadStorageRootPath }),
+          fetchProjectAttachment,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "attachment_unavailable",
+      message: expect.stringContaining("connection reset"),
+    });
+    await expect(
+      fs.readdir(
+        path.join(
+          threadStorageRootPath,
+          "thread-interrupted-stage-attachments",
+          "Attachments",
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("cleans up staged thread.start attachments when runtime start fails", async () => {
@@ -1051,7 +1180,7 @@ describe("thread command dispatch", () => {
       throw new Error("runtime start failed");
     };
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
-      bytes: Buffer.from("content"),
+      content: attachmentContent("content"),
     }));
 
     await expect(
@@ -1112,7 +1241,7 @@ describe("thread command dispatch", () => {
       throw new Error("runtime turn failed");
     };
     const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
-      bytes: Buffer.from("content"),
+      content: attachmentContent("content"),
     }));
 
     await expect(
@@ -1166,6 +1295,69 @@ describe("thread command dispatch", () => {
         ),
       ),
     ).rejects.toThrow();
+  });
+
+  it("reports an unanswered turn start as unconfirmed and keeps its staged attachments", async () => {
+    const threadStorageRootPath = await makeTempDir(
+      "bb-unconfirmed-turn-attachments-",
+    );
+    const harness = createHarness();
+    harness.runtime.runTurn = async () => ({ status: "unconfirmed" });
+    const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(async () => ({
+      content: attachmentContent("content"),
+    }));
+
+    await expect(
+      dispatchCommand(
+        {
+          bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+          type: "turn.submit",
+          environmentId: "env-unconfirmed-turn",
+          threadId: "thread-unconfirmed-turn",
+          requestId: nextClientRequestId(),
+          input: [{ type: "localFile", path: "unconfirmed-uploaded.txt" }],
+          options: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            providerOptions: {},
+            permissionMode: "full",
+            permissionScope: "full",
+            approvalReviewer: null,
+            permissionEscalation: null,
+          },
+          resumeContext: {
+            bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+            workspaceContext: {
+              workspacePath: "/tmp/env-unconfirmed-turn",
+            },
+            projectId: "project-unconfirmed-turn",
+            providerId: "fake",
+            providerThreadId: "provider-unconfirmed-turn",
+            instructions: "Be a helpful coding agent.",
+            dynamicTools: [],
+            contributedEnv: [],
+            injectedSkillSources: [],
+            instructionMode: "append",
+          },
+          target: { mode: "start" },
+        },
+        {
+          ...harness.dispatchOptions({ threadStorageRootPath }),
+          fetchProjectAttachment,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "turn_start_unconfirmed" });
+    await expect(
+      fs.stat(
+        path.join(
+          threadStorageRootPath,
+          "thread-unconfirmed-turn",
+          "Attachments",
+          "unconfirmed-uploaded.txt",
+        ),
+      ),
+    ).resolves.toBeDefined();
   });
 
   it("covers thread lifecycle commands", async () => {
@@ -1658,8 +1850,8 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(runResult).toEqual({});
-    expect(steerResult).toEqual({});
+    expect(runResult).toEqual({ trace: { spans: [] } });
+    expect(steerResult).toEqual({ trace: { spans: [] } });
     expect(harness.runtimeState.ranTurnText).toBe("hello");
     expect(harness.runtimeState.ranTurnClientRequestId).toBe(runRequestId);
     expect(harness.runtimeState.steeredTurnId).toBe("turn-1");
@@ -1756,7 +1948,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(harness.runtimeState.ranTurnText).toBe("resume work");
     expect(harness.runtimeState.resumedThreadId).toBeUndefined();
     expect(harness.manager.listActiveThreads()).toEqual([
@@ -1811,7 +2003,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(harness.runtimeState.steeredTurnId).toBe("turn-1");
     expect(harness.manager.listActiveThreads()).toEqual([
       {
@@ -1878,8 +2070,63 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(steeredTurnIds).toEqual(["turn-old", "turn-new"]);
+    expect(harness.runtimeState.ranTurnClientRequestId).toBeUndefined();
+  });
+
+  it("reports a steer the provider never answered as unconfirmed, without retrying it as a new turn", async () => {
+    const harness = createHarness();
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    harness.threadControls.setActiveTurn("thread-1", "turn-1");
+    let steerAttempts = 0;
+    harness.runtime.steerTurn = async () => {
+      steerAttempts += 1;
+      return { status: "unconfirmed" };
+    };
+
+    await expect(
+      dispatchCommand(
+        {
+          bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+          type: "turn.submit",
+          environmentId: "env-1",
+          threadId: "thread-1",
+          requestId: nextClientRequestId(),
+          input: [textPromptInput("steer a frozen provider")],
+          options: {
+            model: "gpt-5",
+            serviceTier: "default",
+            reasoningLevel: "medium",
+            providerOptions: {},
+            permissionMode: "full",
+            permissionScope: "full",
+            approvalReviewer: null,
+            permissionEscalation: null,
+          },
+          resumeContext: {
+            bridgeLaunch: DISPATCH_TEST_BRIDGE_LAUNCH,
+            workspaceContext: {
+              workspacePath: "/tmp/env-1",
+            },
+            projectId: "project-1",
+            providerId: "fake",
+            providerThreadId: "provider-1",
+            instructions: "Be a helpful coding agent.",
+            dynamicTools: [],
+            contributedEnv: [],
+            injectedSkillSources: [],
+            instructionMode: "append",
+          },
+          target: { mode: "steer", expectedTurnId: "turn-1" },
+        },
+        harness.dispatchOptions(),
+      ),
+    ).rejects.toMatchObject({ code: "steer_unconfirmed" });
+    expect(steerAttempts).toBe(1);
     expect(harness.runtimeState.ranTurnClientRequestId).toBeUndefined();
   });
 
@@ -1954,7 +2201,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(steeredTurnIds).toEqual(["turn-old", "turn-new"]);
     expect(waitCalls).toBe(1);
     expect(harness.runtimeState.ranTurnClientRequestId).toBeUndefined();
@@ -2013,7 +2260,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(harness.runtimeState.ranTurnText).toBe("strict steer");
     expect(harness.runtimeState.ranTurnClientRequestId).toBe(requestId);
   });
@@ -2067,7 +2314,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(harness.runtimeState.ranTurnText).toBe("send without active turn");
     expect(harness.runtimeState.ranTurnClientRequestId).toBe(requestId);
     expect(harness.runtimeState.steeredTurnId).toBeUndefined();
@@ -2117,7 +2364,7 @@ describe("thread command dispatch", () => {
       harness.dispatchOptions(),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(harness.provisions).toEqual([
       expect.objectContaining({
         path: "/tmp/env-lazy",
@@ -2215,7 +2462,7 @@ describe("thread command dispatch", () => {
       makeDispatchOptions({ runtimeManager: manager }),
     );
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ trace: { spans: [] } });
     expect(createRuntimeCalls).toBe(2);
     expect(replacementFake.state.resumedThreadId).toBe("thread-1");
     expect(replacementFake.state.ranTurnText).toBe("after exit");

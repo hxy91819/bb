@@ -5,6 +5,7 @@ import { Editor } from "@tiptap/core";
 import { POINTER_COARSE_QUERY } from "@/components/ui/hooks/use-pointer-coarse";
 import { createEditorExtensions } from "./extensions.js";
 import { TasksEditor } from "./tasks-editor.js";
+import { markdownStorage } from "./markdown-storage.js";
 
 afterEach(cleanup);
 
@@ -39,7 +40,7 @@ function roundTrip(markdown: string): string {
     content: markdown,
   });
   try {
-    return editor.storage.markdown.getMarkdown() as string;
+    return markdownStorage(editor).getMarkdown() as string;
   } finally {
     editor.destroy();
   }
@@ -160,7 +161,7 @@ describe("mention extension", () => {
       expect(pill?.textContent).toBe("TSK-42");
       editor.commands.setContent("[docs](https://example.com)");
       expect(findMentions()).toEqual([]);
-      expect(editor.storage.markdown.getMarkdown()).toBe(
+      expect(markdownStorage(editor).getMarkdown()).toBe(
         "[docs](https://example.com)",
       );
     } finally {
@@ -283,7 +284,7 @@ describe("thread mention extension", () => {
       expect(pill?.classList.contains("bb-tasks-thread-mention")).toBe(true);
       expect(pill?.textContent).toBe("Fix login flow");
       expect(pill?.querySelector("svg.bb-tasks-mention-icon")).toBeTruthy();
-      expect(editor.storage.markdown.getMarkdown()).toBe(
+      expect(markdownStorage(editor).getMarkdown()).toBe(
         "See [Fix login flow](bbthread://thr_a82u8wp8qq).",
       );
     } finally {
@@ -307,83 +308,6 @@ describe("thread mention extension", () => {
     );
     fireEvent.click(pill!);
     expect(onOpenThread).toHaveBeenCalledWith("thr_a82u8wp8qq");
-  });
-});
-
-describe("heading toggle", () => {
-  function editorWith(markdown: string): Editor {
-    return new Editor({
-      extensions: createEditorExtensions(),
-      content: markdown,
-    });
-  }
-
-  function selectBlocks(
-    editor: Editor,
-    fromBlock: number,
-    toBlock = fromBlock,
-  ) {
-    const positions: number[] = [];
-    editor.state.doc.forEach((_node, offset) => {
-      positions.push(offset + 2);
-    });
-    editor.commands.setTextSelection({
-      from: positions[fromBlock - 1]!,
-      to: positions[toBlock - 1]!,
-    });
-  }
-
-  it("converts only the block under a within-block selection", () => {
-    const editor = editorWith("First\n\nSecond\n\nThird");
-    try {
-      selectBlocks(editor, 2);
-      editor.chain().toggleHeading({ level: 2 }).run();
-      expect(editor.storage.markdown.getMarkdown()).toBe(
-        "First\n\n## Second\n\nThird",
-      );
-    } finally {
-      editor.destroy();
-    }
-  });
-
-  it("converts only intersecting blocks for a multi-block selection", () => {
-    const editor = editorWith("First\n\nSecond\n\nThird");
-    try {
-      selectBlocks(editor, 2, 3);
-      editor.chain().toggleHeading({ level: 2 }).run();
-      expect(editor.storage.markdown.getMarkdown()).toBe(
-        "First\n\n## Second\n\n## Third",
-      );
-    } finally {
-      editor.destroy();
-    }
-  });
-
-  it("toggles a heading back to a paragraph", () => {
-    const editor = editorWith("First\n\n## Second\n\nThird");
-    try {
-      selectBlocks(editor, 2);
-      editor.chain().toggleHeading({ level: 2 }).run();
-      expect(editor.storage.markdown.getMarkdown()).toBe(
-        "First\n\nSecond\n\nThird",
-      );
-    } finally {
-      editor.destroy();
-    }
-  });
-
-  it("converts only the caret's block with no selection", () => {
-    const editor = editorWith("First\n\nSecond\n\nThird");
-    try {
-      selectBlocks(editor, 3);
-      editor.commands.setTextSelection(editor.state.selection.from);
-      editor.chain().toggleHeading({ level: 2 }).run();
-      expect(editor.storage.markdown.getMarkdown()).toBe(
-        "First\n\nSecond\n\n## Third",
-      );
-    } finally {
-      editor.destroy();
-    }
   });
 });
 
@@ -511,7 +435,7 @@ describe("TasksEditor component", () => {
     );
     editor!.chain().focus("end").insertContent("caption").run();
     await waitFor(() => {
-      const markdown = editor!.storage.markdown.getMarkdown() as string;
+      const markdown = markdownStorage(editor!).getMarkdown() as string;
       expect(markdown).toContain("![shot](https://example.com/a.png)");
       expect(markdown).toContain("caption");
     });

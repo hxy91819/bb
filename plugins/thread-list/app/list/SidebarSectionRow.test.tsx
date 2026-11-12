@@ -2,7 +2,7 @@
 
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NO_COLLAPSED_CHILD_ACTIVITY } from "../model/thread-activity.js";
+import { makeSidebarThread } from "../model/fixtures.js";
 import type {
   PluginSidebarSplitLayout,
   PluginSidebarThreadRowStatus,
@@ -14,7 +14,7 @@ import {
 import {
   SIDEBAR_CONTROL_STATE_CLASS,
   SIDEBAR_GROUP_TEXT_CLASS,
-} from "../rows/sidebarRowClasses.js";
+} from "@/components/ui/sidebar-row-classes";
 
 installTestPluginRuntime();
 const { SidebarSectionRow } = await import("./SidebarSectionRow.js");
@@ -34,7 +34,7 @@ function renderSectionRow(
       name: "Nested work",
       label: "Nested work",
       depth: 1,
-      activity: NO_COLLAPSED_CHILD_ACTIVITY,
+      collapsedThreads: [],
       isCollapsed: false,
       onToggleCollapsed: vi.fn(),
       ...props,
@@ -81,8 +81,10 @@ describe("SidebarSectionRow", () => {
       {
         name: "Build",
         label: "Work / Build",
-        activity: { ...NO_COLLAPSED_CHILD_ACTIVITY, pending: true },
-        collapsedThreads: [{ id: "thread-one" }, { id: "thread-two" }],
+        collapsedThreads: [
+          makeSidebarThread({ id: "thread-one", hasPendingInteraction: true }),
+          makeSidebarThread({ id: "thread-two", isUnread: false }),
+        ],
         isCollapsed: true,
       },
       {
@@ -124,7 +126,7 @@ describe("SidebarSectionRow", () => {
     expect(slots[0]?.getAttribute("class")).toContain("fill-muted-foreground");
     expect(slots[1]?.getAttribute("class")).toContain("fill-none");
     expect(slots[2]?.getAttribute("class")).toContain("fill-primary");
-    expect(screen.queryByLabelText("Thread needs user input")).toBeNull();
+    expect(document.querySelector("[data-thread-status-glyph]")).toBeNull();
   });
 
   it("rolls a hidden plugin status up to the collapsed section row", () => {
@@ -132,7 +134,9 @@ describe("SidebarSectionRow", () => {
       {
         name: "Building",
         label: "Work / Building",
-        collapsedThreads: [{ id: "thread-one" }],
+        collapsedThreads: [
+          makeSidebarThread({ id: "thread-one", isUnread: false }),
+        ],
         isCollapsed: true,
       },
       {
@@ -146,9 +150,11 @@ describe("SidebarSectionRow", () => {
       },
     );
 
-    expect(screen.getAllByLabelText("Plugin improving draft")).not.toHaveLength(
-      0,
-    );
+    expect(
+      document
+        .querySelector("[data-thread-status-glyph]")
+        ?.getAttribute("data-row-status"),
+    ).toBe("Plugin improving draft");
   });
 
   it("does not roll a plugin status up while the section is expanded", () => {
@@ -156,7 +162,9 @@ describe("SidebarSectionRow", () => {
       {
         name: "Building",
         label: "Work / Building",
-        collapsedThreads: [{ id: "thread-one" }],
+        collapsedThreads: [
+          makeSidebarThread({ id: "thread-one", isUnread: false }),
+        ],
         isCollapsed: false,
       },
       {
@@ -170,6 +178,6 @@ describe("SidebarSectionRow", () => {
       },
     );
 
-    expect(screen.queryByLabelText("Plugin improving draft")).toBeNull();
+    expect(document.querySelector("[data-thread-status-glyph]")).toBeNull();
   });
 });

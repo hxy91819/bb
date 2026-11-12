@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { experimental_useExperiment } from "@get-bb/plugin-sdk/app";
 import { Icon } from "@/components/ui/icon";
 import {
   DropdownMenuGroup,
@@ -21,7 +22,11 @@ import {
   sidebarSortDirectionAtom,
   sidebarGroupThreadsByEnvironmentAtom,
   sidebarEnvironmentGroupingAtom,
+  sidebarGroupByReadStatusAtom,
   sidebarShowProviderIconsAtom,
+  sidebarShowRowMetadataAtom,
+  sidebarShowEmptyProjectsAtom,
+  THREAD_ROW_METADATA_EXPERIMENT,
 } from "../preferences/atoms.js";
 
 const SIDEBAR_ORGANIZE_OPTIONS = [
@@ -90,6 +95,7 @@ export function SidebarHeaderMenuContents({
         compact ? (
           <DropdownMenuItem
             key={item.page}
+            className="[&>[data-icon-root]:last-child]:size-3 [&>[data-icon-root]:last-child]:text-subtle-foreground"
             onSelect={(event) => {
               event.preventDefault();
               onPageChange(item.page);
@@ -101,7 +107,7 @@ export function SidebarHeaderMenuContents({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuSub key={item.page}>
-            <DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger className="[&>[data-icon-root]:last-child]:size-3 [&>[data-icon-root]:last-child]:text-subtle-foreground">
               <Icon name={item.icon} />
               {item.label}
             </DropdownMenuSubTrigger>
@@ -138,8 +144,20 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const setEnvironmentGrouping = useSetAtom(sidebarEnvironmentGroupingAtom);
   const groupByEnvironment = useAtomValue(sidebarGroupThreadsByEnvironmentAtom);
+  const [groupByReadStatus, setGroupByReadStatus] = useAtom(
+    sidebarGroupByReadStatusAtom,
+  );
   const [showProviderIcons, setShowProviderIcons] = useAtom(
     sidebarShowProviderIconsAtom,
+  );
+  const [showRowMetadata, setShowRowMetadata] = useAtom(
+    sidebarShowRowMetadataAtom,
+  );
+  const rowMetadataEnabled = experimental_useExperiment(
+    THREAD_ROW_METADATA_EXPERIMENT,
+  );
+  const [showEmptyProjects, setShowEmptyProjects] = useAtom(
+    sidebarShowEmptyProjectsAtom,
   );
   const selectedSort = sort === "none" ? "updated" : sort;
   if (page === "filter") {
@@ -171,6 +189,21 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
             </DropdownMenuItem>
           );
         })}
+        {organization === "project" && (
+          <DropdownMenuItem
+            role="menuitemcheckbox"
+            aria-checked={showEmptyProjects}
+            onSelect={(event) => {
+              event.preventDefault();
+              setShowEmptyProjects(!showEmptyProjects);
+            }}
+          >
+            Empty projects
+            <span className="ml-auto inline-flex size-4 items-center justify-center">
+              {showEmptyProjects && <Icon name="Check" className="size-4" />}
+            </span>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuGroup>
     );
   }
@@ -207,11 +240,25 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
             onSelect={(event) => {
               event.preventDefault();
               setEnvironmentGrouping(!groupByEnvironment);
+              if (!groupByEnvironment) setGroupByReadStatus(false);
             }}
           >
             By environment
             <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
               {groupByEnvironment && <Icon name="Check" className="size-4" />}
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            role="menuitemcheckbox"
+            aria-checked={groupByReadStatus}
+            onSelect={(event) => {
+              event.preventDefault();
+              setGroupByReadStatus(!groupByReadStatus);
+            }}
+          >
+            By read status
+            <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
+              {groupByReadStatus && <Icon name="Check" className="size-4" />}
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -231,6 +278,21 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
               {showProviderIcons && <Icon name="Check" className="size-4" />}
             </span>
           </DropdownMenuItem>
+          {rowMetadataEnabled ? (
+            <DropdownMenuItem
+              role="menuitemcheckbox"
+              aria-checked={showRowMetadata}
+              onSelect={(event) => {
+                event.preventDefault();
+                setShowRowMetadata(!showRowMetadata);
+              }}
+            >
+              Metadata
+              <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
+                {showRowMetadata && <Icon name="Check" className="size-4" />}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
       </>
     );

@@ -1,5 +1,11 @@
+import {
+  forkHostProcess as fork,
+  createPluginProcessTempDir,
+  ensurePluginProcessDataDir,
+  sanitizeInheritedChildProcessEnv,
+} from "@bb/process-utils";
 import { operationEnvironment } from "./operation-environment.js";
-import { fork, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -12,13 +18,11 @@ import type {
 } from "@bb/host-daemon-contract";
 import type { HostPathWatchChange, HostWatcher } from "@bb/host-watcher";
 import { jsonValueSchema, type JsonValue } from "@bb/domain";
-import {
-  createPluginProcessTempDir,
-  ensurePluginProcessDataDir,
-  sanitizeInheritedChildProcessEnv,
-} from "@bb/process-utils";
 import type { HostDaemonLogger } from "./logger.js";
-import { ensureCachedPluginHostArtifact } from "./plugin-host-artifact-cache.js";
+import {
+  ensureCachedPluginHostArtifact,
+  type FetchPluginHostArtifact,
+} from "./plugin-host-artifact-cache.js";
 import { runInSerialLane } from "./serial-lane.js";
 
 type PluginHostCallCommand = Extract<
@@ -51,7 +55,7 @@ interface WorkerState {
   readyAtMs: number | null;
   child: ChildProcess;
   closed: Promise<void>;
-  tempDir: string;
+  cleanup: Promise<void>;
   pending: Map<string, PendingCall>;
   ready: Promise<void>;
   resolveReady: () => void;
@@ -92,11 +96,7 @@ interface ActiveCallAdmission {
 interface PluginHostManagerOptions {
   dataDir: string;
   logger: Pick<HostDaemonLogger, "debug" | "info" | "warn">;
-  fetchArtifact: (args: {
-    pluginId: string;
-    digest: string;
-    expectedByteLength: number;
-  }) => Promise<Uint8Array>;
+  fetchArtifact: FetchPluginHostArtifact;
   onWorkerExit?: (args: { pluginId: string; generation: string }) => void;
   onSignal?: (args: {
     pluginId: string;
@@ -478,14 +478,15 @@ export class PluginHostManager {
       throw error;
     }
     const closed = new Promise<void>((resolve) => child.once("close", resolve));
-    void closed
-      .then(() => rm(tempDir, { recursive: true, force: true }))
-      .catch((error) => {
-        this.options.logger.warn(
-          { pluginId: command.pluginId, err: error },
-          "Failed to remove host plugin temporary directory",
-        );
-      });
+    const cleanup = closed.then(() =>
+      rm(tempDir, { recursive: true, force: true }),
+    );
+    void cleanup.catch((error) => {
+      this.options.logger.warn(
+        { pluginId: command.pluginId, err: error },
+        "Failed to remove host plugin temporary directory",
+      );
+    });
     let resolveReady!: () => void;
     let rejectReady!: (error: Error) => void;
     const ready = new Promise<void>((resolve, reject) => {
@@ -500,7 +501,7 @@ export class PluginHostManager {
       readyAtMs: null,
       child,
       closed,
-      tempDir,
+      cleanup,
       pending: new Map(),
       ready,
       resolveReady,
@@ -969,7 +970,7 @@ export class PluginHostManager {
   }
 
   private async stopWorker(worker: WorkerState, reason: string): Promise<void> {
-    if (worker.disposing) return worker.closed;
+    if (worker.disposing) return worker.cleanup;
     worker.disposing = true;
     this.cancelWorkerIdleTimer(worker);
     if (this.workers.get(worker.pluginId) === worker) {
@@ -1001,7 +1002,7 @@ export class PluginHostManager {
       "Host plugin worker stopped",
     );
     this.rejectPendingCalls(worker, reason);
-    await rm(worker.tempDir, { recursive: true, force: true });
+    await worker.cleanup;
   }
 
   private cancelWorkerIdleTimer(worker: WorkerState): void {
@@ -1166,7 +1167,23 @@ export class PluginHostManager {
     pending.cancellationError ??= error;
     if (pending.forceTimer === null) {
       pending.forceTimer = setTimeout(() => {
-        if (worker.pending.has(callId)) worker.child.kill("SIGKILL");
+        if (!worker.pending.has(callId)) return;
+        if (
+          worker.activeCallCount > 1 ||
+          worker.watches.size > 0 ||
+          worker.retainedLeaseIds.size > 0
+        ) {
+          this.options.logger.warn(
+            { ...workerLogContext(worker), callId },
+            "Abandoning host plugin call that ignored cancellation; the worker has other work",
+          );
+          worker.pending.delete(callId);
+          clearTimeout(pending.deadlineTimer);
+          sendToWorker(worker.child, { type: "abandon", callId });
+          pending.reject(pending.cancellationError ?? error);
+          return;
+        }
+        worker.child.kill("SIGKILL");
       }, CANCEL_GRACE_MS);
       pending.forceTimer.unref?.();
     }

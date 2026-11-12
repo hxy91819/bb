@@ -14,15 +14,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createConnection,
   getInstalledPluginRegistration,
   getPluginSettingsValues,
   listPluginSchedules,
-  migrate,
   setPluginSettingsValues,
   upsertPluginSchedule,
   type DbConnection,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import { PLUGIN_SDK_MAJOR, PLUGIN_SDK_VERSION } from "@bb/domain";
 import type { Logger } from "@bb/logger";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
@@ -35,7 +34,6 @@ import {
 import {
   accountPoolDefaultEnabled,
   BUILTIN_PLUGINS,
-  OFFICIAL_PLUGINS,
   resolveBuiltinPluginRootPath,
 } from "../../../src/services/plugins/builtin-registry.js";
 import { copyPluginRuntime } from "@bb/plugin-build";
@@ -189,6 +187,8 @@ function createService(args: {
     db: args.db,
     hub: {
       getDaemonSessionIdForHost: () => null,
+      notifyPluginChanged: () => {},
+      onWatchedTargets: () => () => {},
       notifyPluginSignal: () => 0,
       notifySystem: () => {},
     },
@@ -258,26 +258,8 @@ describe("builtin plugin reconciliation", () => {
     delete globals.__builtinFixtureLoads;
     delete globals.__packagedBuiltinLoads;
     delete globals.__hotBuiltinServerVersion;
-    db = createConnection(":memory:");
-    migrate(db);
+    db = createMigratedConnection();
     workDir = await mkdtemp(join(tmpdir(), "bb-builtin-plugins-"));
-  });
-
-  it("keeps official plugins bundled but out of the auto-install builtins", () => {
-    const optionalNames = OFFICIAL_PLUGINS.map((plugin) => plugin.name);
-    expect(optionalNames).toEqual([
-      "environment-modal-sandbox",
-      "browser-automation",
-      "github",
-      "docs",
-      "memory",
-      "tasks",
-      "theme-preview",
-    ]);
-    for (const name of optionalNames) {
-      expect(BUILTIN_PLUGINS.map((plugin) => plugin.name)).not.toContain(name);
-    }
-    expect(OFFICIAL_PLUGINS.every((plugin) => !plugin.autoInstall)).toBe(true);
   });
 
   it("enables the account pooler only when a parent bb server pool is present", () => {
@@ -312,6 +294,7 @@ describe("builtin plugin reconciliation", () => {
         provenance: "builtin",
         isOrphanedBuiltin: false,
         sourceDisplay: "builtin · builtin-fixture",
+        sourceNotice: null,
         updateState: {},
         icon: "EditFile",
         enabled: true,
@@ -602,6 +585,8 @@ describe("builtin plugin reconciliation", () => {
         ]),
       ),
     ).toMatchObject({
+      "prompt-library": false,
+      mcp: false,
       "plugin-api-tester": false,
       "monaco-editor": false,
       "plugin-api-docs": false,

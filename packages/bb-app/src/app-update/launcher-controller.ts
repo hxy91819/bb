@@ -18,7 +18,6 @@ import {
   formatNpmRevisionPackageRoot,
   installNpmRevision,
   pruneNpmRevisions,
-  resolveNpmCliPath,
 } from "./npm-revision.js";
 import type { RunCommand } from "./run-command.js";
 import { inspectSourceCheckout } from "./source-checkout.js";
@@ -36,6 +35,7 @@ const READY_DECISION_TIMEOUT_MS = 60 * 1000;
 type RestartDecision =
   | { kind: "abort" }
   | { kind: "cancel"; message: string }
+  | { kind: "defer" }
   | { kind: "restart" };
 
 export interface LauncherAppUpdateControllerArgs {
@@ -62,7 +62,7 @@ export interface LauncherServerPort {
 
 export interface LauncherAppUpdateController {
   attachServer(child: LauncherServerPort): void;
-  dispose(): void;
+  dispose(): Promise<void>;
   finalizeExit(): Promise<number | null>;
   onFullStackReady(): Promise<void>;
 }
@@ -86,6 +86,8 @@ export function createLauncherAppUpdateController(
   let restartPending: AppUpdatePending | null = null;
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
   const abortController = new AbortController();
+  let applyTask: Promise<void> | null = null;
+  const requestTasks = new Set<Promise<void>>();
   let decideRestart: ((decision: RestartDecision) => void) | null = null;
 
   const waitForRestartDecision = (): Promise<RestartDecision> =>
@@ -178,7 +180,6 @@ export function createLauncherAppUpdateController(
     if (target.kind === "npm") {
       return installNpmRevision({
         dataDir: args.dataDir,
-        npmCliPath: resolveNpmCliPath(),
         onLine: (line) => {
           output.push(line);
           if (output.length > ACTIVITY_OUTPUT_LINES) output.shift();
@@ -190,7 +191,7 @@ export function createLauncherAppUpdateController(
         version: target.version,
       });
     }
-    if (args.repoRoot === null) {
+    if (args.repoRoot === null || args.current.kind !== "source") {
       throw new Error("This bb is not running from a source checkout.");
     }
     setStep("Checking origin/main");
@@ -198,6 +199,8 @@ export function createLauncherAppUpdateController(
       fetch: true,
       repoRoot: args.repoRoot,
       runner: args.runner,
+      running: args.current.commit,
+      signal: abortController.signal,
     });
     if (check.blocked !== null) throw new Error(check.blocked.message);
     if (check.incoming === null || check.incoming.commit !== target.commit) {
@@ -275,6 +278,11 @@ export function createLauncherAppUpdateController(
     pushStatus();
     const decision = await waitForRestartDecision();
     if (decision.kind === "abort") return;
+    if (decision.kind === "defer") {
+      activity = { phase: "idle" };
+      pushStatus();
+      return;
+    }
     if (decision.kind === "cancel") {
       await recordPrepareFailure(to, "prepare", decision.message, []);
       activity = { phase: "idle" };
@@ -294,13 +302,15 @@ export function createLauncherAppUpdateController(
   ): Promise<unknown> => {
     switch (request.type) {
       case "check-source": {
-        if (args.mode !== "source" || args.repoRoot === null) {
+        if (args.repoRoot === null || args.current.kind !== "source") {
           throw new Error("This bb is not running from a source checkout.");
         }
         return inspectSourceCheckout({
           fetch: true,
           repoRoot: args.repoRoot,
           runner: args.runner,
+          running: args.current.commit,
+          signal: abortController.signal,
         });
       }
       case "apply": {
@@ -312,7 +322,10 @@ export function createLauncherAppUpdateController(
         if (activity.phase !== "idle" || restartPending !== null) {
           throw new Error("An update is already in progress.");
         }
-        void runApply(request.target, request.targetVersion).catch(
+        if (abortController.signal.aborted) {
+          throw new Error("bb is shutting down.");
+        }
+        applyTask = runApply(request.target, request.targetVersion).catch(
           (error: unknown) => {
             args.log(`In-app update failed: ${errorMessage(error)}`);
             activity = { phase: "idle" };
@@ -322,15 +335,16 @@ export function createLauncherAppUpdateController(
         return null;
       }
       case "restart":
-      case "cancel": {
+      case "cancel":
+      case "defer": {
         const decide = decideRestart;
         if (activity.phase !== "ready" || decide === null) {
           throw new Error("No update is waiting to restart.");
         }
         decide(
-          request.type === "restart"
-            ? { kind: "restart" }
-            : { kind: "cancel", message: request.message },
+          request.type === "cancel"
+            ? { kind: "cancel", message: request.message }
+            : { kind: request.type },
         );
         return null;
       }
@@ -358,7 +372,7 @@ export function createLauncherAppUpdateController(
       void refreshLastResult().finally(pushStatus);
       return;
     }
-    void handleRequest(message.request).then(
+    const task = handleRequest(message.request).then(
       (result) => {
         send({
           channel: "bb-app-update/response",
@@ -376,6 +390,17 @@ export function createLauncherAppUpdateController(
         });
       },
     );
+    requestTasks.add(task);
+    void task.then(() => requestTasks.delete(task));
+  };
+
+  const dispose = async (): Promise<void> => {
+    abortController.abort();
+    await Promise.all([applyTask, ...requestTasks]);
+    if (statusTimer !== null) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
   };
 
   return {
@@ -386,11 +411,9 @@ export function createLauncherAppUpdateController(
         if (server === child) server = null;
       });
     },
-    dispose() {
-      abortController.abort();
-      if (statusTimer !== null) clearTimeout(statusTimer);
-    },
+    dispose,
     async finalizeExit() {
+      await dispose();
       const pending = restartPending;
       if (pending === null) return null;
       try {

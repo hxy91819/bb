@@ -1,100 +1,166 @@
-import ArrowDown01Icon from "@hugeicons/core-free-icons/ArrowDown01Icon";
-import ArrowExpand01Icon from "@hugeicons/core-free-icons/ArrowExpand01Icon";
-import ArrowLeft01Icon from "@hugeicons/core-free-icons/ArrowLeft01Icon";
-import ArrowMoveDownLeftIcon from "@hugeicons/core-free-icons/ArrowMoveDownLeftIcon";
-import ArrowRight01Icon from "@hugeicons/core-free-icons/ArrowRight01Icon";
-import AttachmentIcon from "@hugeicons/core-free-icons/AttachmentIcon";
-import BubbleChatAddIcon from "@hugeicons/core-free-icons/BubbleChatAddIcon";
-import CheckmarkCircle02Icon from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
-import Clock01Icon from "@hugeicons/core-free-icons/Clock01Icon";
-import FolderGitTwoIcon from "@hugeicons/core-free-icons/FolderGit2Icon";
-import HiFolderIcon from "@hugeicons/core-free-icons/Folder01Icon";
-import HiGitBranchIcon from "@hugeicons/core-free-icons/GitBranchIcon";
-import HiGitMergeIcon from "@hugeicons/core-free-icons/GitMergeIcon";
-import HiLaptopIcon from "@hugeicons/core-free-icons/LaptopIcon";
-import Loading03Icon from "@hugeicons/core-free-icons/Loading03Icon";
-import MessageQuestionIcon from "@hugeicons/core-free-icons/MessageQuestionIcon";
-import Mic02Icon from "@hugeicons/core-free-icons/Mic02Icon";
-import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon";
 import PauseIcon from "@hugeicons/core-free-icons/PauseIcon";
 import PlayIcon from "@hugeicons/core-free-icons/PlayIcon";
-import PlusMinusSquare01Icon from "@hugeicons/core-free-icons/PlusMinusSquare01Icon";
-import SentIcon from "@hugeicons/core-free-icons/SentIcon";
-import Settings01Icon from "@hugeicons/core-free-icons/Settings01Icon";
-import SidebarLeftIcon from "@hugeicons/core-free-icons/SidebarLeftIcon";
-import SidebarRightIcon from "@hugeicons/core-free-icons/SidebarRightIcon";
-import Tick02Icon from "@hugeicons/core-free-icons/Tick02Icon";
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 
 import changelogMd from "../../../../CHANGELOG.md?raw";
 import { RELEASE_META } from "../../../../changelog-metadata";
-import { trackLandingEvent, useInitAnalytics } from "../landing/analytics";
+import type { ExperimentVariant } from "../experiments/flags";
+import {
+  NO_EXPERIMENTS,
+  experimentVariant,
+  type ExperimentBootstrap,
+} from "../experiments/flags";
+import {
+  useExperiment,
+  useExperimentExposer,
+  useExperimentExposure,
+} from "../experiments/use-experiment";
+import { useInitAnalytics } from "../landing/analytics";
+import { useSectionViews } from "../landing/section-views";
+import adobeLogo from "../assets/company-logos/adobe.svg";
+import atlassianLogo from "../assets/company-logos/atlassian.svg";
 import blackstoneLogo from "../assets/company-logos/blackstone.png";
+import browserbaseLogo from "../assets/company-logos/browserbase.png";
+import bytedanceLogo from "../assets/company-logos/bytedance.svg";
+import customerIoLogo from "../assets/company-logos/customer-io.png";
 import datadogLogo from "../assets/company-logos/datadog.svg";
 import figmaLogo from "../assets/company-logos/figma.svg";
+import gustoLogo from "../assets/company-logos/gusto.png";
+import hubspotLogo from "../assets/company-logos/hubspot.svg";
+import jetbrainsLogo from "../assets/company-logos/jetbrains.svg";
+import justEatTakeawayLogo from "../assets/company-logos/just-eat-takeaway.svg";
+import kernelLogo from "../assets/company-logos/kernel.png";
+import linearLogo from "../assets/company-logos/linear.svg";
 import metaLogo from "../assets/company-logos/meta.svg";
+import microsoftLogo from "../assets/company-logos/microsoft.svg";
 import moodysLogo from "../assets/company-logos/moodys.png";
 import notionLogo from "../assets/company-logos/notion.png";
+import oracleLogo from "../assets/company-logos/oracle.svg";
 import ownerLogo from "../assets/company-logos/owner.png";
 import pendoLogo from "../assets/company-logos/pendo.svg";
 import renderLogo from "../assets/company-logos/render.svg";
+import shopifyLogo from "../assets/company-logos/shopify.svg";
 import shortcutLogo from "../assets/company-logos/shortcut.svg";
 import simileLogo from "../assets/company-logos/simile.svg";
+import statsigLogo from "../assets/company-logos/statsig.svg";
+import stitchFixLogo from "../assets/company-logos/stitch-fix.png";
+import tencentLogo from "../assets/company-logos/tencent.png";
+import vercelLogo from "../assets/company-logos/vercel.svg";
+import zooxLogo from "../assets/company-logos/zoox.png";
 import hermesAvatar from "../assets/hermes-avatar.jpg";
-import vscodeIcon from "../assets/vscode.png";
 import { parseChangelog } from "../../../../changelog-parser";
-import { CommandButton } from "../landing/command-button";
+import {
+  CheckIcon,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ClockIcon,
+  ComposerBox,
+  ContextRow,
+  EditorButton,
+  Ellipsis,
+  FileDiffIcon,
+  FolderGitIcon,
+  GearIcon,
+  GitBranchIcon,
+  GitMergeIcon,
+  LaptopGlyph,
+  Maximize2,
+  MockBar,
+  NewThreadIcon,
+  PanelRightIcon,
+  PaperPlane,
+  Paperclip,
+  Spinner,
+  ThreadStatus,
+  useFitMock,
+} from "../landing/app-mock-parts";
 import {
   DiscordLink,
-  DownloadLink,
   GitHubLink,
+  MarketplaceLink,
   SubscribeSection,
 } from "../landing/cta";
+import { HeroWindowSlot } from "../landing/hero-window";
+import heroWindowCss from "../landing/hero-window.css?url";
 import { siteHeadLinks } from "../landing/page-head";
+import { Testimonials } from "../landing/testimonials";
 import { SiteFooter, SiteNav } from "../landing/site-chrome";
-import { useDesktopPlatform } from "../landing/desktop-platform";
 import {
-  ClaudeIcon,
-  CursorIcon,
-  GrokIcon,
-  HermesAgentIcon,
-  LinuxIcon,
-  OmpIcon,
-  OpenAiIcon,
-  OpencodeIcon,
-  PiIcon,
-} from "../landing/icons";
-import type { CtaPlacement, DesktopPlatform } from "../landing/site";
+  AgentRow,
+  Band,
+  InstallOptions,
+  ProviderChips,
+  CustomizeBuild,
+  DelegationTree,
+  PluginMorph,
+  SpawnSidebar,
+  StartAnywhere,
+  useCycle,
+  useScrollReveal,
+} from "../landing/landing-visuals";
 import {
-  CLI_COMMAND,
-  DESKTOP_DOWNLOADS,
+  DISCORD_URL,
+  GITHUB_URL,
   OG_DESCRIPTION,
   SITE_DESCRIPTION,
-  SITE_TITLE,
+  X_URL,
   unfurlMeta,
 } from "../landing/site";
 
 const COMPANY_PROOF = [
   ["Meta", metaLogo, "glyph"],
+  ["Microsoft", microsoftLogo, "glyph"],
   ["Figma", figmaLogo, "glyph"],
   ["Notion", notionLogo, "tile"],
+  ["Vercel", vercelLogo, "glyph"],
+  ["Shopify", shopifyLogo, "glyph"],
+  ["Adobe", adobeLogo, "glyph"],
+  ["Linear", linearLogo, "glyph"],
   ["Datadog", datadogLogo, "glyph"],
+  ["HubSpot", hubspotLogo, "glyph"],
+  ["Atlassian", atlassianLogo, "glyph"],
+  ["JetBrains", jetbrainsLogo, "glyph"],
   ["Owner.com", ownerLogo, "tile"],
   ["Pendo", pendoLogo, "glyph"],
+  ["ByteDance", bytedanceLogo, "glyph"],
   ["Blackstone", blackstoneLogo, "tile"],
   ["Moody's", moodysLogo, "tile"],
   ["Shortcut", shortcutLogo, "tile"],
+  ["Oracle", oracleLogo, "glyph"],
   ["Render", renderLogo, "glyph"],
+  ["Tencent", tencentLogo, "glyph"],
+  ["Gusto", gustoLogo, "tile"],
   ["Simile", simileLogo, "glyph"],
+  ["Browserbase", browserbaseLogo, "tile"],
+  ["Kernel", kernelLogo, "tile"],
+  ["Customer.io", customerIoLogo, "tile"],
+  ["Statsig", statsigLogo, "glyph"],
+  ["Zoox", zooxLogo, "tile"],
+  ["Stitch Fix", stitchFixLogo, "glyph"],
+  ["Just Eat Takeaway", justEatTakeawayLogo, "glyph"],
 ] as const;
 
-function CompanyProofLogos({ duplicate = false }: { duplicate?: boolean }) {
+type CompanyProofEntry = (typeof COMPANY_PROOF)[number];
+
+const COMPANY_PROOF_ROWS = [
+  COMPANY_PROOF.filter((_, index) => index % 2 === 0),
+  COMPANY_PROOF.filter((_, index) => index % 2 === 1),
+];
+
+function CompanyProofLogos({
+  companies,
+  duplicate = false,
+}: {
+  companies: readonly CompanyProofEntry[];
+  duplicate?: boolean;
+}) {
   return (
     <ul className="company-proof-logos" aria-hidden={duplicate || undefined}>
-      {COMPANY_PROOF.map(([name, logo, kind]) => (
+      {companies.map(([name, logo, kind]) => (
         <li key={name} className="company-proof-company">
           <img
             src={logo}
@@ -110,6 +176,53 @@ function CompanyProofLogos({ duplicate = false }: { duplicate?: boolean }) {
   );
 }
 
+function CompanyProofMarquee({
+  companies,
+  reverse,
+}: {
+  companies: readonly CompanyProofEntry[];
+  reverse: boolean;
+}) {
+  const [copies, setCopies] = useState(5);
+  const marqueeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const marquee = marqueeRef.current;
+    const firstCopy = marquee?.querySelector(".company-proof-logos");
+    if (!marquee || !firstCopy) return;
+
+    const measure = () => {
+      const copyWidth = firstCopy.getBoundingClientRect().width;
+      if (copyWidth === 0) return;
+      setCopies(Math.max(2, Math.ceil(marquee.clientWidth / copyWidth) + 1));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(marquee);
+    observer.observe(firstCopy);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="company-proof-marquee" ref={marqueeRef}>
+      <div
+        className={`company-proof-track${reverse ? " is-reverse" : ""}`}
+        style={
+          {
+            "--company-proof-copies": copies,
+            "--company-proof-logos": companies.length,
+          } as CSSProperties
+        }
+      >
+        <CompanyProofLogos companies={companies} />
+        {Array.from({ length: copies - 1 }, (_, i) => (
+          <CompanyProofLogos key={i} companies={companies} duplicate />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const [LATEST_RELEASE] = parseChangelog(changelogMd);
 if (!LATEST_RELEASE) {
   throw new Error("CHANGELOG.md must contain at least one release");
@@ -122,14 +235,56 @@ if (!LATEST_RELEASE_META) {
 }
 const LATEST_RELEASE_URL = `/changelog#${LATEST_RELEASE.version.replaceAll(".", "-")}`;
 
+function heroWindowStylesheets(context: {
+  experiments?: ExperimentBootstrap;
+}): string[] {
+  return experimentVariant(
+    context.experiments ?? NO_EXPERIMENTS,
+    "homepage-hero",
+  ) === "test"
+    ? [heroWindowCss]
+    : [];
+}
+
 export const Route = createFileRoute("/")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: SITE_TITLE },
+      { title: "bb: agentic IDE · The IDE that builds itself" },
       { name: "description", content: SITE_DESCRIPTION },
       ...unfurlMeta("bb", OG_DESCRIPTION, "/"),
     ],
-    links: siteHeadLinks(),
+    links: siteHeadLinks(...heroWindowStylesheets(match.context)),
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": "https://getbb.app/#organization",
+              name: "bb",
+              url: "https://getbb.app/",
+              logo: "https://getbb.app/brand/bb-logo-flat-black.png",
+              sameAs: [GITHUB_URL, X_URL, DISCORD_URL],
+            },
+            {
+              "@type": "SoftwareApplication",
+              "@id": "https://getbb.app/#software",
+              name: "bb",
+              url: "https://getbb.app/",
+              description: SITE_DESCRIPTION,
+              applicationCategory: "DeveloperApplication",
+              operatingSystem: ["macOS", "Windows", "Linux"],
+              isAccessibleForFree: true,
+              offers: { "@type": "Offer", price: 0, priceCurrency: "USD" },
+              publisher: { "@id": "https://getbb.app/#organization" },
+              sameAs: [GITHUB_URL, X_URL, DISCORD_URL],
+            },
+          ],
+        }).replace(/</g, "\\u003c"),
+      },
+    ],
   }),
   component: LandingRoute,
 });
@@ -137,111 +292,6 @@ export const Route = createFileRoute("/")({
 function LandingRoute() {
   useInitAnalytics();
   return <LandingPage />;
-}
-
-const AppleSolidIcon: IconSvgElement = [
-  [
-    "path",
-    {
-      d: "M12 5.75C12 3.75 13.5 1.75 15.5 1.75C15.5 3.75 14 5.75 12 5.75Z",
-      fill: "currentColor",
-      key: "0",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M12.5 8.09001C11.9851 8.09001 11.5867 7.92646 11.1414 7.74368C10.5776 7.51225 9.93875 7.25 8.89334 7.25C7.02235 7.25 4 8.74945 4 12.7495C4 17.4016 7.10471 22.25 9.10471 22.25C9.77426 22.25 10.3775 21.9871 10.954 21.7359C11.4815 21.5059 11.9868 21.2857 12.5 21.2857C13.0132 21.2857 13.5185 21.5059 14.046 21.7359C14.6225 21.9871 15.2257 22.25 15.8953 22.25C17.2879 22.25 18.9573 19.8992 20 16.9008C18.3793 16.2202 17.338 14.618 17.338 12.75C17.338 11.121 18.2036 10.0398 19.5 9.25C18.5 7.75 17.0134 7.25 15.9447 7.25C14.8993 7.25 14.2604 7.51225 13.6966 7.74368C13.2514 7.92646 13.0149 8.09001 12.5 8.09001Z",
-      fill: "currentColor",
-      key: "1",
-    },
-  ],
-];
-
-function DesktopDownloadIcon({ platform }: { platform: DesktopPlatform }) {
-  if (platform === "linux") {
-    return <LinuxIcon className="btn-ic" />;
-  }
-  return <HugeiconsIcon icon={AppleSolidIcon} className="btn-ic" />;
-}
-
-function InstallOptions({ placement }: { placement: CtaPlacement }) {
-  const platform = useDesktopPlatform();
-  const download = DESKTOP_DOWNLOADS[platform];
-  const otherPlatform: DesktopPlatform =
-    platform === "macos" ? "linux" : "macos";
-  return (
-    <div className="install-options">
-      <div className="install-actions">
-        <span className="install-choice">
-          <DownloadLink
-            placement={placement}
-            platform={platform}
-            className="btn btn-primary btn-install"
-          >
-            <DesktopDownloadIcon platform={platform} />
-            {download.buttonLabel}
-          </DownloadLink>
-          <span className="install-note">
-            {download.note}
-            {" · "}
-            <DownloadLink
-              placement={placement}
-              platform={otherPlatform}
-              className="install-note-link"
-            >
-              Also for {DESKTOP_DOWNLOADS[otherPlatform].label}
-            </DownloadLink>
-          </span>
-        </span>
-        <span className="install-choice">
-          <CommandButton
-            command={CLI_COMMAND}
-            label={`Copy browser install command: ${CLI_COMMAND}`}
-            size="hero"
-            onCopy={() =>
-              trackLandingEvent({
-                name: "landing_cli_command_copied",
-                properties: { placement, command: CLI_COMMAND },
-              })
-            }
-          />
-          <span className="install-note">
-            Windows (via WSL), Intel Macs &amp; remote machines
-          </span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function useScrollReveal() {
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-    const targets = Array.from(document.querySelectorAll("[data-reveal]"));
-    for (const target of targets) {
-      if (target.getBoundingClientRect().top > window.innerHeight * 0.9) {
-        target.classList.add("reveal-pending");
-      }
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.remove("reveal-pending");
-            observer.unobserve(entry.target);
-          }
-        }
-      },
-      { rootMargin: "0px 0px -12% 0px" },
-    );
-    for (const target of targets) {
-      observer.observe(target);
-    }
-    return () => observer.disconnect();
-  }, []);
 }
 
 function useConstructMock() {
@@ -279,144 +329,6 @@ function useConstructMock() {
     };
   }, []);
 }
-
-function useFitMock() {
-  useEffect(() => {
-    const mock = document.querySelector<HTMLElement>(".mock");
-    const wrap = mock?.parentElement;
-    if (!mock || !wrap) {
-      return;
-    }
-    const fit = () => {
-      const wrapStyle = getComputedStyle(wrap);
-      const visibleWidth = Number.parseFloat(
-        getComputedStyle(mock).getPropertyValue("--mock-visible-width"),
-      );
-      if (!visibleWidth) {
-        mock.style.removeProperty("--mock-scale");
-        return;
-      }
-      const slice =
-        wrap.clientWidth -
-        Number.parseFloat(wrapStyle.paddingLeft) -
-        Number.parseFloat(wrapStyle.paddingRight);
-      mock.style.setProperty("--mock-scale", String(slice / visibleWidth));
-    };
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(wrap);
-    return () => observer.disconnect();
-  }, []);
-}
-
-const PROVIDER_ICONS = [
-  ClaudeIcon,
-  OpenAiIcon,
-  CursorIcon,
-  PiIcon,
-  OpencodeIcon,
-  GrokIcon,
-  OmpIcon,
-  HermesAgentIcon,
-] as const;
-
-const PROVIDER_ICONS_MOBILE_VISIBLE = 3;
-
-function ProviderChips() {
-  const extra = PROVIDER_ICONS.length - PROVIDER_ICONS_MOBILE_VISIBLE;
-  return (
-    <>
-      {PROVIDER_ICONS.map((Icon, i) => (
-        <Icon
-          key={i}
-          className={
-            i >= PROVIDER_ICONS_MOBILE_VISIBLE ? "plogo plogo-more" : "plogo"
-          }
-        />
-      ))}
-      {extra > 0 ? (
-        <span className="pmore" aria-label={`${extra} more providers`}>
-          +{extra} more
-        </span>
-      ) : null}
-    </>
-  );
-}
-
-type IconProps = { className?: string };
-
-const PanelIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={SidebarLeftIcon} className={className} />
-);
-const PanelRightIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={SidebarRightIcon} className={className} />
-);
-const ChevronLeft = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={ArrowLeft01Icon} className={className} />
-);
-const ChevronRight = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={ArrowRight01Icon} className={className} />
-);
-const ChevronDown = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={ArrowDown01Icon} className={className} />
-);
-const Ellipsis = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={MoreHorizontalIcon} className={className} />
-);
-const NewThreadIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={BubbleChatAddIcon} className={className} />
-);
-const ClockIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={Clock01Icon} className={className} />
-);
-const GearIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={Settings01Icon} className={className} />
-);
-const CheckIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={Tick02Icon} className={className} />
-);
-const CircleCheckIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={CheckmarkCircle02Icon} className={className} />
-);
-const MessageQuestionGlyph = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={MessageQuestionIcon} className={className} />
-);
-const PaperPlane = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={SentIcon} className={className} />
-);
-const Paperclip = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={AttachmentIcon} className={className} />
-);
-const FolderIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={HiFolderIcon} className={className} />
-);
-const FolderGitIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={FolderGitTwoIcon} className={className} />
-);
-const GitBranchIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={HiGitBranchIcon} className={className} />
-);
-const GitMergeIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={HiGitMergeIcon} className={className} />
-);
-const Spinner = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={Loading03Icon} className={className} />
-);
-const Maximize2 = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={ArrowExpand01Icon} className={className} />
-);
-const MicIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={Mic02Icon} className={className} />
-);
-const SendIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={ArrowMoveDownLeftIcon} className={className} />
-);
-const LaptopGlyph = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={HiLaptopIcon} className={className} />
-);
-const FileDiffIcon = ({ className }: IconProps) => (
-  <HugeiconsIcon icon={PlusMinusSquare01Icon} className={className} />
-);
 
 type Status = "running" | "done" | "waiting";
 type Step =
@@ -685,16 +597,6 @@ const CHIEF: MockThread = {
   ],
 };
 
-function ThreadStatus({ status }: { status: Status }) {
-  return (
-    <span className="tstatus" aria-hidden>
-      {status === "running" ? <Spinner className="trun" /> : null}
-      {status === "done" ? <CircleCheckIcon className="tdone" /> : null}
-      {status === "waiting" ? <MessageQuestionGlyph className="twait" /> : null}
-    </span>
-  );
-}
-
 const STREAM_INTERVAL_MS = 1600;
 const STREAM_WINDOW = 16;
 
@@ -854,65 +756,29 @@ function Composer({ thread }: { thread?: MockThread }) {
           <ChevronDown className="pr-ic pr-chev" />
         </div>
       ) : null}
-      <div className="composer-box">
-        <div className="composer-top">
-          <textarea
-            className="composer-input"
-            rows={1}
-            placeholder={
-              isNew
-                ? "Ask anything. @ to mention files or folders"
-                : "Ask for a follow-up. @ to mention files, folders, sections, or threads"
-            }
-            aria-label={isNew ? "Start a new thread" : "Message this thread"}
-          />
-          <Maximize2 className="cb-expand" />
-        </div>
-        <div className="composer-row">
-          <span className="model">
-            <ClaudeIcon className="model-ic" />
-            Opus 4.8 1M
-            <ChevronDown className="chev-sm" />
-          </span>
-          <span className="composer-actions" aria-hidden>
-            <Paperclip className="composer-clip" />
-            <MicIcon className="composer-clip" />
-            <span className="send-btn">
-              <SendIcon className="send-ic" />
-            </span>
-          </span>
-        </div>
-      </div>
-      <div className="context-row">
-        <span className="ctx">
-          <FolderIcon className="ctx-ic" />
-          <span>{isNew ? "paper-ultra-slop" : "bb"}</span>
-          <ChevronDown className="ctx-chev" />
-        </span>
-        <span className="ctx">
-          {isNew ? (
-            <LaptopGlyph className="ctx-ic" />
-          ) : (
-            <FolderGitIcon className="ctx-ic" />
-          )}
-          <span>{isNew ? "Work locally" : "Worktree"}</span>
-          <ChevronDown className="ctx-chev" />
-        </span>
-        <span className="ctx">
-          <GitBranchIcon className="ctx-ic" />
-          <span className="ctx-branch">
-            {isNew ? "Current (main)" : thread.branch}
-          </span>
-          <ChevronDown className="ctx-chev" />
-        </span>
-        <span className="ctx-perm">
-          Full Access
-          <ChevronDown className="ctx-chev" />
-        </span>
-        {thread && thread.status === "running" ? (
-          <Spinner className="ctx-spin" />
-        ) : null}
-      </div>
+      <ComposerBox model="Opus 4.8 1M">
+        <textarea
+          className="composer-input"
+          rows={1}
+          placeholder={
+            isNew
+              ? "Ask anything. @ to mention files or folders"
+              : "Ask for a follow-up. @ to mention files, folders, sections, or threads"
+          }
+          aria-label={isNew ? "Start a new thread" : "Message this thread"}
+        />
+        <Maximize2 className="cb-expand" />
+      </ComposerBox>
+      <ContextRow
+        project={isNew ? "paper-ultra-slop" : "bb"}
+        place={
+          isNew
+            ? { icon: LaptopGlyph, label: "Work locally" }
+            : { icon: FolderGitIcon, label: "Worktree" }
+        }
+        branch={isNew ? "Current (main)" : thread.branch}
+        running={thread?.status === "running"}
+      />
     </div>
   );
 }
@@ -958,7 +824,7 @@ function DiffPanel({
   );
 }
 
-function HeroAppMock() {
+function HeroAppMock({ ref }: { ref: Ref<HTMLElement> }) {
   const [activeId, setActiveId] = useState(HERO_THREADS[0].id);
   const [view, setView] = useState<"thread" | "new">("thread");
   const [diffOpen, setDiffOpen] = useState(false);
@@ -986,56 +852,40 @@ function HeroAppMock() {
       return { ...prev, [parentId]: [...kids, child] };
     });
   }, []);
+  const mockRef = useRef<HTMLDivElement>(null);
+  useFitMock(mockRef);
 
   return (
-    <section className="mockup-wrap">
+    <section ref={ref} className="mockup-wrap">
       <div
+        ref={mockRef}
         className="mock"
         data-construct
         aria-label="Interactive preview of the bb app"
       >
-        <div className="mock-bar">
-          <div className="bar-left">
-            <span className="mock-dots" aria-hidden>
-              <i />
-              <i />
-              <i />
-            </span>
-            <span className="bar-menu" aria-hidden>
-              <PanelIcon className="ri bar-ic" />
-            </span>
-            <span className="bar-nav" aria-hidden>
-              <ChevronLeft className="ri" />
-              <ChevronRight className="ri" />
-            </span>
-          </div>
-          <div className="bar-main">
-            {view === "thread" ? (
-              <>
-                <span className="bar-title">{thread.title}</span>
-                <Ellipsis className="ri bar-kebab" />
-                <span className="bar-actions">
-                  <span className="editor-btn" aria-hidden>
-                    <img src={vscodeIcon} alt="" className="editor-ic" />
-                    <ChevronDown className="chev-xs" />
-                  </span>
-                  <span className="commit-btn" aria-hidden>
-                    Commit
-                  </span>
-                  <button
-                    type="button"
-                    className={diffOpen ? "bar-toggle active" : "bar-toggle"}
-                    aria-label={diffOpen ? "Hide changes" : "Show changes"}
-                    aria-pressed={diffOpen}
-                    onClick={() => setDiffOpen((open) => !open)}
-                  >
-                    <PanelRightIcon className="ri" />
-                  </button>
+        <MockBar>
+          {view === "thread" ? (
+            <>
+              <span className="bar-title">{thread.title}</span>
+              <Ellipsis className="ri bar-kebab" />
+              <span className="bar-actions">
+                <EditorButton />
+                <span className="commit-btn" aria-hidden>
+                  Commit
                 </span>
-              </>
-            ) : null}
-          </div>
-        </div>
+                <button
+                  type="button"
+                  className={diffOpen ? "bar-toggle active" : "bar-toggle"}
+                  aria-label={diffOpen ? "Hide changes" : "Show changes"}
+                  aria-pressed={diffOpen}
+                  onClick={() => setDiffOpen((open) => !open)}
+                >
+                  <PanelRightIcon className="ri" />
+                </button>
+              </span>
+            </>
+          ) : null}
+        </MockBar>
         <div className="mock-body">
           <aside className="side">
             <button
@@ -1145,58 +995,6 @@ function HeroAppMock() {
   );
 }
 
-function Band({
-  title,
-  flip,
-  visual,
-  children,
-}: {
-  title: string;
-  flip?: boolean;
-  visual: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className={flip ? "band band-flip" : "band"} data-reveal>
-      <div className="band-grid">
-        <div className="band-copy">
-          <h2>{title}</h2>
-          {children}
-        </div>
-        <div className="band-visual">{visual}</div>
-      </div>
-    </section>
-  );
-}
-
-function useCycle(holdMs: number, fadeMs: number) {
-  const [cycle, setCycle] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-    let holdTimer = 0;
-    let fadeTimer = 0;
-    const schedule = () => {
-      holdTimer = window.setTimeout(() => {
-        setLeaving(true);
-        fadeTimer = window.setTimeout(() => {
-          setCycle((c) => c + 1);
-          setLeaving(false);
-          schedule();
-        }, fadeMs);
-      }, holdMs);
-    };
-    schedule();
-    return () => {
-      window.clearTimeout(holdTimer);
-      window.clearTimeout(fadeTimer);
-    };
-  }, [holdMs, fadeMs]);
-  return { cycle, leaving };
-}
-
 function AgentChat() {
   const { cycle, leaving } = useCycle(6000, 600);
   return (
@@ -1267,344 +1065,204 @@ function AgentChat() {
   );
 }
 
-type CustomizeMessage = {
-  role: "user" | "agent" | "tool";
-  text: string;
-};
-
-type CustomizeTask = {
-  key: string;
-  title: string;
-  status: "in_progress" | "todo" | "backlog";
-  priority: "urgent" | "high" | "medium" | "low";
-};
-
-type CustomizeScenario = {
-  title: string;
-  prompt: string;
-  promptWidth: string;
-  branch: string;
-  messages: CustomizeMessage[];
-  panel: {
-    name: string;
-    tasks: CustomizeTask[];
-  };
-};
-
-const CUSTOMIZE_SCENARIO: CustomizeScenario = {
-  title: "Build a tasks plugin",
-  prompt: "Add a task management system",
-  promptWidth: "210px",
-  branch: "bb/tasks-plugin",
-  messages: [
-    { role: "user", text: "Add a task management system" },
-    {
-      role: "agent",
-      text: "I'll build it as a bb plugin and mount it in your sidebar.",
-    },
-    { role: "tool", text: "wrote plugin: tasks" },
-    { role: "tool", text: "registered panel + bb tasks CLI" },
-    { role: "agent", text: "Done. Tasks is live, and your agents can use it." },
+const BELOW_FOLD_SECTIONS: Record<"control" | "test", readonly string[]> = {
+  control: ["customizable", "kick-off", "gang", "fork-it", "closer"],
+  test: [
+    "make-it-yours",
+    "hand-off",
+    "start-anywhere",
+    "testimonials",
+    "closer",
   ],
-  panel: {
-    name: "Tasks",
-    tasks: [
-      {
-        key: "BB-1",
-        title: "Ship task delegation",
-        status: "in_progress",
-        priority: "high",
-      },
-      {
-        key: "BB-2",
-        title: "Wire up the tasks CLI",
-        status: "todo",
-        priority: "medium",
-      },
-      {
-        key: "BB-3",
-        title: "Add label filters",
-        status: "todo",
-        priority: "low",
-      },
-      {
-        key: "BB-4",
-        title: "Nightly changelog draft",
-        status: "in_progress",
-        priority: "medium",
-      },
-      {
-        key: "BB-5",
-        title: "Triage flaky integration tests",
-        status: "backlog",
-        priority: "high",
-      },
-      {
-        key: "BB-6",
-        title: "Port the settings panel",
-        status: "backlog",
-        priority: "low",
-      },
-      {
-        key: "BB-7",
-        title: "Document the plugin API",
-        status: "backlog",
-        priority: "medium",
-      },
-    ],
-  },
 };
 
-function CustomizeBuild() {
-  const { cycle, leaving } = useCycle(10600, 500);
-  const run = CUSTOMIZE_SCENARIO;
-  const promptStyle = {
-    "--customize-prompt-width": run.promptWidth,
-  } as CSSProperties;
-  return (
-    <div className="mockup-wrap mockup-wrap-customize">
-      <div
-        className="mock mock-customize-mobile"
-        aria-label="Mobile bb preview: a prompt asks for a task management system, and the agent builds it as a plugin"
-      >
-        <div className="mock-bar">
-          <div className="bar-left">
-            <span className="bar-menu" aria-hidden>
-              <PanelIcon className="ri bar-ic" />
-            </span>
-          </div>
-          <div className="bar-main">
-            <span className="bar-title">{run.title}</span>
-          </div>
-        </div>
-
-        <div
-          className={
-            leaving
-              ? "mock-body customize-body leaving"
-              : "mock-body customize-body"
-          }
-          key={cycle}
-        >
-          <div className="main">
-            <div className="feed feed-live customize-feed">
-              {run.messages.map((message, i) => {
-                const style = { animationDelay: `${3.2 + i * 0.68}s` };
-                if (message.role === "user") {
-                  return (
-                    <div
-                      className="msg-user customize-msg"
-                      key={`${message.role}-${message.text}`}
-                      style={style}
-                    >
-                      {message.text}
-                    </div>
-                  );
-                }
-                if (message.role === "tool") {
-                  return (
-                    <div
-                      className="msg-step customize-msg customize-tool"
-                      key={`${message.role}-${message.text}`}
-                      style={style}
-                    >
-                      <ChevronRight className="step-chev" />
-                      {message.text}
-                    </div>
-                  );
-                }
-                return (
-                  <div
-                    className="msg-say customize-msg"
-                    key={`${message.role}-${message.text}`}
-                    style={style}
-                  >
-                    {message.text}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="composer customize-composer">
-              <div className="composer-box customize-composer-box">
-                <div className="composer-top">
-                  <span className="composer-input customize-typeahead">
-                    <span className="customize-type-text" style={promptStyle}>
-                      {run.prompt}
-                    </span>
-                    <span className="customize-caret" aria-hidden />
-                  </span>
-                  <Maximize2 className="cb-expand" />
-                </div>
-                <div className="composer-row">
-                  <span className="model">
-                    <OpenAiIcon className="model-ic" />
-                    Codex
-                    <ChevronDown className="chev-sm" />
-                  </span>
-                  <span className="composer-actions" aria-hidden>
-                    <Paperclip className="composer-clip" />
-                    <span className="send-btn customize-send">
-                      <SendIcon className="send-ic" />
-                    </span>
-                  </span>
-                </div>
-              </div>
-              <div className="context-row customize-context">
-                <span className="ctx">
-                  <GitBranchIcon className="ctx-ic" />
-                  <span className="ctx-branch">{run.branch}</span>
-                </span>
-                <Spinner className="ctx-spin" />
-              </div>
-            </div>
-          </div>
-
-          {}
-          <div className="plugin-panel" aria-hidden>
-            <div className="plugin-panel-bar">
-              <span className="plugin-panel-name">{run.panel.name}</span>
-              <span className="plugin-panel-badge">Plugin</span>
-            </div>
-            <div className="plugin-panel-rows">
-              {run.panel.tasks.map((task, i) => (
-                <div
-                  className="plugin-task"
-                  key={task.key}
-                  style={{ animationDelay: `${8.3 + i * 0.14}s` }}
-                >
-                  <span
-                    className={`plugin-task-status is-${task.status}`}
-                    aria-hidden
-                  />
-                  <span className="plugin-task-key">{task.key}</span>
-                  <span className="plugin-task-title">{task.title}</span>
-                  <span className={`plugin-task-prio is-${task.priority}`}>
-                    {task.priority}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SpawnRow({
-  icon,
-  name,
-  task,
-  status,
-  at,
-  doneAt,
-  parent,
+function Closer({
+  title,
+  lede,
+  children,
 }: {
-  icon: ReactNode;
-  name: string;
-  task: string;
-  status: string;
-  at: number;
-  doneAt: number;
-  parent?: boolean;
+  title: string;
+  lede: string;
+  children?: ReactNode;
 }) {
   return (
-    <div
-      className={parent ? "sb-thread sb-parent" : "sb-thread"}
-      style={{ animationDelay: `${at}s` }}
-    >
-      <span className="sb-prov" aria-hidden>
-        {icon}
-      </span>
-      <span className="sb-body">
-        <span className="sb-name">{name}</span>
-        <span className="sb-task">{task}</span>
-      </span>
-      <span className="sb-stat" aria-hidden>
-        <span className="sb-run" style={{ animationDelay: `${doneAt}s` }}>
-          <span className="sb-dot" />
-          {status}
-        </span>
-        <span className="sb-done" style={{ animationDelay: `${doneAt}s` }}>
-          <CheckIcon className="sb-check" />
-          done
-        </span>
-      </span>
-    </div>
+    <section className="closer" data-reveal data-section="closer">
+      <h2 className="sec-title">{title}</h2>
+      <p>{lede}</p>
+      <InstallOptions placement="closer" />
+      {children}
+    </section>
   );
 }
 
-function SpawnSidebar() {
-  const { cycle, leaving } = useCycle(5600, 500);
+function TodayBelowFold() {
   return (
-    <div
-      className="spawnbar"
-      aria-label="bb spawns and manages a worker thread for each provider"
-    >
-      <div className="sb-head">
-        <span aria-hidden="true" className="bb-mark sb-mark" />
-        <span className="sb-title">Threads</span>
-        <span className="sb-active">5 active</span>
-      </div>
-      <div className={leaving ? "sb-list leaving" : "sb-list"} key={cycle}>
-        <SpawnRow
-          parent
-          icon={<ClaudeIcon className="sb-ic" />}
-          name="Claude Code"
-          task="Ship the release"
-          status="managing"
-          at={0.1}
-          doneAt={4}
-        />
-        <div className="sb-kids">
-          <SpawnRow
-            icon={<OpenAiIcon className="sb-ic" />}
-            name="Codex"
-            task="Port module to TS"
-            status="running"
-            at={0.6}
-            doneAt={2.3}
-          />
-          <SpawnRow
-            icon={<CursorIcon className="sb-ic" />}
-            name="Cursor"
-            task="Refactor the auth flow"
-            status="running"
-            at={1}
-            doneAt={3}
-          />
-          <SpawnRow
-            icon={<PiIcon className="sb-ic" />}
-            name="Pi"
-            task="Write release notes"
-            status="running"
-            at={1.4}
-            doneAt={3.7}
-          />
-          <SpawnRow
-            icon={<OpencodeIcon className="sb-ic" />}
-            name="OpenCode"
-            task="Add integration tests"
-            status="running"
-            at={1.8}
-            doneAt={3.4}
-          />
+    <>
+      <Band
+        title="Fully customizable."
+        flip
+        section="customizable"
+        visual={<CustomizeBuild />}
+      >
+        <p>
+          Almost anything in bb can be changed in a single prompt. Ask for your
+          Linear issues and they appear: a panel in your sidebar, a{" "}
+          <code>bb linear</code> command, and a skill that teaches every agent
+          to use it.
+        </p>
+        <p>
+          Many of bb&rsquo;s own features are built with the same tools you
+          have. The GitHub integration, agent memory, scheduled jobs, and even
+          remote access are all plugins.
+        </p>
+        <p>Nothing is stopping you from building your ideal workbench.</p>
+      </Band>
+
+      <Band
+        title="Anything can kick off work."
+        section="kick-off"
+        visual={<AgentChat />}
+      >
+        <p>
+          The same CLI your agents use is open to any program you write: a shell
+          script, a cron job, or your own Hermes Agent or OpenClaw bot in
+          Telegram, Signal, or Slack. Each can spawn a thread that&rsquo;s
+          waiting in your sidebar when you are.
+        </p>
+        <p>
+          It runs on your machine, and is waiting for you when you&rsquo;re
+          back.
+        </p>
+      </Band>
+
+      <Band
+        title="The gang's all here"
+        flip
+        section="gang"
+        visual={<SpawnSidebar />}
+      >
+        <p>
+          Claude Code, Codex, Cursor, Pi, OpenCode, Grok, omp, and Hermes all
+          live in bb. Give a task to whichever fits, and have one agent spawn
+          and manage another, each in its own thread.
+        </p>
+        <p>
+          Each runs on your own subscription: the provider plan you already pay
+          for, billed by them, not bb.
+        </p>
+        <div className="providers">
+          <ProviderChips />
         </div>
-      </div>
-    </div>
+      </Band>
+
+      <section className="statement" data-reveal data-section="fork-it">
+        <h2 className="sec-title">Fork it. Make it your own.</h2>
+        <p>
+          bb is MIT-licensed end to end. Fork the repo, customize the agents,
+          tools, and UI, and deploy your own build across your whole
+          organization. It still runs local-first on your machines, on the
+          provider subscriptions you already pay for.
+        </p>
+        <div className="cta-row">
+          <GitHubLink placement="local" className="btn btn-ghost">
+            View the source →
+          </GitHubLink>
+        </div>
+      </section>
+
+      <Closer
+        title="Put your agents to work."
+        lede="Free, open source, and local-first. Install in under a minute."
+      >
+        <div className="cta-row cta-row-secondary">
+          <GitHubLink placement="closer" className="btn btn-ghost">
+            View on GitHub
+          </GitHubLink>
+        </div>
+      </Closer>
+    </>
   );
 }
+
+function RefreshedBelowFold() {
+  return (
+    <>
+      <Band
+        title="Make bb yours. No need to fork."
+        stacked
+        section="make-it-yours"
+        visual={<PluginMorph />}
+      >
+        <p>
+          bb adapts to how you work, not the other way around. Prompt an agent
+          to change almost anything in bb, or choose from 500+ plugins built by
+          the community.
+        </p>
+        <MarketplaceLink placement="customize" className="band-link">
+          Browse plugins &rarr;
+        </MarketplaceLink>
+      </Band>
+
+      <Band
+        title="Stop babysitting agents."
+        stacked
+        section="hand-off"
+        visual={<DelegationTree />}
+      >
+        <p>
+          Have Claude Code plan, Cursor implement, Codex review, and Grok
+          orchestrate them all. Step in anytime, and only hear about what needs
+          you.
+        </p>
+      </Band>
+
+      <Band
+        title="Start from anywhere. Pick up anywhere."
+        stacked
+        section="start-anywhere"
+        visual={<StartAnywhere />}
+      >
+        <p>
+          Start bb from your desk, CI, the bb mobile app, even other AI apps
+          like ChatGPT or Claude. Threads run on machines you own, from your
+          laptop to a remote server or VM.
+        </p>
+      </Band>
+
+      <Testimonials />
+
+      <Closer
+        title="One programmable workspace for all your agents."
+        lede="Free and self-hostable."
+      />
+    </>
+  );
+}
+
+const SUBHEAD_COPY = {
+  control:
+    "bb can control, customize, and automate itself, laying the groundwork for your own software factory.",
+  test: "Run all your coding agents in one programmable workspace. Change almost anything with a plugin or a prompt.",
+} as const satisfies Record<ExperimentVariant<"homepage-hero">, string>;
 
 function LandingPage() {
   const [companyProofPaused, setCompanyProofPaused] = useState(false);
   const [companyProofInView, setCompanyProofInView] = useState(false);
-  const [companyProofCopies, setCompanyProofCopies] = useState(5);
   const companyProofRef = useRef<HTMLElement>(null);
-  const companyProofMarqueeRef = useRef<HTMLDivElement>(null);
+  const qaCheck = useExperiment("homepage-qa-check");
+  useExperimentExposure("homepage-qa-check", "all");
+  const subhead = useExperiment("homepage-hero");
+  useExperimentExposure("homepage-hero", "desktop");
+  const belowFold = useExperiment("homepage-below-fold");
+  const exposeBelowFold = useExperimentExposer(
+    "homepage-below-fold",
+    "desktop",
+  );
   useScrollReveal();
+  useSectionViews((section) => {
+    if (BELOW_FOLD_SECTIONS[belowFold].includes(section)) exposeBelowFold();
+  });
   useConstructMock();
-  useFitMock();
 
   useEffect(() => {
     const companyProof = companyProofRef.current;
@@ -1617,26 +1275,11 @@ function LandingPage() {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const marquee = companyProofMarqueeRef.current;
-    const firstCopy = marquee?.querySelector(".company-proof-logos");
-    if (!marquee || !firstCopy) return;
-
-    const measure = () => {
-      const copyWidth = firstCopy.getBoundingClientRect().width;
-      if (copyWidth === 0) return;
-      setCompanyProofCopies(
-        Math.max(2, Math.ceil(marquee.clientWidth / copyWidth) + 1),
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(marquee);
-    observer.observe(firstCopy);
-    return () => observer.disconnect();
-  }, []);
   return (
-    <div className="wrap">
+    <div
+      className="wrap"
+      data-qa-check={qaCheck === "test" ? qaCheck : undefined}
+    >
       <SiteNav />
 
       <header className="hero">
@@ -1646,25 +1289,29 @@ function LandingPage() {
           <ChevronRight className="updates-arrow" />
         </a>
         <h1>The IDE that builds itself</h1>
-        <p className="sub">
-          bb can control, customize, and automate itself, laying the groundwork
-          for your own software factory.
+        <p className={subhead === "test" ? "sub sub-wide" : "sub"}>
+          {SUBHEAD_COPY[subhead]}
         </p>
 
         <InstallOptions placement="hero" />
 
-        <div className="providers">
-          <span className="label">Works with</span>
-          <ProviderChips />
-        </div>
+        {subhead === "test" ? (
+          <AgentRow />
+        ) : (
+          <div className="providers">
+            <span className="label">Works with</span>
+            <ProviderChips />
+          </div>
+        )}
       </header>
 
-      <HeroAppMock />
+      <HeroWindowSlot control={(ref) => <HeroAppMock ref={ref} />} />
 
       <section
         ref={companyProofRef}
         className={`company-proof${companyProofPaused ? " is-paused" : ""}${companyProofInView ? "" : " is-offscreen"}`}
         aria-labelledby="company-proof-title"
+        data-section="logos"
       >
         <div className="company-proof-heading">
           <h2 id="company-proof-title">Used by builders at</h2>
@@ -1684,89 +1331,18 @@ function LandingPage() {
             />
           </button>
         </div>
-        <div className="company-proof-marquee" ref={companyProofMarqueeRef}>
-          <div
-            className="company-proof-track"
-            style={
-              { "--company-proof-copies": companyProofCopies } as CSSProperties
-            }
-          >
-            <CompanyProofLogos />
-            {Array.from({ length: companyProofCopies - 1 }, (_, i) => (
-              <CompanyProofLogos key={i} duplicate />
-            ))}
-          </div>
+        <div className="company-proof-rows">
+          {COMPANY_PROOF_ROWS.map((companies, index) => (
+            <CompanyProofMarquee
+              key={index}
+              companies={companies}
+              reverse={index === 1}
+            />
+          ))}
         </div>
       </section>
 
-      <Band title="Fully customizable." flip visual={<CustomizeBuild />}>
-        <p>
-          Almost anything in bb can be changed in a single prompt. Ask for a
-          task tracker and one appears: a panel in your sidebar, a{" "}
-          <code>bb tasks</code> command, and a skill that teaches every agent to
-          use it.
-        </p>
-        <p>
-          Many of bb&rsquo;s own features are built with the same tools you
-          have. The GitHub integration, agent memory, scheduled jobs, and even
-          remote access are all plugins.
-        </p>
-        <p>Nothing is stopping you from building your ideal workbench.</p>
-      </Band>
-
-      <Band title="Anything can kick off work." visual={<AgentChat />}>
-        <p>
-          The same CLI your agents use is open to any program you write: a shell
-          script, a cron job, or your own Hermes Agent or OpenClaw bot in
-          Telegram, Signal, or Slack. Each can spawn a thread that&rsquo;s
-          waiting in your sidebar when you are.
-        </p>
-        <p>
-          It runs on your machine, and is waiting for you when you&rsquo;re
-          back.
-        </p>
-      </Band>
-
-      <Band title="The gang's all here" flip visual={<SpawnSidebar />}>
-        <p>
-          Claude Code, Codex, Cursor, Pi, OpenCode, Grok, omp, and Hermes all
-          live in bb. Give a task to whichever fits, and have one agent spawn
-          and manage another, each in its own thread.
-        </p>
-        <p>
-          Each runs on your own subscription: the provider plan you already pay
-          for, billed by them, not bb.
-        </p>
-        <div className="providers">
-          <ProviderChips />
-        </div>
-      </Band>
-
-      <section className="statement" data-reveal>
-        <h2 className="sec-title">Fork it. Make it your own.</h2>
-        <p>
-          bb is MIT-licensed end to end. Fork the repo, customize the agents,
-          tools, and UI, and deploy your own build across your whole
-          organization. It still runs local-first on your machines, on the
-          provider subscriptions you already pay for.
-        </p>
-        <div className="cta-row">
-          <GitHubLink placement="local" className="btn btn-ghost">
-            View the source →
-          </GitHubLink>
-        </div>
-      </section>
-
-      <section className="closer" data-reveal>
-        <h2 className="sec-title">Put your agents to work.</h2>
-        <p>Free, open source, and local-first. Install in under a minute.</p>
-        <InstallOptions placement="closer" />
-        <div className="cta-row cta-row-secondary">
-          <GitHubLink placement="closer" className="btn btn-ghost">
-            View on GitHub
-          </GitHubLink>
-        </div>
-      </section>
+      {belowFold === "test" ? <RefreshedBelowFold /> : <TodayBelowFold />}
 
       <SubscribeSection
         reveal
@@ -1775,7 +1351,7 @@ function LandingPage() {
         }
       />
 
-      <SiteFooter />
+      <SiteFooter current="/" />
     </div>
   );
 }

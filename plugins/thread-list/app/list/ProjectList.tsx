@@ -10,7 +10,9 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -19,7 +21,8 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { toast } from "sonner";
 import type { SidebarThread } from "../model/sidebar-thread.js";
 import {
-  experimental_useSidebarThreadActions,
+  experimental_useProviders,
+  useBbNavigate,
   useSdk,
 } from "@get-bb/plugin-sdk/app";
 import {
@@ -27,14 +30,14 @@ import {
   useSidebarRename,
   useSidebarRenameState,
 } from "../rows/SidebarInlineRename.js";
-import { AppThreadSectionMoveProvider } from "../rows/ThreadSectionMoveProvider.js";
-import { useDialogState } from "../ui/useDialogState.js";
+import { useDialogState } from "@/components/ui/use-dialog-state";
+import { ThreadRowNavigationProvider } from "../rows/threadRowNavigation.js";
+import { SidebarProvidersContext } from "../rows/ThreadRow.js";
 import {
   buildProjectThreadGroups,
   getProjectThreadItemDescendants,
   type ProjectThreadNode,
 } from "../model/project-thread-groups.js";
-import { getCollapsedChildActivity } from "../model/thread-activity.js";
 import { useSectionThreadDnd } from "../dnd/useSectionThreadDnd.js";
 import { useNestDropPreview } from "../dnd/useNestDropPreview.js";
 import {
@@ -46,7 +49,7 @@ import { ThreadSectionCreateDialog } from "./ThreadSectionCreateDialog.js";
 import {
   ConfirmDeleteDialog,
   ConfirmDeleteDialogContent,
-} from "../ui/ConfirmDeleteDialog.js";
+} from "@/components/ui/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -89,7 +92,6 @@ import {
 } from "./PinnedThreadTree.js";
 import {
   collapsedEnvironmentIdsAtom,
-  collapsedThreadIdsAtom,
   collapsedProjectIdsAtom,
   collapsedSidebarSectionIdsAtom,
   sidebarChronologicalSortAtom,
@@ -98,6 +100,7 @@ import {
   sidebarCollapsedMachinesAtom,
   sidebarManualSectionOrderAtom,
   sidebarOrganizationModeAtom,
+  sidebarShowEmptyProjectsAtom,
 } from "../preferences/atoms.js";
 import type {
   ChronologicalSort as SidebarChronologicalSort,
@@ -118,8 +121,10 @@ import {
 } from "./BuiltInSidebarSection.js";
 import { ReorderableSidebarSectionOrderList } from "./ReorderableSidebarSectionOrderList.js";
 import { useSidebarModeSectionOrder } from "./useSidebarModeSectionOrder.js";
+import { useReadStatusGrouping } from "./useReadStatusGrouping.js";
 import { haveSameOrder } from "../model/stored-order.js";
 import {
+  SidebarProjectsContext,
   useSidebarData,
   useSidebarMachineHosts,
   type SidebarProject,
@@ -369,24 +374,13 @@ function ProjectListNavigationLoadingRow({
 
 export function ProjectListShell({ children }: ProjectListShellProps) {
   return (
-    <SidebarContentElementProvider>
-      <SidebarStickyStack data-sidebar-sticky-density="compact-actions">
-        <SidebarGroupContent>{children}</SidebarGroupContent>
-      </SidebarStickyStack>
-    </SidebarContentElementProvider>
-  );
-}
-
-function ProjectListSectionMoveScope({
-  children,
-  sections,
-}: ProjectListShellProps & {
-  sections: readonly SidebarSectionDefinition[];
-}) {
-  return (
-    <AppThreadSectionMoveProvider sections={sections}>
-      <ProjectListShell>{children}</ProjectListShell>
-    </AppThreadSectionMoveProvider>
+    <ThreadRowNavigationProvider>
+      <SidebarContentElementProvider>
+        <SidebarStickyStack data-sidebar-sticky-density="compact-actions">
+          <SidebarGroupContent>{children}</SidebarGroupContent>
+        </SidebarStickyStack>
+      </SidebarContentElementProvider>
+    </ThreadRowNavigationProvider>
   );
 }
 
@@ -437,6 +431,7 @@ function buildGroupSectionItem(
     compareThreads,
     groupThreadsByEnvironment,
   );
+  const hiddenThreads = getProjectThreadItemDescendants(items);
   return {
     kind: "section",
     group: {
@@ -444,13 +439,14 @@ function buildGroupSectionItem(
       key,
       name,
       items,
-      threadCount: getProjectThreadItemDescendants(items).length,
-      activity: getCollapsedChildActivity(threads),
+      threadCount: hiddenThreads.length,
+      hiddenThreads,
     },
   };
 }
 
 function useGroupedModeThreadDnd({
+  containerProjectId,
   collapsedThreadIds,
   compareThreads,
   onToggleThreadCollapsed,
@@ -460,6 +456,7 @@ function useGroupedModeThreadDnd({
   rootItems,
   threads,
 }: {
+  containerProjectId?: string;
   collapsedThreadIds: Set<string>;
   compareThreads: ThreadComparator;
   onToggleThreadCollapsed: ToggleCollapsedId;
@@ -479,6 +476,7 @@ function useGroupedModeThreadDnd({
   );
   const threadDnd = useSectionThreadDnd({
     containerId: CHRONOLOGICAL_CONTAINER_ID,
+    containerProjectId,
     enabled: true,
     rootItems,
     topLevelSectionOrder: order,
@@ -579,10 +577,17 @@ function ProjectModeSections({
     }
     return grouped;
   }, [effectivePinnedThreadIds, threads]);
+  const showEmptyProjects = useAtomValue(sidebarShowEmptyProjectsAtom);
   const projectRows = useMemo<ProjectListRowModel[]>(
     () =>
       projects
-        .filter((project) => !project.isPersonal)
+        .filter(
+          (project) =>
+            !project.isPersonal &&
+            (showEmptyProjects ||
+              status !== "ready" ||
+              threadsByProject.get(project.id)?.some(isSidebarProjectThread)),
+        )
         .map((project) => ({
           project,
           threadListState: getProjectThreadListState({
@@ -591,7 +596,7 @@ function ProjectModeSections({
           }),
           isActive: false,
         })),
-    [projects, status, threadsByProject],
+    [projects, showEmptyProjects, status, threadsByProject],
   );
   const projectSectionIds = useMemo(
     () =>
@@ -662,6 +667,7 @@ function ProjectModeSections({
     [effectivePinnedThreadIds, threads],
   );
   const threadDnd = useGroupedModeThreadDnd({
+    containerProjectId: personalProjectId ?? undefined,
     collapsedThreadIds,
     compareThreads,
     onToggleThreadCollapsed,
@@ -681,7 +687,6 @@ function ProjectModeSections({
     pinned: pinnedSection,
     threads: {
       ...threadsSection,
-      activity: getCollapsedChildActivity(personalThreads),
       collapsedThreads: personalThreads,
       content: (
         <ProjectThreadTree
@@ -981,7 +986,7 @@ function MachineSidebarSection({
       {...props}
       disabled={props.disabled || rename.isEditing}
       labelEditor={rename.editor}
-      onRename={rename.startEditing}
+      onRename={rename.startEditingFromDoubleClick}
       actions={renderActions(
         props.id,
         props.label,
@@ -1056,7 +1061,6 @@ export function MachineModeSections({
   const machineSections = useMemo(
     () =>
       buildMachineThreadGroups(nonPinnedThreads, hosts).map((group) => ({
-        activity: getCollapsedChildActivity(group.threads),
         key: group.key,
         label: group.label,
         threadListState: {
@@ -1151,7 +1155,6 @@ export function MachineModeSections({
     pinned: pinnedSection,
     threads: {
       ...threadsSection,
-      activity: getCollapsedChildActivity(nonPinnedThreads),
       collapsedThreads: nonPinnedThreads,
       content: (
         <ProjectThreadTree
@@ -1268,7 +1271,6 @@ export function MachineModeSections({
                 )}
                 actionsOpen={isSectionDisplayOptionsOpen(sectionId)}
                 actionsMobileAlways
-                collapsedActivity={section.activity}
                 collapsedThreads={section.threadListState.threads}
                 collapseControl={{
                   isCollapsed: collapsedMachineKeys.has(section.key),
@@ -1310,7 +1312,8 @@ function ProjectListComponent({
   onProjectSelect,
 }: ProjectListProps) {
   const sdk = useSdk();
-  const sidebarActions = experimental_useSidebarThreadActions();
+  const navigate = useBbNavigate();
+  const { providers } = experimental_useProviders();
   const { status, sections, projects, personalProject, archived } =
     useSidebarData();
   const personalProjectId = personalProject?.id ?? null;
@@ -1352,6 +1355,10 @@ function ProjectListComponent({
     },
     [sdk],
   );
+  const latestComposeTarget = useRef({ navigate, onProjectSelect });
+  useLayoutEffect(() => {
+    latestComposeTarget.current = { navigate, onProjectSelect };
+  });
   const openRootComposeForProject = useCallback(
     (
       projectId: string | null,
@@ -1359,15 +1366,16 @@ function ProjectListComponent({
       hostId?: string,
       pinned = false,
     ) => {
-      onProjectSelect?.();
-      sidebarActions.openNewThread({
+      const target = latestComposeTarget.current;
+      target.onProjectSelect?.();
+      target.navigate.toCompose({
         ...(projectId !== null ? { projectId } : {}),
-        experimental_placement: { sectionId: sectionId ?? null, pinned },
+        placement: { sectionId: sectionId ?? null, pinned },
         ...(hostId ? { hostId } : {}),
         focusPrompt: true,
       });
     },
-    [onProjectSelect, sidebarActions],
+    [],
   );
   const handleCreateProjectThread = useCallback(
     (projectId: string) => {
@@ -1463,6 +1471,7 @@ function ProjectListComponent({
       return;
     }
     setIsDeleteThreadSectionPending(true);
+    sectionDeleteDialog.onClose();
     void sdk.threadSections
       .delete({ id: section.id })
       .then(() => sectionDeleteDialog.onClose())
@@ -1481,9 +1490,6 @@ function ProjectListComponent({
       sectionDeleteDialog.onClose();
     },
     [sectionDeleteDialog],
-  );
-  const [collapsedThreadIdList, setCollapsedThreadIdList] = useAtom(
-    collapsedThreadIdsAtom,
   );
   const [collapsedEnvironmentIdList, setCollapsedEnvironmentIdList] = useAtom(
     collapsedEnvironmentIdsAtom,
@@ -1548,19 +1554,21 @@ function ProjectListComponent({
   );
   const sortDirection = useAtomValue(sidebarSortDirectionAtom);
   const activeRename = useSidebarRenameState();
-  const sidebarThreadComparator = useMemo<ThreadComparator>(
+  const sortRename = chronologicalSort === "alpha" ? activeRename : null;
+  const baseThreadComparator = useMemo<ThreadComparator>(
     () =>
-      getSidebarThreadComparator(
-        chronologicalSort,
-        sortDirection,
-        activeRename,
-      ),
-    [chronologicalSort, sortDirection, activeRename],
+      getSidebarThreadComparator(chronologicalSort, sortDirection, sortRename),
+    [chronologicalSort, sortDirection, sortRename],
   );
-  const collapsedThreadIds = useMemo(
-    () => new Set(collapsedThreadIdList),
-    [collapsedThreadIdList],
-  );
+  const {
+    comparator: sidebarThreadComparator,
+    collapsedThreadIds,
+    toggleThreadCollapsed,
+  } = useReadStatusGrouping({
+    threads,
+    selectedThreadId,
+    comparator: baseThreadComparator,
+  });
   const collapsedEnvironmentIds = useMemo(
     () => new Set(collapsedEnvironmentIdList),
     [collapsedEnvironmentIdList],
@@ -1606,15 +1614,6 @@ function ProjectListComponent({
     [pinnedSidebarState.rootNodes],
   );
   const hasPinnedSection = pinnedSidebarState.rootNodes.length > 0;
-  const toggleThreadCollapsed = useCallback<ToggleCollapsedId>(
-    (threadId) => {
-      setCollapsedThreadIdList((current) => {
-        return toggleCollapsedIdList({ current, id: threadId });
-      });
-    },
-    [setCollapsedThreadIdList],
-  );
-
   const toggleEnvironmentCollapsed = useCallback<ToggleCollapsedId>(
     (environmentId) => {
       setCollapsedEnvironmentIdList((current) => {
@@ -1656,7 +1655,6 @@ function ProjectListComponent({
       isSidebarProjectThread(thread),
   );
   const pinnedSection: BuiltInSidebarSectionOptions = {
-    activity: getCollapsedChildActivity(pinnedSectionThreads),
     collapsedThreads: pinnedSectionThreads,
     label: "Pinned",
     content: pinnedSectionContent,
@@ -1703,14 +1701,14 @@ function ProjectListComponent({
     );
   }
 
-  return (
+  const content = (
     <SidebarHeaderActionsProvider
       value={{
         onNewSection: handleOpenCreateSectionDialog,
         isCreatingSection: isCreateThreadSectionPending,
       }}
     >
-      <ProjectListSectionMoveScope sections={sections}>
+      <ProjectListShell>
         <SidebarDraftPresenceSync />
         <ActiveSidebarModeSections
           mode={organizationMode}
@@ -1829,10 +1827,17 @@ function ProjectListComponent({
             )}
           </>
         )}
-      </ProjectListSectionMoveScope>
+      </ProjectListShell>
       {sectionCreateDialog}
       {sectionDeleteDialogContent}
     </SidebarHeaderActionsProvider>
+  );
+  return (
+    <SidebarProjectsContext.Provider value={projects}>
+      <SidebarProvidersContext.Provider value={providers}>
+        {content}
+      </SidebarProvidersContext.Provider>
+    </SidebarProjectsContext.Provider>
   );
 }
 

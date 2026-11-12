@@ -11,6 +11,9 @@ A project maps to a code repository. All threads belong to a project.
 
   bb project list                         List ordinary projects
     --include-personal                    Also include the personal project
+  bb project discover                     Find recently used git repos
+    --machine <id-or-name>                Machine to scan (default: local)
+    --host <id-or-name>                   Alias for --machine
   bb project history <id>                 List prompt history
   bb project reorder <id>                 Reorder in the sidebar
     --after <id>                          Previous project, or omit for start
@@ -39,12 +42,15 @@ Global prompt history:
   Lists accepted prompts across projects and threads newest first. Pass the
   returned cursor to continue from the next page.
 
+  Prompt history omits prompts larger than 256 KiB.
+
 Discovery:
 
   bb project branches <id> --host <id>   List branches for a machine source
   bb project paths <id>                   Search workspace paths
   bb project files <id>                   List workspace files
-  bb project content <id> <path>          Read file content (binary is base64)
+  bb project content <id> <path>          Read file content (binary is base64;
+                                          --json reports contentEncoding)
   bb project commands <id> --provider <id>
                                           List commands and skills
     --machine <id-or-name>                Target project source machine
@@ -60,6 +66,11 @@ Discovery:
   --environment <id> belonging to Personal. Personal has no default project
   source; the selected environment must be ready.
 
+  Path and file searches honor Git ignore rules, including local and global
+  exclusions; tracked and non-ignored untracked files, including hidden files,
+  remain searchable. Non-Git workspaces use filesystem listings. Use
+  `bb file list|paths` for listings that include ignored files.
+
 Attachments:
 
   bb project attachment upload <id>       Upload bytes from the CLI machine
@@ -73,9 +84,10 @@ Attachments:
   its relative `path` to thread --file/--image input. Thread --file and --image
   upload absolute paths and file: URLs from the CLI machine automatically;
   relative values remain existing server attachment paths.
-  image/* uploads are limited to 10MB; other files are limited to 25MB.
+  Uploads are limited to 35MB per file.
   image/heic and image/heif uploads are rejected because no renderer or
-  provider can decode them; convert them to JPEG or PNG first.
+  provider can decode them; convert them to JPEG or PNG first. There is no
+  command to list or remove project attachments.
 
 Sources:
 
@@ -98,10 +110,5 @@ Sources:
 
   bb project source delete <projectId> <sourceId>
 
-Project source deletion remains available while a project is pending deletion so providers can finish cleanup. A live project must retain at least one source; a deleting project may remove its last source.
-
-Workspace file and path searches honor Git ignore rules, including local and
-global exclusions. Tracked files and non-ignored untracked files remain
-searchable, including hidden files. Non-Git workspaces use filesystem listings.
-Use `bb file list|paths` for filesystem listings that include ignored files,
-subject to their explicit exclusion options.
+  A live project must retain at least one source; a project pending deletion
+  may remove its last source.

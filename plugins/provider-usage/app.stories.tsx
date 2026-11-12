@@ -110,7 +110,7 @@ const healthyPool = machine("source:account-pool", "Account Pooler", [
   provider(
     "team-claude",
     "claude-code",
-    measured("team@example.com", 97, "Max (20x)"),
+    measured("team@example.com", 97, "Ultra"),
   ),
 ]);
 const healthyMachine = machine("host-m4", "Michael-M4", [
@@ -151,7 +151,7 @@ const mixedPool = machine("source:account-pool", "Account Pooler", [
   provider(
     "team",
     "claude-code",
-    twoWindows("team@example.com", 97, 71, "Max (20x)"),
+    twoWindows("team@example.com", 97, 71, "Ultra"),
   ),
   provider(
     "research-long-account-name",
@@ -222,7 +222,7 @@ function liveUsage(
 const liveCodexWork = liveUsage("work@example.com", "Pro", [
   ["Weekly limit", 74, 95.6],
 ]);
-const liveClaude = liveUsage("personal@example.com", "Max (20x)", [
+const liveClaude = liveUsage("personal@example.com", "Ultra", [
   ["Five-hour limit", 7, 2.8],
   ["Weekly limit", 10, 146.3],
   ["Weekly · Fable", 0, 146.3],
@@ -270,7 +270,7 @@ const liveMachines = [
       "pool-claude-personal",
       "claude-code",
       "personal@example.com",
-      liveUsage("personal@example.com", "Max (20x)", [
+      liveUsage("personal@example.com", "Ultra", [
         ["Five-hour limit", 7, 2.8],
         ["Weekly limit", 9, 146.3],
         ["Weekly · Fable", 0, 146.3],
@@ -441,6 +441,46 @@ function ScenarioRows({
   );
 }
 
+export function CompactSettingsActions() {
+  const cases = [
+    { label: "No sources: refresh stays beside heading", machines: [] },
+    {
+      label: "One machine: refresh stays beside heading",
+      machines: [healthyMachine],
+    },
+    {
+      label: "Multiple sources: picker and refresh may stack",
+      machines: [healthyMachine, healthyPool],
+    },
+  ];
+  return (
+    <div className="space-y-8 p-5">
+      {cases.map(({ label, machines }) => (
+        <div key={label} className="space-y-3">
+          <h2 className="text-sm font-semibold">{label}</h2>
+          <div className="flex flex-wrap items-start gap-6">
+            {[352, 390].map((width) => (
+              <div key={width} style={{ width }} className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {width}px container
+                </p>
+                <UsageSettingsContent
+                  machines={machines}
+                  selectedId={null}
+                  loading={false}
+                  error={false}
+                  onSelect={() => {}}
+                  onRefresh={() => {}}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Settings() {
   return (
     <ScenarioRows>
@@ -484,4 +524,3 @@ export function Disclosure() {
     </ScenarioRows>
   );
 }
-

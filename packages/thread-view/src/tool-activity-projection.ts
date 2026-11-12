@@ -91,6 +91,7 @@ type BufferedExecutionOutput = RunningExecCall | PendingExecutionOutput;
 interface RunningCommandExecution extends RunningExecutionBase {
   kind: "command";
   command: string;
+  description: string | null;
   cwd: string | null;
   parsedIntents: EventProjectionToolParsedIntent[];
   source: string | null;
@@ -324,6 +325,7 @@ function createRunningExecCall(
         ...base,
         kind: "command",
         command: incoming.command ?? "",
+        description: incoming.description ?? null,
         cwd: incoming.cwd ?? null,
         parsedIntents: incoming.parsedIntents ?? [],
         source: incoming.source ?? null,
@@ -355,6 +357,7 @@ function createRunningExecCall(
 interface CommandExecutionFieldsTarget {
   approvalStatus: EventProjectionApprovalLifecycleStatus | null;
   command: string;
+  description: string | null;
   cwd: string | null;
   exitCode: number | null;
   parsedIntents: EventProjectionToolParsedIntent[];
@@ -364,6 +367,7 @@ interface CommandExecutionFieldsTarget {
 interface CommandExecutionFieldsSource {
   approvalStatus?: EventProjectionApprovalLifecycleStatus | null;
   command?: string;
+  description?: string | null;
   cwd?: string | null;
   exitCode?: number | null;
   parsedIntents?: EventProjectionToolParsedIntent[];
@@ -425,6 +429,7 @@ function mergeCommandExecutionFields(
 ): void {
   if (incoming.cwd && !target.cwd) target.cwd = incoming.cwd;
   if (incoming.source && !target.source) target.source = incoming.source;
+  if (incoming.description) target.description = incoming.description;
   if (incoming.command && incoming.command !== target.command) {
     target.command = incoming.command;
     target.parsedIntents = incoming.parsedIntents ?? [];
@@ -534,6 +539,15 @@ function upsertRunningExecCall(
     return createRunningExecCall(incoming, meta, threadId, scopeFields.scope);
   }
 
+  if (
+    existing.kind === "command" &&
+    existing.approvalStatus === "waiting_for_approval" &&
+    incoming.kind === "command" &&
+    incoming.approvalStatus === null &&
+    incoming.status === "pending"
+  ) {
+    existing.startedAt = meta.createdAt;
+  }
   mergeRunningExecutionMetadata(existing, incoming);
   mergeExecutionCompletion(existing, incoming);
   if (!existing.parentToolCallId && incoming.parentToolCallId) {
@@ -781,6 +795,7 @@ function mergeExecutionSummary(
     switch (incoming.kind) {
       case "command":
         if (target.kind !== "command") return;
+        if ("startedAt" in incoming) target.startedAt = incoming.startedAt;
         mergeCommandExecutionFields(target, incoming);
         break;
       case "tool-call":
@@ -906,6 +921,7 @@ function createExecMessage(
   const base = {
     id: messageId(call.threadId, rowKindForId, call.callId),
     threadId: call.threadId,
+    sourceEvent: { seq: call.sourceSeqStart, part: 0 },
     sourceSeqStart: call.sourceSeqStart,
     sourceSeqEnd: call.sourceSeqEnd,
     createdAt: call.createdAt,
@@ -926,6 +942,7 @@ function createExecMessage(
       ...base,
       kind: "command",
       command: call.command,
+      description: call.description,
       cwd: call.cwd,
       parsedIntents: call.parsedIntents,
       source: call.source,
@@ -993,6 +1010,30 @@ export function onExecBegin(
         call.createdAt,
       );
     }
+    return;
+  }
+
+  const historyMatch = findExecMessageInHistoryCells(state, call.callId);
+  const reopensDelegation =
+    historyMatch !== null &&
+    !existingRunning &&
+    historyMatch.call.kind === "delegation" &&
+    call.kind === "delegation";
+  if (reopensDelegation) {
+    historyMatch.call.status = "pending";
+    historyMatch.call.completedAt = null;
+    state.toolActivity.finalizedExecCallIds.delete(call.callId);
+  }
+  if (historyMatch && (existingRunning || reopensDelegation)) {
+    mergeExecutionSummary(historyMatch.call, call);
+    historyMatch.cell.sourceSeqEnd = Math.max(
+      historyMatch.cell.sourceSeqEnd,
+      call.sourceSeqEnd,
+    );
+    historyMatch.cell.createdAt = Math.max(
+      historyMatch.cell.createdAt,
+      call.createdAt,
+    );
     return;
   }
 

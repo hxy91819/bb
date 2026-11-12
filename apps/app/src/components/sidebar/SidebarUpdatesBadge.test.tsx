@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TooltipProvider } from "@bb/shared-ui/tooltip";
 import type { Host } from "@bb/domain";
@@ -13,6 +19,7 @@ import type {
   UpdateInventoryMachine,
 } from "@/hooks/useUpdateInventory";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
+import { makePluginListItem } from "@/test/fixtures/plugins";
 import { SidebarUpdatesBadge } from "./SidebarUpdatesBadge";
 
 const useUpdateInventoryMock = vi.hoisted(() => vi.fn());
@@ -51,6 +58,7 @@ vi.mock("@/lib/ws", () => ({
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   providerCliInstallRunnerState.runningJobKey = null;
   useUpdateInventoryMock.mockReset();
 });
@@ -134,6 +142,11 @@ function machine(
   };
 }
 
+const NO_PLUGIN_UPDATES: UpdateInventory["plugins"] = {
+  trackedCount: 0,
+  items: [],
+};
+
 function renderBadge(inventory: Partial<UpdateInventory>) {
   useUpdateInventoryMock.mockReturnValue({
     isLoading: false,
@@ -142,6 +155,7 @@ function renderBadge(inventory: Partial<UpdateInventory>) {
     appUpdateAvailable: false,
     desktopUpdateReady: false,
     machines: [],
+    plugins: NO_PLUGIN_UPDATES,
     actionableCount: 0,
     hasAttention: false,
     ...inventory,
@@ -173,11 +187,124 @@ describe("SidebarUpdatesBadge", () => {
     expect(screen.queryByTestId("sidebar-updates-badge-providers")).toBeNull();
   });
 
-  it("counts a daemon stuck on an old protocol as a bb update, not a provider one", () => {
-    renderBadge({ machines: [machine({ canRetryDaemonUpdate: true })] });
+  it("counts plugin updates but not blocked plugin candidates", () => {
+    const plugin = (id: string) =>
+      makePluginListItem({ id, source: `npm:@acme/${id}@^1.0.0` });
+    renderBadge({
+      plugins: {
+        trackedCount: 3,
+        items: [
+          { kind: "update", plugin: plugin("notes"), version: "1.1.0" },
+          { kind: "update", plugin: plugin("linear"), version: "1.2.0" },
+          {
+            kind: "blocked",
+            plugin: plugin("legacy"),
+            version: "2.0.0",
+            reasons: ["engines.bb requires >=9.0.0"],
+          },
+        ],
+      },
+    });
 
+    const chip = screen.getByRole("link", {
+      name: "2 plugin updates available",
+    });
+    expect(chip.getAttribute("href")).toBe("/settings/updates");
+    expect(chip.textContent).toBe("2");
+    expect(screen.queryByTestId("sidebar-updates-badge-bb")).toBeNull();
+  });
+
+  it("acknowledges offline machines across reloads without suppressing real updates", () => {
+    const offline = machine({
+      host: makeHost({
+        id: "offline",
+        name: "Work laptop",
+        status: "disconnected",
+        lastSeenAt: 100,
+        lastRejectedProtocolVersion: 1,
+      }),
+      canRetryDaemonUpdate: true,
+    });
+    renderBadge({ machines: [offline] });
+    expect(screen.queryByTestId("sidebar-updates-badge-bb")).toBeNull();
+    const warning = screen.getByRole("link", {
+      name: "Work laptop is offline",
+    });
+    expect(warning.getAttribute("href")).toBe("/settings/machines");
+    fireEvent.click(warning);
+    expect(screen.queryByTestId("sidebar-machines-attention-badge")).toBeNull();
+    cleanup();
+
+    const reloaded = renderBadge({ isLoading: true });
+    useUpdateInventoryMock.mockReturnValue({
+      isLoading: false,
+      plugins: NO_PLUGIN_UPDATES,
+      machines: [
+        {
+          ...offline,
+          host: { ...offline.host, lastRejectedProtocolVersion: 2 },
+        },
+      ],
+      appUpdateAvailable: true,
+    });
+    reloaded.rerender(<BadgeHarness />);
+    expect(screen.queryByTestId("sidebar-machines-attention-badge")).toBeNull();
     expect(screen.getByTestId("sidebar-updates-badge-bb")).toBeTruthy();
-    expect(screen.queryByTestId("sidebar-updates-badge-providers")).toBeNull();
+    cleanup();
+
+    renderBadge({
+      machines: [{ ...offline, host: { ...offline.host, lastSeenAt: 200 } }],
+    });
+    expect(screen.getByTestId("sidebar-machines-attention-badge")).toBeTruthy();
+  });
+
+  it("keeps acknowledged hosts quiet when peers recover and reports new issues", () => {
+    const first = machine({
+      host: makeHost({ id: "first", status: "disconnected" }),
+    });
+    const second = machine({
+      host: makeHost({ id: "second", status: "disconnected" }),
+    });
+    const result = renderBadge({ machines: [first, second] });
+    fireEvent.click(screen.getByRole("link", { name: "Machines offline" }));
+    useUpdateInventoryMock.mockReturnValue({
+      isLoading: false,
+      plugins: NO_PLUGIN_UPDATES,
+      machines: [first],
+    });
+    result.rerender(<BadgeHarness />);
+    expect(screen.queryByTestId("sidebar-machines-attention-badge")).toBeNull();
+
+    useUpdateInventoryMock.mockReturnValue({
+      isLoading: false,
+      plugins: NO_PLUGIN_UPDATES,
+      machines: [
+        first,
+        { ...second, host: { ...second.host, status: "connected" } },
+      ],
+    });
+    result.rerender(<BadgeHarness />);
+    useUpdateInventoryMock.mockReturnValue({
+      isLoading: false,
+      plugins: NO_PLUGIN_UPDATES,
+      machines: [first, second],
+    });
+    result.rerender(<BadgeHarness />);
+    expect(screen.getByRole("link", { name: "Machines offline" })).toBeTruthy();
+  });
+
+  it("does not warn about intentionally paused machines or ephemeral hosts", () => {
+    const paused = makeHost({ status: "disconnected" });
+    paused.lifecycle.phase = "suspended";
+    renderBadge({
+      machines: [
+        machine({ host: paused }),
+        machine({
+          host: makeHost({ status: "disconnected", type: "ephemeral" }),
+        }),
+      ],
+    });
+    expect(screen.queryByTestId("sidebar-machines-attention-badge")).toBeNull();
   });
 
   it("shows only the provider chip when bb itself is current", () => {
@@ -214,19 +341,6 @@ describe("SidebarUpdatesBadge", () => {
 
     expect(providerChip.querySelector('[data-icon="Loading"]')).toBeNull();
     expect(providerChip.querySelector('[data-icon="Download"]')).toBeTruthy();
-  });
-
-  it("renders no provider chip when a CLI is not installed", () => {
-    renderBadge({
-      machines: [
-        machine({
-          issues: [missingInstallIssue("claude-code", "Claude Code")],
-        }),
-      ],
-    });
-
-    expect(screen.queryByTestId("sidebar-updates-badge-providers")).toBeNull();
-    expect(screen.queryByTestId("sidebar-updates-badge-bb")).toBeNull();
   });
 
   it("still shows the bb chip when the only provider issue is a missing CLI", () => {

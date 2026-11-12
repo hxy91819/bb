@@ -82,29 +82,6 @@ const run: WorkflowRunView = {
   finishedAt: null,
 };
 
-describe("workflows app registration", () => {
-  it("registers the composer banner, chat directive, and thread panel action", () => {
-    expect(app.composerCustomizations).toMatchObject([
-      {
-        id: "workflow-status",
-        scopes: ["thread"],
-        banners: [{ id: "active-runs", chrome: "bare" }],
-      },
-    ]);
-    expect(app.messageDirectives.map((directive) => directive.id)).toEqual([
-      "workflow-preview",
-    ]);
-    expect(app.threadPanelActions).toMatchObject([
-      {
-        id: "workflow-run",
-        title: "Workflow run",
-        icon: "Workflow",
-        layout: "flush",
-      },
-    ]);
-  });
-});
-
 describe("workflow composer banner", () => {
   const banner = app.composerCustomizations[0]!.banners![0]!;
 
@@ -134,7 +111,12 @@ describe("workflow composer banner", () => {
       },
     );
 
-    await slot.findByText("Review the release");
+    fireEvent.click(
+      await slot.findByRole("button", {
+        name: "2 workflows running. Show all",
+      }),
+    );
+    expect(slot.getByText("Review the release")).toBeTruthy();
     expect(slot.getByText("Queue release notes")).toBeTruthy();
     expect(slot.getByText("Review")).toBeTruthy();
     expect(slot.getByText("1/2 agents")).toBeTruthy();
@@ -146,7 +128,94 @@ describe("workflow composer banner", () => {
     ).toBeTruthy();
   });
 
-  it("matches the native collapsed summary and expands with an accessible toggle", async () => {
+  it("auto-collapses multiple active runs into a stack that expands to every run", async () => {
+    const runs = [1, 2, 3, 4].map((index) => ({
+      ...run,
+      id: `wfr_${index}1111111-1111-4111-8111-111111111111`,
+      name: `Build ${index}`,
+    }));
+    const slot = renderSlot(
+      banner,
+      {},
+      {
+        composer: {
+          scope: { kind: "thread", threadId: "thr_scope" },
+        },
+        rpc: { workflowActiveRuns: () => ({ runs }) },
+      },
+    );
+
+    const stack = await slot.findByRole("button", {
+      name: "4 workflows running. Show all",
+    });
+    expect(stack.getAttribute("aria-expanded")).toBe("false");
+    expect(slot.getByText("4")).toBeTruthy();
+    expect(
+      slot.container.querySelectorAll("[data-prompt-stack-peek]"),
+    ).toHaveLength(2);
+    expect(slot.queryAllByRole("region", { name: "Workflow" })).toHaveLength(0);
+
+    fireEvent.click(stack);
+    expect(slot.getAllByRole("region", { name: "Workflow" })).toHaveLength(4);
+    const collapse = slot.getByRole("button", { name: "Collapse 4 workflows" });
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(collapse);
+    expect(
+      slot.container.querySelectorAll("[data-prompt-stack-peek]"),
+    ).toHaveLength(0);
+
+    fireEvent.click(collapse);
+    expect(slot.queryAllByRole("region", { name: "Workflow" })).toHaveLength(0);
+    expect(document.activeElement).toBe(
+      slot.getByRole("button", { name: "4 workflows running. Show all" }),
+    );
+  });
+
+  it("re-collapses the stack after every run finishes and new runs start", async () => {
+    const runs = [1, 2].map((index) => ({
+      ...run,
+      id: `wfr_${index}1111111-1111-4111-8111-111111111111`,
+      name: `Build ${index}`,
+    }));
+    let current: WorkflowRunView[] = runs;
+    const slot = renderSlot(
+      banner,
+      {},
+      {
+        composer: {
+          scope: { kind: "thread", threadId: "thr_scope" },
+        },
+        rpc: { workflowActiveRuns: () => ({ runs: current }) },
+      },
+    );
+
+    fireEvent.click(
+      await slot.findByRole("button", {
+        name: "2 workflows running. Show all",
+      }),
+    );
+    expect(
+      slot.getByRole("button", { name: "Collapse 2 workflows" }),
+    ).toBeTruthy();
+
+    current = [];
+    await slot.experimental_invalidateRpc(["runs:thr_scope"]);
+    await waitFor(() =>
+      expect(
+        slot.queryByRole("button", { name: "Collapse 2 workflows" }),
+      ).toBeNull(),
+    );
+
+    current = runs;
+    await slot.experimental_invalidateRpc(["runs:thr_scope"]);
+    expect(
+      await slot.findByRole("button", {
+        name: "2 workflows running. Show all",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("expands from the card and collapses from the chevron row with focus following", async () => {
     const slot = renderSlot(
       banner,
       {},
@@ -178,14 +247,20 @@ describe("workflow composer banner", () => {
     expect(body?.className).toContain("grid-rows-[1fr]");
     expect(slot.getByText("Adversarial review")).toBeTruthy();
     expect(slot.getByRole("button", { name: /Review0\/1/ })).toBeTruthy();
-    expect(
-      slot.container.querySelector('[data-icon="ChevronDown"].rotate-180'),
-    ).toBeTruthy();
+    const collapse = slot.getByRole("button", {
+      name: "Collapse workflow Review the release",
+    });
+    expect(document.activeElement).toBe(collapse);
+
+    fireEvent.click(collapse);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(body?.getAttribute("aria-hidden")).toBe("true");
+    expect(body?.hasAttribute("inert")).toBe(true);
+    expect(document.activeElement).toBe(toggle);
   });
 
-  it("preserves each run's expansion state across polls", async () => {
-    vi.useFakeTimers();
-    let polls = 0;
+  it("preserves each run's expansion state across refreshes", async () => {
+    let reads = 0;
     const slot = renderSlot(
       banner,
       {},
@@ -195,24 +270,27 @@ describe("workflow composer banner", () => {
         },
         rpc: {
           workflowActiveRuns: () => {
-            polls += 1;
-            return { runs: [{ ...run }] };
+            reads += 1;
+            return {
+              runs: [
+                { ...run, currentPhase: reads > 1 ? "Discover" : "Review" },
+              ],
+            };
           },
         },
       },
     );
 
-    await act(async () => Promise.resolve());
-    const toggle = slot.getByRole("button", {
+    const toggle = await slot.findByRole("button", {
       name: "Workflow: Review the release",
     });
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(polls).toBe(2);
+    await slot.experimental_invalidateRpc(["runs:thr_scope"]);
+    expect(reads).toBe(2);
+    expect(toggle.isConnected).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    slot.unmount();
   });
 
   it("renders null when the scope thread has no active runs", async () => {
@@ -231,9 +309,9 @@ describe("workflow composer banner", () => {
     expect(slot.container.childElementCount).toBe(0);
   });
 
-  it("does not poll an idle thread; a workflow-runs signal refreshes it and an active run falls back to a slow poll", async () => {
-    vi.useFakeTimers();
+  it("refreshes only for its own thread's runs and keeps runs through a failed refresh", async () => {
     let runs: WorkflowRunView[] = [];
+    let failing = false;
     const slot = renderSlot(
       banner,
       {},
@@ -241,87 +319,39 @@ describe("workflow composer banner", () => {
         composer: {
           scope: { kind: "thread", threadId: "thr_idle" },
         },
-        rpc: { workflowActiveRuns: () => ({ runs }) },
+        rpc: {
+          workflowActiveRuns: () => {
+            if (failing) throw new Error("outage");
+            return { runs };
+          },
+        },
       },
     );
 
-    await act(async () => Promise.resolve());
-    expect(slot.rpcCalls).toHaveLength(1);
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(slot.rpcCalls).toHaveLength(1);
-
-    await slot.emitRealtime("workflow-runs", { threadId: "thr_other" });
+    await waitFor(() => expect(slot.rpcCalls).toHaveLength(1));
+    await slot.experimental_invalidateRpc(["runs:thr_other"]);
     expect(slot.rpcCalls).toHaveLength(1);
 
     runs = [run];
-    await slot.emitRealtime("workflow-runs", { threadId: "thr_idle" });
-    await act(async () => Promise.resolve());
+    await slot.experimental_invalidateRpc(["runs:thr_idle"]);
+    expect(await slot.findByText("Review the release")).toBeTruthy();
     expect(slot.rpcCalls).toHaveLength(2);
+
+    failing = true;
+    await slot.experimental_invalidateRpc(["runs:thr_idle"]);
+    await waitFor(() => expect(slot.rpcCalls).toHaveLength(3));
     expect(slot.getByText("Review the release")).toBeTruthy();
-    await act(async () => vi.advanceTimersByTimeAsync(14_000));
-    expect(slot.rpcCalls).toHaveLength(2);
-    await act(async () => vi.advanceTimersByTimeAsync(1_000));
-    expect(slot.rpcCalls).toHaveLength(3);
 
+    failing = false;
     runs = [];
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(slot.rpcCalls).toHaveLength(4);
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(slot.rpcCalls).toHaveLength(4);
-    slot.unmount();
-  });
-
-  it("pauses polling while the document is hidden and refreshes once when it is visible again", async () => {
-    vi.useFakeTimers();
-    const setVisibility = (state: "visible" | "hidden") => {
-      Object.defineProperty(document, "visibilityState", {
-        configurable: true,
-        get: () => state,
-      });
-      document.dispatchEvent(new Event("visibilitychange"));
-    };
-    const slot = renderSlot(
-      banner,
-      {},
-      {
-        composer: {
-          scope: { kind: "thread", threadId: "thr_scope" },
-        },
-        rpc: { workflowActiveRuns: () => ({ runs: [run] }) },
-      },
+    await slot.experimental_invalidateRpc(["runs:thr_idle"]);
+    await waitFor(() =>
+      expect(slot.queryByText("Review the release")).toBeNull(),
     );
-    try {
-      await act(async () => Promise.resolve());
-      expect(slot.rpcCalls).toHaveLength(1);
-      await act(async () => vi.advanceTimersByTimeAsync(15_000));
-      expect(slot.rpcCalls).toHaveLength(2);
-
-      await act(async () => {
-        setVisibility("hidden");
-      });
-      await act(async () => vi.advanceTimersByTimeAsync(60_000));
-      await slot.emitRealtime("workflow-runs", { threadId: "thr_scope" });
-      await act(async () => Promise.resolve());
-      expect(slot.rpcCalls).toHaveLength(2);
-
-      await act(async () => {
-        setVisibility("visible");
-      });
-      await act(async () => Promise.resolve());
-      expect(slot.rpcCalls).toHaveLength(3);
-      await act(async () => vi.advanceTimersByTimeAsync(15_000));
-      expect(slot.rpcCalls).toHaveLength(4);
-    } finally {
-      slot.unmount();
-      Object.defineProperty(document, "visibilityState", {
-        configurable: true,
-        get: () => "visible",
-      });
-    }
   });
 
   it("opens the run in the workflow side panel without stopping it", async () => {
-    const openThreadPanel = vi.fn(() => true);
+    const openTab = vi.fn(() => true);
     const slot = renderSlot(
       banner,
       {},
@@ -329,7 +359,7 @@ describe("workflow composer banner", () => {
         composer: {
           scope: { kind: "thread", threadId: "thr_scope" },
         },
-        openThreadPanel,
+        experimental_panel: { openTab },
         rpc: {
           workflowActiveRuns: () => ({ runs: [run] }),
         },
@@ -341,8 +371,12 @@ describe("workflow composer banner", () => {
         name: /open workflow review.*in side panel/i,
       }),
     );
-    expect(openThreadPanel).toHaveBeenCalledWith({
-      actionId: "workflow-run",
+    expect(openTab).toHaveBeenCalledWith({
+      tab: {
+        id: "workflow-run",
+        context: { kind: "thread" },
+        availability: "action",
+      },
       title: "Review the release",
       params: { runId: run.id },
     });
@@ -372,7 +406,7 @@ describe("workflow-preview directive", () => {
   });
 
   it("renders live phases and opens the matching shared thread panel", async () => {
-    const openThreadPanel = vi.fn(() => true);
+    const openTab = vi.fn(() => true);
     const slot = renderSlot(
       app.messageDirectives[0]!,
       {
@@ -382,7 +416,7 @@ describe("workflow-preview directive", () => {
         openWorkspaceFile: null,
       },
       {
-        openThreadPanel,
+        experimental_panel: { openTab },
         rpc: {
           workflowRunView: (input) => {
             expect(input).toEqual({ threadId: "thr_origin", runId: run.id });
@@ -427,8 +461,12 @@ describe("workflow-preview directive", () => {
     fireEvent.click(workflowToggle);
 
     fireEvent.click(slot.getByRole("button", { name: /open in right panel/i }));
-    expect(openThreadPanel).toHaveBeenCalledWith({
-      actionId: "workflow-run",
+    expect(openTab).toHaveBeenCalledWith({
+      tab: {
+        id: "workflow-run",
+        context: { kind: "thread" },
+        availability: "action",
+      },
       title: "Review the release",
       params: { runId: run.id },
     });
@@ -505,8 +543,7 @@ describe("workflow-preview directive", () => {
     expect(slot.getByText("Unphased verification")).toBeTruthy();
   });
 
-  it("recovers from initial and active polling failures, then settles", async () => {
-    vi.useFakeTimers();
+  it("recovers from initial and refresh failures without promising retries", async () => {
     let attempt = 0;
     const terminalRun: WorkflowRunView = {
       ...run,
@@ -534,58 +571,35 @@ describe("workflow-preview directive", () => {
           workflowRunView: () => {
             attempt += 1;
             if (attempt === 1) throw new Error("initial outage");
-            if (attempt === 3) throw new Error("poll outage");
+            if (attempt === 3) throw new Error("refresh outage");
             return { run: attempt === 2 ? run : terminalRun };
           },
         },
       },
     );
 
-    await act(async () => Promise.resolve());
-    expect(slot.getByRole("alert").textContent).toMatch(/initial outage/i);
+    expect((await slot.findByRole("alert")).textContent).toMatch(
+      /initial outage/i,
+    );
 
-    await act(async () => vi.advanceTimersByTimeAsync(2_000));
-    expect(slot.getByText("Review the release")).toBeTruthy();
+    await slot.experimental_invalidateRpc(["runs:thr_origin"]);
+    expect(await slot.findByText("Review the release")).toBeTruthy();
     expect(slot.queryByText("Complete")).toBeNull();
 
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(slot.getByRole("status").textContent).toMatch(
-      /poll outage.*retrying/i,
+    await slot.experimental_invalidateRpc(["runs:thr_origin"]);
+    expect((await slot.findByRole("status")).textContent).toBe(
+      "Could not refresh: refresh outage.",
     );
     expect(slot.getByText("Review the release")).toBeTruthy();
 
-    await act(async () => vi.advanceTimersByTimeAsync(2_000));
-    expect(slot.getByText("Complete")).toBeTruthy();
+    await slot.experimental_invalidateRpc(["runs:thr_origin"]);
+    expect(await slot.findByText("Complete")).toBeTruthy();
     expect(slot.queryByRole("status")).toBeNull();
     expect(attempt).toBe(4);
-
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(attempt).toBe(4);
-    slot.unmount();
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(attempt).toBe(4);
   });
 
-  it("does not overlap a poll that takes longer than the interval", async () => {
-    vi.useFakeTimers();
-    let attempt = 0;
-    let resolvePoll: ((value: { run: WorkflowRunView }) => void) | null = null;
-    const delayedPoll = new Promise<{ run: WorkflowRunView }>((resolve) => {
-      resolvePoll = resolve;
-    });
-    const terminalRun: WorkflowRunView = {
-      ...run,
-      status: "succeeded",
-      phases: run.phases.map((phase) => ({
-        ...phase,
-        calls: phase.calls.map((call) => ({
-          ...call,
-          status: "succeeded" as const,
-          finishedAt: 4_000,
-        })),
-      })),
-      finishedAt: 4_000,
-    };
+  it("replaces a loaded missing run with a later read error", async () => {
+    let failing = false;
     const slot = renderSlot(
       app.messageDirectives[0]!,
       {
@@ -597,41 +611,29 @@ describe("workflow-preview directive", () => {
       {
         rpc: {
           workflowRunView: () => {
-            attempt += 1;
-            if (attempt === 1) return { run };
-            if (attempt === 2) return delayedPoll;
-            throw new Error("polls overlapped");
+            if (failing) throw new Error("server unavailable");
+            return { run: null };
           },
         },
       },
     );
 
-    await act(async () => Promise.resolve());
-    expect(slot.getByText("Review the release")).toBeTruthy();
-    expect(slot.queryByText("Complete")).toBeNull();
-
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(attempt).toBe(2);
-    await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(attempt).toBe(2);
-
-    await act(async () => {
-      resolvePoll?.({ run: terminalRun });
-      await delayedPoll;
-    });
-    expect(slot.getByText("Complete")).toBeTruthy();
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(attempt).toBe(2);
+    expect((await slot.findByRole("alert")).textContent).toBe(
+      "Workflow run not found.",
+    );
+    failing = true;
+    await slot.experimental_invalidateRpc(["runs:thr_origin"]);
+    await waitFor(() =>
+      expect(slot.getByRole("alert").textContent).toBe("server unavailable"),
+    );
   });
 
-  it("refreshes a run view on workflow-runs signals and folds a burst into one follow-up request", async () => {
-    let attempt = 0;
-    let resolveFirstSignalLoad:
-      | ((value: { run: WorkflowRunView }) => void)
-      | null = null;
-    const firstSignalLoad = new Promise<{ run: WorkflowRunView }>((resolve) => {
-      resolveFirstSignalLoad = resolve;
+  it("keeps a running run's elapsed time ticking between refreshes and freezes it once finished", async () => {
+    vi.useFakeTimers({
+      now: 61_000,
+      toFake: ["Date", "setInterval", "clearInterval"],
     });
+    let finished = false;
     const slot = renderSlot(
       app.messageDirectives[0]!,
       {
@@ -642,67 +644,25 @@ describe("workflow-preview directive", () => {
       },
       {
         rpc: {
-          workflowRunView: () => {
-            attempt += 1;
-            if (attempt === 2) return firstSignalLoad;
-            return { run };
-          },
-        },
-      },
-    );
-    await slot.findByText("Review the release");
-    expect(attempt).toBe(1);
-
-    await slot.emitRealtime("workflow-runs", { threadId: "thr_other" });
-    expect(attempt).toBe(1);
-
-    await slot.emitRealtime("workflow-runs", { threadId: message.threadId });
-    await slot.emitRealtime("workflow-runs", { threadId: message.threadId });
-    await slot.emitRealtime("workflow-runs", { threadId: message.threadId });
-    expect(attempt).toBe(2);
-
-    await act(async () => {
-      resolveFirstSignalLoad?.({ run });
-      await firstSignalLoad;
-    });
-    await waitFor(() => expect(attempt).toBe(3));
-    await act(async () => Promise.resolve());
-    expect(attempt).toBe(3);
-    slot.unmount();
-  });
-
-  it("backs off while a run view keeps failing instead of retrying every second", async () => {
-    vi.useFakeTimers();
-    let attempt = 0;
-    const slot = renderSlot(
-      app.messageDirectives[0]!,
-      {
-        attributes: { run: run.id },
-        source: `::workflow-preview{run="${run.id}"}`,
-        message,
-        openWorkspaceFile: null,
-      },
-      {
-        rpc: {
-          workflowRunView: () => {
-            attempt += 1;
-            throw new Error(
-              "This workflow run is not available in this thread",
-            );
-          },
+          workflowRunView: () => ({
+            run: finished
+              ? { ...run, status: "succeeded" as const, finishedAt: 125_000 }
+              : run,
+          }),
         },
       },
     );
 
-    await act(async () => Promise.resolve());
-    expect(attempt).toBe(1);
-    await act(async () => vi.advanceTimersByTimeAsync(2_000));
-    expect(attempt).toBe(2);
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
-    expect(attempt).toBe(3);
-    await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
-    expect(attempt).toBe(15);
-    slot.unmount();
+    expect(await slot.findByText("1m")).toBeTruthy();
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(slot.getByText("1m 5s")).toBeTruthy();
+
+    finished = true;
+    await slot.experimental_invalidateRpc(["runs:thr_origin"]);
+    expect(await slot.findByText("2m 4s")).toBeTruthy();
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(slot.getByText("2m 4s")).toBeTruthy();
+    expect(slot.rpcCalls).toHaveLength(2);
   });
 
   it("renders successful empty phases as settled", async () => {
@@ -774,7 +734,7 @@ describe("workflow thread panel", () => {
     let stopped = false;
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_origin", params: { runId: run.id } },
+      { threadId: "thr_origin", environment: null, params: { runId: run.id } },
       {
         rpc: {
           workflowRunView: () => ({
@@ -824,7 +784,7 @@ describe("workflow thread panel", () => {
   ])("keeps local spacing while showing %s", async (_name, workflowRunView) => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_origin", params: { runId: run.id } },
+      { threadId: "thr_origin", environment: null, params: { runId: run.id } },
       { rpc: { workflowRunView } },
     );
 
@@ -844,6 +804,7 @@ describe("workflow thread panel", () => {
       app.threadPanelActions[0]!,
       {
         threadId: "thr_origin",
+        environment: null,
         params: { runId: run.id, unexpected: true },
       },
       { rpc: {} },

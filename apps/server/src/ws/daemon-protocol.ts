@@ -11,6 +11,7 @@ import { verifyAuthenticatedDaemon } from "../internal/auth.js";
 import type {
   AppDeps,
   LoggedPendingInteractionWorkSessionDeps,
+  WorkSessionDeps,
 } from "../types.js";
 import { runtimeErrorLogFields } from "../services/lib/error-log-fields.js";
 import {
@@ -25,6 +26,7 @@ import {
 import { HEARTBEAT_INTERVAL_MS, LEASE_TIMEOUT_MS } from "../constants.js";
 import {
   notifyDaemonEnvironmentChange,
+  notifyDaemonThreadStorageChange,
   recordDaemonEnvironmentMetadataChange,
 } from "../internal/environment-changes.js";
 import { requestQueuedMessageDispatch } from "../services/threads/queued-message-dispatch.js";
@@ -108,6 +110,7 @@ export function onDaemonSocketOpen(
   deps.hub.registerDaemon(args.sessionId, args.hostId, args.socket);
   handleDaemonSocketOpened(deps, { hostId: args.hostId });
   deps.sharedPorts.pushCurrentSharedPortsForHost(args.hostId);
+  deps.sharedPorts.pushCurrentNextTunnelForHost(args.hostId);
   if (!isServerMoveSnapshotFenced(deps.db)) {
     deps.terminalSessions.reconcileDisconnectedHostTerminals({
       daemonSessionId: args.sessionId,
@@ -140,10 +143,7 @@ export function onDaemonSocketOpen(
 }
 
 export function onDaemonSocketMessage(
-  deps: Pick<
-    AppDeps,
-    "config" | "db" | "hub" | "logger" | "sharedPorts" | "terminalSessions"
-  >,
+  deps: WorkSessionDeps & Pick<AppDeps, "sharedPorts" | "terminalSessions">,
   args: DaemonSocketMessageArgs,
   plugins?: Pick<PluginService, "handleHostSignal" | "handleHostWorkerExit">,
   serverMove?: Pick<ServerMoveCoordinator, "handleProgress">,
@@ -205,6 +205,13 @@ export function onDaemonSocketMessage(
         });
         return;
       }
+      if (message.type === "thread-storage-change") {
+        notifyDaemonThreadStorageChange(deps, {
+          hostId: args.hostId,
+          threadId: message.threadId,
+        });
+        return;
+      }
       if (message.type === "environment-metadata-change") {
         recordDaemonEnvironmentMetadataChange(deps, {
           hostId: args.hostId,
@@ -244,6 +251,14 @@ export function onDaemonSocketMessage(
         deps.sharedPorts.recordTunnelIdentity(args.hostId, message.identity);
         return;
       }
+      if (message.type === "connect-next.status") {
+        deps.sharedPorts.recordNextTunnelStatus({
+          hostId: args.hostId,
+          sessionId: args.sessionId,
+          status: message.status,
+        });
+        return;
+      }
       if (message.type === "desktop-browser.changed") {
         const scope = {
           hostId: args.hostId,
@@ -251,9 +266,7 @@ export function onDaemonSocketMessage(
           generation: message.generation,
           threadId: message.threadId,
         };
-        try {
-          syncDesktopBrowserTabs(deps, scope, message.tabs);
-        } catch (error) {
+        const logDropped = (error: unknown) => {
           deps.logger.warn(
             {
               sessionId: args.sessionId,
@@ -262,7 +275,10 @@ export function onDaemonSocketMessage(
             },
             "Dropping desktop browser snapshot the server cannot apply",
           );
-        }
+        };
+        void syncDesktopBrowserTabs(deps, scope, message.tabs).catch(
+          logDropped,
+        );
         return;
       }
       if (message.type === "plugin-host.worker-exited") {

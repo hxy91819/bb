@@ -11,6 +11,7 @@ import {
   type Db,
 } from "./data.js";
 import { publishAutomationChange } from "./realtime.js";
+import type { ScriptRunScope } from "./script-runner.js";
 import { computeNextScheduledTime } from "./schedule-helpers.js";
 import {
   errorMessage,
@@ -61,6 +62,7 @@ async function processDueAutomation(
     agentHostsAvailable: boolean;
     serverUrl: string;
     resolveWorkingDirectory: ScriptWorkingDirectoryResolver;
+    scriptRuns: ScriptRunScope;
   },
 ): Promise<void> {
   if (args.automation.nextRunAt === null) return;
@@ -119,6 +121,7 @@ async function processDueAutomation(
       onFailure,
       serverUrl: args.serverUrl,
       resolveWorkingDirectory: args.resolveWorkingDirectory,
+      scriptRuns: args.scriptRuns,
     }).catch((error: unknown) => {
       bb.log.error(
         `Detached script automation ${args.automation.id} failed unexpectedly: ${errorMessage(error)}`,
@@ -151,11 +154,13 @@ export async function sweepDueAutomations(
     pluginDataDir: string;
     serverUrl: string;
     serverHostId: string | null;
+    scriptRuns: ScriptRunScope;
     now?: number;
   },
 ): Promise<void> {
   const now = args.now ?? Date.now();
   const due = listDueAutomations(db, { now, limit: DUE_AUTOMATION_BATCH_SIZE });
+  if (due.length === 0) return;
   const agentHostsAvailable = await hasConnectedHost(bb);
   const resolveWorkingDirectory = createScriptWorkingDirectoryResolver({
     sdk: bb.sdk,
@@ -171,6 +176,7 @@ export async function sweepDueAutomations(
         agentHostsAvailable,
         serverUrl: args.serverUrl,
         resolveWorkingDirectory,
+        scriptRuns: args.scriptRuns,
       });
     } catch (error) {
       bb.log.error(

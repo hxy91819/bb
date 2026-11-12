@@ -1,6 +1,7 @@
-import { createEventId, getThread } from "@bb/db";
+import { createEventId, getThread, type DbTransaction } from "@bb/db";
 import {
   THREAD_CONTEXT_CLEAR_OPERATION,
+  THREAD_CONTEXT_CLEARED_DETAIL,
   threadScope,
   type Environment,
   type Thread,
@@ -16,6 +17,7 @@ import { requestQueuedMessageDispatch } from "./queued-message-dispatch.js";
 export async function clearThreadContext(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: {
+    beforeCommitInTransaction?: (args: { tx: DbTransaction }) => void;
     environment: Pick<Environment, "hostId" | "id">;
     thread: Thread;
   },
@@ -35,7 +37,9 @@ export async function clearThreadContext(
         "Context can only be cleared when the thread is idle or failed",
       );
     }
-    if (deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(thread.id)) {
+    if (
+      deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(thread.id)
+    ) {
       throw new ApiError(
         409,
         "awaiting_user_interaction",
@@ -56,19 +60,22 @@ export async function clearThreadContext(
       );
     }
 
-    appendThreadEvent(deps, {
-      threadId: releasedThread.id,
-      environmentId: releasedThread.environmentId,
-      type: "system/operation",
-      scope: threadScope(),
-      data: {
-        operation: THREAD_CONTEXT_CLEAR_OPERATION,
-        operationId: createEventId(),
-        status: "completed",
-        message:
-          "Earlier chat is hidden from the active timeline. Durable history and workspace are unchanged.",
+    appendThreadEvent(
+      deps,
+      {
+        threadId: releasedThread.id,
+        environmentId: releasedThread.environmentId,
+        type: "system/operation",
+        scope: threadScope(),
+        data: {
+          operation: THREAD_CONTEXT_CLEAR_OPERATION,
+          operationId: createEventId(),
+          status: "completed",
+          message: THREAD_CONTEXT_CLEARED_DETAIL,
+        },
       },
-    });
+      args.beforeCommitInTransaction,
+    );
     deps.hub.notifyThread(
       releasedThread.id,
       ["history-rewritten", "status-changed"],

@@ -11,7 +11,9 @@ import { Icon, type IconName } from "@bb/shared-ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@bb/shared-ui/tooltip";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@bb/shared-ui/chrome-style-tokens";
-import type { WorkspaceCheckoutDisplay } from "@/lib/workspace-checkout-display";
+import type {
+  WorkspaceCheckoutDisplay,
+} from "@bb/shared-ui/lib/workspace-checkout-display";
 import {
   MachineLabel,
   type MachineLabelHost,
@@ -42,7 +44,7 @@ export function ThreadDetailsButton({
         OPTION_BASE_CLASS_NAME,
         OPTION_INTERACTIVE_CLASS_NAME,
         OPTION_MUTED_CLASS_NAME,
-        "h-6 max-md:h-11 max-md:px-2",
+        "h-6 max-md:pointer-coarse:h-11 max-md:pointer-coarse:px-2",
       )}
     >
       <Icon name={icon} className="size-3.5 shrink-0" aria-hidden />

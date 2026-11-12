@@ -31,8 +31,27 @@ export const hostDirectoryListingSchema = z.object({
   directory: z.string(),
   parent: z.string().nullable(),
   entries: z.array(hostDirectoryEntrySchema),
+  roots: z.array(z.string()),
 });
 export type HostDirectoryListing = z.infer<typeof hostDirectoryListingSchema>;
+
+export const hostDiscoveredRepoSchema = z.object({
+  path: z.string().min(1),
+  name: z.string().min(1),
+  lastActivityAt: z.string().datetime(),
+  originUrl: z.string().min(1).nullable(),
+  projectId: z.string().min(1).nullable(),
+});
+export type HostDiscoveredRepo = z.infer<typeof hostDiscoveredRepoSchema>;
+
+export const hostDiscoveredReposResponseSchema = z.object({
+  repos: z.array(hostDiscoveredRepoSchema),
+  truncated: z.boolean(),
+  unreadableCount: z.number().int().nonnegative(),
+});
+export type HostDiscoveredReposResponse = z.infer<
+  typeof hostDiscoveredReposResponseSchema
+>;
 
 export const hostCloneDefaultPathQuerySchema = z.object({
   projectId: z.string().min(1),
@@ -132,6 +151,13 @@ export type HostPickFolderRequest = z.infer<typeof hostPickFolderRequestSchema>;
 
 export type HostPickFolderResponse = PickFolderResponse;
 
+export const hostProviderCliStatusQuerySchema = z.object({
+  refresh: z.enum(["true", "false"]).optional(),
+});
+export type HostProviderCliStatusQuery = z.input<
+  typeof hostProviderCliStatusQuerySchema
+>;
+
 export type HostProviderCliStatusResponse = ProviderCliStatusResponse;
 
 export const hostProviderCliInstallRequestSchema =
@@ -146,3 +172,8 @@ export const hostListQuerySchema = z.object({
   type: hostTypeSchema.optional(),
 });
 export type HostListQuery = z.input<typeof hostListQuerySchema>;
+
+export const hostDeleteQuerySchema = z.object({
+  force: z.enum(["true", "false"]).optional(),
+});
+export type HostDeleteQuery = z.input<typeof hostDeleteQuerySchema>;

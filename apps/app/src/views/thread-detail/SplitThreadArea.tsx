@@ -7,9 +7,7 @@ import {
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   Fragment,
-  lazy,
   memo,
-  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -17,6 +15,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type SetStateAction,
@@ -29,6 +28,7 @@ import {
 import { useIsMutating } from "@tanstack/react-query";
 import { BbHttpError } from "@/lib/sdk";
 import { useThread } from "@/hooks/queries/thread-queries";
+import { useIsSidebarFramed } from "@/components/ui/sidebar.js";
 import { useSplitWorkspaceActive } from "@/hooks/useSplitWorkspaceActive";
 import {
   dimInactiveSplitsAtom,
@@ -79,16 +79,14 @@ import {
   type PaneSecondaryPanelRegistry,
 } from "./PaneContext";
 import { LazyThreadDetailView as ThreadDetailView } from "./LazyThreadDetailView";
-import { RootComposeView } from "@/views/RootComposeView";
+import { LazyRootComposeView as RootComposeView } from "@/views/LazyRootComposeView";
 import { PluginPanelView } from "@/views/PluginPanelView";
 import {
   AppPageHeader,
   HEADER_ICON_BUTTON_CLASS,
   HEADER_PANE_ACTION_ICON_BUTTON_CLASS,
 } from "@/components/layout/AppPageHeader";
-import { AppBreadcrumbs } from "@/components/layout/AppBreadcrumbs";
-import { resourceRouteLabelAtom } from "@/components/layout/resourceRouteLabelAtom";
-import { resolveAutomationBreadcrumbs } from "@/components/tools/tools-navigation";
+import { PluginPageTitleHost } from "@/components/plugin/PluginPageTitleHost";
 import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@bb/shared-ui/chrome-style-tokens";
@@ -118,31 +116,27 @@ import { SecondaryPanelHostLayoutContext } from "@/components/secondary-panel/Se
 import {
   CONTEXT_INACTIVE_TEXT_CLASS,
   CONTEXT_SELECTION_SURFACE_CLASS,
-} from "@/components/ui/context-selection";
+} from "@bb/shared-ui/context-selection";
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
 import { wsManager } from "@/lib/ws";
 import { useImmediateRouteNavigate } from "@/components/ui/app-route-anchor";
 import { PluginDetailOpenerBoundary } from "@/components/plugin/plugin-detail-opener";
+import { defineSplit } from "@/lib/define-split";
+import { LazyPluginDetailPaneView } from "@/views/ToolsViewSplits";
 
-const LazyPluginPanelRightPanelHost = lazy(() =>
-  import("@/components/plugin/PluginPanelRightPanelHost").then(
-    ({ PluginPanelRightPanelHost }) => ({ default: PluginPanelRightPanelHost }),
-  ),
-);
-
-const LazyPluginDetailPaneView = lazy(() =>
-  import("@/views/ToolsView").then(({ PluginDetailPaneView }) => ({
-    default: PluginDetailPaneView,
-  })),
-);
-
-function PluginDetailPaneView({ pluginId }: { pluginId: string }) {
-  return (
-    <Suspense fallback={null}>
-      <LazyPluginDetailPaneView pluginId={pluginId} />
-    </Suspense>
-  );
-}
+const LazyPluginPanelRightPanelHost = defineSplit<
+  ComponentProps<
+    typeof import("@/components/plugin/PluginPanelRightPanelHost").PluginPanelRightPanelHost
+  >
+>({
+  id: "plugin-panel-right-panel-host",
+  load: () =>
+    import("@/components/plugin/PluginPanelRightPanelHost").then(
+      (module) => module.PluginPanelRightPanelHost,
+    ),
+  loading: () => null,
+  tier: "intent",
+});
 
 function PluginPagePanelHost({
   children,
@@ -161,11 +155,9 @@ function PluginPagePanelHost({
       key={`${props.pluginId}/${props.panelPath}`}
       isFocused={pane?.isFocused ?? true}
     >
-      <Suspense fallback={null}>
-        <LazyPluginPanelRightPanelHost {...props}>
-          {children}
-        </LazyPluginPanelRightPanelHost>
-      </Suspense>
+      <LazyPluginPanelRightPanelHost {...props}>
+        {children}
+      </LazyPluginPanelRightPanelHost>
     </PluginDetailOpenerBoundary>
   );
 }
@@ -443,14 +435,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
     const focus = () => {
       if (!root.isConnected || root.getAttribute("aria-hidden") === "true")
         return false;
-      const composer = root.querySelector<HTMLElement>(
-        "[data-promptbox] [contenteditable='true'], [data-promptbox] textarea:not(:disabled)",
-      );
-      if (composer) {
-        focusPaneComposer(composer);
-        return document.activeElement === composer;
-      }
-      return false;
+      return focusPaneComposer(root) && root.contains(document.activeElement);
     };
     const frame = requestAnimationFrame(() => {
       if (focus()) {
@@ -696,12 +681,19 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   );
 
   if (layout === null || currentContent === null) return null;
-  if (!splitWorkspaceActive) {
+  const firstPane = panes[0];
+  const singlePane =
+    panes.length === 1 && firstPane !== undefined ? firstPane : null;
+  const keepsSinglePane =
+    singlePane !== null &&
+    (currentContent.kind === "thread" || currentContent.kind === "new-thread");
+  if (!splitWorkspaceActive && !keepsSinglePane) {
     return (
       <StandalonePaneContent
         content={currentContent}
         paneId={layout.focusedPaneId}
         onRequestClose={
+          currentContent.kind === "thread" ||
           currentContent.kind === "new-thread"
             ? null
             : () => closePane(layout.focusedPaneId)
@@ -711,7 +703,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
     );
   }
 
-  const commandHandlers = (
+  const commandHandlers = splitWorkspaceActive ? (
     <SplitPaneCommandHandlers
       closePane={closePane}
       focusPane={(paneId) => {
@@ -724,23 +716,28 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
       panes={panes}
       toggleMaximizePane={toggleMaximizePane}
     />
-  );
+  ) : null;
 
-  const firstPane = panes[0];
-  if (panes.length === 1 && firstPane !== undefined) {
+  if (singlePane !== null) {
+    const singlePaneContent = splitWorkspaceActive
+      ? singlePane.content
+      : currentContent;
     return (
       <>
         {commandHandlers}
         <WorkspacePaneContent
-          content={firstPane.content}
-          paneId={firstPane.paneId}
+          content={singlePaneContent}
+          paneId={singlePane.paneId}
           isFocused
           isSplitPane={false}
           timelineEnabled
           secondaryPanelRegistry={null}
           reservesWindowPanelToggle={false}
           onClosePane={
-            firstPane.content.kind === "new-thread" ? null : closePane
+            singlePaneContent.kind === "thread" ||
+            singlePaneContent.kind === "new-thread"
+              ? null
+              : closePane
           }
           isMaximized={false}
           onToggleMaximizePane={null}
@@ -769,6 +766,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
             node={layout.root}
             path={EMPTY_PATH}
             isTopRow
+            isBottomRow
             isLeftEdge
             isRightEdge
             dimsInactiveSplits={dimsInactiveSplits}
@@ -872,6 +870,7 @@ interface SplitTreeProps {
   path: SplitPath;
   dimsInactiveSplits: boolean;
   isTopRow: boolean;
+  isBottomRow: boolean;
   isLeftEdge: boolean;
   isRightEdge: boolean;
   focusedPaneId: string;
@@ -892,8 +891,16 @@ interface SplitTreeProps {
 }
 
 function SplitTree(props: SplitTreeProps) {
-  const { node, path, isTopRow, isLeftEdge, isRightEdge, focusedPaneId } =
-    props;
+  const {
+    node,
+    path,
+    isTopRow,
+    isBottomRow,
+    isLeftEdge,
+    isRightEdge,
+    focusedPaneId,
+  } = props;
+  const isSidebarFramed = useIsSidebarFramed();
 
   if (node.type === "pane") {
     const isFocused = node.paneId === focusedPaneId;
@@ -908,6 +915,7 @@ function SplitTree(props: SplitTreeProps) {
           "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
           isHiddenByMaximize && "invisible pointer-events-none",
           isMaximized && "absolute inset-0 z-30",
+          !isMaximized && !isBottomRow && "[--bb-content-bottom-inset:0px]",
         )}
         tabIndex={-1}
         data-split-pane-id={node.paneId}
@@ -948,6 +956,9 @@ function SplitTree(props: SplitTreeProps) {
           data-pane-focus-scrim=""
           className={cn(
             "pointer-events-none absolute inset-0 z-20 transition-colors",
+            isSidebarFramed &&
+              (isMaximized || isTopRow) &&
+              "top-[calc(var(--bb-window-frame-top)_+_1px)]",
             isFocused || !props.dimsInactiveSplits
               ? "bg-transparent"
               : "bg-background/30",
@@ -985,6 +996,10 @@ function SplitTree(props: SplitTreeProps) {
               node={child}
               path={[...path, index]}
               isTopRow={isTopRow && (node.dir === "row" || index === 0)}
+              isBottomRow={
+                isBottomRow &&
+                (node.dir === "row" || index === node.children.length - 1)
+              }
               isLeftEdge={isLeftEdge && (node.dir === "col" || index === 0)}
               isRightEdge={
                 isRightEdge &&
@@ -1154,6 +1169,7 @@ function StandalonePaneContent({
   if (content.kind === "thread" || content.kind === "new-thread") {
     return (
       <DefaultPaneContextProvider
+        paneId={paneId}
         onRequestClose={onRequestClose}
         navigateInPane={navigateInPane}
       >
@@ -1166,7 +1182,7 @@ function StandalonePaneContent({
     );
   }
   if (content.kind === "plugin-detail") {
-    return <PluginDetailPaneView pluginId={content.pluginId} />;
+    return <LazyPluginDetailPaneView pluginId={content.pluginId} />;
   }
   const panelEntry = navPanelChrome.find(
     (candidate) =>
@@ -1198,36 +1214,44 @@ function StandalonePaneContent({
     </Button>
   ) : null;
   return (
-    <PluginPagePanelHost
-      flushPageInsets
+    <PluginPageTitleHost
       pluginId={content.pluginId}
       panelPath={content.panelPath}
-      paneId={paneId}
       subPath={content.subPath}
     >
-      {panelChrome ? (
-        <div className="flex h-full min-h-0 flex-col">
-          <AppPageHeader
-            center={<PluginPanelHeaderCenter chrome={panelChrome} />}
-            actions={
-              panel ? (
-                <PluginPanelHeaderActions
-                  panel={panel}
-                  paneId={paneId}
-                  subPath={content.subPath}
-                  paneActions={paneActions}
-                />
-              ) : (
-                paneActions
-              )
-            }
-          />
-          <div className="flex min-h-0 flex-1 flex-col p-4 md:p-5">{body}</div>
-        </div>
-      ) : (
-        body
-      )}
-    </PluginPagePanelHost>
+      <PluginPagePanelHost
+        flushPageInsets
+        pluginId={content.pluginId}
+        panelPath={content.panelPath}
+        paneId={paneId}
+        subPath={content.subPath}
+      >
+        {panelChrome ? (
+          <div className="flex h-full min-h-0 flex-col">
+            <AppPageHeader
+              center={<PluginPanelHeaderCenter chrome={panelChrome} />}
+              actions={
+                panel ? (
+                  <PluginPanelHeaderActions
+                    panel={panel}
+                    paneId={paneId}
+                    subPath={content.subPath}
+                    paneActions={paneActions}
+                  />
+                ) : (
+                  paneActions
+                )
+              }
+            />
+            <div className="flex min-h-0 flex-1 flex-col p-4 md:p-5">
+              {body}
+            </div>
+          </div>
+        ) : (
+          body
+        )}
+      </PluginPagePanelHost>
+    </PluginPageTitleHost>
   );
 }
 
@@ -1247,7 +1271,6 @@ function NonThreadPaneContent({
   ownsWindowTopLeft: boolean;
 }) {
   const navPanelChrome = usePluginNavPanelChrome();
-  const resourceRouteLabel = useAtomValue(resourceRouteLabelAtom);
   const dimsInactiveSplits = useAtomValue(dimInactiveSplitsAtom);
   const { reservesWindowPanelToggle, isFocused } = useOptionalPaneContext() ?? {
     reservesWindowPanelToggle: false,
@@ -1267,13 +1290,6 @@ function NonThreadPaneContent({
       : undefined;
   const panel = panelEntry?.panel ?? undefined;
   const panelChrome = panelEntry?.chrome;
-  const automationBreadcrumbs =
-    content.kind === "plugin-panel"
-      ? resolveAutomationBreadcrumbs(
-          paneContentRoute(content),
-          isFocused ? resourceRouteLabel : null,
-        )
-      : null;
   const label =
     panelChrome?.title ??
     (content.kind === "plugin-detail" ? "Extension" : "New thread");
@@ -1334,6 +1350,10 @@ function NonThreadPaneContent({
       className={cn(
         "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
         !isBoundedPane && content.kind === "new-thread" && "-m-4 md:-m-5",
+        !isBoundedPane &&
+          !panel &&
+          content.kind !== "new-thread" &&
+          "pt-(--bb-window-frame-top)",
       )}
     >
       {isBoundedPane || panel ? (
@@ -1358,12 +1378,7 @@ function NonThreadPaneContent({
               )}
               onPointerDown={beginPaneDrag ? handlePointerDown : undefined}
             >
-              {automationBreadcrumbs ? (
-                <AppBreadcrumbs
-                  breadcrumbs={automationBreadcrumbs}
-                  usesDesktopChrome={usesDesktopChrome}
-                />
-              ) : panelChrome ? (
+              {panelChrome ? (
                 <PluginPanelHeaderCenter chrome={panelChrome} />
               ) : (
                 <p
@@ -1395,7 +1410,7 @@ function NonThreadPaneContent({
         {content.kind === "new-thread" ? (
           <RootComposeView />
         ) : content.kind === "plugin-detail" ? (
-          <PluginDetailPaneView pluginId={content.pluginId} />
+          <LazyPluginDetailPaneView pluginId={content.pluginId} />
         ) : (
           <PluginPanelView
             pluginId={content.pluginId}
@@ -1408,14 +1423,21 @@ function NonThreadPaneContent({
   );
 
   return content.kind === "plugin-panel" ? (
-    <PluginPagePanelHost
-      flushPageInsets={!isBoundedPane}
+    <PluginPageTitleHost
       pluginId={content.pluginId}
       panelPath={content.panelPath}
       subPath={content.subPath}
+      focused={isFocused}
     >
-      {contentMarkup}
-    </PluginPagePanelHost>
+      <PluginPagePanelHost
+        flushPageInsets={!isBoundedPane}
+        pluginId={content.pluginId}
+        panelPath={content.panelPath}
+        subPath={content.subPath}
+      >
+        {contentMarkup}
+      </PluginPagePanelHost>
+    </PluginPageTitleHost>
   ) : (
     contentMarkup
   );
@@ -1509,6 +1531,7 @@ function SplitDivider({
   onResize,
 }: SplitDividerProps) {
   const horizontal = dir === "row";
+  const isSidebarFramed = useIsSidebarFramed();
   const finishResizeRef = useRef<(() => void) | null>(null);
   useEffect(
     () => () => {
@@ -1620,7 +1643,7 @@ function SplitDivider({
       aria-orientation={horizontal ? "vertical" : "horizontal"}
       className={cn(
         "group relative z-[25] flex-shrink-0 transition-colors",
-        "bg-border-seam",
+        isSidebarFramed ? "bg-border" : "bg-border-seam",
         "hover:bg-ring/40 data-[dragging]:bg-ring/40",
         hidden && "invisible pointer-events-none",
         horizontal ? "w-px cursor-col-resize" : "h-px cursor-row-resize",

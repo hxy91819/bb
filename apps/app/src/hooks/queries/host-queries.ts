@@ -1,13 +1,23 @@
 import { useMemo } from "react";
-import { keepPreviousData, skipToken, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  queryOptions,
+  skipToken,
+  useQuery,
+} from "@tanstack/react-query";
 import type { Host } from "@bb/domain";
-import type { HostDirectoryListing } from "@bb/server-contract";
+import type {
+  HostDirectoryListing,
+  HostDiscoveredReposResponse,
+} from "@bb/server-contract";
 import { sdk } from "@/lib/sdk";
 import { useHostListRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
+import { keepNewerByUpdatedAt } from "@/hooks/cache-owners/cache-effect-utils";
 import {
   hostCloneDefaultPathQueryKey,
   hostDirectoryQueryKey,
+  hostDiscoveredReposQueryKey,
   hostsQueryKey,
 } from "./query-keys";
 import type { QueryOptions } from "./query-helpers";
@@ -19,11 +29,25 @@ export function useHosts(
   const includeCreating = options?.includeCreating ?? false;
   useHostListRealtimeSubscription({ enabled });
 
-  return useQuery<Host[]>({
-    queryKey: hostsQueryKey(includeCreating),
-    queryFn: ({ signal }) => sdk.hosts.list({ signal, includeCreating }),
+  return useQuery({
+    ...hostsQueryOptions(includeCreating),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+export function hostsQueryOptions(includeCreating: boolean) {
+  return queryOptions<Host[]>({
+    queryKey: hostsQueryKey(includeCreating),
+    queryFn: async ({ client, queryKey, signal }) => {
+      const hosts = await sdk.hosts.list({ signal, includeCreating });
+      const cached = new Map(
+        client.getQueryData<Host[]>(queryKey)?.map((host) => [host.id, host]),
+      );
+      return hosts.map((host) =>
+        keepNewerByUpdatedAt(cached.get(host.id), host),
+      );
+    },
   });
 }
 
@@ -79,6 +103,23 @@ export function useHostCloneDefaultPath(
               .path
         : skipToken,
     staleTime: 60_000,
+  });
+}
+
+export function useHostDiscoveredRepos(
+  hostId: string | null,
+  options?: QueryOptions,
+) {
+  return useQuery<HostDiscoveredReposResponse>({
+    queryKey: hostDiscoveredReposQueryKey(hostId),
+    queryFn:
+      hostId === null
+        ? skipToken
+        : ({ signal }) =>
+            sdk.hosts.experimental_discoverRepos({ hostId, signal }),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 

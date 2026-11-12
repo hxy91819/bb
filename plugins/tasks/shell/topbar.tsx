@@ -1,7 +1,11 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  experimental_useRpcRefresh,
+  useRealtimeConnectionState,
+} from "@get-bb/plugin-sdk/app";
 import type { Project, Task } from "../shared/contract.js";
 import { groupTasksByStatus } from "../views/list/lib.js";
-import { listAllTasks, useTasksQuery } from "./data.js";
+import { selectTasks, useTasksQuery } from "./data.js";
 import type { ResolvedTasksRoute, TaskViewMode, TasksRoute } from "./routes.js";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -12,7 +16,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useTasksRefresh } from "./refresh.js";
 
 const REFRESH_TASKS_LABEL = "Refresh tasks";
 
@@ -49,13 +52,9 @@ function TaskPager({
   onNavigate: (route: TasksRoute) => void;
 }) {
   const siblings = useTasksQuery(
-    async (rpc) =>
-      listAllTasks(rpc, {
-        ...(projectId === null ? {} : { projectId }),
-        parentTaskId: null,
-      }),
-    ["tasks:changed"],
-    [projectId],
+    "listAllTasks",
+    { ...(projectId === null ? {} : { projectId }), parentTaskId: null },
+    selectTasks,
   );
   const position = useMemo(
     () => (siblings.data ? pagerPosition(siblings.data, taskKey) : null),
@@ -122,6 +121,32 @@ function ViewToggle({
       {segment("board", "Board")}
     </div>
   );
+}
+
+function useTasksRefresh() {
+  const { refresh, isRefreshing: isFetching } = experimental_useRpcRefresh();
+  const connectionState = useRealtimeConnectionState();
+  const [requested, setRequested] = useState(false);
+  const wasFetching = useRef(isFetching);
+  const previousConnection = useRef(connectionState);
+  useEffect(() => {
+    const reconnected =
+      previousConnection.current === "reconnecting" &&
+      connectionState === "connected";
+    previousConnection.current = connectionState;
+    if (reconnected) setRequested(true);
+  }, [connectionState]);
+  useEffect(() => {
+    if (wasFetching.current && !isFetching) setRequested(false);
+    wasFetching.current = isFetching;
+  }, [isFetching]);
+  return {
+    isRefreshing: requested && isFetching,
+    refresh: () => {
+      setRequested(true);
+      refresh();
+    },
+  };
 }
 
 function RefreshTasksButton() {
@@ -272,7 +297,7 @@ export function TasksTopbar({
   })();
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border-hairline bg-background px-3.5 text-sm max-md:h-12 max-md:pl-12 max-md:pointer-coarse:pl-14">
+    <header className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border-hairline bg-background px-3.5 text-sm max-md:pointer-coarse:h-12 max-md:pl-12 max-md:pointer-coarse:pl-14">
       <div className="min-w-0 flex-1 overflow-hidden">{breadcrumb}</div>
       {route.kind === "task" &&
       (pagerScope !== null || projects !== undefined) ? (

@@ -36,7 +36,29 @@ const sharePayloadSchema = z
 export type BridgeSharePayload = z.infer<typeof sharePayloadSchema>;
 
 const bridgeRequestSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("open-application"),
+      payload: z.object({ url: z.string().max(8192) }).strict(),
+    })
+    .strict(),
   z.object({ kind: z.literal("share"), payload: sharePayloadSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("clipboard-html"),
+      payload: z
+        .object({ text: z.string().max(100000), html: z.string().max(1000000) })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("clipboard"),
+      payload: z
+        .object({ text: z.string().max(100000), imageUrl: httpUrlSchema })
+        .strict(),
+    })
+    .strict(),
 ]);
 
 export const NATIVE_SCREENS = ["device-settings"] as const;
@@ -59,6 +81,12 @@ export const pageToShellMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("open-external"), url: httpUrlSchema }).strict(),
   z
     .object({ type: z.literal("open-native"), screen: nativeScreenSchema })
+    .strict(),
+  z
+    .object({
+      type: z.literal("switch-server"),
+      id: z.string().min(1).max(256),
+    })
     .strict(),
   z
     .object({

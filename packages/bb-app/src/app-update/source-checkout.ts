@@ -20,6 +20,7 @@ const packageJsonSchema = z
 interface SourceGitArgs {
   repoRoot: string;
   runner: RunCommand;
+  signal?: AbortSignal;
 }
 
 function gitEnv(): NodeJS.ProcessEnv {
@@ -35,6 +36,7 @@ async function git(
   gitArgs: string[],
   timeoutMs?: number,
 ): Promise<string> {
+  args.signal?.throwIfAborted();
   const result = await runCheckedCommand(
     args.runner,
     `git ${gitArgs[0] ?? ""}`,
@@ -43,6 +45,7 @@ async function git(
       command: "git",
       cwd: args.repoRoot,
       env: gitEnv(),
+      ...(args.signal === undefined ? {} : { signal: args.signal }),
       ...(timeoutMs === undefined ? {} : { timeoutMs }),
     },
   );
@@ -53,11 +56,13 @@ async function tryGit(
   args: SourceGitArgs,
   gitArgs: string[],
 ): Promise<string | null> {
+  args.signal?.throwIfAborted();
   const result = await args.runner({
     args: gitArgs,
     command: "git",
     cwd: args.repoRoot,
     env: gitEnv(),
+    ...(args.signal === undefined ? {} : { signal: args.signal }),
   });
   return result.code === 0 ? result.stdout.trim() : null;
 }
@@ -135,16 +140,18 @@ async function readLocalBlock(
 }
 
 export async function inspectSourceCheckout(
-  args: SourceGitArgs & { fetch: boolean },
+  args: SourceGitArgs & { fetch: boolean; running: string },
 ): Promise<SourceUpdateCheck> {
   const current = await readSourceRevision(args);
   const localBlock = await readLocalBlock(args);
   if (args.fetch && localBlock?.reason !== "detached-head") {
+    args.signal?.throwIfAborted();
     const fetchResult = await args.runner({
       args: ["fetch", "--quiet", SOURCE_REMOTE, SOURCE_BRANCH],
       command: "git",
       cwd: args.repoRoot,
       env: gitEnv(),
+      ...(args.signal === undefined ? {} : { signal: args.signal }),
       timeoutMs: FETCH_TIMEOUT_MS,
     });
     if (fetchResult.code !== 0) {
@@ -168,24 +175,31 @@ export async function inspectSourceCheckout(
   if (upstream === null) {
     return { blocked: localBlock, current, incoming: null };
   }
-  const counts = await git(args, [
-    "rev-list",
-    "--left-right",
-    "--count",
-    `HEAD...${UPSTREAM_REF}`,
-  ]);
-  const [aheadText, behindText] = counts.split(/\s+/u);
-  const ahead = Number(aheadText);
-  const behind = Number(behindText);
+  const ahead = Number(
+    await git(args, ["rev-list", "--count", `${UPSTREAM_REF}..HEAD`]),
+  );
+  const behind = Number(
+    await git(args, [
+      "rev-list",
+      "--count",
+      `${args.running}..${UPSTREAM_REF}`,
+    ]),
+  );
   if (!Number.isInteger(behind) || behind === 0) {
     return { blocked: localBlock, current, incoming: null };
   }
+  const incomingCommitTimes = (
+    await git(args, ["log", "--format=%ct", `${args.running}..${UPSTREAM_REF}`])
+  )
+    .split("\n")
+    .map(Number)
+    .filter(Number.isInteger);
   const subjects = (
     await git(args, [
       "log",
       "--format=%s",
       `-n${String(INCOMING_SUBJECT_LIMIT)}`,
-      `HEAD..${UPSTREAM_REF}`,
+      `${args.running}..${UPSTREAM_REF}`,
     ])
   )
     .split("\n")
@@ -201,6 +215,9 @@ export async function inspectSourceCheckout(
         : null),
     current,
     incoming: {
+      behindSince: new Date(
+        Math.min(...incomingCommitTimes) * 1000,
+      ).toISOString(),
       commit: upstream,
       commitCount: behind,
       subjects,
@@ -210,16 +227,19 @@ export async function inspectSourceCheckout(
 }
 
 export async function fastForwardSource(
-  args: SourceGitArgs & { from: string; to: string },
+  args: SourceGitArgs & { to: string },
 ): Promise<void> {
   const block = await readLocalBlock(args);
   if (block !== null) {
     throw new Error(block.message);
   }
   const head = await git(args, ["rev-parse", "HEAD"]);
-  if (head !== args.from) {
+  if (
+    (await tryGit(args, ["merge-base", "--is-ancestor", head, args.to])) ===
+    null
+  ) {
     throw new Error(
-      `The checkout moved to ${head.slice(0, 12)} after the update was requested.`,
+      `The checkout moved to ${head.slice(0, 12)}, which ${args.to.slice(0, 12)} does not contain.`,
     );
   }
   await git(args, ["merge", "--ff-only", "--quiet", args.to]);

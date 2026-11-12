@@ -1,4 +1,4 @@
-import { defineRpcContract } from "@get-bb/plugin-sdk";
+import { defineRpcContract, type JsonValue } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import {
   accountStatusSchema,
@@ -15,6 +15,7 @@ export {
   type SignOutResult,
 } from "./schemas.js";
 export const CONNECT_PLUGIN_ID = "connect";
+export const CONNECT_NEXT_PLUGIN_ID = "bb--connect-next";
 
 export const STATUS_METHOD = "bb-account.v1.status";
 export const WAIT_FOR_STATUS_CHANGE_METHOD =
@@ -30,7 +31,19 @@ export const LONG_POLL_TIMEOUT_MS = 25_000;
 export const FETCH_BODY_MAX_BYTES = 1024 * 1024;
 export const FETCH_REQUEST_BODY_MAX_BYTES = 16 * 1024 * 1024;
 export const FETCH_TIMEOUT_MIN_MS = 1_000;
-export const FETCH_TIMEOUT_MAX_MS = 15_000;
+export const FETCH_TIMEOUT_DEFAULT_MS = 15_000;
+export const FETCH_TIMEOUT_MAX_MS = 65_000;
+
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+);
 
 const emptyInputSchema = z.object({}).strict().nullable();
 
@@ -47,13 +60,13 @@ export const fetchInputSchema = z
       .describe(
         'Starts with "/api/ai/" ("/api/connect/" is reserved for the connect plugin); no query, fragment, "..", or "//"',
       ),
-    body: z.json().nullable().default(null),
+    body: jsonValueSchema.nullable().default(null),
     timeoutMs: z
       .number()
       .int()
       .min(FETCH_TIMEOUT_MIN_MS)
       .max(FETCH_TIMEOUT_MAX_MS)
-      .default(FETCH_TIMEOUT_MAX_MS)
+      .default(FETCH_TIMEOUT_DEFAULT_MS)
       .describe("Give up on getbb.app after this many milliseconds"),
   })
   .strict();
@@ -63,7 +76,7 @@ export type AccountFetchInput = z.infer<typeof fetchInputSchema>;
 export const fetchOutputSchema = z
   .object({
     status: z.number().int(),
-    body: z.json().nullable(),
+    body: jsonValueSchema.nullable(),
   })
   .strict();
 

@@ -30,6 +30,7 @@ const searchResult = {
   official: true,
   author: null,
   installed: false,
+  installedByDefault: false,
   conflictingInstallSource: null,
   installs: null,
   compatible: true,
@@ -81,6 +82,7 @@ const installedPlugin = {
   catalogEntryId: "linear",
   publisherLabel: "BB Community",
   sourceDisplay: "builtin · linear",
+  sourceNotice: null,
   updateState: {},
   enabled: true,
   description: "Linear issue tools",
@@ -193,6 +195,29 @@ describe("bb plugin catalog", () => {
     const output = collectLogPayloads(vi.mocked(console.log)).join("\n");
     expect(output).toContain("Installs");
     expect(output).toContain("4,210");
+  });
+
+  it("labels built-in and new listings like the plugin store", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      json({
+        results: [
+          { ...searchResult, installedByDefault: true, installs: 2 },
+          {
+            ...searchResult,
+            entryId: "notes",
+            pluginId: "notes",
+            displayName: "Notes",
+            installs: 3,
+            publishedAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    );
+    await runCommand(["plugin", "search", "lin"], register);
+
+    const output = collectLogPayloads(vi.mocked(console.log)).join("\n");
+    expect(output).toContain("Built in");
+    expect(output).toContain("New");
   });
 
   it("outputs raw catalog search results as JSON", async () => {

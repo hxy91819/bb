@@ -2,17 +2,16 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   appendStoredThreadEvent,
-  createConnection,
   createEnvironment,
   createProject,
   createThread,
   getThread,
-  migrate,
   noopNotifier,
   openSession,
   upsertHost,
   type DbConnection,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import {
   changedMessageSchema,
   formatClientTurnRequestIdSuffix,
@@ -33,7 +32,6 @@ const providerRegistry = await createTestProviderRegistry();
 const NO_ACTIVITY = {
   activeBackgroundAgentCount: 0,
   activeBackgroundCommandCount: 0,
-  activeGoalCount: 0,
   activePlanModeCount: 0,
   activeWorkflowCount: 0,
 };
@@ -116,8 +114,7 @@ interface Setup {
 }
 
 function setup(status: ThreadStatus): Setup {
-  const db = createConnection(":memory:");
-  migrate(db);
+  const db = createMigratedConnection();
   const hub = new NotificationHub();
   const host = upsertHost(db, noopNotifier, {
     id: "host-lifecycle-outcome",
@@ -228,7 +225,7 @@ describe("applyLoggedThreadLifecycleEvent", () => {
     ).toBe("waiting-for-host");
   });
 
-  it("carries the status-gated plan and goal activity of the post-transition row", () => {
+  it("carries the status-gated plan activity of the post-transition row", () => {
     const { db, hostId, hub, threadId } = setup("idle");
     connectDaemon(db, hub, hostId);
     seedOpenPlanTurnWithGoal(db, threadId);
@@ -241,7 +238,7 @@ describe("applyLoggedThreadLifecycleEvent", () => {
     );
     expect(
       lastThreadListMessage(socket.messages).metadata?.statusChange?.activity,
-    ).toEqual({ ...NO_ACTIVITY, activeGoalCount: 1, activePlanModeCount: 1 });
+    ).toEqual({ ...NO_ACTIVITY, activePlanModeCount: 1 });
 
     applyLoggedThreadLifecycleEvent(
       { db, hub, logger: testLogger, providerRegistry },
@@ -251,7 +248,7 @@ describe("applyLoggedThreadLifecycleEvent", () => {
       lastThreadListMessage(socket.messages).metadata?.statusChange,
     ).toMatchObject({
       status: "idle",
-      activity: { ...NO_ACTIVITY, activeGoalCount: 1, activePlanModeCount: 0 },
+      activity: { ...NO_ACTIVITY, activePlanModeCount: 0 },
     });
   });
 

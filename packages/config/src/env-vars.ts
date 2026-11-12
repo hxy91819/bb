@@ -7,6 +7,16 @@ import {
   appUpdateModeSchema,
   type AppUpdateMode,
 } from "./app-update.js";
+import {
+  APP_INSTALL_KIND_ENV_NAME,
+  APP_SOURCE_COMMIT_ENV_NAME,
+  APP_SOURCE_ORIGIN_ENV_NAME,
+  appInstallKindSchema,
+  appSourceOriginSchema,
+  type AppInstallKind,
+  type AppSourceOrigin,
+} from "./app-install.js";
+import { CLI_LAUNCHER_ENV_NAME } from "./cli-command.js";
 import { defineEnvVar, type EnvVarParseArgs } from "./env.js";
 import {
   APP_SURFACE_ENV_NAME,
@@ -59,6 +69,41 @@ function parseAppUpdateModeEnvValue(args: EnvVarParseArgs): AppUpdateMode {
   }
   throw new Error(
     `${args.name} must be one of ${appUpdateModeSchema.options.join(", ")}`,
+  );
+}
+
+function parseAppInstallKindEnvValue(args: EnvVarParseArgs): AppInstallKind {
+  const parsed = appInstallKindSchema.safeParse(args.value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  throw new Error(
+    `${args.name} must be one of ${appInstallKindSchema.options.join(", ")}`,
+  );
+}
+
+function parseAppSourceOriginEnvValue(args: EnvVarParseArgs): AppSourceOrigin {
+  const parsed = appSourceOriginSchema.safeParse(args.value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  throw new Error(
+    `${args.name} must be one of ${appSourceOriginSchema.options.join(", ")}`,
+  );
+}
+
+const setupGuideVariantSchema = z.enum(["control", "new"]);
+export type SetupGuideVariant = z.infer<typeof setupGuideVariantSchema>;
+
+function parseSetupGuideVariantEnvValue(
+  args: EnvVarParseArgs,
+): SetupGuideVariant {
+  const parsed = setupGuideVariantSchema.safeParse(args.value.trim());
+  if (parsed.success) {
+    return parsed.data;
+  }
+  throw new Error(
+    `${args.name} must be one of ${setupGuideVariantSchema.options.join(", ")}`,
   );
 }
 
@@ -189,6 +234,34 @@ export const BB_APP_UPDATE_MODE_ENV = defineEnvVar<AppUpdateMode>({
   parse: parseAppUpdateModeEnvValue,
 });
 
+export const BB_CLI_LAUNCHER_ENV = defineEnvVar<string>({
+  description:
+    "Internal path the bb-app launcher hands its server child: the bb command launcher it wrote in the data directory for this install. The server offers to put the bb command on PATH only when it is set.",
+  name: CLI_LAUNCHER_ENV_NAME,
+  parse: parseNonEmptyStringEnvValue,
+});
+
+export const BB_APP_INSTALL_KIND_ENV = defineEnvVar<AppInstallKind>({
+  description:
+    "Internal marker the bb-app launcher hands its server child for telemetry attribution: desktop for the desktop app, npm for package installs, source for pnpm start checkouts. Absent when the server runs without the launcher.",
+  name: APP_INSTALL_KIND_ENV_NAME,
+  parse: parseAppInstallKindEnvValue,
+});
+
+export const BB_APP_SOURCE_ORIGIN_ENV = defineEnvVar<AppSourceOrigin>({
+  description:
+    "Internal marker the bb-app launcher hands its server child for source checkouts: official when the origin remote is github.com/get-bb/bb or github.com/ymichael/bb, fork for any other origin, none without one.",
+  name: APP_SOURCE_ORIGIN_ENV_NAME,
+  parse: parseAppSourceOriginEnvValue,
+});
+
+export const BB_APP_SOURCE_COMMIT_ENV = defineEnvVar<string>({
+  description:
+    "Internal marker the bb-app launcher hands its server child with the HEAD commit of an official source checkout. Never set for forks.",
+  name: APP_SOURCE_COMMIT_ENV_NAME,
+  parse: parseNonEmptyStringEnvValue,
+});
+
 export const BB_APP_SURFACE_ENV = defineEnvVar<AppSurface>({
   description:
     "Internal launcher marker for telemetry attribution. Set by bb-app and desktop launchers.",
@@ -217,6 +290,13 @@ export const BB_MARKETPLACE_URL_ENV = defineEnvVar<string>({
   parse: parseOptionalUrlEnvValue,
 });
 
+export const BB_CONNECT_GATE_KEYS_URL_ENV = defineEnvVar<string>({
+  description:
+    "URL of the bb connect next gate public key set the server's tunnel ingress verifies gate assertions with. Point it at a local file server to test the ingress.",
+  name: "BB_CONNECT_GATE_KEYS_URL",
+  parse: parseRequiredUrlEnvValue,
+});
+
 export const BB_POSTHOG_API_KEY_ENV = defineEnvVar<string>({
   description:
     "PostHog project API key for anonymous usage telemetry. Telemetry is disabled when empty.",
@@ -224,9 +304,30 @@ export const BB_POSTHOG_API_KEY_ENV = defineEnvVar<string>({
   parse: parseStringEnvValue,
 });
 
+export const BB_PERF_DIAGNOSTICS_ENV = defineEnvVar<boolean>({
+  description:
+    "Permit server performance diagnostics when the performanceDiagnostics experiment is on. Requires restart.",
+  name: "BB_PERF_DIAGNOSTICS",
+  parse: parseBooleanEnvValue,
+});
+
+export const BB_SKIP_ONBOARDING_ENV = defineEnvVar<boolean>({
+  description:
+    "Mark first-run setup as completed at server startup so the setup screen is skipped. Settings can still replay it.",
+  name: "BB_SKIP_ONBOARDING",
+  parse: parseBooleanEnvValue,
+});
+
+export const BB_SETUP_GUIDE_VARIANT_ENV = defineEnvVar<SetupGuideVariant>({
+  description:
+    "Forces the first-run setup guide variant (control or new) for QA, ignoring telemetry and the setup-guide-redesign experiment.",
+  name: "BB_SETUP_GUIDE_VARIANT",
+  parse: parseSetupGuideVariantEnvValue,
+});
+
 export const BB_TELEMETRY_ENV = defineEnvVar<boolean>({
   description:
-    "Anonymous usage telemetry (app starts, thread creation counts, user message counts, and plugin installs). Set to false to opt out.",
+    "Anonymous usage telemetry (app starts, thread creation counts, user message counts, and plugin installs, tagged with app version, install kind, and OS and Node versions). Set to false to opt out.",
   name: "BB_TELEMETRY",
   parse: parseBooleanEnvValue,
 });
@@ -235,6 +336,13 @@ export const BB_FF_PLACEHOLDER_ENV = defineEnvVar<boolean>({
   description:
     "Permanent placeholder feature flag. Non-functional keep-alive so the flag system has at least one entry; do not gate behavior on it.",
   name: "BB_FF_PLACEHOLDER",
+  parse: parseBooleanEnvValue,
+});
+
+export const BB_FF_INITIATOR_TELEMETRY_ENV = defineEnvVar<boolean>({
+  description:
+    "Adds a fixed initiator value (user, agent, automation, plugin or system) to anonymous thread_created and user_message_sent telemetry. On by default; set false to omit it.",
+  name: "BB_FF_INITIATOR_TELEMETRY",
   parse: parseBooleanEnvValue,
 });
 
@@ -341,6 +449,10 @@ export const DEFAULT_BB_TELEMETRY = true;
 export const DEFAULT_BB_DEV_APP_HOST = "";
 export const DEFAULT_BB_MARKETPLACE_URL =
   "https://getbb.app/marketplace/v2/marketplace.json";
+export const DEFAULT_BB_CONNECT_GATE_KEYS_URL =
+  "https://getbb.app/.well-known/bb-connect-gate-keys.json";
 export const DEFAULT_BB_FF_PLACEHOLDER = defaultFeatureFlags.placeholder;
+export const DEFAULT_BB_FF_INITIATOR_TELEMETRY =
+  defaultFeatureFlags.initiatorTelemetry;
 export const DEFAULT_BB_FF_TIMELINE_WINDOW_EVENT_BUDGET =
   defaultFeatureFlags.timelineWindowEventBudget;

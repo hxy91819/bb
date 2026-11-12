@@ -1,18 +1,24 @@
 # @bb/mobile
 
-Native iOS/Android client for bb (Expo SDK 57, React Native 0.86, Expo
+Native iOS/Android client for bb (Expo SDK 58, React Native 0.88, Expo
 Router, NativeWind v5).
 
 Status: a native shell around the web interface (#2515). `app/webview.tsx`
 loads the active server's web app in `react-native-webview` and talks to it
 over `@bb/mobile-bridge` (handshake, haptics, app-icon badge, share, open
-external links, open native screens). Threads, projects, plugins and server
+external links, open native screens, save files on iOS). Threads, projects, plugins and server
 settings run in the page. The native screens cover what the page cannot
 own: first-run pairing (Direct URL and bb connect QR / code enrollment),
 saved servers, This device settings (appearance, haptics, notifications,
 reload the page, clear website data), push registration and notification
 taps, deep links, quick actions, share intents and the connection banner.
-The `Mobile E2E` GitHub workflow drives the shell flows.
+External links use the web app's `shellOpenExternal` helper and the native
+bridge to open through the OS URL handler. Application links use the version-3
+`open-application` request: the shared web UI handles confirmation and saved
+approvals in site-local localStorage; the native client validates the destination,
+launches it, and reports opening errors back to the page. Older web pages keep the existing bridge
+capabilities; no new capability enum value is advertised. The `Mobile E2E` GitHub workflow
+drives the shell flows.
 
 ## Structure
 
@@ -124,6 +130,47 @@ debugging enabled.
 
 ### Android local APK and verification
 
+For development threads, build the standalone **bb dev** app from the repo root:
+
+```bash
+pnpm mobile:apk:dev
+adb install -r apps/mobile/build-output/bb-dev.apk
+```
+
+The APK is `apps/mobile/build-output/bb-dev.apk`. It has an orange bb launcher
+icon, favicon, and splash logo, the name **bb dev**, and package `app.getbb.mobile.dev`, so it
+installs alongside the regular app with separate saved servers and data. It
+embeds the Release JS bundle and runs without Metro, EAS, Firebase, or production
+signing credentials. Pair it with the development server through Add server or
+a pairing code. It does not claim production HTTPS app links or use the
+production Firebase configuration; Android themed icons use the system tint.
+Dev launcher assets tint the existing shaded mobile artwork using the orange
+palette and tinting method from `apps/app/scripts/generate-pwa-icons.mjs`,
+preserving the original dimensions, alpha, and launcher padding. The transparent
+splash asset stores the original light logo's shading in orange RGB and uses
+the dark logo's silhouette alpha. This keeps transparency at the edges rather
+than throughout the shaded mark, avoiding darkening during native image
+generation. Both light and dark splash screens use the orange logo.
+
+Use `pnpm mobile:apk:dev -- x86_64` for an Intel emulator. The default is
+`arm64-v8a` for a physical phone. Install Android SDK/build tools and JDK 17
+first; the script detects the standard macOS SDK and Homebrew JDK 17 paths when
+`ANDROID_HOME` and `JAVA_HOME` are unset. Both local commands regenerate the
+gitignored Android project, so do not run them concurrently in the same checkout
+or keep manual edits in `apps/mobile/android`.
+Concurrent builds are rejected. If a force-killed build leaves a stale lock,
+remove `apps/mobile/build-output/.android-build-lock` after confirming no build
+is running, then retry.
+
+When a thread is asked to build a dev APK, use this command, wait for successful
+completion, and provide a clickable link to the resulting APK. Record the
+source commit and any uncommitted changes. For a durable per-thread copy, copy
+the APK into `$BB_THREAD_STORAGE` and link that absolute path. Do not publish it
+to the public `android-testing` release. Builds use the generated debug signing
+key; Android updates require the same key as the installed dev app.
+
+The existing local build retains the regular app identity for smoke tests:
+
 ```bash
 pnpm exec turbo run build:android:local --filter=@bb/mobile
 adb install -r apps/mobile/build-output/bb-android-local.apk
@@ -215,7 +262,7 @@ coverage. Test those separately once Firebase/signing are configured.
 
 ### iOS prerequisites
 
-- Xcode 26.2 with an iOS 26 simulator runtime (`xcodebuild -downloadPlatform iOS`).
+- Xcode 27.1 with an iOS 27.1 simulator runtime (`xcodebuild -downloadPlatform iOS`).
 - CocoaPods (`brew install cocoapods`), `export LANG=en_US.UTF-8`.
 - For Maestro e2e: `brew install --cask temurin@17` or `brew install openjdk@17`
   plus `brew install mobile-dev-inc/tap/maestro`; the `e2e:ios` script sets
@@ -224,7 +271,7 @@ coverage. Test those separately once Firebase/signing are configured.
 ## Develop
 
 ```bash
-pnpm install                                   # applies patches/expo-modules-jsi@57.0.4.patch
+pnpm install                                   # applies patches/react-native-webview@14.0.1.patch
 cd apps/mobile
 pnpm ios                                       # prebuild + build the dev-client, opens the simulator
 EXPO_PUBLIC_BB_SERVER_URL=http://127.0.0.1:<port> pnpm dev   # Metro (dev-client)
@@ -250,6 +297,8 @@ cd apps/mobile && pnpm e2e:ios
 The flows drive the WebView shell. Maestro reads the page through the
 WKWebView accessibility tree, so assertions on page content target its text,
 not native test ids.
+The deterministic backend marks web onboarding complete before seeding threads,
+so Android and iOS shell flows start with the thread list available.
 `shell-launch.yaml` pairs a Direct server from first run and lands in the
 shell with the page rendered; the other shell flows assume it works.
 `shell-deep-link.yaml` opens a `bb://` scheme link and a web link for the
@@ -316,21 +365,22 @@ as the first argument drives a dev client through Metro instead.
   (`pnpm exec turbo run build typecheck lint` in `Checks`, the `packages`
   test shard for `vitest`), like every workspace package.
 - `.github/workflows/mobile-e2e.yml` (`Mobile E2E`) runs the flows above on
-  the `blacksmith-6vcpu-macos-15` runner: label a pull request `mobile-e2e`,
+  the `blacksmith-6vcpu-macos-27` runner: label a pull request `mobile-e2e`,
   dispatch it by hand (optional `flows` input), or wait for the nightly run.
-  It selects Xcode 26.2 (`DEVELOPER_DIR`, falling back to the newest 26.x),
-  boots the simulator `pick-simulator.mjs` chooses, installs Maestro 2.8.0
+  It selects Xcode 27.1 (`DEVELOPER_DIR`; the job fails without it), boots
+  the simulator `pick-simulator.mjs` chooses (an iPhone 17 on iOS 27.0),
+  installs Maestro 2.8.0
   (Java 17 from `actions/setup-java` only when the image has no JDK 17+),
   restores `ios/Pods` + `Podfile.lock` and (behind the workflow's
   `CACHE_DERIVED_DATA` knob — DerivedData is ~7 GB raw and the Actions cache
   quota is shared with the Turbo caches) the Xcode DerivedData `Build/`
   directory from `actions/cache` keyed on `pnpm-lock.yaml` + `app.json` +
-  `package.json` + `patches/**`, prebuilds, builds the Release app onto the
-  simulator, starts the harness backend (`turbo run e2e:mobile-backend`,
+  `package.json` + `patches/**` and the Xcode build, prebuilds, builds the
+  Release app onto the simulator, starts the harness backend (`turbo run e2e:mobile-backend`,
   waits for `/health`), runs `ci-run-flows.sh`, and uploads
   `e2e-artifacts/` (per-flow Maestro output, backend log, simulator log).
 
-## bb connect (Phase 5)
+## bb connect
 
 - Pair through Settings → Mobile → Add mobile device or `bb connect machine-code`. No experiment is required.
 - Enrollment (`src/screens/connect`, `src/data/connect`, route `/connect`):
@@ -434,7 +484,7 @@ add-root-cert`). Env: `BB_MOBILE_E2E_GATE_PORT` (42998),
   response because their URL stays the same. Concurrent 410 responses update
   the profile once.
 
-## Push notifications and deep links (Phase 5)
+## Push notifications and deep links
 
 Android disables Firebase Messaging auto-initialization and Analytics collection
 in the generated manifest. The app requests a push token only for a server with
@@ -446,7 +496,6 @@ enabled servers. Failed server-subscription removal is retained for retry;
 local token deletion does not require that server to be reachable. This does not
 delete the Firebase installation ID or previously processed provider data.
 iOS keeps its existing APNs registration behavior.
-
 
 - Registration: `PushNotificationsHost` (mounted once in `app/_layout.tsx`)
   registers the phone's Expo push token with each enabled server through
@@ -475,6 +524,18 @@ iOS keeps its existing APNs registration behavior.
   when no hint matches. The shell accepts a bridge `badge` message
   (`useShellBridge` → `updateAppBadgeCount`), and `AppBadgeSync` writes that
   count on background; the web app does not send it yet.
+- Read elsewhere (`dismissReadNotifications` experiment): once a thread the
+  server notified about is read on any client, the server sends each device a
+  silent push (`_contentAvailable` on iOS, a data-only message on Android;
+  data `{"kind":"dismiss","threadId":"…"}`).
+  `src/notifications/dismiss-read-threads-task.ts`, loaded from `index.ts`
+  before expo-router, runs as an `expo-task-manager` background notification
+  task and removes the delivered notifications whose `threadId` matches. The
+  foreground handler never lists a dismiss push. iOS delays or drops silent
+  pushes under load and skips apps the user force-quit, and Android may defer
+  them in Doze; the notifications then stay until cleared. The iOS Simulator
+  turns `simctl push` silent payloads into a background fetch, so the task
+  only runs from a real APNs delivery on a device.
 - Simulator check without APNs: `xcrun simctl push <udid> app.getbb.mobile
 payload.apns` with `{"aps":{"alert":{…}},"body":{"kind":"turn-finished",
 "threadId":"…","projectId":"…","serverUrl":"https://…"}}`
@@ -512,6 +573,31 @@ payload.apns` with `{"aps":{"alert":{…}},"body":{"kind":"turn-finished",
   toast.
 - Outbound: the shell handles the bridge `share` request (`useShellBridge` →
   RN `Share.share`); the web app does not send it yet.
+- File downloads (iOS): `saveFile` and the plugin API
+  `experimental_saveFile` click ordinary download anchors, including object
+  URLs for recordings and other browser-created blobs. The iOS WebView patch
+  turns `shouldPerformDownload` actions and attachment/non-displayable
+  responses into `WKDownload`s. WebKit writes the file in the WebView's
+  request context; bb does not copy cookies, refetch through native HTTP, or
+  transfer bytes through the JavaScript bridge. The patched `onFileDownload`
+  event includes `filePath` for a completed local file or `error` for a
+  failure, alongside the original `downloadUrl`. React Native presents the
+  share sheet and deletes that download's directory after sharing, dismissal,
+  or failure. Partial downloads are cancelled and removed on WebView teardown
+  or page reload. Previous-process cache files are cleared on the first
+  download. There are at most four active WebKit downloads. Files live under
+  `Paths.cache/bb-webkit-downloads/<uuid>/`.
+  The shell queries the installed binary through `nativeDownloadsSupported()`
+  before enabling the new handlers, so an OTA update on an older binary keeps
+  its existing behavior. The handshake advertises `nativeDownloads: true` separately from the strict
+  capabilities enum, so older pages keep recognizing the shell. The page
+  helper resolves `started` or `failed`; completion and share-sheet
+  cancellation are handled by the shell. Older shells keep anchor behavior.
+  `onOpenWindow` converts server API attachments into download anchors,
+  keeps app pages in the shell, and sends other sites out. Subframes can load
+  page-local previews on prefixed profiles. Android retains its existing
+  download behavior. Rebuild the iOS client after changing this patch; Metro
+  updates alone do not install its native download support.
 - Haptics: `src/lib/haptics/` — `haptic(kind)` maps semantic kinds
   (`selection`, `impact-light|medium|heavy`, `success`, `warning`, `error`)
   onto expo-haptics and honors the Settings → This device → Haptics toggle
@@ -520,6 +606,37 @@ payload.apns` with `{"aps":{"alert":{…}},"body":{"kind":"turn-finished",
   segmented appearance picker (selection), destructive ActionSheet rows and
   confirmations (warning), the servers long-press menu (heavy), and the
   auth-required banner (warning). Screens never import expo-haptics directly.
+
+### Native download verification
+
+Build and install the patched iOS client, then start the normal local QA
+backend from [debugging-and-qa.md](../../docs/debugging-and-qa.md). Start the
+fixture proxy with its printed backend URL and an unused local port:
+
+```bash
+node apps/mobile/e2e/scripts/download-fixture.mjs http://127.0.0.1:<backend-port> <proxy-port>
+```
+
+Save both `http://127.0.0.1:<proxy-port>` and the same URL with `/bb` as
+native server profiles. With each active, open `bb://api/v1/download-fixture`.
+The proxy forwards normal app traffic, strips `/bb`, and also forwards root
+paths, matching the web app's current root-relative API URLs.
+
+- Authenticated file requires an HttpOnly cookie installed by the fixture
+  page. The proxy logs `authorized: true` without printing cookies. A plain
+  curl request without that cookie gets 401.
+- Download blob generates the same 1,536,000 bytes in the page. Both files
+  must match the SHA-256 printed by the fixture server and retain their names.
+- Save to Files and share-sheet dismissal must leave the page intact and
+  remove the corresponding `Library/Caches/bb-webkit-downloads/<uuid>/` file.
+- Missing file must show a 404 toast. Redirect download must finish with the
+  same bytes. Open attachment tab must open the share sheet.
+- Start Slow download, then Reload page before it finishes. The proxy must
+  log the interrupted connection, and its partial cache directory must be
+  removed. Also check interruption by switching profiles or reloading from
+  native device settings.
+
+Cold-launch the development client for native verification.
 
 ## Release (EAS)
 
@@ -572,9 +689,9 @@ push key); nobody needs a local Xcode signing setup to ship.
   review, for example for a store release. Repo
   secrets: `EXPO_TOKEN` (a robot token from the `bb-team` Expo org) and
   `ASC_API_KEY_P8` (the `.p8` contents).
-- The `expo-modules-jsi` pnpm patch and the `lightningcss` override ship
-  with the repo and apply on EAS; the default build image provides
-  Xcode 26.x.
+- The `react-native-webview` pnpm patch and the `lightningcss` override ship
+  with the repo and apply on EAS; builds need an EAS image with Xcode 27.x
+  (the iOS 27 SDK) for iPhone Duo.
 - Universal links need the signed app's team id in the AASA the connect gate
   serves (`packages/connect-db/src/app-links.ts`) and a physical-device
   check against `https://<handle>.getbb.app/threads/…`. Android signing
@@ -706,7 +823,29 @@ both public links. Add `--details --json` or call `system.mobileAppReleases()`
 upload date. The server fetches only public metadata, caches it for five minutes,
 and returns `android: null` if unavailable or inconsistent. Download links remain
 usable during metadata failures. iOS version and release date are shown in TestFlight.
-Publish updates with **Mobile Android (EAS)**, profile `preview`, **publish** on.
+Inside the Android app, Settings → Mobile also shows the installed version and
+compares its native build number with the published APK: up to date, update
+available, or newer than the published release. Older apps without build-number
+reporting and unavailable release metadata show that update status cannot be
+determined. The download button remains available in every state.
+The nightly release pipeline builds and publishes an Android preview APK after
+a successful npm nightly publication, alongside the iOS build. This runs on the
+daily 3 AM America/Los_Angeles schedule, a manual nightly publish, and the
+nightly publication following a stable release. Successful builds replace the
+APK and version metadata used by Settings → Mobile. These builds do not submit
+to Google Play.
+
+The Android version name matches the published bb-app nightly version, including
+its full `-nightly.RUN.ATTEMPT` suffix. EAS continues to increment the integer
+Android build number independently. The APK's version name and build number
+are also used in the Settings → Mobile download metadata.
+
+For an immediate update, run **Mobile Android (EAS)**, profile `preview`,
+**publish** on, or
+`gh workflow run mobile-android-eas.yml --ref main -f profile=preview -f publish=true -f submit=false`.
+Add `-f version=X.Y.Z-nightly.RUN.ATTEMPT` to assign a specific nightly version,
+or `-f version=X.Y.Z` for a stable version. Leaving it empty uses the committed
+mobile version.
 The preview Gradle command builds `arm64-v8a` and `armeabi-v7a`, supporting
 both 64-bit and 32-bit ARM phones. It omits Intel x86/x86_64 libraries to reduce
 the direct download; Intel devices and x86 emulators cannot install this APK.
@@ -714,3 +853,67 @@ Production AABs retain all architectures so Google Play can deliver
 device-specific packages. Keep EAS signing credentials unchanged so existing
 sideload installations can update. The smaller APK still undergoes browser
 security scanning; reduced size does not guarantee a fix for scanning hangs.
+
+## Android keyboard image paste
+
+The `react-native-webview` patch receives keyboard image content through
+AndroidX `InputConnectionCompat`. It is enabled only for WebViews with BB's
+injected mobile bridge. The bridge captures the focused prompt editor, then
+replays the image as a clipboard file through the existing web paste handler.
+The WebView serves a temporary, single-use URL from the keyboard's content
+stream. Image bytes stay binary instead of passing through base64 or a
+JavaScript string. Reads run off the UI thread, stop at the composer's 35 MB
+attachment limit, and must complete within 30 seconds. At most four transfers
+can be pending per WebView. Completion, timeout, navigation, and WebView
+destruction close the stream and release URI permissions. The bridge delivers
+the file only after the complete body and native success confirmation arrive;
+failed reads and removed or navigated editors discard the result. This requires
+an updated Android APK but works with the existing web composer without a
+server update.
+
+For a device smoke test:
+
+1. Copy a screenshot to the Android clipboard and focus a thread composer.
+2. Open Gboard's clipboard panel and tap the image. Check that its attachment
+   preview appears and finishes uploading.
+3. Paste ordinary clipboard text and check that it still appears in the editor.
+4. Paste a large image up to 35 MB and check that it completes without closing
+   the app. An image above the limit must not create an attachment.
+5. With a test content provider, delay one image read beyond 30 seconds, then
+   paste another image. The second image must arrive while the first expires.
+6. Navigate away during a delayed read and check that its result does not attach
+   to another composer.
+7. Remove the test attachments and text without sending a message.
+
+Bridge regression tests run with
+`pnpm exec turbo run test typecheck --filter=@bb/mobile-bridge`.
+
+## Android message copy
+
+For messages containing text and an image, Android Copy uses the shell's
+`copyRichText` method to publish `text/plain` plus `text/html`. The HTML carries
+hidden, versioned BB metadata with the exact message text and an image URL.
+BB's regular Paste handler validates that metadata, inserts the text and
+fetches the image from the same server with the current session. Downloads
+reject redirects and non-image responses, enforce the 35 MB attachment limit,
+and time out after 30 seconds. A failed download preserves the pasted text and
+reports that the image could not be attached. Results from removed editors or
+pages that navigated away are discarded.
+
+Android WebView's long-press Paste delivers the HTML. Gboard's text suggestion
+and clipboard-history text entries insert plain text without a rich paste
+event, so those paths paste text only. BB does not compare inserted text with
+previous messages or retain a copied-message cache. HTML-aware destinations
+can also render the text and image reference; plain text destinations receive
+only the text. The image reference requires access to the original server and
+image. Copying image bytes for external image targets uses the image-only path.
+
+Image-only messages use `copyTextAndImage` to download the image into the app
+cache and expose its URI through the WebView FileProvider. Downloads are
+limited to 35 MB, reject redirects, and expire after 25 seconds with 10-second
+network timeouts. Old cache files are removed on the next copy after 24 hours.
+
+Both the APK and served BB web app need this change. Older APKs retain the
+previous combined image/text item behavior. Verify mixed-message Copy followed
+by long-press Paste, Gboard text insertion, image-only Copy/Paste, ordinary text,
+and a missing image. Remove test drafts without sending them.

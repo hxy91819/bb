@@ -1,13 +1,11 @@
-import type {
-  AppCommandContextKey,
-  AppCommandId,
-  AppDefaultKeybinding,
-  AppDefaultKeybindings,
-  AppKeybinding,
-  AppKeybindings,
-  AppShortcut,
-} from "@bb/domain";
 import {
+  type AppCommandContextKey,
+  type AppCommandId,
+  type AppDefaultKeybinding,
+  type AppDefaultKeybindings,
+  type AppKeybinding,
+  type AppKeybindings,
+  type AppShortcut,
   QUESTION_SELECT_APP_COMMAND_IDS,
   PANE_FOCUS_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
@@ -134,6 +132,11 @@ const composerWithoutModal = {
   none: ["modalOpen", "terminalFocus", "browserFocus"],
 } as const;
 
+const terminalWithoutModal = {
+  all: ["mainSurface", "terminalFocus"],
+  none: ["modalOpen"],
+} as const;
+
 const pickerOpenOnly = {
   all: ["mainSurface", "modelPickerOpen"],
   none: [],
@@ -144,12 +147,32 @@ const webMainWithoutModal = {
   none: ["modalOpen"],
 } as const;
 
+const mainWithoutModalOrBrowser = {
+  all: ["mainSurface"],
+  none: ["modalOpen", "browserFocus"],
+} as const;
+
+const questionWithoutOtherEditable: readonly BindingOptions[] = [
+  {
+    all: ["mainSurface", "questionOpen"],
+    none: ["modalOpen", "editableFocus"],
+  },
+  { all: ["mainSurface", "questionFocus"], none: ["modalOpen"] },
+];
+
+const questionFocusWithoutEditable = {
+  all: ["mainSurface", "questionFocus"],
+  none: ["modalOpen", "editableFocus"],
+} as const;
+
 const splitWithoutModal = {
   all: ["mainSurface", "splitActive"],
   none: ["modalOpen"],
 } as const;
 
 export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
+  binding("history.back", "[", { mod: true }, mainWithoutModalOrBrowser),
+  binding("history.forward", "]", { mod: true }, mainWithoutModalOrBrowser),
   binding("palette.open", "p", { mod: true, shift: true }, mainWithoutModal),
   binding("thread.new", "o", { mod: true, shift: true }, mainWithoutModal),
   binding(
@@ -164,12 +187,15 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
   binding("thread.search", "k", { mod: true }, mainWithoutModal),
   unassignedBinding("thread.rename", mainWithoutModal),
   unassignedBinding("thread.archive", mainWithoutModal),
+  unassignedBinding("thread.markRead", mainWithoutModal),
+  unassignedBinding("thread.pin", mainWithoutModal),
   binding("app.back", "Escape", {}, mainWithoutModal),
   binding("settings.open", ",", { mod: true }, mainWithoutModal),
   binding("sidebar.toggle", "\\", { mod: true }, mainWithoutModal),
   unassignedBinding("notifications.open", mainWithoutModal),
   unassignedBinding("plugins.enterSafeMode", mainWithoutModal),
   unassignedBinding("plugins.exitSafeMode", mainWithoutModal),
+  unassignedBinding("plugins.pruneCache", mainWithoutModal),
   binding(
     "thread.previous",
     "[",
@@ -262,21 +288,31 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
   ),
   binding("panel.close", "w", { mod: true }, mainWithoutModal),
   binding("panel.toggle", "j", { mod: true }, mainWithoutModal),
+  unassignedBinding("panel.fullScreen.toggle", mainWithoutModal),
   binding("file.quickOpen", "p", { mod: true }, mainWithoutModal),
-  binding(
-    "diff.toggle",
-    "d",
-    { mod: true },
-    {
-      ...mainWithoutModal,
-      none: ["modalOpen", "editableFocus", "terminalFocus", "browserFocus"],
-    },
-  ),
   binding(
     "terminal.open",
     "Enter",
     { mod: true, shift: true },
     mainWithoutModal,
+  ),
+  binding(
+    "terminal.find",
+    "f",
+    { mod: true },
+    {
+      ...terminalWithoutModal,
+      all: [...terminalWithoutModal.all, "macPlatform"],
+    },
+  ),
+  binding(
+    "terminal.find",
+    "f",
+    { mod: true, shift: true },
+    {
+      ...terminalWithoutModal,
+      none: [...terminalWithoutModal.none, "macPlatform"],
+    },
   ),
   binding(
     "composer.focus",
@@ -375,7 +411,7 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     {
       all: ["mainSurface", "browserFocus"],
       desktopOnly: true,
-      none: ["modalOpen"],
+      none: ["modalOpen", "terminalFocus"],
     },
   ),
   binding(
@@ -385,7 +421,7 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     {
       all: ["mainSurface"],
       desktopOnly: true,
-      none: ["modalOpen", "browserFocus"],
+      none: ["modalOpen", "browserFocus", "terminalFocus"],
     },
   ),
   binding("workspace.openPreferred", "o", { mod: true }, mainWithoutModal),
@@ -400,6 +436,14 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
       },
     ),
   ),
+  ...questionWithoutOtherEditable.map((options) =>
+    binding("question.submit", "Enter", { mod: true }, options),
+  ),
+  ...questionWithoutOtherEditable.map((options) =>
+    binding("question.cancel", ".", { mod: true }, options),
+  ),
+  binding("question.previous", "ArrowLeft", {}, questionFocusWithoutEditable),
+  binding("question.next", "ArrowRight", {}, questionFocusWithoutEditable),
   binding(
     "window.new",
     "n",
@@ -410,7 +454,12 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     },
   ),
   unassignedBinding("logs.openServerDaemon", {
-    all: ["mainSurface", "macPlatform"],
+    all: ["mainSurface"],
+    desktopOnly: true,
+    none: ["modalOpen"],
+  }),
+  unassignedBinding("window.reload", {
+    all: ["mainSurface"],
     desktopOnly: true,
     none: ["modalOpen"],
   }),

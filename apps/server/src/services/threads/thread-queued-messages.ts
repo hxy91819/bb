@@ -1,5 +1,6 @@
 import {
   promptInputSchema,
+  queuedMessageSystemNoticeSchema,
   queuedMessageWaitingOnSchema,
   threadQueuedMessageSchema,
 } from "@bb/domain";
@@ -8,6 +9,8 @@ import type {
   PromptInput,
   QueuedMessagePayload,
   QueuedMessagePayloadKind,
+  QueuedMessageState,
+  QueuedMessageSystemNotice,
   QueuedMessageWaitingOn,
   StartedOnBehalfOf,
   StartedOnBehalfOfInitiator,
@@ -21,7 +24,6 @@ import { resolveDispatchAuthor } from "./dispatch-author.js";
 interface StoredQueuedThreadMessageRow {
   origin: ThreadCreateOrigin | null;
   originPluginId: string | null;
-  claimedAt: number | null;
   content: string;
   createdAt: number;
   failureReason: string | null;
@@ -37,6 +39,7 @@ interface StoredQueuedThreadMessageRow {
   sendAt: number | null;
   serviceTier: string;
   senderThreadId: string | null;
+  state: QueuedMessageState;
   requestedByInitiator: StartedOnBehalfOfInitiator | null;
   requestedByThreadId: string | null;
   systemNotice: string | null;
@@ -93,6 +96,27 @@ export function parseStoredQueuedThreadMessageWaitingOn(
       500,
       "internal_error",
       `Stored queued message ${row.id} for thread ${row.threadId} has a malformed wait`,
+    );
+  }
+  return parsed.data;
+}
+
+export function parseStoredQueuedThreadMessageSystemNotice(
+  row: Pick<StoredQueuedThreadMessageRow, "id" | "systemNotice" | "threadId">,
+): QueuedMessageSystemNotice | null {
+  if (row.systemNotice === null) return null;
+  let notice: unknown;
+  try {
+    notice = JSON.parse(row.systemNotice);
+  } catch {
+    notice = null;
+  }
+  const parsed = queuedMessageSystemNoticeSchema.safeParse(notice);
+  if (!parsed.success) {
+    throw new ApiError(
+      500,
+      "internal_error",
+      `Stored queued message ${row.id} for thread ${row.threadId} has a malformed system notice`,
     );
   }
   return parsed.data;
@@ -159,14 +183,12 @@ function toQueuedMessagePayload(
 export function toThreadQueuedMessage(
   row: StoredQueuedThreadMessageRow,
 ): ThreadQueuedMessage {
-  const author =
-    row.systemNotice !== null
-      ? { initiator: "system" as const, senderThreadId: null }
-      : resolveDispatchAuthor({
-          retrying: row.payloadKind === "retry",
-          senderThreadId: row.senderThreadId,
-          startedOnBehalfOf: storedQueuedThreadMessageRequestedBy(row),
-        });
+  const author = resolveDispatchAuthor({
+    retrying: row.payloadKind === "retry",
+    systemNotice: row.systemNotice !== null,
+    senderThreadId: row.senderThreadId,
+    startedOnBehalfOf: storedQueuedThreadMessageRequestedBy(row),
+  });
   return threadQueuedMessageSchema.parse({
     id: row.id,
     origin: row.origin,
@@ -181,12 +203,17 @@ export function toThreadQueuedMessage(
     serviceTier: row.serviceTier,
     groupWithNext: row.groupWithNext,
     sendAt: row.sendAt,
+    state: row.state,
     waitingOn: parseStoredQueuedThreadMessageWaitingOn(row),
     failureReason: row.failureReason,
     payload: toQueuedMessagePayload(row),
+    systemNotice: parseStoredQueuedThreadMessageSystemNotice(row),
     // An `inline` draft stops being editable the moment the drain claims it:
     // the row is on its way to a provider and a rewrite would be lost.
-    editable: row.payloadKind === "inline" && row.claimedAt === null,
+    editable:
+      row.payloadKind === "inline" &&
+      row.state !== "claimed" &&
+      row.systemNotice === null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });

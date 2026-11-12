@@ -5,6 +5,7 @@ import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type {
   AccountPoolConfig,
   AccountSummary,
+  LimitWindow,
   PoolStatus,
 } from "./src/contracts.js";
 
@@ -17,6 +18,23 @@ afterEach(() => {
 });
 
 const STATUS_CACHE_KEY = "account-pool:status";
+
+function claudeWindow(
+  slot: LimitWindow["slot"],
+  utilization: number,
+  overrides: Partial<LimitWindow> = {},
+): LimitWindow {
+  return {
+    slot,
+    windowMinutes: slot === "primary" ? 300 : 10_080,
+    utilization,
+    resetAt: null,
+    status: null,
+    observedAt: 1,
+    source: "usage",
+    ...overrides,
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -64,12 +82,6 @@ function account(overrides: Partial<AccountSummary> = {}): AccountSummary {
     lastUsedAt: 2,
     lastUsedHostId: "host-one",
     lastUsedHostName: "bee",
-    fiveHourUtilization: 0.21,
-    fiveHourResetAt: null,
-    fiveHourStatus: null,
-    sevenDayUtilization: null,
-    sevenDayResetAt: null,
-    sevenDayStatus: null,
     representativeClaim: null,
     familyWeekly: {
       fable: null,
@@ -78,7 +90,7 @@ function account(overrides: Partial<AccountSummary> = {}): AccountSummary {
       haiku: null,
       other: null,
     },
-    limitWindows: [],
+    limitWindows: [claudeWindow("primary", 0.21)],
     extraUsage: null,
     usageRestriction: null,
     observedAt: 1,
@@ -118,6 +130,7 @@ function config(overrides: Partial<AccountPoolConfig> = {}): AccountPoolConfig {
 function render(
   accounts = [account()],
   extraRpc: Record<string, () => object | null | Promise<object | null>> = {},
+  copyToClipboard?: () => Promise<boolean>,
 ) {
   return renderSlot(
     app.settingsSections[0]!,
@@ -129,6 +142,7 @@ function render(
         ...extraRpc,
       },
       openUrl: () => true,
+      experimental_copyToClipboard: copyToClipboard,
     },
   );
 }
@@ -216,7 +230,7 @@ describe("Account Pool settings", () => {
   it("renders cached accounts as refreshing until live status arrives, then caches it", async () => {
     window.localStorage.setItem(
       STATUS_CACHE_KEY,
-      JSON.stringify(status([account({ fiveHourUtilization: 0.21 })])),
+      JSON.stringify(status([account({ limitWindows: [claudeWindow("primary", 0.21)] })])),
     );
     const live = deferred<PoolStatus>();
     const slot = render([], { "status.get": () => live.promise });
@@ -226,14 +240,14 @@ describe("Account Pool settings", () => {
     expect(slot.getByText(/· refreshing…$/)).toBeTruthy();
     expect(slot.queryByText("Loading…")).toBeNull();
     expect(slot.queryByText("No accounts in the pool")).toBeNull();
-    live.resolve(status([account({ fiveHourUtilization: 0.6 })]));
+    live.resolve(status([account({ limitWindows: [claudeWindow("primary", 0.6)] })]));
     expect(await slot.findByText("60%")).toBeTruthy();
     expect(slot.queryByText("refreshing usage…")).toBeNull();
     expect(slot.queryByText(/· refreshing…$/)).toBeNull();
     const cached = JSON.parse(
       window.localStorage.getItem(STATUS_CACHE_KEY) ?? "null",
     ) as PoolStatus;
-    expect(cached.accounts[0]?.fiveHourUtilization).toBe(0.6);
+    expect(cached.accounts[0]?.limitWindows[0]?.utilization).toBe(0.6);
   });
 
   it("ignores a malformed status cache and shows the loading state", async () => {
@@ -261,16 +275,44 @@ describe("Account Pool settings", () => {
     );
   });
 
-  it("renders fixed quota slots with missing buckets as em dashes", async () => {
-    const slot = render();
+  it("renders only the windows a Claude account reports and an unobserved Fable slot as an em dash", async () => {
+    const slot = render([
+      account({ limitWindows: [claudeWindow("secondary", 0.3)] }),
+    ]);
     expect(await slot.findByText("person@example.com")).toBeTruthy();
-    expect(slot.getByText("5H")).toBeTruthy();
     expect(slot.getByText("7D")).toBeTruthy();
+    expect(slot.getByText("30%")).toBeTruthy();
+    expect(slot.queryByText("5H")).toBeNull();
     expect(slot.getByText("FABLE")).toBeTruthy();
-    expect(slot.getAllByText("—")).toHaveLength(2);
+    expect(slot.getAllByText("—")).toHaveLength(1);
     expect(
       slot.getByText("Hub accepting · 2 in flight · used by bee"),
     ).toBeTruthy();
+    fireEvent.click(
+      await slot.findByRole("button", {
+        name: "Open person@example.com details",
+      }),
+    );
+    expect(await slot.findByText("7 day")).toBeTruthy();
+    expect(slot.queryByText("Weekly")).toBeNull();
+    expect(slot.queryByText("5 hour")).toBeNull();
+  });
+
+  it("renders a Claude account with no observed windows as empty 5H and 7D slots", async () => {
+    const slot = render([account({ limitWindows: [] })]);
+    expect(await slot.findByText("person@example.com")).toBeTruthy();
+    expect(slot.getByText("5H")).toBeTruthy();
+    expect(slot.getByText("7D")).toBeTruthy();
+    expect(slot.queryByText("LIMIT")).toBeNull();
+    expect(slot.getAllByText("—")).toHaveLength(3);
+    fireEvent.click(
+      await slot.findByRole("button", {
+        name: "Open person@example.com details",
+      }),
+    );
+    expect(await slot.findByText("5 hour")).toBeTruthy();
+    expect(slot.getByText("7 day")).toBeTruthy();
+    expect(slot.queryByText("No usage limits observed yet.")).toBeNull();
   });
 
   it("keeps the quota slots visible at mobile widths", async () => {
@@ -278,6 +320,25 @@ describe("Account Pool settings", () => {
     const group = (await slot.findByText("5H")).parentElement?.parentElement;
     expect(group).toBeTruthy();
     expect(group?.className).not.toMatch(/(^|\s)hidden(\s|$)/u);
+  });
+
+  it("dates an exhausted account by its refused window, not one past the threshold", async () => {
+    const slot = render([
+      account({
+        status: "exhausted",
+        limitWindows: [
+          claudeWindow("primary", 1, {
+            status: "rejected",
+            resetAt: Date.now() + 2 * 60 * 60 * 1_000,
+          }),
+          claudeWindow("secondary", 0.99, {
+            status: "allowed",
+            resetAt: Date.now() + 6 * 24 * 60 * 60 * 1_000,
+          }),
+        ],
+      }),
+    ]);
+    expect(await slot.findByText("Exhausted · resets in 2h 0m")).toBeTruthy();
   });
 
   it("renders only the windows a Codex account reports and no Fable slot", async () => {
@@ -289,8 +350,6 @@ describe("Account Pool settings", () => {
         label: "pro@example.com",
         codexAccountId: "chatgpt-account",
         status: "exhausted",
-        fiveHourUtilization: 0.25,
-        fiveHourResetAt: Date.now() + 60 * 60 * 1_000,
         limitWindows: [
           {
             slot: "primary",
@@ -398,6 +457,63 @@ describe("Account Pool settings", () => {
     expect(
       (await slot.findByLabelText("Codex user code")).textContent,
     ).toContain("ABCD-1234");
+  });
+
+  it("signs an existing account in again in place and completes into it", async () => {
+    const slot = render([account({ label: "Reserve", enabled: false })], {
+      "login.start": () => ({
+        sessionId: "22222222-2222-4222-8222-222222222222",
+        authorizeUrl: "https://claude.ai/oauth/authorize?state=state",
+      }),
+      "login.complete": () => account({ label: "Reserve", enabled: false }),
+    });
+    fireEvent.pointerDown(
+      await slot.findByRole("button", { name: "Reserve actions" }),
+    );
+    fireEvent.click(await slot.findByText("Sign in again…"));
+    expect(
+      await slot.findByRole("dialog", { name: "Sign in again to Reserve" }),
+    ).toBeTruthy();
+    expect(slot.rpcCalls).toContainEqual({
+      method: "login.start",
+      input: { kind: "relogin", accountId: account().id },
+    });
+    fireEvent.change(slot.getByLabelText("Claude authorization code"), {
+      target: { value: "code#state" },
+    });
+    fireEvent.click(slot.getByRole("button", { name: "Complete" }));
+    expect(await slot.findByText("Signed in again to Reserve")).toBeTruthy();
+    expect(slot.queryByRole("button", { name: "Add another" })).toBeNull();
+  });
+
+  it("shows a refused Claude re-login inside the sign-in dialog", async () => {
+    const refusal =
+      "This login is for spouse@example.com, not person@example.com.";
+    const slot = render([account()], {
+      "login.start": () => ({
+        sessionId: "22222222-2222-4222-8222-222222222222",
+        authorizeUrl: "https://claude.ai/oauth/authorize?state=state",
+      }),
+      "login.complete": () => {
+        throw new Error(refusal);
+      },
+    });
+    fireEvent.pointerDown(
+      await slot.findByRole("button", { name: "person@example.com actions" }),
+    );
+    fireEvent.click(await slot.findByText("Sign in again…"));
+    fireEvent.change(await slot.findByLabelText("Claude authorization code"), {
+      target: { value: "code#state" },
+    });
+    fireEvent.click(slot.getByRole("button", { name: "Complete" }));
+    const dialog = await slot.findByRole("dialog", {
+      name: "Sign in again to person@example.com",
+    });
+    await waitFor(() => expect(dialog.textContent).toContain(refusal));
+    expect(
+      slot.getByRole("button", { name: "Complete" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(slot.getByRole("button", { name: "Start again" })).toBeTruthy();
   });
 
   it("persists provider routing from the section switch", async () => {
@@ -576,13 +692,12 @@ describe("Account Pool settings", () => {
   );
 
   it("does not claim success when copying the device code fails", async () => {
-    const copy = deferred<void>();
-    const writeText = vi.fn(() => copy.promise);
-    vi.stubGlobal("navigator", {
-      ...navigator,
-      clipboard: { writeText },
-    });
-    const slot = render([], { "codexLogin.start": codexLoginStart });
+    const copy = deferred<boolean>();
+    const slot = render(
+      [],
+      { "codexLogin.start": codexLoginStart },
+      () => copy.promise,
+    );
     fireEvent.click(
       await slot.findByRole("button", { name: "Sign in to Codex" }),
     );
@@ -590,21 +705,22 @@ describe("Account Pool settings", () => {
       name: "Copy Codex sign-in code",
     });
     fireEvent.click(button);
-    expect(writeText).toHaveBeenCalledWith("ABCD-1234");
-    await act(async () => copy.reject(new Error("denied")));
+    expect(slot.inspection.experimental_clipboardWrites).toEqual([
+      { text: "ABCD-1234" },
+    ]);
+    await act(async () => copy.resolve(false));
     expect(window.getSelection()?.toString()).toBe("ABCD-1234");
     expect(slot.queryByText("Sign-in code copied")).toBeNull();
     expect(button.querySelector('[data-icon="Check"]')).toBeNull();
   });
 
   it("does not claim success when copying the authorization URL fails", async () => {
-    const copy = deferred<void>();
-    const writeText = vi.fn(() => copy.promise);
-    vi.stubGlobal("navigator", {
-      ...navigator,
-      clipboard: { writeText },
-    });
-    const slot = render([], { "codexLogin.start": codexLoginStart });
+    const copy = deferred<boolean>();
+    const slot = render(
+      [],
+      { "codexLogin.start": codexLoginStart },
+      () => copy.promise,
+    );
     fireEvent.click(
       await slot.findByRole("button", { name: "Sign in to Codex" }),
     );
@@ -612,10 +728,10 @@ describe("Account Pool settings", () => {
       name: "Copy Codex authorization URL",
     });
     fireEvent.click(button);
-    expect(writeText).toHaveBeenCalledWith(
-      "https://auth.openai.com/codex/device",
-    );
-    await act(async () => copy.reject(new Error("denied")));
+    expect(slot.inspection.experimental_clipboardWrites).toEqual([
+      { text: "https://auth.openai.com/codex/device" },
+    ]);
+    await act(async () => copy.resolve(false));
     const input = slot.getByRole("textbox", {
       name: "Codex authorization URL",
     }) as HTMLInputElement;
@@ -626,25 +742,26 @@ describe("Account Pool settings", () => {
   });
 
   it("keeps polling and the close action working after copying the code", async () => {
-    const copy = deferred<void>();
-    const writeText = vi.fn(() => copy.promise);
-    vi.stubGlobal("navigator", {
-      ...navigator,
-      clipboard: { writeText },
-    });
-    const slot = render([], {
-      "codexLogin.start": codexLoginStart,
-      "codexLogin.poll": () => ({ status: "pending" }),
-      "codexLogin.cancel": () => ({ cancelled: true }),
-    });
+    const copy = deferred<boolean>();
+    const slot = render(
+      [],
+      {
+        "codexLogin.start": codexLoginStart,
+        "codexLogin.poll": () => ({ status: "pending" }),
+        "codexLogin.cancel": () => ({ cancelled: true }),
+      },
+      () => copy.promise,
+    );
     fireEvent.click(
       await slot.findByRole("button", { name: "Sign in to Codex" }),
     );
     fireEvent.click(
       await slot.findByRole("button", { name: "Copy Codex sign-in code" }),
     );
-    expect(writeText).toHaveBeenCalledWith("ABCD-1234");
-    await act(async () => copy.resolve());
+    expect(slot.inspection.experimental_clipboardWrites).toEqual([
+      { text: "ABCD-1234" },
+    ]);
+    await act(async () => copy.resolve(true));
     expect(
       (await slot.findByRole("dialog", { name: "Sign in to Codex" }))
         .textContent,
@@ -676,7 +793,7 @@ describe("Account Pool settings", () => {
     fireEvent.click(
       await slot.findByRole("button", { name: "Sign in to Codex" }),
     );
-    fireEvent.click(await slot.findByRole("button", { name: "Try again" }));
+    fireEvent.click(await slot.findByRole("button", { name: "Start again" }));
     await waitFor(() => expect(starts).toBe(2));
   });
   it.each(["claude", "codex"] as const)(

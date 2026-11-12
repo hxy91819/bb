@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ThreadMachineStatusBanner } from "./ThreadMachineStatus";
 
 const provider = {
@@ -16,53 +16,50 @@ const provider = {
   supportsSuspend: true,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+});
+
+function renderBanner(phase: "suspending" | "suspended" | "resuming") {
+  const { container } = render(
+    <ThreadMachineStatusBanner
+      host={{
+        name: "Modal sandbox ugxe6e",
+        type: "ephemeral",
+        machineProviderId: provider.id,
+      }}
+      provider={provider}
+      phase={phase}
+      error={null}
+      onResume={() => {}}
+    />,
+  );
+  return {
+    markup: container.innerHTML,
+    status: screen.getByRole("status"),
+    buttons: screen.queryAllByRole("button"),
+  };
+}
 
 describe("ThreadMachineStatusBanner", () => {
   it("names the paused state generically and keeps the provider icon", () => {
-    const { container } = render(
-      <ThreadMachineStatusBanner
-        host={{
-          name: "Modal sandbox ugxe6e",
-          type: "ephemeral",
-          machineProviderId: provider.id,
-        }}
-        provider={provider}
-        phase="suspended"
-        error={null}
-        onResume={vi.fn()}
-      />,
-    );
+    const { markup, status, buttons } = renderBanner("suspended");
 
-    expect(screen.getByRole("status").textContent).toBe("Machine is paused");
-    expect(container.querySelector('[data-icon="Cloud"]')).not.toBeNull();
-    expect(screen.queryByText("Modal sandbox ugxe6e")).toBeNull();
-    expect(screen.queryByText(provider.displayName)).toBeNull();
-    expect(
-      (screen.getByRole("button", { name: "Resume" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false);
+    expect(status.textContent).toBe("Machine is paused");
+    expect(status.querySelector('[data-icon="Cloud"]')).not.toBeNull();
+    expect(markup).not.toContain("Modal sandbox ugxe6e");
+    expect(markup).not.toContain(provider.displayName);
+    expect(buttons.map((button) => button.textContent)).toEqual(["Resume"]);
+    expect(buttons[0]?.hasAttribute("disabled")).toBe(false);
   });
 
   it.each([
     ["suspending", "Machine is pausing…"],
     ["resuming", "Machine is resuming…"],
-  ] as const)("renders the durable %s phase", (phase, status) => {
-    render(
-      <ThreadMachineStatusBanner
-        host={{
-          name: "Modal sandbox ugxe6e",
-          type: "ephemeral",
-          machineProviderId: provider.id,
-        }}
-        provider={provider}
-        phase={phase}
-        error={null}
-        onResume={vi.fn()}
-      />,
-    );
+  ] as const)("renders the durable %s phase", (phase, expected) => {
+    const { status, buttons } = renderBanner(phase);
 
-    expect(screen.getByRole("status").textContent).toBe(status);
-    expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+    expect(status.textContent).toBe(expected);
+    expect(buttons).toEqual([]);
   });
 });

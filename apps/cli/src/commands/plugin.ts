@@ -6,8 +6,16 @@ import { createInterface } from "node:readline/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { Command, Option } from "commander";
 import { z } from "zod";
-import { derivePluginId, jsonValueSchema } from "@bb/domain";
+import {
+  derivePluginId,
+  jsonValueSchema,
+  PLUGIN_SDK_VERSION,
+} from "@bb/domain";
 import { pluginCliCall, RESERVED_BB_CLI_COMMANDS } from "@bb/domain/plugin-cli";
+import {
+  pluginInstallBadge,
+  type PluginInstallBadge,
+} from "@bb/domain/plugin-install-badge";
 import type {
   InstalledPlugin as PluginEntry,
   PluginApplyUpdateResult,
@@ -16,7 +24,6 @@ import type {
   PluginCatalogSearchResult,
   PluginUpdateCheckEntry as PluginUpdateResult,
 } from "@bb/server-contract";
-import { PLUGIN_SDK_VERSION } from "@bb/domain";
 import { BbHttpError, pluginMutationResponseSchema } from "@bb/sdk";
 import { parseDataDirEnvValue, resolveProdDataDir } from "@bb/config/runtime";
 import {
@@ -26,13 +33,16 @@ import {
   setPluginSdkPin,
   type PluginPackageLayoutMigration,
 } from "@bb/templates/plugin-scaffold";
-import { action } from "../action.js";
+import { action, CliExitError } from "../action.js";
 import { cliFetch, createCliBbSdk } from "../client.js";
+import { resolveContextThreadId } from "../context-env.js";
 import {
   buildPluginApp,
   buildPluginHost,
   buildPluginServer,
   createPluginDevLoop,
+  findPluginSdkInstallImports,
+  type PluginSdkInstallImport,
   PLUGIN_TOOLCHAIN_PINS,
   resolvePluginBuildToolchain,
   type PluginBuildToolchain,
@@ -67,6 +77,24 @@ export function resolveNewPluginTarget(name: string): NewPluginTarget | null {
     packageName,
     directoryName: `bb-plugin-${pluginId}`,
   };
+}
+
+function pluginInstallBadgeLabel(badge: PluginInstallBadge | null): string {
+  if (badge === null) return "";
+  if (badge.kind === "builtin") return "Built in";
+  if (badge.kind === "new") return "New";
+  return badge.installs.toLocaleString("en-US");
+}
+
+function formatCacheBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
 function toolchainBaseDir(): string {
@@ -181,12 +209,16 @@ function warnIfSdkPinIsStale(pin: string | null): void {
 function printMigrationPlan(plan: PluginPackageLayoutMigration): void {
   if (plan.pin !== null) {
     console.log(
-      `  package.json   devDependencies "@get-bb/plugin-sdk": ${plan.pin.from ?? "(none)"} → ${plan.pin.to}`,
+      `  package.json   ${plan.sdkField} "@get-bb/plugin-sdk": ${plan.pin.from ?? "(none)"} → ${plan.pin.to}`,
     );
   }
-  if (plan.movedFromDependencies) {
+  if (plan.sdkRelocation === "moved") {
     console.log(
-      '  package.json   move "@get-bb/plugin-sdk" from dependencies to devDependencies',
+      `  package.json   move "@get-bb/plugin-sdk" from ${otherSdkField(plan.sdkField)} to ${plan.sdkField}`,
+    );
+  } else if (plan.sdkRelocation === "deduplicated") {
+    console.log(
+      `  package.json   remove the duplicate "@get-bb/plugin-sdk" from ${otherSdkField(plan.sdkField)} (kept in ${plan.sdkField})`,
     );
   }
   if (plan.enginesFloor !== null) {
@@ -210,6 +242,40 @@ function printMigrationPlan(plan: PluginPackageLayoutMigration): void {
     console.log(
       `  rewrite        ${file.path} (${file.imports} import${file.imports === 1 ? "" : "s"} of "@bb/plugin-sdk" → "@get-bb/plugin-sdk")`,
     );
+  }
+}
+
+function otherSdkField(
+  field: "dependencies" | "devDependencies",
+): "dependencies" | "devDependencies" {
+  return field === "dependencies" ? "devDependencies" : "dependencies";
+}
+
+function describePendingSdkPin(
+  pending: NonNullable<Awaited<ReturnType<typeof setPluginSdkPin>>>,
+  installImport: PluginSdkInstallImport | undefined,
+): string | null {
+  const field = pending.sdkField;
+  const other = otherSdkField(field);
+  const reason =
+    installImport === undefined
+      ? "bb provides its runtime"
+      : `${installImport.file} imports "${installImport.specifier}", which the build bundles from the plugin's own SDK install, and Git installs omit devDependencies`;
+  const fix = "(`bb plugin types` does it for you)";
+  switch (pending.sdkRelocation) {
+    case "moved":
+      return pending.pin === null
+        ? `Move "@get-bb/plugin-sdk" from ${other} to ${field} — ${reason} ${fix}.`
+        : `Move "@get-bb/plugin-sdk" from ${other} to ${field} at ${pending.pin.to} and re-run npm install — ${reason} ${fix}.`;
+    case "deduplicated":
+      return pending.pin === null
+        ? `Remove the duplicate "@get-bb/plugin-sdk" from ${other}; keep it in ${field} — ${reason} ${fix}.`
+        : `Remove the duplicate "@get-bb/plugin-sdk" from ${other}, set it to ${pending.pin.to} in ${field}, and re-run npm install — ${reason} ${fix}.`;
+    case "none":
+      if (pending.pin === null) return null;
+      return installImport !== undefined && pending.pin.from === null
+        ? `Add "@get-bb/plugin-sdk" ${pending.pin.to} to ${field} and run npm install — ${reason} ${fix}.`
+        : `Set "@get-bb/plugin-sdk" to ${pending.pin.to} in ${field} and re-run npm install ${fix}.`;
   }
 }
 
@@ -288,6 +354,25 @@ async function isPackageInstalled(
   }
 }
 
+const PLUGIN_CREATION_TELEMETRY_TIMEOUT_MS = 2_000;
+
+async function recordPluginCreationStarted(
+  getUrl: () => string,
+): Promise<void> {
+  if (resolveContextThreadId() !== undefined) return;
+  try {
+    await createCliBbSdk(
+      getUrl(),
+      PLUGIN_CREATION_TELEMETRY_TIMEOUT_MS,
+    ).system.experimental_recordTelemetryEvent({
+      name: "plugin_creation_started",
+      properties: {},
+    });
+  } catch {
+    return;
+  }
+}
+
 async function warnIfSdkVersionUnpublished(): Promise<void> {
   const status = await probeSdkVersionPublished();
   if (status === "published") return;
@@ -321,12 +406,8 @@ async function execNpm(
   args: readonly string[],
   options: { cwd?: string; timeout?: number; killSignal?: NodeJS.Signals },
 ): Promise<{ stdout: string; stderr: string }> {
-  const { exec, execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  if (process.platform === "win32") {
-    return promisify(exec)(["npm", ...args].join(" "), options);
-  }
-  return promisify(execFile)("npm", [...args], options);
+  const { execHostFile } = await import("@bb/process-utils");
+  return execHostFile("npm", args, options);
 }
 
 async function probeSdkVersionPublished(): Promise<
@@ -438,7 +519,7 @@ const UPDATE_STATUS_LABELS: Record<PluginUpdateResult["outcome"], string> = {
 
 function blockedSummary(result: PluginUpdateResult): string {
   if (!result.blocked) return "—";
-  return `${result.blocked.version}: ${result.blocked.reasons.join("; ")}`;
+  return `${result.blocked.label}: ${result.blocked.reasons.join("; ")}`;
 }
 
 function updateDetail(result: PluginUpdateResult): string {
@@ -660,6 +741,9 @@ function printPlugin(plugin: PluginEntry): void {
   const detail = plugin.statusDetail ? `  (${plugin.statusDetail})` : "";
   console.log(`${plugin.id}@${plugin.version}  ${state}${detail}`);
   console.log(`  source: ${plugin.source}`);
+  if (plugin.sourceNotice !== null) {
+    console.log(`  note: ${plugin.sourceNotice}`);
+  }
   const stats = plugin.handlerStats;
   if (stats && stats.count > 0) {
     const errors = stats.errorCount > 0 ? `, ${stats.errorCount} errors` : "";
@@ -823,12 +907,22 @@ export function registerPluginCommands(
               : jsonValueSchema.parse(
                   JSON.parse(await readFile(opts.inputFile, "utf8")),
                 );
-          const result = await createCliBbSdk(getUrl()).plugins.callRpc({
-            pluginId,
-            method,
-            input,
-            outputSchema: jsonValueSchema,
-          });
+          const result = await createCliBbSdk(getUrl())
+            .plugins.callRpc({
+              pluginId,
+              method,
+              input,
+              outputSchema: jsonValueSchema,
+            })
+            .catch((error: unknown) => {
+              if (error instanceof BbHttpError && error.code !== null) {
+                throw new CliExitError(`${error.code}: ${error.message}`, 1, {
+                  code: error.code,
+                  hint: null,
+                });
+              }
+              throw error;
+            });
           if (opts.json) {
             outputJson(opts, result);
             return;
@@ -889,19 +983,17 @@ export function registerPluginCommands(
           return;
         }
         const showMarketplace = results.some((result) => !result.official);
-        const showInstalls = results.some((result) => result.installs !== null);
-        const rows = results.map((result) => [
+        const now = Date.now();
+        const badges = results.map((result) =>
+          pluginInstallBadgeLabel(pluginInstallBadge(result, now)),
+        );
+        const showInstalls = badges.some((badge) => badge !== "");
+        const rows = results.map((result, index) => [
           result.displayName,
           result.description,
           result.category ?? "Uncategorized",
           ...(showMarketplace ? [result.marketplaceDisplayName] : []),
-          ...(showInstalls
-            ? [
-                result.installs === null
-                  ? ""
-                  : result.installs.toLocaleString("en-US"),
-              ]
-            : []),
+          ...(showInstalls ? [badges[index]] : []),
           result.installed
             ? "✓ installed"
             : !result.compatible
@@ -1026,6 +1118,10 @@ export function registerPluginCommands(
       "Resolve a git: semver range over <prefix>vX.Y.Z tags (monorepo tagging)",
     )
     .option("--yes", "Skip the confirmation prompt")
+    .option(
+      "--no-wait",
+      "Start the install in the background and print its job; follow it with `bb plugin install-jobs`",
+    )
     .option("--json", "Output JSON")
     .action(
       action(
@@ -1036,6 +1132,7 @@ export function registerPluginCommands(
             subdirectory?: string;
             plugin?: string;
             tagPrefix?: string;
+            wait: boolean;
           },
         ) => {
           if (opts.subdirectory !== undefined && opts.plugin !== undefined) {
@@ -1106,26 +1203,55 @@ export function registerPluginCommands(
             "Refusing to install without confirmation — re-run with --yes.",
             opts.yes === true,
           );
-          const plugin =
+          const plugins = createCliBbSdk(getUrl()).plugins;
+          const request =
             intent.kind === "source"
-              ? await createCliBbSdk(getUrl()).plugins.install({
-                  source: intent.source,
-                  ...(opts.subdirectory === undefined
-                    ? {}
-                    : { subdirectory: opts.subdirectory }),
-                  ...(opts.plugin === undefined ? {} : { plugin: opts.plugin }),
-                })
-              : await createCliBbSdk(getUrl()).plugins.catalog.install(
-                  intent.plan.kind === "marketplace"
-                    ? {
-                        entryId: intent.plan.entryId,
-                        marketplace: intent.plan.marketplace,
-                        ...(intent.plan.official
-                          ? {}
-                          : { confirmedSource: intent.plan.resolvedSource }),
-                      }
-                    : { entryId: intent.plan.entryId },
-                );
+              ? {
+                  kind: "source" as const,
+                  args: {
+                    source: intent.source,
+                    ...(opts.subdirectory === undefined
+                      ? {}
+                      : { subdirectory: opts.subdirectory }),
+                    ...(opts.plugin === undefined
+                      ? {}
+                      : { plugin: opts.plugin }),
+                  },
+                }
+              : {
+                  kind: "catalog" as const,
+                  args:
+                    intent.plan.kind === "marketplace"
+                      ? {
+                          entryId: intent.plan.entryId,
+                          marketplace: intent.plan.marketplace,
+                          ...(intent.plan.official
+                            ? {}
+                            : { confirmedSource: intent.plan.resolvedSource }),
+                        }
+                      : { entryId: intent.plan.entryId },
+                };
+          if (!opts.wait) {
+            const job =
+              request.kind === "source"
+                ? await plugins.startInstall(request.args)
+                : await plugins.catalog.startInstall(request.args);
+            if (opts.json) {
+              outputJson(opts, { ok: true as const, job });
+              return;
+            }
+            console.log(
+              `Installing ${job.displayName} in the background (job ${job.id}).`,
+            );
+            console.log(
+              `Follow it with \`bb plugin install-jobs\`; cancel it with \`bb plugin cancel-install ${job.id}\`.`,
+            );
+            return;
+          }
+          const plugin =
+            request.kind === "source"
+              ? await plugins.install(request.args)
+              : await plugins.catalog.install(request.args);
           const result = { ok: true as const, plugin };
           if (opts.json) {
             outputJson(opts, result);
@@ -1135,6 +1261,68 @@ export function registerPluginCommands(
           printPlugin(plugin);
         },
       ),
+    );
+
+  plugin
+    .command("install-jobs")
+    .description(
+      "List plugin installs that are queued or running, and those that finished in the last ten minutes. Installs run one at a time on the server and continue when the CLI or app disconnects",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      action(async (opts: JsonOutputOptions) => {
+        const jobs = await createCliBbSdk(getUrl()).plugins.installJobs.list();
+        if (opts.json) {
+          outputJson(opts, { jobs });
+          return;
+        }
+        if (jobs.length === 0) {
+          console.log("No recent plugin installs.");
+          return;
+        }
+        console.log(
+          renderBorderlessTable(
+            {
+              head: ["Job", "Plugin", "State", "Detail"],
+              colWidths: [38, 28, 12, 60],
+              trimTrailingWhitespace: true,
+            },
+            jobs.map((job) => [
+              job.id,
+              job.displayName,
+              job.state,
+              job.state === "failed"
+                ? job.error
+                : job.state === "succeeded"
+                  ? job.plugin.id
+                  : "",
+            ]),
+          ),
+        );
+      }),
+    );
+
+  plugin
+    .command("cancel-install <job-id>")
+    .description(
+      "Cancel a plugin install. A queued install is dropped; a running install stops its current download or build and leaves nothing installed, unless it has already started registering the plugin, in which case it finishes",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      action(async (jobId: string, opts: JsonOutputOptions) => {
+        const job = await createCliBbSdk(getUrl()).plugins.installJobs.cancel({
+          jobId,
+        });
+        if (opts.json) {
+          outputJson(opts, { job });
+          return;
+        }
+        console.log(
+          job.state === "cancelling"
+            ? `Cancelling the ${job.displayName} install.`
+            : `The ${job.displayName} install is ${job.state}.`,
+        );
+      }),
     );
 
   plugin
@@ -1175,8 +1363,57 @@ export function registerPluginCommands(
     );
 
   plugin
+    .command("update-jobs [job-id]")
+    .description(
+      "Show background plugin updates and results retained for ten minutes; running jobs survive client disconnections, but not a server restart",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      action(async (jobId: string | undefined, opts: JsonOutputOptions) => {
+        const updates =
+          createCliBbSdk(getUrl()).plugins.experimental_updateJobs;
+        const jobs =
+          jobId === undefined
+            ? await updates.list()
+            : [await updates.get({ jobId })];
+        if (opts.json) {
+          outputJson(opts, { jobs });
+          return;
+        }
+        if (jobs.length === 0) {
+          console.log("No recent plugin updates.");
+          return;
+        }
+        console.log(
+          renderBorderlessTable(
+            {
+              head: ["Job", "Plugin", "State", "Detail"],
+              colWidths: [38, 28, 12, 60],
+              trimTrailingWhitespace: true,
+            },
+            jobs.map((job) => [
+              job.id,
+              job.displayName,
+              job.state,
+              job.state === "running"
+                ? job.phase
+                : job.state === "failed"
+                  ? job.error
+                  : job.state === "completed"
+                    ? (job.result.detail ?? job.result.outcome)
+                    : "",
+            ]),
+          ),
+        );
+      }),
+    );
+
+  plugin
     .command("update [id]")
-    .description("Update one plugin, or all plugins with --all")
+    .description(
+      "Update one plugin, or all plugins with --all; waits for the server job by default",
+    )
+    .option("--no-wait", "Start background updates and return their job IDs")
     .option("--all", "Update every plugin with a compatible update")
     .option("--yes", "Skip confirmation prompts")
     .action(
@@ -1186,6 +1423,7 @@ export function registerPluginCommands(
           opts: {
             all?: boolean;
             yes?: boolean;
+            wait?: boolean;
           },
         ) => {
           if ((id === undefined) === !opts.all) {
@@ -1239,6 +1477,19 @@ export function registerPluginCommands(
               opts.yes === true,
             );
 
+            if (opts.wait === false) {
+              const job = await sdk.plugins.experimental_startUpdate({
+                pluginId: result.id,
+              });
+              console.log(
+                `Updating ${job.displayName} in the background (job ${job.id}).`,
+              );
+              console.log(
+                `Follow it with \`bb plugin update-jobs ${job.id}\`.`,
+              );
+              continue;
+            }
+
             let mutation: PluginApplyUpdateResult;
             try {
               mutation = await sdk.plugins.applyUpdate({
@@ -1275,6 +1526,7 @@ export function registerPluginCommands(
           );
           process.exit(1);
         }
+        const creationTelemetry = recordPluginCreationStarted(getUrl);
         const { directoryName, packageName } = target;
         const targetDir = resolve(process.cwd(), directoryName);
         await scaffoldPlugin({
@@ -1291,13 +1543,14 @@ export function registerPluginCommands(
           console.log("  npm install --include=dev");
         }
         console.log("  bb plugin install .");
+        await creationTelemetry;
       }),
     );
 
   plugin
     .command("types [path]")
     .description(
-      "Sync a package-layout plugin's @get-bb/plugin-sdk surface to the running bb (default: cwd): repin the npm devDependency and the declared type-only devDependencies of the packages bb shims at runtime (sonner, vaul, the portal radix families, ...); legacy vendored-layout plugins must migrate first",
+      "Sync a package-layout plugin's @get-bb/plugin-sdk surface to the running bb (default: cwd): repin the npm package (in dependencies when an entry imports an SDK subpath the build bundles from the plugin's own install, such as @get-bb/plugin-sdk/provider-bridge, since Git installs omit devDependencies; otherwise in devDependencies) and the declared type-only devDependencies of the packages bb shims at runtime (sonner, vaul, the portal radix families, ...); legacy vendored-layout plugins must migrate first",
     )
     .option(
       "--check",
@@ -1314,6 +1567,8 @@ export function registerPluginCommands(
           process.exit(1);
         }
         if (layout.kind === "package") {
+          const [installImport] = await findPluginSdkInstallImports(rootDir);
+          const sdkInDependencies = installImport !== undefined;
           if (opts.check) {
             console.log(
               `This plugin uses the npm package @get-bb/plugin-sdk; pin is ${layout.pin ?? "not declared"}, host is ${PLUGIN_SDK_VERSION}.`,
@@ -1321,6 +1576,7 @@ export function registerPluginCommands(
             const pending = await setPluginSdkPin({
               rootDir,
               sdkVersion: PLUGIN_SDK_VERSION,
+              sdkInDependencies,
               dryRun: true,
             });
             if (pending === null) {
@@ -1329,13 +1585,8 @@ export function registerPluginCommands(
               );
               return;
             }
-            if (pending.pin !== null || pending.movedFromDependencies) {
-              console.error(
-                pending.pin === null
-                  ? 'Move "@get-bb/plugin-sdk" from dependencies to devDependencies — bb provides its runtime (`bb plugin types` does it for you).'
-                  : `Set "@get-bb/plugin-sdk" to ${PLUGIN_SDK_VERSION} in devDependencies and re-run npm install (\`bb plugin types\` does it for you).`,
-              );
-            }
+            const sdkPinFix = describePendingSdkPin(pending, installImport);
+            if (sdkPinFix !== null) console.error(sdkPinFix);
             for (const shim of pending.shimmedTypePins) {
               console.error(
                 shim.movedFromDependencies
@@ -1348,6 +1599,7 @@ export function registerPluginCommands(
           const changed = await setPluginSdkPin({
             rootDir,
             sdkVersion: PLUGIN_SDK_VERSION,
+            sdkInDependencies,
           });
           if (changed === null) {
             console.log(
@@ -1360,12 +1612,16 @@ export function registerPluginCommands(
           }
           if (changed.pin !== null) {
             console.log(
-              `@get-bb/plugin-sdk: ${changed.pin.from ?? "(not declared)"} → ${changed.pin.to} in devDependencies.`,
+              `@get-bb/plugin-sdk: ${changed.pin.from ?? "(not declared)"} → ${changed.pin.to} in ${changed.sdkField}.`,
             );
           }
-          if (changed.movedFromDependencies) {
+          if (changed.sdkRelocation === "moved") {
             console.log(
-              "Moved @get-bb/plugin-sdk from dependencies to devDependencies.",
+              `Moved @get-bb/plugin-sdk from ${otherSdkField(changed.sdkField)} to ${changed.sdkField}.`,
+            );
+          } else if (changed.sdkRelocation === "deduplicated") {
+            console.log(
+              `Removed the duplicate @get-bb/plugin-sdk from ${otherSdkField(changed.sdkField)}; it stays in ${changed.sdkField}.`,
             );
           }
           for (const shim of changed.shimmedTypePins) {
@@ -1385,7 +1641,7 @@ export function registerPluginCommands(
   plugin
     .command("migrate [path]")
     .description(
-      "Switch a plugin that vendors types/ to the @get-bb/plugin-sdk npm package (default: cwd): pin the devDependency, drop the tsconfig path map, delete the vendored declarations, and rewrite pre-rename @bb/plugin-sdk imports in the plugin's sources; prints the plan and asks first",
+      "Switch a plugin that vendors types/ to the @get-bb/plugin-sdk npm package (default: cwd): pin the SDK where `bb plugin types` would, drop the tsconfig path map, delete the vendored declarations, and rewrite pre-rename @bb/plugin-sdk imports in the plugin's sources; prints the plan and asks first",
     )
     .option("--yes", "Skip the confirmation prompt")
     .action(
@@ -1393,9 +1649,12 @@ export function registerPluginCommands(
         const rootDir = resolve(process.cwd(), path ?? ".");
         await requirePluginManifest(rootDir);
         const layout = await resolvePluginSdkLayout(rootDir);
+        const sdkInDependencies =
+          (await findPluginSdkInstallImports(rootDir)).length > 0;
         const plan = await migratePluginToPackageLayout({
           rootDir,
           sdkVersion: PLUGIN_SDK_VERSION,
+          sdkInDependencies,
           dryRun: true,
         });
         if (!plan.changed) {
@@ -1415,9 +1674,12 @@ export function registerPluginCommands(
           "Refusing to migrate without confirmation — re-run with --yes to apply the plan above.",
           opts.yes ?? false,
         );
+        const confirmedSdkInDependencies =
+          (await findPluginSdkInstallImports(rootDir)).length > 0;
         const confirmedPlan = await migratePluginToPackageLayout({
           rootDir,
           sdkVersion: PLUGIN_SDK_VERSION,
+          sdkInDependencies: confirmedSdkInDependencies,
           dryRun: true,
         });
         if (!samePlan(plan, confirmedPlan)) {
@@ -1429,6 +1691,7 @@ export function registerPluginCommands(
         const applied = await migratePluginToPackageLayout({
           rootDir,
           sdkVersion: PLUGIN_SDK_VERSION,
+          sdkInDependencies: confirmedSdkInDependencies,
         });
         console.log("Migrated to the @get-bb/plugin-sdk npm package.");
         if (plan.removedTypesDir && !applied.removedTypesDir) {
@@ -1458,9 +1721,13 @@ export function registerPluginCommands(
         await checkPluginSdkLayout(rootDir);
         const toolchain = await cliBuildToolchain();
         const server = await buildPluginServer(rootDir, bbVersion, toolchain);
+        for (const warning of server.migrationWarnings)
+          console.warn(`warning: ${warning}`);
         const files = [server.jsPath, server.mapPath, server.metaPath];
         if (hasApp) {
           const app = await buildPluginApp(rootDir, bbVersion, toolchain);
+          for (const warning of app.migrationWarnings)
+            console.warn(`warning: ${warning}`);
           files.push(app.jsPath, app.cssPath, app.metaPath);
         }
         if (hasHost) {
@@ -1510,12 +1777,14 @@ export function registerPluginCommands(
             };
           },
           buildApp: async () => {
-            await buildPluginApp(
+            const app = await buildPluginApp(
               rootDir,
               resolveBbCliVersion(),
               await cliBuildToolchain(),
-              { minify: false },
+              { minify: false, hostProvidedZod: false },
             );
+            for (const warning of app.migrationWarnings)
+              console.warn(`warning: ${warning}`);
           },
           buildHost: async () => {
             await buildPluginHost(
@@ -1598,16 +1867,30 @@ export function registerPluginCommands(
       .option("--json", "Output JSON")
       .action(
         action(async (id: string, opts: JsonOutputOptions) => {
-          const result = pluginMutationResponseSchema.parse(
+          const response = pluginMutationResponseSchema.parse(
             await callPlugins(
               getUrl(),
               `/${encodeURIComponent(id)}/${name}`,
               "POST",
             ),
           );
+          const failedPlugin =
+            name === "enable" &&
+            response.plugin?.enabled === true &&
+            response.plugin.status === "error"
+              ? response.plugin
+              : null;
+          const result = failedPlugin
+            ? {
+                ...response,
+                ok: false,
+                error:
+                  failedPlugin.statusDetail ?? `plugin "${id}" failed to load`,
+              }
+            : response;
           if (outputMutationJson(opts, result)) return;
+          if (result.plugin) printPlugin(result.plugin);
           if (!result.ok || !result.plugin) exitWithError(result);
-          printPlugin(result.plugin);
         }),
       );
   }
@@ -1639,6 +1922,37 @@ export function registerPluginCommands(
           for (const problem of problems) console.error(problem);
         }
         if (problems.length > 0) process.exit(1);
+      }),
+    );
+
+  plugin
+    .command("prune")
+    .description(
+      "Delete cached plugin versions that no installed plugin uses, such as versions left by earlier bb releases, rolled-back updates, or interrupted operations, and unrecorded cache directories. Updates and removals already delete what they replace. Never touches a version an installed plugin runs or a local path source",
+    )
+    .option("--dry-run", "List what would be deleted without deleting it")
+    .option("--json", "Output JSON")
+    .action(
+      action(async (opts: JsonOutputOptions & { dryRun?: boolean }) => {
+        const result = await createCliBbSdk(
+          getUrl(),
+        ).plugins.experimental_pruneCache({ dryRun: opts.dryRun === true });
+        if (opts.json) {
+          outputJson(opts, result);
+          return;
+        }
+        if (result.removed.length === 0) {
+          console.log("No unused cached plugin versions.");
+          return;
+        }
+        for (const entry of result.removed) {
+          console.log(
+            `${formatCacheBytes(entry.bytes).padStart(9)}  ${entry.pluginId ?? "(unrecorded)"}@${entry.version}  ${entry.path}`,
+          );
+        }
+        console.log(
+          `${result.dryRun ? "Would free" : "Freed"} ${formatCacheBytes(result.bytes)} from ${result.removed.length} cached plugin version${result.removed.length === 1 ? "" : "s"}.`,
+        );
       }),
     );
 

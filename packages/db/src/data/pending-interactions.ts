@@ -1,9 +1,9 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PendingInteractionStatus } from "@bb/domain";
 import type { DbConnection, DbTransaction } from "../connection.js";
 import { createPendingInteractionId } from "../ids.js";
-import { pendingInteractions } from "../schema.js";
+import { environments, pendingInteractions, threads } from "../schema.js";
 
 type PendingInteractionWriteConnection = DbConnection | DbTransaction;
 type PendingInteractionReadConnection = DbConnection | DbTransaction;
@@ -180,6 +180,26 @@ export function getPendingInteractionByProviderRequest(
   );
 }
 
+export function listActiveProviderPendingInteractionsForHost(
+  db: PendingInteractionReadConnection,
+  args: { hostId: string },
+): PendingInteractionRow[] {
+  return db
+    .select({ interaction: pendingInteractions })
+    .from(pendingInteractions)
+    .innerJoin(threads, eq(pendingInteractions.threadId, threads.id))
+    .innerJoin(environments, eq(threads.environmentId, environments.id))
+    .where(
+      and(
+        eq(environments.hostId, args.hostId),
+        eq(pendingInteractions.originKind, "provider"),
+        inArray(pendingInteractions.status, ["pending", "resolving"]),
+      ),
+    )
+    .all()
+    .map((row) => row.interaction);
+}
+
 export function listActivePluginPendingInteractions(
   db: PendingInteractionReadConnection,
 ): PendingInteractionRow[] {
@@ -212,6 +232,25 @@ export function getActivePendingInteractionForThread(
       )
       .orderBy(desc(pendingInteractions.createdAt))
       .get() ?? null
+  );
+}
+
+export function hasTurnBoundActivePendingInteractionForThread(
+  db: PendingInteractionReadConnection,
+  threadId: string,
+): boolean {
+  return (
+    db
+      .select({ id: pendingInteractions.id })
+      .from(pendingInteractions)
+      .where(
+        and(
+          eq(pendingInteractions.threadId, threadId),
+          inArray(pendingInteractions.status, ["pending", "resolving"]),
+          isNotNull(pendingInteractions.turnId),
+        ),
+      )
+      .get() !== undefined
   );
 }
 
@@ -321,7 +360,13 @@ function interruptPendingInteractionsBatched(
           and(
             ...args.extraConditions,
             inArray(pendingInteractions.threadId, threadIdsBatch),
-            inArray(pendingInteractions.status, ["pending", "resolving"]),
+            or(
+              eq(pendingInteractions.status, "pending"),
+              and(
+                eq(pendingInteractions.status, "resolving"),
+                eq(pendingInteractions.originKind, "plugin"),
+              ),
+            ),
           ),
         )
         .returning()

@@ -33,7 +33,7 @@ survives restarts.
 `/api/connect/` are only for the connect plugin (the handler checks the rpc
 caller), and every other path is refused. A path may not contain `..`, `//`,
 a query, a fragment, or characters other than letters, digits, and `-._~/`;
-anything else throws. `timeoutMs` is an integer from 1000 to 15000 and
+anything else throws. `timeoutMs` is an integer from 1000 to 65000 and
 defaults to 15000. Request bodies are capped at 16 MB (room for a base64
 voice recording) and response bodies at 1 MB, redirects
 are returned rather than followed, and a non-JSON body comes back as `null`.
@@ -47,7 +47,8 @@ The unlisted methods serve the plugin's own UI and CLI and connect:
 `bb-account.v1.adoptConnectCredential`, `bb-account.v1.connectCredential`,
 `bb-account.v1.confirmRefusedCredential`, `login.start`, `login.poll`,
 `login.cancel`, `redeemCode`, and `signOut`. Only the connect plugin may call
-the three `bb-account.v1.*` methods.
+the three `bb-account.v1.*` methods, except that the `bb--connect-next` plugin may
+also read `connectCredential`.
 
 - `adoptConnectCredential` (`{credential, baseUrl, replaces}`) stores the
   pairing connect holds for older builds. It answers `changed` unless bb
@@ -56,7 +57,8 @@ the three `bb-account.v1.*` methods.
   `adopted` once it is stored. It never revokes anything.
 - `connectCredential` returns `{credential: {baseUrl, serverUrl, serverId,
 credential} | null}`. Connect dials the tunnel with it and keeps its copy
-  for older builds current.
+  for older builds current; connect-next sends it to the Fly gate as frp's
+  `metas.credential`.
 - `confirmRefusedCredential` (`{credential}`) is how connect reports that the
   gate refused the credential. If it is still the current one, bb account
   checks it with `GET /api/account/me` and signs out when getbb.app answers 401. It returns the account status.

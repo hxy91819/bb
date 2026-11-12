@@ -1,8 +1,10 @@
+import { createAsyncTtlMemo, type AsyncTtlMemo } from "@bb/async-cache";
 import type {
   ProviderCliStatus,
   ProviderCliStatusResponse,
 } from "@bb/host-daemon-contract";
 import type { ProviderInfo } from "@bb/domain";
+import { isDeepStrictEqual } from "node:util";
 import { ZodError } from "zod";
 import type { WorkSessionDeps } from "../../types.js";
 import { COMMAND_TIMEOUT_MS } from "../../constants.js";
@@ -68,9 +70,31 @@ export async function aggregateProviderInstallations(
   );
 }
 
+const statusCaches = new WeakMap<
+  object,
+  AsyncTtlMemo<string, ProviderInstallationStatus>
+>();
+
+export const PROVIDER_INSTALLATION_STATUS_FRESH_MS = 30_000;
+
+function providerStatusCache(deps: WorkSessionDeps) {
+  let cache = statusCaches.get(deps.db);
+  if (!cache) {
+    cache = createAsyncTtlMemo<string, ProviderInstallationStatus>({
+      maxEntries: 1_024,
+      ttlMs: PROVIDER_INSTALLATION_STATUS_FRESH_MS,
+      staleWhileRevalidate: true,
+    });
+    statusCaches.set(deps.db, cache);
+  }
+  return cache;
+}
+
+export type ProviderInstallationsReadMode = "prewarm" | "read" | "refresh";
+
 export async function getProviderInstallations(
   deps: WorkSessionDeps,
-  args: { hostId: string },
+  args: { hostId: string; mode: ProviderInstallationsReadMode },
 ): Promise<ProviderCliStatusResponse> {
   const deadline = Date.now() + PROVIDER_INSTALLATION_STATUS_TIMEOUT_MS;
   const providers = await listSystemProviderInfos(deps, {
@@ -105,15 +129,41 @@ export async function getProviderInstallations(
       }
       return async (timeoutMs) => {
         try {
-          return await callHostRetryableOnlineRpc(deps, {
-            hostId: args.hostId,
-            timeoutMs,
-            command: {
-              type: "provider.installation.status",
-              providerId: provider.id,
-              bridgeLaunch,
+          return await providerStatusCache(deps).run(
+            `${args.hostId} ${provider.id} ${deps.providerRegistry.getRegistrationRevision()} ${JSON.stringify(bridgeLaunch)}`,
+            () =>
+              callHostRetryableOnlineRpc(deps, {
+                hostId: args.hostId,
+                timeoutMs,
+                command: {
+                  type: "provider.installation.status",
+                  providerId: provider.id,
+                  bridgeLaunch,
+                },
+              }),
+            {
+              refresh: args.mode === "refresh",
+              revalidateStale: args.mode !== "prewarm",
+              onReplaced: (previous, next) => {
+                if (!isDeepStrictEqual(previous, next)) {
+                  deps.hub.notifyHost(args.hostId, [
+                    "provider-cli-status-changed",
+                  ]);
+                }
+              },
+              onRevalidateError: (error) => {
+                deps.logger.warn(
+                  {
+                    err: error,
+                    failure: "status_refresh_failed",
+                    hostId: args.hostId,
+                    providerId: provider.id,
+                  },
+                  "Failed to refresh provider installation status; keeping the previous status",
+                );
+              },
             },
-          });
+          );
         } catch (error) {
           if (!canOmitProviderInstallationStatusError(error)) {
             throw error;
@@ -151,9 +201,14 @@ export async function serializeProviderInstallation<T>(
   });
   hosts.set(hostId, tail);
   await previous;
+  const cache = providerStatusCache(deps);
+  const invalidate = () =>
+    cache.invalidateWhere((key) => key.startsWith(`${hostId} `));
+  invalidate();
   try {
     return await run();
   } finally {
+    invalidate();
     release();
     if (hosts.get(hostId) === tail) hosts.delete(hostId);
   }

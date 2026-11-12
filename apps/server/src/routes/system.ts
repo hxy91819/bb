@@ -1,3 +1,5 @@
+import { withReportedProviderId } from "../services/system/provider-telemetry.js";
+import { rememberPluginRecommendation } from "../services/plugins/plugin-use-telemetry.js";
 import { createMobileAppReleaseService } from "../services/install/mobile-app-releases.js";
 import {
   setMachineEnvironmentVariable,
@@ -55,6 +57,7 @@ import {
 import type { ServerAppDeps, ServerRuntimeConfig } from "../types.js";
 import type { PluginService } from "../services/plugins/plugin-service.js";
 import { ApiError } from "../errors.js";
+import { readMultipartFormData } from "./multipart-form-data.js";
 import {
   buildAiServicesView,
   testAiService,
@@ -217,6 +220,8 @@ export function registerSystemRoutes(
       defaultKeybindings: DEFAULT_APP_KEYBINDINGS,
       keybindingOverrides,
       experiments: getExperiments(deps.db),
+      performanceDiagnosticsAvailable:
+        deps.config.performanceDiagnosticsAvailable,
       appearance: await resolveSelectedTheme(
         getStoredThemeId(deps.db),
         getStoredFaviconColor(deps.db),
@@ -305,11 +310,27 @@ export function registerSystemRoutes(
         : undefined;
     const updatedSettings = appSettingsSchema.parse({
       ...settings,
+      idleProviderSessionTimeoutMinutes:
+        settings.idleProviderSessionTimeoutMinutes === undefined
+          ? current.idleProviderSessionTimeoutMinutes
+          : settings.idleProviderSessionTimeoutMinutes,
       allowFastServiceTier:
         settings.allowFastServiceTier ?? current.allowFastServiceTier,
       telemetryEnabled: settings.telemetryEnabled ?? current.telemetryEnabled,
+      terminalCopyOnSelect:
+        settings.terminalCopyOnSelect ?? current.terminalCopyOnSelect,
+      keepHistoryAfterContextClear:
+        settings.keepHistoryAfterContextClear ??
+        current.keepHistoryAfterContextClear,
+      summarizeShellCommands:
+        settings.summarizeShellCommands ?? current.summarizeShellCommands,
       confirmThreadArchive:
         settings.confirmThreadArchive ?? current.confirmThreadArchive,
+      earlyAdopter: settings.earlyAdopter ?? current.earlyAdopter,
+      onboardingCompletedAt:
+        settings.onboardingCompletedAt === undefined
+          ? current.onboardingCompletedAt
+          : settings.onboardingCompletedAt,
       showDiagnosticEvents:
         diagnosticValue === undefined ||
         (showUnhandledProviderEvents !== undefined &&
@@ -324,6 +345,32 @@ export function registerSystemRoutes(
     deps.telemetry.setEnabled(updatedSettings.telemetryEnabled);
     deps.hub.notifySystem(["config-changed"]);
     return context.json(compatibleGeneralSettings());
+  });
+
+  get(routes.setupGuide, async (context) => {
+    const { guide } = await deps.setupGuideExperiment.resolve();
+    return context.json({ variant: guide.variant });
+  });
+
+  post(routes.recordTelemetryEvent, async (context, payload) => {
+    if (
+      payload.name === "recommendation" &&
+      payload.properties.action === "selected"
+    ) {
+      rememberPluginRecommendation(
+        deps,
+        payload.properties.resource_id,
+        payload.properties.recommendation_id,
+      );
+    }
+    if (payload.name === "onboarding_exposed") {
+      await deps.setupGuideExperiment.recordExposure(payload.properties.entry);
+      return context.json({ ok: true });
+    }
+    deps.telemetry.capture(
+      await deps.setupGuideExperiment.annotate(withReportedProviderId(payload)),
+    );
+    return context.json({ ok: true });
   });
 
   put(routes.keyboardSettings, (context, payload) => {
@@ -655,7 +702,7 @@ export function registerSystemRoutes(
   );
 
   post(routes.voiceTranscription, async (context) => {
-    const formData = await context.req.formData();
+    const formData = await readMultipartFormData(context.req);
     const file = formData.get("file");
     if (!(file instanceof File)) {
       throw new ApiError(400, "invalid_request", "Audio file is required");
@@ -698,12 +745,69 @@ export function registerSystemRoutes(
     );
   });
 
+  post(routes.scheduleAppUpdate, async (context) => {
+    assertAppUpdateAllowed(context);
+    assertUpdateWhenIdleEnabled(deps.db);
+    return context.json(await deps.appUpdate.schedule());
+  });
+
+  post(routes.cancelScheduledAppUpdate, async (context) => {
+    assertAppUpdateAllowed(context);
+    assertUpdateWhenIdleEnabled(deps.db);
+    return context.json(await deps.appUpdate.cancelScheduled());
+  });
+
+  post(routes.setAppUpdateAuto, async (context, body) => {
+    assertAppUpdateAllowed(context);
+    assertUpdateWhenIdleEnabled(deps.db);
+    return context.json(await deps.appUpdate.setAutoUpdate(body.enabled));
+  });
+
   post(routes.acknowledgeAppUpdate, async (context, body) => {
     assertAppUpdateAllowed(context);
     return context.json(
       await deps.appUpdate.acknowledgeResult({ id: body.id }),
     );
   });
+
+  get(routes.cliCommand, async (context) =>
+    context.json(await deps.cliCommand.getStatus()),
+  );
+
+  post(routes.installCliCommand, async (context) => {
+    assertCliCommandChangeAllowed(context);
+    return context.json(await deps.cliCommand.install());
+  });
+
+  post(routes.removeCliCommand, async (context) => {
+    assertCliCommandChangeAllowed(context);
+    return context.json(await deps.cliCommand.remove());
+  });
+}
+
+function assertCliCommandChangeAllowed(
+  context: Parameters<typeof getGateAuthKind>[0],
+): void {
+  if (getGateAuthKind(context) === "machine") {
+    throw new ApiError(
+      403,
+      "forbidden",
+      "Machine credentials cannot change the bb command on the bb server's computer",
+    );
+  }
+}
+
+const UPDATE_WHEN_IDLE_EXPERIMENT_DISABLED_MESSAGE =
+  'Updating when idle is off. Turn on the "Update when idle" experiment in Settings → Experiments, or run bb settings experiment updateWhenIdle true, then try again.';
+
+function assertUpdateWhenIdleEnabled(db: ServerAppDeps["db"]): void {
+  if (!getExperiments(db).updateWhenIdle) {
+    throw new ApiError(
+      403,
+      "update_when_idle_experiment_disabled",
+      UPDATE_WHEN_IDLE_EXPERIMENT_DISABLED_MESSAGE,
+    );
+  }
 }
 
 function assertAppUpdateAllowed(

@@ -8,6 +8,7 @@ import { threadScope, turnScope } from "@bb/domain";
 import { applyLoggedThreadLifecycleEvent } from "../../../src/services/threads/lifecycle-outcome.js";
 import { beginProjectDeletion } from "../../../src/services/projects/project-deletion.js";
 import { createThreadRecord } from "../../../src/services/threads/thread-create-helpers.js";
+import { archiveThreadAndReleaseChildren } from "../../../src/services/threads/thread-ownership.js";
 import type { ThreadCreateServiceRequest } from "../../../src/services/threads/thread-create-request.js";
 import {
   seedEvent,
@@ -142,12 +143,17 @@ describe("plugin thread lifecycle events", () => {
       const { environment, thread } = seedThreadFixture(harness, {
         thread: { status: "active" },
       });
+      seedTurnStarted(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        turnId: "turn-1",
+      });
       seedEvent(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-1",
         scope: turnScope("turn-1"),
-        sequence: 1,
+        sequence: 2,
         type: "item/completed",
         data: {
           item: { type: "agentMessage", id: "assistant-1", text: "All done." },
@@ -178,6 +184,93 @@ describe("plugin thread lifecycle events", () => {
       expect(entry?.handlerStats.errorCount).toBe(0);
     } finally {
       delete globals.__idleEvents;
+      await cleanup();
+    }
+  });
+
+  it("reports only the ended turn's root reply in thread.idle and the output route", async () => {
+    const recorded: RecordedThreadPayload[] = [];
+    globals.__turnIdleEvents = recorded;
+    const { harness, cleanup } = await setUpPluginHarness(`
+      export default function plugin(bb: any) {
+        bb.events.on("thread.idle", (payload: any) => {
+          (globalThis as any).__turnIdleEvents.push(payload);
+        });
+      }
+    `);
+    try {
+      const { environment, thread } = seedThreadFixture(harness, {
+        thread: { status: "active" },
+      });
+      const runTurn = async (
+        turnId: string,
+        messages: { text: string; parentToolCallId?: string }[],
+      ) => {
+        seedTurnStarted(harness.deps, {
+          threadId: thread.id,
+          environmentId: environment.id,
+          turnId,
+        });
+        for (const [index, message] of messages.entries()) {
+          seedEvent(harness.deps, {
+            threadId: thread.id,
+            environmentId: environment.id,
+            providerThreadId: `provider-${turnId}`,
+            scope: turnScope(turnId),
+            sequence:
+              getLatestThreadSequence(harness.db, {
+                threadId: thread.id,
+              }) + 1,
+            type: "item/completed",
+            data: {
+              item: {
+                type: "agentMessage",
+                id: `${turnId}-message-${index}`,
+                text: message.text,
+                ...(message.parentToolCallId
+                  ? { parentToolCallId: message.parentToolCallId }
+                  : {}),
+              },
+            },
+          });
+        }
+        applyLoggedThreadLifecycleEvent(lifecycleDeps(harness), {
+          threadId: thread.id,
+          event: { type: "run.succeeded" },
+        });
+        await vi.waitFor(() => expect(recorded.length).toBeGreaterThan(0));
+        const response = await harness.app.request(
+          `/api/v1/threads/${thread.id}/output`,
+        );
+        const { output } = (await response.json()) as { output: string | null };
+        const idleText = recorded.pop()?.lastAssistantText;
+        applyLoggedThreadLifecycleEvent(lifecycleDeps(harness), {
+          threadId: thread.id,
+          event: { type: "run.started" },
+        });
+        return { idleText, output };
+      };
+
+      await expect(
+        runTurn("turn-1", [
+          { text: "Subagent detail.", parentToolCallId: "spawn-1" },
+          { text: "First result." },
+        ]),
+      ).resolves.toEqual({
+        idleText: "First result.",
+        output: "First result.",
+      });
+      await expect(runTurn("turn-2", [])).resolves.toEqual({
+        idleText: null,
+        output: null,
+      });
+      await expect(
+        runTurn("turn-3", [
+          { text: "Nested only.", parentToolCallId: "spawn-3" },
+        ]),
+      ).resolves.toEqual({ idleText: null, output: null });
+    } finally {
+      delete globals.__turnIdleEvents;
       await cleanup();
     }
   });
@@ -299,6 +392,7 @@ describe("plugin thread lifecycle events", () => {
         startedOnBehalfOf: null,
         titleFallback: "Plugin event test thread",
         visibility: "visible",
+        parentNotifications: "auto",
       };
       const thread = createThreadRecord(
         { db: harness.db, hub: harness.hub },
@@ -307,10 +401,6 @@ describe("plugin thread lifecycle events", () => {
 
       await vi.waitFor(() => expect(recorded).toHaveLength(1));
       expect(recorded[0]?.thread.id).toBe(thread.id);
-      // `pending`, not `starting`: creation is unhooked, so the row — and this
-      // event — exist before the first message has been admitted. A listener
-      // that treated `thread.created` as "this thread is running" would count
-      // a thread that may never start (the concurrency limiter used to).
       expect(recorded[0]?.thread.status).toBe("pending");
     } finally {
       delete globals.__createdEvents;
@@ -346,6 +436,7 @@ describe("plugin thread lifecycle events", () => {
               startedOnBehalfOf: null,
               titleFallback: "Hidden plugin worker",
               visibility: "hidden",
+              parentNotifications: "auto",
             },
           },
         );
@@ -523,6 +614,101 @@ describe("plugin thread lifecycle events", () => {
     } finally {
       delete globals.__cascadeEvents;
       delete globals.__cascadeProjectIds;
+      await cleanup();
+    }
+  });
+
+  it("delivers a parent change for a moved thread and each child released by an archive", async () => {
+    const recorded: Array<{
+      threadId: string;
+      parentThreadId: string | null;
+      previousParentThreadId: string | null;
+    }> = [];
+    globals.__parentChangedEvents = recorded;
+    const { harness, cleanup } = await setUpPluginHarness(`
+      export default function plugin(bb: any) {
+        bb.events.on("experimental_thread.parentChanged", ({ thread, previousParentThreadId }: any) => {
+          (globalThis as any).__parentChangedEvents.push({
+            threadId: thread.id,
+            parentThreadId: thread.parentThreadId,
+            previousParentThreadId,
+          });
+        });
+      }
+    `);
+    try {
+      const { project, thread: parent } = seedThreadFixture(harness, {
+        thread: { status: "idle" },
+      });
+      const child = seedThread(harness.deps, { projectId: project.id });
+      const sibling = seedThread(harness.deps, {
+        projectId: project.id,
+        parentThreadId: parent.id,
+      });
+      const move = (body: unknown) =>
+        harness.app.request(`/api/v1/threads/${child.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+      expect((await move({ parentThreadId: parent.id })).status).toBe(200);
+      expect((await move({ parentThreadId: parent.id })).status).toBe(200);
+      expect((await move({ title: "Renamed" })).status).toBe(200);
+      await vi.waitFor(() => expect(recorded).toHaveLength(1));
+      archiveThreadAndReleaseChildren(harness.deps, { threadId: parent.id });
+      await vi.waitFor(() => expect(recorded).toHaveLength(3));
+      expect(recorded[0]).toEqual({
+        threadId: child.id,
+        parentThreadId: parent.id,
+        previousParentThreadId: null,
+      });
+      expect(recorded.slice(1)).toEqual(
+        expect.arrayContaining(
+          [child.id, sibling.id].map((threadId) => ({
+            threadId,
+            parentThreadId: null,
+            previousParentThreadId: parent.id,
+          })),
+        ),
+      );
+    } finally {
+      delete globals.__parentChangedEvents;
+      await cleanup();
+    }
+  });
+
+  it("delivers a read event when a thread is marked read but not unread", async () => {
+    const recorded: Array<{ threadId: string; read: boolean }> = [];
+    globals.__readEvents = recorded;
+    const { harness, cleanup } = await setUpPluginHarness(`
+      export default function plugin(bb: any) {
+        bb.events.on("experimental_thread.read", ({ thread }: any) => {
+          (globalThis as any).__readEvents.push({
+            threadId: thread.id,
+            read: (thread.lastReadAt ?? 0) >= thread.latestAttentionAt,
+          });
+        });
+      }
+    `);
+    try {
+      const { thread } = seedThreadFixture(harness, {
+        thread: { status: "idle" },
+      });
+      const post = (action: "read" | "unread") =>
+        harness.app.request(`/api/v1/threads/${thread.id}/${action}`, {
+          method: "POST",
+        });
+
+      expect((await post("unread")).status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(recorded).toEqual([]);
+      expect((await post("read")).status).toBe(200);
+      await vi.waitFor(() =>
+        expect(recorded).toEqual([{ threadId: thread.id, read: true }]),
+      );
+    } finally {
+      delete globals.__readEvents;
       await cleanup();
     }
   });

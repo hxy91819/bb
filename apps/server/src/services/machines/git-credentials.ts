@@ -1,9 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { createAsyncTtlMemo, type AsyncTtlMemo } from "@bb/async-cache";
+import { execHostFile } from "@bb/process-utils";
 import type { HostDaemonContributedEnvEntry } from "@bb/host-daemon-contract";
 import { z } from "zod";
 
-const exec = promisify(execFile);
+const exec = execHostFile;
 
 const githubCredentialHelper =
   '!f() { test "$1" = get || exit 0; protocol=; host=; while IFS= read -r line && test -n "$line"; do case "$line" in protocol=*) protocol=${line#protocol=} ;; host=*) host=${line#host=} ;; esac; done; if test "$protocol" = https && test "$host" = github.com && test -n "$GH_TOKEN"; then printf "username=x-access-token\\npassword=%s\\n" "$GH_TOKEN"; fi; }; f';
@@ -15,7 +15,7 @@ const gitConfig = [
   ["url.https://github.com/.insteadOf", "ssh://git@github.com/"],
 ] as const;
 const identitySchema = z.object({
-  login: z.string().regex(/^[a-zA-Z0-9-]+$/u),
+  login: z.string().regex(/^[a-zA-Z0-9_-]+$/u),
   id: z.number().int().positive(),
   email: z.email().nullable(),
 });
@@ -46,7 +46,7 @@ export function githubGitConfiguration(): HostDaemonContributedEnvEntry[] {
   );
 }
 
-export async function resolveGitCredentials(
+async function loadGitCredentials(
   run = runGh,
 ): Promise<HostDaemonContributedEnvEntry[]> {
   try {
@@ -81,8 +81,36 @@ export async function resolveGitCredentials(
   }
 }
 
+const credentialCaches = new WeakMap<
+  typeof runGh,
+  AsyncTtlMemo<string, HostDaemonContributedEnvEntry[]>
+>();
+
+async function cachedGitCredentials(run: typeof runGh, refresh: boolean) {
+  let cache = credentialCaches.get(run);
+  if (!cache) {
+    cache = createAsyncTtlMemo({
+      maxEntries: 1_024,
+      ttlMs: (entries) => (entries.length ? 60_000 : 5_000),
+      staleWhileRevalidate: true,
+    });
+    credentialCaches.set(run, cache);
+  }
+  return structuredClone(
+    await cache.run("github.com", () => loadGitCredentials(run), {
+      refresh,
+    }),
+  );
+}
+
+export async function resolveGitCredentials(
+  run = runGh,
+): Promise<HostDaemonContributedEnvEntry[]> {
+  return cachedGitCredentials(run, false);
+}
+
 export async function machineGitHealth(run = runGh) {
-  const entries = await resolveGitCredentials(run);
+  const entries = await cachedGitCredentials(run, true);
   return {
     status: entries.length ? ("ready" as const) : ("not configured" as const),
     statusMessage: entries.length

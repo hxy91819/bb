@@ -7,10 +7,10 @@ import { cn } from "@bb/shared-ui/lib/utils";
 import {
   PROMPT_MENTION_PILL_CLASS,
   promptMentionTooltipLabel,
-} from "@/components/promptbox/mentions/prompt-mention-display";
+} from "@bb/client-core";
 import { PromptMentionIcon } from "@/components/promptbox/mentions/PromptMentionIcon";
-import { promptMentionClipboardDataAttributes } from "@/components/promptbox/mentions/prompt-mention-clipboard";
-import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
+import { promptMentionClipboardDataAttributes } from "@bb/client-core";
+import type { PromptMentionLinkResolver } from "@bb/client-core";
 import { useThreadRoutePath } from "@/components/thread/ThreadTitleMentions";
 
 interface PromptMentionPillProps {
@@ -89,6 +89,41 @@ function mentionPillClassName(interactive: boolean): string {
   );
 }
 
+interface MessageMentionPillProps {
+  messageSeq: number;
+  resource: PromptMentionResource;
+  threadId: string;
+}
+
+export function MessageMentionPill({
+  messageSeq,
+  resource,
+  threadId,
+}: MessageMentionPillProps) {
+  const threadRoutePath = useThreadRoutePath();
+  const projectId = resource.kind === "thread" ? resource.projectId : undefined;
+  const title = `${promptMentionTooltipLabel(resource)} · message`;
+  const labelNode = (
+    <>
+      <PromptMentionIcon
+        resource={resource}
+        className="size-3.5 shrink-0 self-center text-muted-foreground"
+      />
+      <span className="truncate">{resource.label}</span>
+      <span className="shrink-0 text-muted-foreground">· message</span>
+    </>
+  );
+  return (
+    <RouteAnchor
+      className={mentionPillClassName(true)}
+      href={threadRoutePath(threadId, projectId, messageSeq)}
+      title={title}
+    >
+      {labelNode}
+    </RouteAnchor>
+  );
+}
+
 export function PromptMentionPill({
   interactive = true,
   resource,
@@ -152,7 +187,7 @@ export function PromptMentionPill({
       <RouteAnchor
         className={mentionPillClassName(true)}
         {...clipboardAttributes}
-        href={threadRoutePath(resource.threadId, resource.projectId)}
+        href={threadRoutePath(resource.threadId, resource.projectId, null)}
         title={title}
       >
         {labelNode}
@@ -173,7 +208,7 @@ export function PromptMentionPill({
     );
   }
 
-  if (resource.kind === "path") {
+  if (resource.kind === "path" || resource.kind === "attachment") {
     const activate = resolveMentionLink?.(resource) ?? null;
     if (activate) {
       return (

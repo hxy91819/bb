@@ -5,10 +5,9 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { BbDesktopInfo } from "@bb/desktop-contract";
+import type { ProviderInfo } from "@bb/domain";
 import type {
   SystemAppUpdateResult,
   SystemAppUpdateStatus,
@@ -21,7 +20,6 @@ import {
   type UpdateState,
 } from "@bb/domain/update-state";
 import { Button, type ButtonProps } from "@bb/shared-ui/button";
-import { usePrefersReducedMotion } from "@bb/shared-ui/hooks/use-media-query";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
@@ -33,7 +31,6 @@ import {
 import {
   ResourceActionButton,
   ResourceListState,
-  ResourceRow,
 } from "@bb/shared-ui/resource-list";
 import {
   hasProviderCliAction,
@@ -56,12 +53,6 @@ import {
   startAppUpdateCheck,
   subscribeAppUpdateCheck,
 } from "@/components/settings/app-update-check-store";
-import {
-  fetchLatestChangelogEntry,
-  LATEST_CHANGELOG_ENTRY,
-  RELEASE_META,
-  type ChangelogBlock,
-} from "@/components/settings/changelog-preview";
 import { openAppUpdateResultDetails } from "@/components/app-update/app-update-details-store";
 import {
   formatAppUpdateRevision,
@@ -70,29 +61,48 @@ import {
   pendingAppUpdateResult,
   runningThreadCountFromError,
   runningThreadsWarning,
+  runningThreadsCaption,
+  scheduledAppUpdateCaption,
 } from "@/components/app-update/app-update-presentation";
 import {
   ConfirmDeleteDialog,
   ConfirmDeleteDialogContent,
-} from "@/components/dialogs/ConfirmDeleteDialog";
+} from "@bb/shared-ui/confirm-delete-dialog";
+import { SplitButton } from "@/components/ui/split-button";
 import { appToast } from "@/components/ui/app-toast";
 import { BbLogo } from "@/components/ui/bb-logo";
-import { OverflowFade } from "@/components/ui/overflow-fade";
 import {
-  SettingsBadge,
-  SettingsRowList,
   SettingsSection,
+  SettingsWithControl,
 } from "@/components/ui/settings-section";
-import { invalidateHostProviderCliStatus } from "@/hooks/cache-owners/provider-cli-status-cache-owner";
+import { Switch } from "@bb/shared-ui/switch";
+import { refreshHostProviderCliStatus } from "@/hooks/cache-owners/provider-cli-status-cache-owner";
 import { hydrateAppUpdateStatus } from "@/hooks/cache-owners/app-update-cache-owner";
 import { hydrateSystemVersionCache } from "@/hooks/cache-owners/system-version-cache-owner";
-import { useApplyAppUpdate } from "@/hooks/mutations/app-update-mutations";
+import {
+  useApplyAppUpdate,
+  useCancelScheduledAppUpdate,
+  useSetAutoAppUpdate,
+} from "@/hooks/mutations/app-update-mutations";
 import { useAppUpdateStatus } from "@/hooks/queries/app-update-queries";
 import { useRetryHostUpdate } from "@/hooks/mutations/host-mutations";
 import {
   useUpdateInventory,
   type UpdateInventoryMachine,
+  type UpdateInventoryPlugin,
+  type UpdateInventoryPlugins,
 } from "@/hooks/useUpdateInventory";
+import { usePluginUpdateCheck } from "@/hooks/queries/plugin-catalog-queries";
+import { Link } from "react-router-dom";
+import { getPluginDetailRoutePath } from "@/lib/route-paths";
+import {
+  isActivePluginUpdateJob,
+  startPluginUpdate,
+  usePluginUpdateJobs,
+} from "@/hooks/queries/plugin-update-job-queries";
+import { applyPluginUpdateJob } from "@/hooks/cache-owners/plugin-cache-owner";
+import { PluginIcon } from "@/components/plugin/PluginIcon";
+import { pluginAdminErrorMessage } from "@/lib/plugin-admin-error";
 import { useHostDaemon } from "@/hooks/useHostDaemon";
 import { useDesktopUpdateInfo } from "@/hooks/useDesktopUpdateInfo";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
@@ -101,55 +111,21 @@ import {
   hostNeedsUpdate,
   hostUpdateIsStalled,
 } from "@/lib/host-update-status";
-import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
-import {
-  getSettingsMachineRoutePath,
-  getSettingsRoutePath,
-} from "@/lib/route-paths";
 import { ProviderIcon } from "@/components/plugin/ProviderIcon";
 import {
   useSystemConfig,
   useSystemProviders,
 } from "@/hooks/queries/system-queries";
 import { sdk } from "@/lib/sdk";
-import { rawStringLocalStorage } from "@/lib/browser-storage";
-
-const EMPTY_PROVIDER_CLI_FAILURES: ReadonlyMap<
-  string,
-  ProviderCliInstallFailure
-> = new Map();
-const CHANGELOG_URL = "https://getbb.app/changelog";
-const CHANGELOG_STALE_TIME_MS = 5 * 60_000;
-const CHANGELOG_DISMISSED_VERSION_STORAGE_KEY =
-  "bb.settings.updates.dismissed-changelog-version";
-const CHANGELOG_DISMISS_CONFIRMATION_MS = 2_000;
-const CHANGELOG_DISMISS_EXIT_MS = 180;
-
-interface ChangelogDismissal {
-  phase: "confirming" | "exiting";
-  version: string;
-}
-
-function isNewerChangelogVersion(
-  candidate: string,
-  dismissed: string,
-): boolean {
-  const versionPattern = /^\d+(?:\.\d+)*$/;
-  if (!versionPattern.test(candidate) || !versionPattern.test(dismissed)) {
-    return candidate !== dismissed;
-  }
-  const candidateParts = candidate.split(".").map(Number);
-  const dismissedParts = dismissed.split(".").map(Number);
-  const partCount = Math.max(candidateParts.length, dismissedParts.length);
-  for (let index = 0; index < partCount; index += 1) {
-    const candidatePart = candidateParts[index] ?? 0;
-    const dismissedPart = dismissedParts[index] ?? 0;
-    if (candidatePart !== dismissedPart) {
-      return candidatePart > dismissedPart;
-    }
-  }
-  return false;
-}
+import {
+  isReleaseVersion,
+  nightlyBaseVersion,
+  resolveReleaseUpdateVersion,
+  resolveSourceUpdateNotes,
+  type ReleaseVersionInput,
+} from "./release-notes-model";
+import { recordReleaseNotesOpened } from "./release-notes";
+import { ReleaseNotesPanel } from "./ReleaseNotesPanel";
 
 const BULK_RETRY_THRESHOLD = 1;
 
@@ -218,26 +194,24 @@ export function UpdateActionButton({
   );
 }
 
-const ROW_GRID =
-  "grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3";
-
-const ROW_SPACING = "py-2 first:pt-0 last:pb-0";
-
 function UpdatesRow({
   leading,
   children,
-  className,
+  actions,
 }: {
-  leading?: ReactNode;
+  leading: ReactNode;
   children: ReactNode;
-  className?: string;
+  actions: ReactNode;
 }) {
   return (
-    <div className={cn(ROW_GRID, ROW_SPACING, "text-sm", className)}>
-      <span className="flex size-6 shrink-0 items-center justify-center">
-        {leading}
+    <div className="@container/update-row flex min-w-0 flex-wrap items-start gap-3 px-4 py-3.5 text-sm">
+      <span className="flex min-w-48 flex-1 basis-0 items-start gap-3">
+        <span className="flex h-5 w-6 shrink-0 items-center justify-center">
+          {leading}
+        </span>
+        {children}
       </span>
-      {children}
+      {actions}
     </div>
   );
 }
@@ -255,7 +229,7 @@ function RowVersions({
   return (
     <span
       data-version-metadata
-      className="min-w-0 shrink text-2xs text-muted-foreground"
+      className="min-w-0 shrink text-2xs break-words text-muted-foreground"
     >
       {current}
       {latest !== null && latest !== current ? (
@@ -273,19 +247,26 @@ function RowName({
   detail,
   current,
   latest,
+  trailing = null,
 }: {
   name: string;
   detail?: ReactNode;
   current: string | null;
   latest: string | null;
+  trailing?: ReactNode;
 }) {
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-      <span className="truncate text-sm font-medium text-foreground">
+      <span className="shrink-0 truncate text-sm font-medium text-foreground @min-[28rem]/update-row:w-16">
         {name}
       </span>
+      {current === null && trailing === null ? null : (
+        <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <RowVersions current={current} latest={latest} />
+          {trailing}
+        </span>
+      )}
       {detail}
-      <RowVersions current={current} latest={latest} />
     </span>
   );
 }
@@ -304,7 +285,7 @@ function RowStateCaption({
   children: ReactNode;
 }) {
   return (
-    <span className={cn("shrink-0 text-xs", stateTextClass(state))}>
+    <span className={cn("min-w-0 text-2xs break-words", stateTextClass(state))}>
       {children}
     </span>
   );
@@ -474,317 +455,9 @@ function RowStateControl({
 
 function RowActions({ children }: { children: ReactNode }) {
   return (
-    <span className="ml-auto flex shrink-0 items-center justify-end gap-1">
+    <span className="ml-auto flex h-5 shrink-0 items-center justify-end gap-1">
       {children}
     </span>
-  );
-}
-
-const CHANGELOG_INLINE_COMPONENTS: Components = {
-  p: ({ children }) => <>{children}</>,
-  a: ({ children, href }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-      onClick={(event) => {
-        event.preventDefault();
-        if (href !== undefined) {
-          openUrlInExternalBrowser(href);
-        }
-      }}
-    >
-      {children}
-    </a>
-  ),
-  code: ({ children }) => (
-    <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
-      {children}
-    </code>
-  ),
-  strong: ({ children }) => (
-    <strong className="font-semibold text-foreground">{children}</strong>
-  ),
-};
-
-function ChangelogInline({ text }: { text: string }) {
-  return (
-    <ReactMarkdown components={CHANGELOG_INLINE_COMPONENTS} skipHtml>
-      {text}
-    </ReactMarkdown>
-  );
-}
-
-function ChangelogBlocks({
-  blocks,
-  lede = false,
-}: {
-  blocks: ChangelogBlock[];
-  lede?: boolean;
-}) {
-  return blocks.map((block, index) =>
-    block.kind === "list" ? (
-      <ul key={index} className="mt-2.5 space-y-1.5">
-        {block.items.map((item) => (
-          <li
-            key={item}
-            className="relative pl-4 text-sm leading-normal text-muted-foreground before:absolute before:left-0 before:top-2 before:size-1 before:rounded-sm before:bg-border"
-          >
-            <ChangelogInline text={item} />
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p
-        key={index}
-        className={cn(
-          "mt-2.5 text-sm leading-relaxed text-muted-foreground first:mt-0",
-          lede && "text-foreground/80",
-        )}
-      >
-        <ChangelogInline text={block.text} />
-      </p>
-    ),
-  );
-}
-
-export function ChangelogPreviewCard() {
-  const changelogQuery = useQuery({
-    queryKey: ["updates", "changelog", "latest"],
-    queryFn: ({ signal }) => fetchLatestChangelogEntry(fetch, signal),
-    placeholderData: LATEST_CHANGELOG_ENTRY ?? undefined,
-    retry: false,
-    staleTime: CHANGELOG_STALE_TIME_MS,
-  });
-  const entry = changelogQuery.data ?? LATEST_CHANGELOG_ENTRY;
-  const [dismissedVersion, setDismissedVersion] = useState(() =>
-    rawStringLocalStorage.getItem(CHANGELOG_DISMISSED_VERSION_STORAGE_KEY, ""),
-  );
-  const [dismissal, setDismissal] = useState<ChangelogDismissal | null>(null);
-  const prefersReducedMotion = usePrefersReducedMotion();
-  const releaseBodyRef = useRef<HTMLDivElement>(null);
-  const [moreBelow, setMoreBelow] = useState(false);
-  const syncFade = (node: HTMLDivElement | null) => {
-    if (node === null) {
-      return;
-    }
-    setMoreBelow(node.scrollTop + node.clientHeight < node.scrollHeight - 1);
-  };
-  useEffect(() => {
-    syncFade(releaseBodyRef.current);
-  }, [entry]);
-  useEffect(() => {
-    if (dismissal?.phase !== "confirming") {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setDismissal((current) =>
-        current?.version === dismissal.version
-          ? { ...current, phase: "exiting" }
-          : current,
-      );
-    }, CHANGELOG_DISMISS_CONFIRMATION_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [dismissal]);
-  useEffect(() => {
-    if (dismissal?.phase !== "exiting") {
-      return;
-    }
-    const dismissedEntryVersion = dismissal.version;
-    const timeoutId = window.setTimeout(
-      () => {
-        setDismissedVersion(dismissedEntryVersion);
-        setDismissal((current) =>
-          current?.version === dismissedEntryVersion ? null : current,
-        );
-      },
-      prefersReducedMotion ? 0 : CHANGELOG_DISMISS_EXIT_MS,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [dismissal, prefersReducedMotion]);
-  if (entry === null) {
-    return null;
-  }
-  if (
-    dismissedVersion.length > 0 &&
-    (changelogQuery.dataUpdatedAt === 0 ||
-      !isNewerChangelogVersion(entry.version, dismissedVersion))
-  ) {
-    return null;
-  }
-  const releaseMeta = RELEASE_META[entry.version];
-  const dismissalPhase =
-    dismissal?.version === entry.version ? dismissal.phase : "visible";
-  const releaseVisible = dismissalPhase === "visible";
-  return (
-    <div
-      data-updates-domain="changelog"
-      data-changelog-dismiss-phase={dismissalPhase}
-      className={cn(
-        "grid transition-[grid-template-rows,margin,opacity,transform] duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none [&>section]:min-h-0 [&>section]:overflow-hidden",
-        dismissalPhase === "exiting"
-          ? "-mb-6 grid-rows-[0fr] -translate-y-1 opacity-0"
-          : "grid-rows-[1fr] translate-y-0 opacity-100",
-      )}
-    >
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div
-          data-changelog-release-panel
-          aria-hidden={!releaseVisible}
-          className={cn(
-            "grid transition-[grid-template-rows,opacity] duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-            releaseVisible
-              ? "grid-rows-[1fr] opacity-100"
-              : "pointer-events-none grid-rows-[0fr] opacity-0",
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <article data-changelog-preview className="min-w-0 p-4 sm:p-5">
-              <div
-                data-changelog-header
-                className="flex min-w-0 items-center justify-between gap-4"
-              >
-                <h2 className="min-w-0">
-                  <span
-                    data-changelog-label
-                    className="inline-flex rounded-sm border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium leading-none text-muted-foreground"
-                  >
-                    What's new
-                  </span>
-                </h2>
-                {releaseVisible ? (
-                  <Tooltip delayDuration={300} disableHoverableContent>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-changelog-dismiss
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-foreground"
-                        aria-label={`Dismiss bb ${entry.version} changelog preview`}
-                        onClick={() => {
-                          rawStringLocalStorage.setItem(
-                            CHANGELOG_DISMISSED_VERSION_STORAGE_KEY,
-                            entry.version,
-                          );
-                          setDismissal({
-                            phase: "confirming",
-                            version: entry.version,
-                          });
-                        }}
-                      >
-                        <Icon aria-hidden name="X" className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Dismiss</TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </div>
-              {releaseMeta === undefined ? null : (
-                <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  <span
-                    data-changelog-version={entry.version}
-                    className="inline-flex rounded-full border border-border bg-muted/30 px-2.5 py-1 font-mono text-xs font-semibold leading-none tracking-tight text-foreground"
-                  >
-                    {entry.version}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {releaseMeta.date}
-                  </span>
-                </div>
-              )}
-
-              <div
-                className={cn(
-                  "relative min-w-0",
-                  releaseMeta === undefined ? "mt-4" : "mt-3",
-                )}
-              >
-                <div
-                  ref={releaseBodyRef}
-                  data-changelog-release-scroll
-                  onScroll={(event) => syncFade(event.currentTarget)}
-                  className="max-h-56 overflow-y-auto pr-3"
-                >
-                  <h3 className="text-lg font-semibold leading-snug tracking-tight text-foreground">
-                    {releaseMeta?.headline ?? entry.version}
-                  </h3>
-                  {entry.lede.length === 0 ? null : (
-                    <div className="mt-2">
-                      <ChangelogBlocks blocks={entry.lede} lede />
-                    </div>
-                  )}
-                  {entry.sections.map((section) => (
-                    <div key={section.title} className="mt-4">
-                      <h4 className="text-sm font-semibold leading-snug text-foreground">
-                        {section.title}
-                      </h4>
-                      <ChangelogBlocks blocks={section.blocks} />
-                    </div>
-                  ))}
-                </div>
-                {moreBelow ? <OverflowFade placement="below" inset /> : null}
-              </div>
-            </article>
-            <div
-              data-changelog-footer
-              className="flex items-center justify-end border-t border-foreground bg-foreground px-4 py-2.5 text-background sm:px-5"
-            >
-              <button
-                type="button"
-                disabled={!releaseVisible}
-                aria-label={`Open the full bb ${entry.version} changelog`}
-                onClick={() =>
-                  openUrlInExternalBrowser(
-                    `${CHANGELOG_URL}#${entry.version.replaceAll(".", "-")}`,
-                  )
-                }
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm text-xs font-semibold text-background underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-background"
-              >
-                Full changelog
-                <Icon aria-hidden name="ExternalLink" className="size-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-        <div
-          data-changelog-dismiss-confirmation
-          role="status"
-          aria-live="polite"
-          aria-hidden={releaseVisible}
-          className={cn(
-            "grid transition-[grid-template-rows,opacity] duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-            releaseVisible
-              ? "pointer-events-none grid-rows-[0fr] opacity-0"
-              : "grid-rows-[1fr] opacity-100",
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div className="p-4 text-center sm:p-5">
-              <div className="mx-auto max-w-sm">
-                <div className="flex items-center justify-center gap-2">
-                  <Icon
-                    aria-hidden
-                    name="CircleCheck"
-                    className="size-4 text-muted-foreground"
-                  />
-                  <span className="inline-flex rounded-full border border-border bg-muted/30 px-2.5 py-1 font-mono text-xs font-semibold leading-none tracking-tight text-foreground">
-                    {entry.version}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-lg font-semibold leading-snug tracking-tight text-foreground">
-                  You're all caught up
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  We'll show the next bb release here.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -793,51 +466,117 @@ interface BbAppUpdateRowsProps {
   systemVersion: SystemVersionResponse | undefined;
   appUpdate?: SystemAppUpdateStatus | undefined;
   applyPending?: boolean;
+  cancelScheduledPending?: boolean;
   desktopInfo: BbDesktopInfo | null;
   isDesktop: boolean;
   onApplyAppUpdate?: (() => void) | null;
+  onCancelScheduledAppUpdate?: (() => void) | null;
+  onRetryAppCheck?: (() => void) | null;
   onRelaunchDesktop: (() => void) | null;
   onRetryDesktop: (() => void) | null;
   onShowAppUpdateResult?: ((result: SystemAppUpdateResult) => void) | null;
   isChecking?: boolean;
+  releaseNotes?: ReleaseNotesToggle | null;
+}
+
+export interface ReleaseNotesToggle {
+  version: string;
+  panelId: string;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function ReleaseNotesToggleButton({
+  version,
+  panelId,
+  expanded,
+  onToggle,
+}: ReleaseNotesToggle) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-controls={expanded ? panelId : undefined}
+      aria-label={`Changelog for bb ${version}`}
+      className="inline-flex w-fit shrink-0 cursor-pointer items-center gap-0.5 rounded-sm text-2xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none aria-expanded:text-foreground"
+      onClick={onToggle}
+    >
+      Changelog
+      <Icon
+        aria-hidden
+        name="ChevronRight"
+        className={cn("size-3 transition-transform", expanded && "rotate-90")}
+      />
+    </button>
+  );
 }
 
 export function BbAppUpdateRows({
-  name: rowName = "bb app",
+  name: rowName = "Server",
   systemVersion,
   appUpdate,
   applyPending = false,
+  cancelScheduledPending = false,
   desktopInfo,
   isDesktop,
   onApplyAppUpdate = null,
+  onCancelScheduledAppUpdate = null,
+  onRetryAppCheck = null,
   onRelaunchDesktop,
   onRetryDesktop,
   onShowAppUpdateResult = null,
   isChecking = false,
+  releaseNotes = null,
 }: BbAppUpdateRowsProps) {
+  const notesLink =
+    releaseNotes === null ? null : (
+      <ReleaseNotesToggleButton {...releaseNotes} />
+    );
   const settledStatus = isChecking ? (
     <RowStateControl live state="in-progress" />
   ) : (
     <RowStateControl state="up-to-date" />
   );
-  const row = (name: ReactNode, indicator: ReactNode, caption?: ReactNode) => (
+  const unavailableCheckControl =
+    onRetryAppCheck === null ? null : (
+      <RowStateControl
+        state="latest-unknown"
+        buttonLabel="Retry"
+        actionLabel="Retry the release check"
+        loading={isChecking}
+        onClick={onRetryAppCheck}
+      />
+    );
+  const row: BbAppRowRenderer = (name, indicator, caption, description) => (
     <UpdatesRow
       leading={
         <span data-bb-update-role="app" aria-hidden>
-          <BbLogo className="size-4" />
+          <BbLogo className="size-4 -translate-y-px" />
         </span>
       }
+      actions={<RowActions>{indicator}</RowActions>}
     >
-      <span className="flex min-w-0 items-baseline gap-2">
-        {name}
-        {caption}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-col gap-1 @min-[28rem]/update-row:flex-row @min-[28rem]/update-row:flex-wrap @min-[28rem]/update-row:items-baseline @min-[28rem]/update-row:gap-x-2">
+          {name}
+          {caption}
+        </span>
+        {description === undefined ? null : (
+          <span className="mt-0.5 text-xs leading-snug text-muted-foreground">
+            {description}
+          </span>
+        )}
       </span>
-      <RowActions>{indicator}</RowActions>
     </UpdatesRow>
   );
   if (isDesktop && desktopInfo === null) {
     return row(
-      <RowName name={rowName} current={null} latest={null} />,
+      <RowName
+        name={rowName}
+        current={null}
+        latest={null}
+        trailing={notesLink}
+      />,
       <RowStateControl live state="in-progress" />,
     );
   }
@@ -847,7 +586,12 @@ export function BbAppUpdateRows({
       desktopInfo.pendingVersion ?? desktopInfo.latestVersion;
     const latest = desktopInfo.updateAvailable ? pendingVersion : null;
     const name = (
-      <RowName name={rowName} current={desktopInfo.version} latest={latest} />
+      <RowName
+        name={rowName}
+        current={desktopInfo.version}
+        latest={latest}
+        trailing={notesLink}
+      />
     );
 
     if (desktopInfo.updateDownloaded) {
@@ -881,18 +625,57 @@ export function BbAppUpdateRows({
     if (desktopInfo.updateAvailable) {
       return row(name, <RowStateControl state="update-available" />);
     }
+    if (desktopInfo.latestVersion === null) {
+      const checkDesktop = onRetryAppCheck ?? onRetryDesktop;
+      const unchecked = desktopInfo.lastCheckedAt === null;
+      return row(
+        name,
+        checkDesktop === null ? (
+          isChecking ? (
+            settledStatus
+          ) : null
+        ) : (
+          <RowStateControl
+            state="latest-unknown"
+            buttonLabel={unchecked ? "Check" : "Retry"}
+            actionLabel={
+              unchecked
+                ? "Check for desktop releases"
+                : "Retry the desktop release check"
+            }
+            loading={isChecking}
+            onClick={checkDesktop}
+          />
+        ),
+        undefined,
+        isChecking
+          ? "Checking for a newer desktop release…"
+          : unchecked
+            ? "Desktop updates haven't been checked yet."
+            : "Couldn't determine the latest desktop release.",
+      );
+    }
     return row(name, settledStatus);
   }
 
-  if (appUpdate !== undefined && appUpdate.support.kind === "supported") {
+  if (
+    appUpdate !== undefined &&
+    (appUpdate.support.kind === "supported" ||
+      appUpdate.desktopUpdateSupported === true)
+  ) {
     return (
       <InAppUpdateRow
         name={rowName}
+        installKind={systemVersion?.installKind ?? null}
         status={appUpdate}
         applyPending={applyPending}
+        cancelScheduledPending={cancelScheduledPending}
         settledStatus={settledStatus}
+        unavailableCheckControl={unavailableCheckControl}
         row={row}
+        trailing={notesLink}
         onApply={onApplyAppUpdate}
+        onCancelScheduled={onCancelScheduledAppUpdate}
         onShowResult={onShowAppUpdateResult}
       />
     );
@@ -900,16 +683,45 @@ export function BbAppUpdateRows({
 
   if (systemVersion === undefined) {
     return row(
-      <RowName name={rowName} current={null} latest={null} />,
+      <RowName
+        name={rowName}
+        current={null}
+        latest={null}
+        trailing={notesLink}
+      />,
       <RowStateControl state="in-progress" />,
     );
   }
 
+  if (systemVersion.installKind === "source") {
+    return row(
+      <RowName
+        name={rowName}
+        detail={
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            Source checkout
+          </span>
+        }
+        current={
+          systemVersion.currentCommit === null
+            ? `Build ${systemVersion.currentVersion}`
+            : systemVersion.currentCommit.slice(0, 7)
+        }
+        latest={null}
+        trailing={notesLink}
+      />,
+      null,
+    );
+  }
+
+  const desktopHostedServer =
+    systemVersion.installKind === "desktop" ||
+    (appUpdate !== undefined && isDesktopOwnedServer(appUpdate));
   const name = (
     <RowName
       name={rowName}
       detail={
-        systemVersion.updateAvailable ? (
+        systemVersion.updateAvailable && !desktopHostedServer ? (
           <span className="hidden truncate font-mono text-2xs text-muted-foreground sm:inline">
             {systemVersion.upgradeCommand}
           </span>
@@ -919,10 +731,14 @@ export function BbAppUpdateRows({
       latest={
         systemVersion.updateAvailable ? systemVersion.latestVersion : null
       }
+      trailing={notesLink}
     />
   );
 
   if (systemVersion.updateAvailable) {
+    if (desktopHostedServer) {
+      return row(name, <RowStateControl state="update-available" />);
+    }
     return row(
       name,
       <RowStateControl
@@ -940,38 +756,98 @@ export function BbAppUpdateRows({
     );
   }
 
+  if (systemVersion.latestVersion === null) {
+    return row(
+      name,
+      unavailableCheckControl,
+      undefined,
+      isChecking
+        ? "Checking npm for a newer release…"
+        : "Couldn't check npm for a newer release.",
+    );
+  }
   return row(name, settledStatus);
+}
+
+function ScheduledUpdateSplitButton({
+  updateNowPending,
+  onUpdateNow,
+  skipPending,
+  onSkip,
+}: {
+  updateNowPending: boolean;
+  onUpdateNow: () => void;
+  skipPending: boolean;
+  onSkip: () => void;
+}) {
+  return (
+    <SplitButton
+      className="h-6 px-2 text-xs"
+      disabled={updateNowPending}
+      primaryAction={{ label: "Update now", onSelect: onUpdateNow }}
+      primaryTooltip="Restart into the update without waiting for threads"
+      triggerLabel="More update options"
+      mobileTitle="Update bb"
+      secondaryActions={[
+        {
+          id: "skip-version",
+          label: "Skip this version",
+          disabled: skipPending,
+          onSelect: onSkip,
+        },
+      ]}
+    />
+  );
 }
 
 type BbAppRowRenderer = (
   name: ReactNode,
   indicator: ReactNode,
   caption?: ReactNode,
+  description?: ReactNode,
 ) => ReactNode;
 
 function InAppUpdateRow({
   name: rowName,
   status,
+  installKind,
   applyPending,
+  cancelScheduledPending,
   settledStatus,
+  unavailableCheckControl,
   row,
+  trailing,
   onApply,
+  onCancelScheduled,
   onShowResult,
 }: {
   name: string;
   status: SystemAppUpdateStatus;
+  installKind: SystemVersionResponse["installKind"];
   applyPending: boolean;
+  cancelScheduledPending: boolean;
   settledStatus: ReactNode;
+  unavailableCheckControl: ReactNode;
   row: BbAppRowRenderer;
+  trailing: ReactNode;
   onApply: (() => void) | null;
+  onCancelScheduled: (() => void) | null;
   onShowResult: ((result: SystemAppUpdateResult) => void) | null;
 }) {
   const available = status.available;
   const name = (
     <RowName
       name={rowName}
+      detail={
+        installKind === "source" ? (
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            Source checkout
+          </span>
+        ) : undefined
+      }
       current={formatAppUpdateRevision(status.current)}
       latest={available === null ? null : formatAppUpdateTarget(available)}
+      trailing={trailing}
     />
   );
   const activity = status.activity;
@@ -987,6 +863,25 @@ function InAppUpdateRow({
       name,
       <RowStateControl live state="in-progress" />,
       <RowStateCaption state="in-progress">Restarting</RowStateCaption>,
+    );
+  }
+  if (status.scheduled !== null) {
+    return row(
+      name,
+      onCancelScheduled === null || onApply === null ? null : (
+        <ScheduledUpdateSplitButton
+          updateNowPending={applyPending}
+          onUpdateNow={onApply}
+          skipPending={cancelScheduledPending}
+          onSkip={onCancelScheduled}
+        />
+      ),
+      <RowStateCaption state="update-available">
+        {scheduledAppUpdateCaption(
+          status.runningThreadCount,
+          status.scheduled.requiredIdleMs,
+        )}
+      </RowStateCaption>,
     );
   }
 
@@ -1017,40 +912,49 @@ function InAppUpdateRow({
         reason="Last update failed"
         openLabel="View the failed bb update"
         openTooltip="View details"
-        onOpen={
-          onShowResult === null ? undefined : () => onShowResult(failure)
-        }
+        onOpen={onShowResult === null ? undefined : () => onShowResult(failure)}
       />,
     );
   }
   if (status.blocked !== null) {
     return row(
       name,
-      available !== null ? (
-        <RowStateControl state="update-available" />
-      ) : status.blocked.reason === "fetch-failed" ? (
-        <RowStateControl state="latest-unknown" />
-      ) : (
-        settledStatus
-      ),
-      <span className="min-w-0 truncate text-xs text-muted-foreground">
-        {status.blocked.message}
-      </span>,
+      ((status.support.kind === "supported" && status.support.mode === "npm") ||
+        status.desktopUpdateSupported === true) &&
+        status.blocked.reason === "fetch-failed"
+        ? unavailableCheckControl
+        : null,
+      undefined,
+      status.blocked.message,
     );
   }
   if (updateButton !== null) {
-    return row(name, updateButton);
+    const captions = [
+      status.autoUpdate && status.availableSkipped
+        ? "Skipped until a newer version"
+        : null,
+      status.runningThreadCount > 0
+        ? runningThreadsCaption(status.runningThreadCount)
+        : null,
+    ].filter((caption) => caption !== null);
+    return row(
+      name,
+      updateButton,
+      captions.length === 0 ? undefined : (
+        <RowStateCaption state="update-available">
+          {captions.join(" · ")}
+        </RowStateCaption>
+      ),
+    );
   }
-  return row(name, settledStatus);
-}
-
-interface MachineUpdatesRowsProps {
-  machine: UpdateInventoryMachine;
-  runningJobKey: string | null;
-  queuedJobKeys: ReadonlySet<string>;
-  failuresByJobKey?: ReadonlyMap<string, ProviderCliInstallFailure>;
-  onStartInstall: (hostId: string, issue: ProviderCliActionableIssue) => void;
-  onOpenProvider: (providerId: string) => void;
+  return row(
+    name,
+    available === null ? (
+      settledStatus
+    ) : (
+      <RowStateControl state="update-available" />
+    ),
+  );
 }
 
 function machineHasRelevantHealthStatus(
@@ -1063,16 +967,20 @@ function machineHasRelevantHealthStatus(
   );
 }
 
-function visibleProviderUpdateIssues(
-  machine: UpdateInventoryMachine,
-): ProviderCliIssue[] {
-  if (
+function providerStatusIsVisible(machine: UpdateInventoryMachine): boolean {
+  return !(
     machine.canRetryDaemonUpdate ||
     machine.host.status !== "connected" ||
     machine.statusError ||
     machine.statusPending ||
     machine.providerStatus === null
-  ) {
+  );
+}
+
+function visibleProviderUpdateIssues(
+  machine: UpdateInventoryMachine,
+): ProviderCliIssue[] {
+  if (!providerStatusIsVisible(machine)) {
     return [];
   }
   return machine.issues.filter(isProviderCliUpdateIssue);
@@ -1081,13 +989,7 @@ function visibleProviderUpdateIssues(
 function visibleInstalledProviderEntries(
   machine: UpdateInventoryMachine,
 ): ProviderCliStatusEntry[] {
-  if (
-    machine.canRetryDaemonUpdate ||
-    machine.host.status !== "connected" ||
-    machine.statusError ||
-    machine.statusPending ||
-    machine.providerStatus === null
-  ) {
+  if (!providerStatusIsVisible(machine) || machine.providerStatus === null) {
     return [];
   }
   return providerCliEntries(machine.providerStatus).filter(
@@ -1095,100 +997,346 @@ function visibleInstalledProviderEntries(
   );
 }
 
-export function BbDaemonUpdateRow({
-  machine,
-  now,
-  retryUpdatePending,
-  onRetryDaemonUpdate,
-  onOpenMachine,
-}: {
-  machine: UpdateInventoryMachine;
-  now: number;
-  retryUpdatePending: boolean;
-  onRetryDaemonUpdate: (hostId: string) => void;
-  onOpenMachine: (hostId: string) => void;
-}) {
+type MachineDaemonState = "updating" | "stalled" | "ahead" | "offline";
+
+function machineDaemonState(
+  machine: UpdateInventoryMachine,
+  now: number,
+): MachineDaemonState | null {
   const { host } = machine;
-  const updateStalled =
-    machine.canRetryDaemonUpdate && hostUpdateIsStalled(host, now);
-  const updating = machine.canRetryDaemonUpdate && !updateStalled;
-  const machineIsAhead = hostNeedsUpdate(host) && !hostCanRetryUpdate(host);
-  const offline = host.status !== "connected";
+  if (machine.canRetryDaemonUpdate) {
+    return hostUpdateIsStalled(host, now) ? "stalled" : "updating";
+  }
+  if (hostNeedsUpdate(host) && !hostCanRetryUpdate(host)) {
+    return "ahead";
+  }
+  return host.status === "connected" ? null : "offline";
+}
 
-  const daemonCaption = machineIsAhead ? (
-    <RowStateCaption state="offline">
-      Update this app to reconnect
-    </RowStateCaption>
-  ) : null;
-
+function machineNeedsAttention(
+  machine: UpdateInventoryMachine,
+  now: number,
+): boolean {
+  const daemon = machineDaemonState(machine, now);
   return (
-    <ResourceRow
-      className={ROW_SPACING}
-      actionsVisibility="always"
-      openLabel={`Open ${host.name} settings`}
-      onOpen={() => onOpenMachine(host.id)}
-      leading={
-        <span data-bb-update-role="daemon" aria-hidden>
-          <BbLogo className="size-4" />
-        </span>
-      }
-      title="bb daemon"
-      titleAside={
-        updateStalled ? (
-          <FailureIndicator reason="Update didn't finish" />
-        ) : null
-      }
-      state={daemonCaption}
-      trailingMeta={null}
-      actions={
-        updating ? (
-          <RowStateControl live state="in-progress" />
-        ) : updateStalled ? (
-          <RowStateControl
-            state="failed"
-            actionIcon={RETRY_ACTION_ICON as IconName}
-            actionTooltip="Retry"
-            actionLabel={`Retry on ${host.name} now`}
-            loading={retryUpdatePending}
-            onClick={() => onRetryDaemonUpdate(host.id)}
-          />
-        ) : machineIsAhead ? (
-          <RowStateControl state="offline" />
-        ) : offline ? (
-          <RowStateControl state="offline" />
-        ) : null
-      }
-    />
+    (daemon !== null && daemon !== "offline") ||
+    machine.statusError ||
+    visibleProviderUpdateIssues(machine).length > 0
   );
 }
 
-export function ProviderCliCheckRow({
-  machine,
-  onRecheckClis,
-  onOpenMachine,
-}: {
-  machine: UpdateInventoryMachine;
-  onRecheckClis: (hostId: string) => void;
-  onOpenMachine: (hostId: string) => void;
-}) {
-  const { host } = machine;
+interface ProviderCliJobState {
+  runningJobKey: string | null;
+  queuedJobKeys: ReadonlySet<string>;
+  failuresByJobKey: ReadonlyMap<string, ProviderCliInstallFailure>;
+}
+
+interface MachineProviderItem {
+  provider: ProviderCliStatusEntry["provider"];
+  status: ProviderCliStatusEntry["status"];
+  issue: ProviderCliIssue | null;
+  activity: "running" | "queued" | null;
+  failure: ProviderCliInstallFailure | null;
+}
+
+function machineProviderItems(
+  machine: UpdateInventoryMachine,
+  jobs: ProviderCliJobState,
+): MachineProviderItem[] {
+  const issuesByProvider = new Map(
+    visibleProviderUpdateIssues(machine).map((issue) => [
+      issue.provider,
+      issue,
+    ]),
+  );
+  return visibleInstalledProviderEntries(machine).map(
+    ({ provider, status }) => {
+      const issue = issuesByProvider.get(provider) ?? null;
+      const jobKey = providerCliJobKey(machine.host.id, provider);
+      const storedFailure = jobs.failuresByJobKey.get(jobKey) ?? null;
+      return {
+        provider,
+        status,
+        issue,
+        activity:
+          jobs.runningJobKey === jobKey
+            ? "running"
+            : jobs.queuedJobKeys.has(jobKey)
+              ? "queued"
+              : null,
+        failure:
+          issue !== null &&
+          storedFailure?.issueFingerprint === issue.fingerprint
+            ? storedFailure
+            : null,
+      };
+    },
+  );
+}
+
+function itemIsStartable(
+  item: MachineProviderItem,
+): item is MachineProviderItem & {
+  issue: ProviderCliActionableIssue;
+} {
   return (
-    <ResourceRow
-      className={ROW_SPACING}
-      actionsVisibility="always"
-      openLabel={`Open ${host.name} settings`}
-      onOpen={() => onOpenMachine(host.id)}
-      leading={
-        <Icon
-          aria-hidden
-          name="Terminal"
+    item.issue !== null &&
+    hasProviderCliAction(item.issue) &&
+    item.activity === null
+  );
+}
+
+const UPDATER_NAMES: Record<string, string> = {
+  brew: "Homebrew",
+  bun: "Bun",
+  mise: "mise",
+  npm: "npm",
+  pnpm: "pnpm",
+};
+
+export function providerCliUpdaterName(
+  status: ProviderCliStatusEntry["status"],
+): string | null {
+  const command = status.installAction?.command.trim().split(/\s+/u)[0];
+  if (command === undefined || command.length === 0) {
+    return null;
+  }
+  const executable = (command.split(/[\\/]/u).pop() ?? command).replace(
+    /\.(?:exe|cmd|bat)$/iu,
+    "",
+  );
+  if (executable === status.executableName) {
+    return "Built-in updater";
+  }
+  return UPDATER_NAMES[executable] ?? executable;
+}
+
+function providerItemState(item: MachineProviderItem): UpdateState {
+  if (item.issue === null) {
+    return item.status.latestVersion === null ? "latest-unknown" : "up-to-date";
+  }
+  return item.issue.action === null ? "update-manually" : "update-available";
+}
+
+function ProviderAvatar({
+  item,
+  providerInfo,
+  onToggle,
+}: {
+  item: MachineProviderItem;
+  providerInfo: ProviderInfo | undefined;
+  onToggle: () => void;
+}) {
+  const manual = item.issue?.action === null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-provider-avatar={item.provider}
+          data-provider-activity={
+            item.failure !== null ? "failed" : (item.activity ?? undefined)
+          }
+          data-provider-manual={manual ? "" : undefined}
+          className={cn(
+            "relative z-10 -ml-1.5 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full ring-2 ring-card first:ml-0",
+            manual
+              ? "bg-card outline-1 -outline-offset-1 outline-subtle-foreground outline-dashed"
+              : "bg-muted",
+          )}
+          onClick={onToggle}
+        >
+          <ProviderIcon
+            providerKind="agent"
+            provider={providerInfo ?? { id: item.provider }}
+            className={cn("size-3.5", manual && "opacity-60")}
+          />
+          {item.activity === "running" ? (
+            <span
+              aria-hidden
+              className="absolute -inset-0.5 animate-spin rounded-full border-2 border-transparent border-t-foreground motion-reduce:animate-none"
+            />
+          ) : null}
+          {item.failure !== null ? (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-destructive ring-2 ring-card"
+            />
+          ) : null}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {item.status.displayName}
+        {item.status.currentVersion === null
+          ? null
+          : ` ${item.status.currentVersion}`}
+        {item.status.latestVersion === null ||
+        item.status.latestVersion === item.status.currentVersion
+          ? null
+          : ` → ${item.status.latestVersion}`}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ProviderDetailRow({
+  hostName,
+  item,
+  providerInfo,
+  onStart,
+}: {
+  hostName: string;
+  item: MachineProviderItem;
+  providerInfo: ProviderInfo | undefined;
+  onStart: (issue: ProviderCliActionableIssue) => void;
+}) {
+  const { status, issue, failure } = item;
+  const state = providerItemState(item);
+  const updater = issue === null ? null : providerCliUpdaterName(status);
+  const retryIssue =
+    failure !== null && itemIsStartable(item) ? item.issue : null;
+  return (
+    <div
+      data-provider-row={item.provider}
+      className="grid min-h-8 min-w-0 grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2.5 text-sm"
+    >
+      <span
+        data-provider-icon={item.provider}
+        aria-hidden
+        className="flex size-3.5 shrink-0 items-center justify-center"
+      >
+        <ProviderIcon
+          providerKind="agent"
+          provider={providerInfo ?? { id: item.provider }}
           className="size-3.5 text-muted-foreground"
         />
-      }
-      title="Provider CLIs"
-      titleAside={<FailureIndicator reason="Couldn't check for updates" />}
-      trailingMeta={null}
-      actions={
+      </span>
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="w-28 shrink-0 truncate text-foreground">
+          {status.displayName}
+        </span>
+        <RowVersions
+          current={status.currentVersion}
+          latest={issue !== null ? status.latestVersion : null}
+        />
+      </span>
+      <span className="flex shrink-0 items-center justify-end gap-1.5">
+        {state === "update-manually" ? (
+          <span className="text-xs text-subtle-foreground">
+            {UPDATE_STATE_PRESENTATION["update-manually"].label}
+          </span>
+        ) : updater === null || status.installAction === null ? null : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-provider-updater
+                tabIndex={0}
+                className="rounded-sm text-xs text-subtle-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {updater}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <code className="font-mono">{status.installAction.command}</code>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {failure === null ? null : (
+          <FailureIndicator
+            reason={PROVIDER_CLI_FAILURE_SUMMARIES[failure.kind]}
+            openLabel={`View ${status.displayName} update log`}
+            openTooltip="View log"
+            onOpen={() => openProviderCliInstallLog(failure.logDialogState)}
+          />
+        )}
+        {item.activity !== null ? (
+          <RowStateControl live state="in-progress" />
+        ) : retryIssue !== null ? (
+          <RowStateControl
+            state="failed"
+            actionIcon={RETRY_ACTION_ICON as IconName}
+            actionLabel={`Retry ${status.displayName} on ${hostName}`}
+            actionTooltip="Retry"
+            onClick={() => onStart(retryIssue)}
+          />
+        ) : state === "up-to-date" || state === "latest-unknown" ? (
+          <RowStateControl state={state} />
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+interface MachineUpdateRowProps extends ProviderCliJobState {
+  machine: UpdateInventoryMachine;
+  now: number;
+  tags: readonly string[];
+  expanded: boolean;
+  retryUpdatePending: boolean;
+  onToggle: () => void;
+  onStartInstall: (hostId: string, issue: ProviderCliActionableIssue) => void;
+  onRetryDaemonUpdate: (hostId: string) => void;
+  onRecheckClis: (hostId: string) => void;
+}
+
+function MachineRowNote({
+  machine,
+  daemon,
+  items,
+  retryUpdatePending,
+  onStartInstall,
+  onRetryDaemonUpdate,
+  onRecheckClis,
+}: Pick<
+  MachineUpdateRowProps,
+  | "machine"
+  | "retryUpdatePending"
+  | "onStartInstall"
+  | "onRetryDaemonUpdate"
+  | "onRecheckClis"
+> & {
+  daemon: MachineDaemonState | null;
+  items: MachineProviderItem[];
+}) {
+  const { host } = machine;
+  if (daemon === "updating") {
+    return (
+      <>
+        <RowStateCaption state="in-progress">Updating bb</RowStateCaption>
+        <RowStateControl live state="in-progress" />
+      </>
+    );
+  }
+  if (daemon === "stalled") {
+    return (
+      <>
+        <RowStateCaption state="failed">Update didn't finish</RowStateCaption>
+        <RowStateControl
+          state="failed"
+          actionIcon={RETRY_ACTION_ICON as IconName}
+          actionTooltip="Retry"
+          actionLabel={`Retry on ${host.name} now`}
+          loading={retryUpdatePending}
+          onClick={() => onRetryDaemonUpdate(host.id)}
+        />
+      </>
+    );
+  }
+  if (daemon === "ahead") {
+    return (
+      <RowStateCaption state="offline">
+        Update this app to reconnect
+      </RowStateCaption>
+    );
+  }
+  if (daemon === "offline") {
+    return <RowStateCaption state="offline">Offline</RowStateCaption>;
+  }
+  if (machine.statusError) {
+    return (
+      <>
+        <RowStateCaption state="failed">
+          Couldn't check for updates
+        </RowStateCaption>
         <RowStateControl
           state="failed"
           actionIcon={RETRY_ACTION_ICON as IconName}
@@ -1197,194 +1345,676 @@ export function ProviderCliCheckRow({
           loading={machine.statusFetching}
           onClick={() => onRecheckClis(host.id)}
         />
-      }
-    />
-  );
+      </>
+    );
+  }
+  const failed = items.filter((item) => item.failure !== null);
+  if (failed.length > 0) {
+    const retryable = failed.filter(itemIsStartable);
+    return (
+      <>
+        <RowStateCaption state="failed">
+          {failed.length === 1
+            ? `${failed[0]?.status.displayName} failed`
+            : `${failed.length} failed`}
+        </RowStateCaption>
+        {retryable.length === 0 ? null : (
+          <RowStateControl
+            state="failed"
+            actionIcon={RETRY_ACTION_ICON as IconName}
+            actionTooltip="Retry"
+            actionLabel={`Retry failed updates on ${host.name}`}
+            onClick={() => {
+              for (const item of retryable) {
+                onStartInstall(host.id, item.issue);
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  }
+  const manual = items.filter((item) => item.issue?.action === null).length;
+  if (manual > 0) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="rounded-sm text-xs text-subtle-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {manual} manual
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {UPDATE_STATE_PRESENTATION["update-manually"].label}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  return null;
 }
 
-function providerRowState({
-  issue,
-  status,
-}: {
-  issue: ProviderCliIssue | null;
-  status: ProviderCliStatusEntry["status"];
-}): UpdateState | null {
-  if (issue === null) {
-    return status.latestVersion === null ? "latest-unknown" : "up-to-date";
-  }
-  if (issue.action === null) {
-    return "update-manually";
-  }
-  return "update-available";
-}
-
-export function MachineUpdatesRows({
+export function MachineUpdateRow({
   machine,
+  now,
+  tags,
+  expanded,
+  retryUpdatePending,
   runningJobKey,
   queuedJobKeys,
-  failuresByJobKey = EMPTY_PROVIDER_CLI_FAILURES,
+  failuresByJobKey,
+  onToggle,
   onStartInstall,
-  onOpenProvider,
-}: MachineUpdatesRowsProps) {
+  onRetryDaemonUpdate,
+  onRecheckClis,
+}: MachineUpdateRowProps) {
   const { host } = machine;
   const providerRoster = useSystemProviders().data;
-  const providerEntries = visibleInstalledProviderEntries(machine);
-  const issuesByProvider = new Map(
-    visibleProviderUpdateIssues(machine).map((issue) => [
-      issue.provider,
-      issue,
-    ]),
-  );
-
-  if (providerEntries.length === 0) {
-    return null;
-  }
-
-  const rows = providerEntries.map(({ provider, status }) => {
-    const issue = issuesByProvider.get(provider) ?? null;
-    const state = providerRowState({ issue, status });
-    const jobKey = providerCliJobKey(host.id, provider);
-    const running = runningJobKey === jobKey;
-    const queued = queuedJobKeys.has(jobKey);
-    const storedFailure = failuresByJobKey.get(jobKey) ?? null;
-    const failure =
-      issue !== null && storedFailure?.issueFingerprint === issue.fingerprint
-        ? storedFailure
-        : null;
-    const actionable =
-      issue !== null && hasProviderCliAction(issue) && !running && !queued;
-    const providerId = provider;
-    const providerInfo = providerRoster?.find(
-      (candidate) => candidate.id === providerId,
-    );
-    return (
-      <ResourceRow
-        key={provider}
-        className={ROW_SPACING}
-        actionsVisibility="always"
-        openLabel={`Open ${status.displayName} settings`}
-        onOpen={() => onOpenProvider(providerId)}
-        leading={
-          <span
-            data-provider-icon={providerId}
-            aria-hidden
-            className="flex size-3.5 shrink-0 items-center justify-center"
-          >
-            <ProviderIcon
-              providerKind="agent"
-              provider={providerInfo ?? { id: providerId }}
-              className="size-3.5 text-muted-foreground"
+  const items = machineProviderItems(machine, {
+    runningJobKey,
+    queuedJobKeys,
+    failuresByJobKey,
+  });
+  const outdated = items.filter((item) => item.issue !== null);
+  const startable = items.filter(itemIsStartable);
+  const daemon = machineDaemonState(machine, now);
+  const expandable = items.length > 0;
+  const detailId = `updates-machine-detail-${host.id}`;
+  const providerInfoFor = (provider: string) =>
+    providerRoster?.find((candidate) => candidate.id === provider);
+  return (
+    <div data-updates-machine={host.id}>
+      <div
+        className={cn(
+          "relative grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-sm",
+          expandable && "hover:bg-state-hover",
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-5 w-6 shrink-0 items-center justify-center">
+            <Icon
+              aria-hidden
+              name="Laptop"
+              className="size-4 text-muted-foreground"
             />
           </span>
-        }
-        title={status.displayName}
-        titleMeta={
-          <RowVersions
-            current={status.currentVersion}
-            latest={issue !== null ? status.latestVersion : null}
+          <span className="flex min-w-0 items-baseline gap-2">
+            {expandable ? (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={detailId}
+                className="min-w-0 cursor-pointer truncate rounded-sm text-left font-medium text-foreground after:absolute after:inset-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+                onClick={onToggle}
+              >
+                {host.name}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate font-medium text-foreground">
+                {host.name}
+              </span>
+            )}
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                data-machine-tag
+                className="shrink-0 text-xs text-subtle-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+          </span>
+        </span>
+        <span className="relative z-10 flex min-w-0 items-center justify-end gap-2">
+          <MachineRowNote
+            machine={machine}
+            daemon={daemon}
+            items={items}
+            retryUpdatePending={retryUpdatePending}
+            onStartInstall={onStartInstall}
+            onRetryDaemonUpdate={onRetryDaemonUpdate}
+            onRecheckClis={onRecheckClis}
           />
-        }
-        titleAside={
-          failure === null ? null : (
-            <FailureIndicator
-              reason={PROVIDER_CLI_FAILURE_SUMMARIES[failure.kind]}
-              openLabel={`View ${status.displayName} update log`}
-              openTooltip="View log"
-              onOpen={() => openProviderCliInstallLog(failure.logDialogState)}
-            />
-          )
-        }
-        trailingMeta={null}
-        actions={
-          running ? (
-            <RowStateControl live state="in-progress" />
-          ) : queued ? (
-            <RowStateControl live state="in-progress" />
-          ) : failure !== null ? (
-            actionable ? (
-              <RowStateControl
-                state="failed"
-                actionIcon={RETRY_ACTION_ICON as IconName}
-                actionLabel={`Retry ${status.displayName} on ${host.name}`}
-                actionTooltip="Retry"
-                onClick={() => onStartInstall(host.id, issue)}
-              />
-            ) : null
-          ) : state === null ? null : (
-            <RowStateControl
-              state={state}
-              actionLabel={
-                actionable
-                  ? `${issue.action.label} ${status.displayName} on ${host.name}`
-                  : undefined
-              }
-              actionTooltip={actionable ? issue.action.label : undefined}
-              onClick={
-                actionable ? () => onStartInstall(host.id, issue) : undefined
-              }
-            />
-          )
-        }
-      />
-    );
-  });
-
-  return <>{rows}</>;
-}
-
-export function MachineUpdatesSection({
-  machine,
-  isThisMachine,
-  showServerBadge,
-  children,
-}: {
-  machine: UpdateInventoryMachine;
-  isThisMachine: boolean;
-  showServerBadge: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div data-updates-machine={machine.host.id}>
-      <div data-updates-domain="machine">
-        <SettingsSection
-          title={
-            <span className="flex min-w-0 items-center gap-2">
-              <Icon
-                name="Laptop"
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-              <span className="truncate">{machine.host.name}</span>
-              {isThisMachine ? (
-                <SettingsBadge>This machine</SettingsBadge>
-              ) : null}
-              {showServerBadge ? <SettingsBadge>Server</SettingsBadge> : null}
+          {outdated.length === 0 ? null : (
+            <span
+              data-provider-pile
+              className="flex shrink-0 items-center pl-1"
+            >
+              {outdated.map((item) => (
+                <ProviderAvatar
+                  key={item.provider}
+                  item={item}
+                  providerInfo={providerInfoFor(item.provider)}
+                  onToggle={onToggle}
+                />
+              ))}
             </span>
-          }
-        >
-          <SettingsRowList>{children}</SettingsRowList>
-        </SettingsSection>
+          )}
+        </span>
       </div>
+      {expanded && expandable ? (
+        <div
+          id={detailId}
+          data-updates-machine-detail
+          className="border-t border-border-seam bg-muted/25 py-2 pr-4 pl-[3.25rem]"
+        >
+          {items.map((item) => (
+            <ProviderDetailRow
+              key={item.provider}
+              hostName={host.name}
+              item={item}
+              providerInfo={providerInfoFor(item.provider)}
+              onStart={(issue) => onStartInstall(host.id, issue)}
+            />
+          ))}
+          {startable.length === 0 ? null : (
+            <div className="flex justify-end pt-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-xs"
+                onClick={() => {
+                  for (const item of startable) {
+                    onStartInstall(host.id, item.issue);
+                  }
+                }}
+              >
+                Update {host.name}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export function MachineUpdatesFleetSection({
-  action,
-  children,
+export function AutoAppUpdateSetting({
+  label,
+  checked,
+  onCheckedChange,
 }: {
-  action?: ReactNode;
-  children: ReactNode;
+  label: string;
+  checked: boolean;
+  onCheckedChange: (enabled: boolean) => void;
 }) {
   return (
-    <SettingsSection
-      action={action}
-      bodyClassName="border-0 bg-transparent p-0"
-      description="Manage bb and provider CLI updates across all machines."
-      title="Machine updates"
+    <div className="py-3.5 pr-4 pl-13">
+      <SettingsWithControl
+        label={label}
+        description="Checks every hour and restarts bb into a new version once no thread has run for 15 minutes."
+      >
+        <Switch
+          checked={checked}
+          onCheckedChange={onCheckedChange}
+          aria-label={label}
+        />
+      </SettingsWithControl>
+    </div>
+  );
+}
+
+export function BbUpdatesCard({ children }: { children: ReactNode }) {
+  return (
+    <section aria-label="bb" data-updates-domain="bb">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="divide-y divide-border">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function pluralMachines(count: number): string {
+  return `${count} machine${count === 1 ? "" : "s"}`;
+}
+
+function quietFleetSummary(machines: readonly UpdateInventoryMachine[]): {
+  message: string;
+  checking: boolean;
+} {
+  const connected = machines.filter(
+    (machine) => machine.host.status === "connected",
+  );
+  const offline = machines.length - connected.length;
+  if (connected.some((machine) => machine.statusPending)) {
+    return { message: "Checking for updates…", checking: true };
+  }
+  if (connected.length === 0) {
+    return {
+      message:
+        machines.length === 1
+          ? `${machines[0]?.host.name} is offline.`
+          : `All ${pluralMachines(machines.length)} are offline.`,
+      checking: false,
+    };
+  }
+  const scope =
+    machines.length === 1
+      ? `on ${connected[0]?.host.name}`
+      : offline === 0
+        ? `on all ${pluralMachines(connected.length)}`
+        : `on ${pluralMachines(connected.length)}`;
+  return {
+    message: `Nothing to update ${scope}.${offline === 0 ? "" : ` ${offline} offline.`}`,
+    checking: false,
+  };
+}
+
+function BulkUpdateProgress({ remainingJobs }: { remainingJobs: number }) {
+  const [batch, setBatch] = useState({ total: 0, remaining: 0 });
+  if (batch.remaining !== remainingJobs) {
+    setBatch({
+      total:
+        remainingJobs === 0
+          ? 0
+          : batch.remaining === 0
+            ? remainingJobs
+            : batch.total + Math.max(0, remainingJobs - batch.remaining),
+      remaining: remainingJobs,
+    });
+  }
+  if (remainingJobs === 0) {
+    return null;
+  }
+  return (
+    <span
+      role="status"
+      data-updates-progress
+      className="flex h-7 items-center gap-1.5 text-xs text-subtle-foreground"
     >
-      <div className="space-y-6 pt-1.5">{children}</div>
-    </SettingsSection>
+      <Icon aria-hidden name="Loading" className="size-3.5 animate-spin" />
+      {batch.total > 1 && batch.remaining === remainingJobs
+        ? `Updating ${batch.total - remainingJobs + 1} of ${batch.total}`
+        : "Updating"}
+    </span>
+  );
+}
+
+interface ProviderCliUpdatesSectionProps extends ProviderCliJobState {
+  machines: readonly UpdateInventoryMachine[];
+  now: number;
+  localDaemonHostId: string | null;
+  serverHostId: string | null;
+  retryPendingHostId: string | null;
+  onStartInstall: (hostId: string, issue: ProviderCliActionableIssue) => void;
+  onRetryDaemonUpdate: (hostId: string) => void;
+  onRetryAllDaemonUpdates: (hostIds: string[]) => void;
+  onRecheckClis: (hostId: string) => void;
+}
+
+export function ProviderCliUpdatesSection({
+  machines,
+  now,
+  localDaemonHostId,
+  serverHostId,
+  retryPendingHostId,
+  runningJobKey,
+  queuedJobKeys,
+  failuresByJobKey,
+  onStartInstall,
+  onRetryDaemonUpdate,
+  onRetryAllDaemonUpdates,
+  onRecheckClis,
+}: ProviderCliUpdatesSectionProps) {
+  const [expandedHostIds, setExpandedHostIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [showAll, setShowAll] = useState(false);
+  const jobs = { runningJobKey, queuedJobKeys, failuresByJobKey };
+
+  const remainingJobs = (runningJobKey === null ? 0 : 1) + queuedJobKeys.size;
+
+  const attention = machines.filter((machine) =>
+    machineNeedsAttention(machine, now),
+  );
+  const quiet = machines.filter(
+    (machine) => !machineNeedsAttention(machine, now),
+  );
+  const listed = showAll ? [...attention, ...quiet] : attention;
+  const startable = machines.flatMap((machine) =>
+    machineProviderItems(machine, jobs)
+      .filter(itemIsStartable)
+      .map((item) => ({ hostId: machine.host.id, issue: item.issue })),
+  );
+  const stalledHostIds = machines
+    .filter((machine) => machineDaemonState(machine, now) === "stalled")
+    .map((machine) => machine.host.id);
+
+  const updateAllButton =
+    remainingJobs === 0 && startable.length > 0 ? (
+      <UpdateActionButton
+        label={`Update all ${startable.length} CLI tool${startable.length === 1 ? "" : "s"}`}
+        tooltipLabel="Update all"
+        icon={UPDATE_ACTION_ICON}
+        visibleLabel="Update all"
+        variant="default"
+        onClick={() => {
+          for (const { hostId, issue } of startable) {
+            onStartInstall(hostId, issue);
+          }
+        }}
+      />
+    ) : null;
+  const retryAllButton =
+    stalledHostIds.length > BULK_RETRY_THRESHOLD ? (
+      <UpdateActionButton
+        label={`Update all ${stalledHostIds.length} machines now`}
+        visibleLabel="Retry all"
+        icon="RotateCcw"
+        iconPosition="end"
+        variant="default"
+        className="font-medium"
+        onClick={() => onRetryAllDaemonUpdates(stalledHostIds)}
+      />
+    ) : null;
+  const bulkActions =
+    retryAllButton !== null || updateAllButton !== null || remainingJobs > 0 ? (
+      <div
+        role="toolbar"
+        aria-label="Bulk update actions"
+        className="flex flex-wrap items-center justify-end gap-2"
+      >
+        <BulkUpdateProgress remainingJobs={remainingJobs} />
+        {retryAllButton}
+        {updateAllButton}
+      </div>
+    ) : null;
+
+  const summary = quietFleetSummary(quiet);
+  return (
+    <div data-updates-domain="provider-clis" className="space-y-2">
+      <SettingsSection
+        action={bulkActions}
+        actionPlacement="inline"
+        bodyClassName="overflow-hidden p-0"
+        title="Provider CLIs"
+      >
+        {machines.length === 0 ? (
+          <ResourceListState state="empty" message="No machines available." />
+        ) : listed.length === 0 ? (
+          <div
+            data-updates-summary
+            className="flex min-h-12 items-center gap-3 px-4 py-2 text-sm text-muted-foreground"
+          >
+            <span className="flex h-5 w-6 shrink-0 items-center justify-center">
+              <Icon
+                aria-hidden
+                name={summary.checking ? "Loading" : "CircleCheck"}
+                className={cn(
+                  "size-4 text-input",
+                  summary.checking && "animate-spin",
+                )}
+              />
+            </span>
+            {summary.message}
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {listed.map((machine) => {
+              const hostId = machine.host.id;
+              const tags = [
+                hostId === serverHostId ? "Server" : null,
+                machines.length > 1 && hostId === localDaemonHostId
+                  ? "This machine"
+                  : null,
+              ].filter((tag): tag is string => tag !== null);
+              return (
+                <MachineUpdateRow
+                  key={hostId}
+                  machine={machine}
+                  now={now}
+                  tags={tags}
+                  expanded={expandedHostIds.has(hostId)}
+                  retryUpdatePending={retryPendingHostId === hostId}
+                  runningJobKey={runningJobKey}
+                  queuedJobKeys={queuedJobKeys}
+                  failuresByJobKey={failuresByJobKey}
+                  onToggle={() => {
+                    setExpandedHostIds((current) => {
+                      const next = new Set(current);
+                      if (!next.delete(hostId)) {
+                        next.add(hostId);
+                      }
+                      return next;
+                    });
+                  }}
+                  onStartInstall={onStartInstall}
+                  onRetryDaemonUpdate={onRetryDaemonUpdate}
+                  onRecheckClis={onRecheckClis}
+                />
+              );
+            })}
+          </div>
+        )}
+      </SettingsSection>
+      {quiet.length === 0 ? null : (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-subtle-foreground">
+          {attention.length === 0 ? null : (
+            <span>
+              {quiet.length === 1
+                ? "1 other machine has nothing to update"
+                : `${quiet.length} other machines have nothing to update`}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-expanded={showAll}
+            className="cursor-pointer rounded-sm underline decoration-border underline-offset-4 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+            onClick={() => setShowAll((current) => !current)}
+          >
+            {showAll
+              ? attention.length === 0
+                ? "Hide machines"
+                : "Hide"
+              : attention.length === 0
+                ? "Show machines"
+                : "Show all"}
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function pluginDisplayName(item: UpdateInventoryPlugin): string {
+  return item.plugin.name ?? item.plugin.id;
+}
+
+function blockedPluginReason(
+  item: Extract<UpdateInventoryPlugin, { kind: "blocked" }>,
+): string {
+  const version = item.version;
+  return item.reasons.length === 0
+    ? `${version} isn’t compatible with this bb`
+    : `${version}: ${item.reasons.join("; ")}`;
+}
+
+function PluginUpdateRow({
+  item,
+  updating,
+  onStartUpdate,
+}: {
+  item: UpdateInventoryPlugin;
+  updating: boolean;
+  onStartUpdate: (pluginId: string) => void;
+}) {
+  const { plugin } = item;
+  const name = pluginDisplayName(item);
+  const failure =
+    item.kind === "update" ? plugin.updateState.lastFailure : null;
+  return (
+    <div
+      data-plugin-update-row={plugin.id}
+      className="grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-sm"
+    >
+      <Link
+        to={getPluginDetailRoutePath({
+          pluginId: plugin.id,
+          view: "installed",
+        })}
+        className="flex min-w-0 items-start gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="flex h-5 w-6 shrink-0 items-center justify-center">
+          <PluginIcon
+            pluginId={plugin.id}
+            icon={plugin.icon}
+            compactIconUrl={plugin.compactIconUrl}
+            className="size-4 text-muted-foreground"
+          />
+        </span>
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {name}
+          </span>
+          <RowVersions
+            current={plugin.version}
+            latest={item.kind === "update" ? item.version : null}
+          />
+          {item.kind === "blocked" ? (
+            <span className="basis-full text-2xs break-words text-subtle-foreground">
+              {blockedPluginReason(item)}
+            </span>
+          ) : null}
+        </span>
+      </Link>
+      <RowActions>
+        {updating ? (
+          <RowStateControl live state="in-progress" />
+        ) : item.kind === "blocked" ? (
+          <span className="text-2xs font-semibold text-subtle-foreground">
+            Blocked
+          </span>
+        ) : failure !== null ? (
+          <>
+            <FailureIndicator
+              reason={
+                failure.detail.length > 0
+                  ? failure.detail
+                  : `bb couldn’t activate ${failure.label} and restored ${plugin.version}.`
+              }
+            />
+            <RowStateControl
+              state="failed"
+              actionIcon={RETRY_ACTION_ICON as IconName}
+              actionLabel={`Retry ${name} update to ${item.version}`}
+              actionTooltip="Retry"
+              onClick={() => onStartUpdate(plugin.id)}
+            />
+          </>
+        ) : (
+          <RowStateControl
+            state="update-available"
+            actionLabel={`Update ${name} to ${item.version}`}
+            buttonLeading={
+              <Icon aria-hidden name={UPDATE_ACTION_ICON} className="size-3" />
+            }
+            buttonLabel="Update"
+            onClick={() => onStartUpdate(plugin.id)}
+          />
+        )}
+      </RowActions>
+    </div>
+  );
+}
+
+interface PluginUpdatesSectionProps {
+  plugins: UpdateInventoryPlugins;
+  updatingPluginIds: ReadonlySet<string>;
+  checking: boolean;
+  onStartUpdates: (pluginIds: string[]) => void;
+}
+
+export function PluginUpdatesSection({
+  plugins,
+  updatingPluginIds,
+  checking,
+  onStartUpdates,
+}: PluginUpdatesSectionProps) {
+  const remainingJobs = updatingPluginIds.size;
+  const startable = plugins.items
+    .filter((item) => item.kind === "update")
+    .map((item) => item.plugin.id);
+  const bulkActions =
+    remainingJobs === 0 && startable.length === 0 ? null : (
+      <div
+        role="toolbar"
+        aria-label="Bulk plugin update actions"
+        className="flex flex-wrap items-center justify-end gap-2"
+      >
+        <BulkUpdateProgress remainingJobs={remainingJobs} />
+        {remainingJobs > 0 ? null : (
+          <UpdateActionButton
+            label={`Update all ${startable.length} plugin${startable.length === 1 ? "" : "s"}`}
+            tooltipLabel="Update all"
+            icon={UPDATE_ACTION_ICON}
+            visibleLabel="Update all"
+            variant="default"
+            onClick={() => onStartUpdates(startable)}
+          />
+        )}
+      </div>
+    );
+  return (
+    <div data-updates-domain="plugins">
+      <SettingsSection
+        action={bulkActions}
+        actionPlacement="inline"
+        bodyClassName="overflow-hidden p-0"
+        title="Plugins"
+      >
+        {plugins.items.length === 0 ? (
+          <div
+            data-updates-summary
+            className="flex min-h-12 items-center gap-3 px-4 py-2 text-sm text-muted-foreground"
+          >
+            <span className="flex h-5 w-6 shrink-0 items-center justify-center">
+              <Icon
+                aria-hidden
+                name={checking ? "Loading" : "CircleCheck"}
+                className={cn("size-4 text-input", checking && "animate-spin")}
+              />
+            </span>
+            {checking
+              ? "Checking for updates…"
+              : plugins.trackedCount === 0
+                ? "No installed plugins track updates."
+                : plugins.trackedCount === 1
+                  ? "Nothing to update for 1 plugin."
+                  : `Nothing to update across ${plugins.trackedCount} plugins.`}
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {plugins.items.map((item) => (
+              <PluginUpdateRow
+                key={item.plugin.id}
+                item={item}
+                updating={updatingPluginIds.has(item.plugin.id)}
+                onStartUpdate={(pluginId) => onStartUpdates([pluginId])}
+              />
+            ))}
+          </div>
+        )}
+      </SettingsSection>
+    </div>
+  );
+}
+
+function desktopRowNeedsAttention(desktopInfo: BbDesktopInfo | null): boolean {
+  if (desktopInfo === null) {
+    return false;
+  }
+  if (
+    desktopInfo.updateAvailable ||
+    desktopInfo.updateDownloaded ||
+    desktopInfo.downloadState === "downloading" ||
+    desktopInfo.downloadState === "failed"
+  ) {
+    return true;
+  }
+  return (
+    desktopInfo.latestVersion === null && desktopInfo.lastCheckedAt !== null
   );
 }
 
@@ -1397,15 +2027,31 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-interface UpdatesSettingsSectionProps {
-  showChangelogPreview?: boolean;
+function resolveReleaseNotesVersion(input: ReleaseVersionInput): string | null {
+  const target = resolveReleaseUpdateVersion(input);
+  if (target !== null) {
+    return target;
+  }
+  const installed = input.isDesktop
+    ? (input.desktopInfo?.version ?? null)
+    : (input.appUpdate?.current.version ??
+      input.systemVersion?.currentVersion ??
+      null);
+  return installed !== null &&
+    (isReleaseVersion(installed) || nightlyBaseVersion(installed) !== null)
+    ? installed
+    : null;
 }
 
-export function UpdatesSettingsSection({
-  showChangelogPreview = false,
-}: UpdatesSettingsSectionProps = {}) {
+type ReleaseNotesRow = "server" | "desktop";
+
+const RELEASE_NOTES_PANEL_IDS: Record<ReleaseNotesRow, string> = {
+  server: "updates-release-notes-server",
+  desktop: "updates-release-notes-desktop",
+};
+
+export function UpdatesSettingsSection() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const inventory = useUpdateInventory();
   const { localDaemonHostId } = useHostDaemon();
   const serverPrimaryHostId = useSystemConfig().data?.primaryHostId ?? null;
@@ -1420,10 +2066,43 @@ export function UpdatesSettingsSection({
     useProviderCliInstallRunner();
   const appUpdateStatus = useAppUpdateStatus();
   const applyAppUpdate = useApplyAppUpdate();
+  const setAutoAppUpdate = useSetAutoAppUpdate();
+  const cancelScheduledAppUpdate = useCancelScheduledAppUpdate();
   const [confirmingAppUpdateThreads, setConfirmingAppUpdateThreads] = useState<
     number | null
   >(null);
   const appUpdate = appUpdateStatus.data;
+  const [openReleaseNotes, setOpenReleaseNotes] =
+    useState<ReleaseNotesRow | null>(null);
+  const pluginUpdateCheck = usePluginUpdateCheck(null, {
+    enabled: inventory.plugins !== null,
+  });
+  const updatingPluginIds = new Set(
+    (usePluginUpdateJobs().data ?? [])
+      .filter(isActivePluginUpdateJob)
+      .map((job) => job.pluginId),
+  );
+
+  function startPluginUpdates(pluginIds: readonly string[]): void {
+    for (const pluginId of pluginIds) {
+      const item = inventory.plugins?.items.find(
+        (candidate) => candidate.plugin.id === pluginId,
+      );
+      const name = item === undefined ? pluginId : pluginDisplayName(item);
+      void startPluginUpdate(pluginId).then(
+        (job) => applyPluginUpdateJob({ queryClient, job }),
+        (error: unknown) => {
+          appToast.error("Plugin update failed", {
+            description: `${name} — ${pluginAdminErrorMessage(error)}`,
+          });
+        },
+      );
+    }
+  }
+  const experiments = useSystemConfig().data?.experiments;
+  const updateWhenIdleEnabled = experiments?.updateWhenIdle === true;
+  const threadsResumeAfterRestart =
+    experiments?.resumeThreadsAfterRestart === true;
 
   function startAppUpdate(): void {
     const runningThreadCount = appUpdate?.runningThreadCount ?? 0;
@@ -1442,53 +2121,32 @@ export function UpdatesSettingsSection({
     );
   }
 
-  const visibleProviderIssues: {
-    hostId: string;
-    issue: ProviderCliIssue;
-  }[] = inventory.machines.flatMap((machine) =>
-    visibleProviderUpdateIssues(machine).map((issue) => ({
-      hostId: machine.host.id,
-      issue,
-    })),
-  );
-  const actionableIssues = visibleProviderIssues
-    .filter(
-      (
-        entry,
-      ): entry is {
-        hostId: string;
-        issue: ProviderCliActionableIssue;
-      } => hasProviderCliAction(entry.issue),
-    )
-    .filter(({ hostId, issue }) => {
-      const jobKey = providerCliJobKey(hostId, issue.provider);
-      return runningJobKey !== jobKey && !queuedJobKeys.has(jobKey);
-    });
-
   const connectedHostIds = inventory.machines
     .filter((machine) => machine.host.status === "connected")
     .map((machine) => machine.host.id);
 
   function handleCheckForUpdates(): void {
     startAppUpdateCheck(async () => {
-      const [appCheck, appUpdateCheck] = await Promise.allSettled([
-        desktopApi !== null
-          ? desktopApi.checkForUpdates().then(() => null)
-          : sdk.system.version({ force: true }),
-        sdk.system.appUpdate({ force: true }),
-      ]);
+      const [appCheck, appUpdateCheck, desktopCheck] = await Promise.allSettled(
+        [
+          sdk.system.version({ force: true }),
+          sdk.system.appUpdate({ force: true }),
+          desktopApi?.checkForUpdates(),
+        ],
+      );
       if (appUpdateCheck.status === "fulfilled") {
         hydrateAppUpdateStatus({ queryClient, status: appUpdateCheck.value });
       }
       if (appCheck.status === "rejected") {
         throw appCheck.reason;
       }
-      if (appCheck.value !== null) {
-        hydrateSystemVersionCache({ queryClient, version: appCheck.value });
+      hydrateSystemVersionCache({ queryClient, version: appCheck.value });
+      if (desktopCheck.status === "rejected") {
+        throw desktopCheck.reason;
       }
       await Promise.all(
         connectedHostIds.map((hostId) =>
-          invalidateHostProviderCliStatus({ queryClient, hostId }),
+          refreshHostProviderCliStatus({ queryClient, hostId }),
         ),
       );
     });
@@ -1509,40 +2167,30 @@ export function UpdatesSettingsSection({
     desktopInfo?.updateAvailable === true ||
     inventory.systemVersion?.updateAvailable === true ||
     inventory.appUpdateAvailable ||
-    (appUpdate?.support.kind === "supported" &&
+    ((appUpdate?.support.kind === "supported" ||
+      appUpdate?.desktopUpdateSupported === true) &&
       (appUpdate.available !== null ||
         appUpdate.activity.phase !== "idle" ||
         pendingAppUpdateResult(appUpdate) !== null));
   const relevantFleetMachines = inventory.machines.filter(
     machineHasRelevantHealthStatus,
   );
-  const stalledMachines = relevantFleetMachines.filter(
-    (machine) =>
-      machine.canRetryDaemonUpdate && hostUpdateIsStalled(machine.host, now),
+  const hasStalledMachine = relevantFleetMachines.some(
+    (machine) => machineDaemonState(machine, now) === "stalled",
   );
-  const appMachine =
-    inventory.machines.find((machine) => machine.isPrimary) ??
-    inventory.machines[0] ??
-    null;
+  const hasProviderUpdates = inventory.machines.some(
+    (machine) => visibleProviderUpdateIssues(machine).length > 0,
+  );
   const serverRunsSeparately =
-    isDesktop && appUpdate !== undefined && !isDesktopOwnedServer(appUpdate);
-  const desktopClientHostId =
-    serverRunsSeparately &&
-    localDaemonHostId !== null &&
-    inventory.machines.some((machine) => machine.host.id === localDaemonHostId)
-      ? localDaemonHostId
-      : null;
-  const visibleMachines = inventory.machines.filter(
-    (machine) =>
-      machine.host.id === appMachine?.host.id ||
-      machine.host.id === desktopClientHostId ||
-      machineHasRelevantHealthStatus(machine) ||
-      visibleInstalledProviderEntries(machine).length > 0,
-  );
+    isDesktop &&
+    !(
+      appUpdate !== undefined &&
+      isDesktopOwnedServer(appUpdate) &&
+      localDaemonHostId !== null &&
+      localDaemonHostId === serverPrimaryHostId
+    );
   const hasUpdateWork =
-    appUpdateVisible ||
-    visibleProviderIssues.length > 0 ||
-    stalledMachines.length > 0;
+    appUpdateVisible || hasProviderUpdates || hasStalledMachine;
   const fleetIsHealthy = relevantFleetMachines.length === 0;
   const showFallbackBbStatus =
     !hasUpdateWork && !fleetIsHealthy && isDesktop && desktopInfo === null;
@@ -1567,44 +2215,88 @@ export function UpdatesSettingsSection({
             });
           });
         };
-  const appRow = (
-    <BbAppUpdateRows
-      systemVersion={inventory.systemVersion}
-      appUpdate={desktopInfo === null ? appUpdate : undefined}
-      applyPending={applyAppUpdate.isPending}
-      desktopInfo={desktopInfo}
-      isDesktop={isDesktop}
-      isChecking={isChecking}
-      onApplyAppUpdate={startAppUpdate}
-      onShowAppUpdateResult={openAppUpdateResultDetails}
-      onRelaunchDesktop={relaunchDesktop}
-      onRetryDesktop={retryDesktop}
-    />
-  );
+  const useServerUpdate =
+    serverRunsSeparately || appUpdate?.desktopUpdateSupported === true;
+  const releaseNotesVersion = resolveReleaseNotesVersion({
+    isDesktop: !useServerUpdate && isDesktop,
+    desktopInfo: useServerUpdate ? null : desktopInfo,
+    appUpdate,
+    systemVersion: inventory.systemVersion,
+  });
+  const serverSourceUpdate = resolveSourceUpdateNotes(appUpdate);
+  const releaseNotesVersions: Record<ReleaseNotesRow, string | null> = {
+    server:
+      inventory.systemVersion?.installKind === "source" &&
+      serverSourceUpdate === null
+        ? null
+        : releaseNotesVersion,
+    desktop: resolveReleaseNotesVersion({
+      isDesktop: true,
+      desktopInfo,
+      appUpdate: undefined,
+      systemVersion: undefined,
+    }),
+  };
+  function releaseNotesToggle(row: ReleaseNotesRow): ReleaseNotesToggle | null {
+    const version = releaseNotesVersions[row];
+    if (version === null) {
+      return null;
+    }
+    const expanded = openReleaseNotes === row;
+    return {
+      version,
+      panelId: RELEASE_NOTES_PANEL_IDS[row],
+      expanded,
+      onToggle: () => {
+        setOpenReleaseNotes(expanded ? null : row);
+        if (!expanded) {
+          recordReleaseNotesOpened(version, "inline");
+        }
+      },
+    };
+  }
+  function releaseNotesPanel(row: ReleaseNotesRow): ReactNode {
+    const version = releaseNotesVersions[row];
+    return openReleaseNotes === row && version !== null ? (
+      <ReleaseNotesPanel
+        id={RELEASE_NOTES_PANEL_IDS[row]}
+        version={version}
+        sourceUpdate={row === "server" ? serverSourceUpdate : null}
+      />
+    ) : null;
+  }
   const serverAppRow = (
     <BbAppUpdateRows
-      name="bb server"
+      name="Server"
       systemVersion={inventory.systemVersion}
-      appUpdate={appUpdate}
+      appUpdate={
+        useServerUpdate || desktopInfo === null ? appUpdate : undefined
+      }
       applyPending={applyAppUpdate.isPending}
-      desktopInfo={null}
-      isDesktop={false}
+      cancelScheduledPending={cancelScheduledAppUpdate.isPending}
+      desktopInfo={useServerUpdate ? null : desktopInfo}
+      isDesktop={!useServerUpdate && isDesktop}
       isChecking={isChecking}
       onApplyAppUpdate={startAppUpdate}
+      onCancelScheduledAppUpdate={() => cancelScheduledAppUpdate.mutate()}
+      onRetryAppCheck={handleCheckForUpdates}
       onShowAppUpdateResult={openAppUpdateResultDetails}
-      onRelaunchDesktop={null}
-      onRetryDesktop={null}
+      onRelaunchDesktop={useServerUpdate ? null : relaunchDesktop}
+      onRetryDesktop={useServerUpdate ? null : retryDesktop}
+      releaseNotes={releaseNotesToggle("server")}
     />
   );
   const desktopClientRow = (
     <BbAppUpdateRows
-      name="bb desktop"
+      name="Desktop"
       systemVersion={undefined}
       desktopInfo={desktopInfo}
       isDesktop={isDesktop}
       isChecking={isChecking}
+      onRetryAppCheck={handleCheckForUpdates}
       onRelaunchDesktop={relaunchDesktop}
       onRetryDesktop={retryDesktop}
+      releaseNotes={releaseNotesToggle("desktop")}
     />
   );
 
@@ -1621,148 +2313,70 @@ export function UpdatesSettingsSection({
     });
   }
 
-  function retryAllStalledDaemonUpdates(): void {
-    for (const machine of stalledMachines) {
-      retryHostUpdate.mutate(machine.host.id);
+  function retryAllStalledDaemonUpdates(hostIds: string[]): void {
+    for (const hostId of hostIds) {
+      retryHostUpdate.mutate(hostId);
     }
-    appToast.success(
-      `Retrying the update on ${stalledMachines.length} machines`,
-    );
+    appToast.success(`Retrying the update on ${hostIds.length} machines`);
   }
-
-  const updateAllButton =
-    actionableIssues.length > 1 ? (
-      <UpdateActionButton
-        label={`Update all ${actionableIssues.length} CLI tools`}
-        tooltipLabel="Update all"
-        icon={UPDATE_ACTION_ICON}
-        visibleLabel="Update all"
-        variant="default"
-        onClick={() => {
-          for (const { hostId, issue } of actionableIssues) {
-            startInstall({ hostId, issue });
-          }
-        }}
-      />
-    ) : null;
-  const retryAllButton =
-    stalledMachines.length > BULK_RETRY_THRESHOLD ? (
-      <UpdateActionButton
-        label={`Update all ${stalledMachines.length} machines now`}
-        visibleLabel="Retry all"
-        icon="RotateCcw"
-        iconPosition="end"
-        variant="default"
-        className="font-medium"
-        onClick={retryAllStalledDaemonUpdates}
-      />
-    ) : null;
-  const bulkActions =
-    retryAllButton !== null || updateAllButton !== null ? (
-      <div
-        role="toolbar"
-        aria-label="Bulk update actions"
-        className="flex flex-wrap items-center justify-end gap-2"
-      >
-        {retryAllButton}
-        {updateAllButton}
-      </div>
-    ) : null;
 
   return (
     <div className="space-y-6">
-      {showChangelogPreview ? <ChangelogPreviewCard /> : null}
-
-      <MachineUpdatesFleetSection action={bulkActions}>
-        {serverRunsSeparately && desktopClientHostId === null ? (
-          <div data-updates-device="desktop">
-            <SettingsSection
-              title={
-                <span className="flex min-w-0 items-center gap-2">
-                  <Icon
-                    name="Laptop"
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <span className="truncate">This device</span>
-                </span>
-              }
-            >
-              <SettingsRowList>{desktopClientRow}</SettingsRowList>
-            </SettingsSection>
-          </div>
+      <BbUpdatesCard>
+        {serverRunsSeparately && desktopRowNeedsAttention(desktopInfo) ? (
+          <>
+            {desktopClientRow}
+            {releaseNotesPanel("desktop")}
+          </>
         ) : null}
-        {visibleMachines.length === 0 ? (
-          <ResourceListState state="empty" message="No machines available." />
-        ) : (
-          visibleMachines.map((machine) => {
-            const ownsApp = machine.host.id === appMachine?.host.id;
-            const showDaemon =
-              machine.canRetryDaemonUpdate ||
-              machine.host.status !== "connected";
-            return (
-              <MachineUpdatesSection
-                key={machine.host.id}
-                machine={machine}
-                isThisMachine={
-                  inventory.machines.length > 1 &&
-                  machine.host.id === localDaemonHostId
-                }
-                showServerBadge={machine.host.id === serverPrimaryHostId}
-              >
-                {ownsApp
-                  ? serverRunsSeparately
-                    ? serverAppRow
-                    : appRow
-                  : null}
-                {machine.host.id === desktopClientHostId
-                  ? desktopClientRow
-                  : null}
-                {showDaemon ? (
-                  <BbDaemonUpdateRow
-                    machine={machine}
-                    now={now}
-                    retryUpdatePending={
-                      retryHostUpdate.isPending &&
-                      retryHostUpdate.variables === machine.host.id
-                    }
-                    onRetryDaemonUpdate={retryDaemonUpdate}
-                    onOpenMachine={(hostId) =>
-                      navigate(getSettingsMachineRoutePath(hostId))
-                    }
-                  />
-                ) : null}
-                {machine.statusError ? (
-                  <ProviderCliCheckRow
-                    machine={machine}
-                    onRecheckClis={(hostId) => {
-                      void invalidateHostProviderCliStatus({
-                        queryClient,
-                        hostId,
-                      });
-                    }}
-                    onOpenMachine={(hostId) =>
-                      navigate(getSettingsMachineRoutePath(hostId))
-                    }
-                  />
-                ) : null}
-                <MachineUpdatesRows
-                  machine={machine}
-                  runningJobKey={runningJobKey}
-                  queuedJobKeys={queuedJobKeys}
-                  failuresByJobKey={failuresByJobKey}
-                  onStartInstall={(hostId, issue) =>
-                    startInstall({ hostId, issue })
-                  }
-                  onOpenProvider={() =>
-                    navigate(getSettingsRoutePath("providers"))
-                  }
-                />
-              </MachineUpdatesSection>
-            );
-          })
-        )}
-      </MachineUpdatesFleetSection>
+        {serverAppRow}
+        {releaseNotesPanel("server")}
+        {updateWhenIdleEnabled &&
+        appUpdate !== undefined &&
+        (appUpdate.support.kind === "supported" ||
+          appUpdate.desktopUpdateSupported === true) ? (
+          <AutoAppUpdateSetting
+            label={
+              serverRunsSeparately
+                ? "Restart and update the server automatically"
+                : "Restart and update bb automatically"
+            }
+            checked={
+              setAutoAppUpdate.isPending
+                ? (setAutoAppUpdate.variables ?? appUpdate.autoUpdate)
+                : appUpdate.autoUpdate
+            }
+            onCheckedChange={(enabled) => setAutoAppUpdate.mutate(enabled)}
+          />
+        ) : null}
+      </BbUpdatesCard>
+
+      <ProviderCliUpdatesSection
+        machines={inventory.machines}
+        now={now}
+        localDaemonHostId={localDaemonHostId}
+        serverHostId={serverPrimaryHostId}
+        retryPendingHostId={
+          retryHostUpdate.isPending ? (retryHostUpdate.variables ?? null) : null
+        }
+        runningJobKey={runningJobKey}
+        queuedJobKeys={queuedJobKeys}
+        failuresByJobKey={failuresByJobKey}
+        onStartInstall={(hostId, issue) => startInstall({ hostId, issue })}
+        onRetryDaemonUpdate={retryDaemonUpdate}
+        onRetryAllDaemonUpdates={retryAllStalledDaemonUpdates}
+        onRecheckClis={(hostId) => {
+          void refreshHostProviderCliStatus({ queryClient, hostId });
+        }}
+      />
+      {inventory.plugins === null ? null : (
+        <PluginUpdatesSection
+          plugins={inventory.plugins}
+          updatingPluginIds={updatingPluginIds}
+          checking={pluginUpdateCheck.isFetching}
+          onStartUpdates={startPluginUpdates}
+        />
+      )}
       <ConfirmDeleteDialog
         open={confirmingAppUpdateThreads !== null}
         onOpenChange={(open) => {
@@ -1771,7 +2385,10 @@ export function UpdatesSettingsSection({
       >
         <ConfirmDeleteDialogContent
           title="Update bb now?"
-          description={runningThreadsWarning(confirmingAppUpdateThreads ?? 0)}
+          description={runningThreadsWarning(
+            confirmingAppUpdateThreads ?? 0,
+            threadsResumeAfterRestart,
+          )}
           confirmLabel="Update and restart"
           pending={applyAppUpdate.isPending}
           onCancel={() => setConfirmingAppUpdateThreads(null)}

@@ -1,12 +1,17 @@
-import { drizzle } from "drizzle-orm/d1";
 import { escapeHtmlText } from "@bb/text-utils";
 import {
+  GATE_OAUTH_AUTH_KIND,
+  GATE_OAUTH_CLIENT_HEADER,
+  GATE_OAUTH_GRANT_HEADER,
+  GATE_OAUTH_SCOPE_HEADER,
+  MCP_LOCAL_PATH,
+  MCP_PUBLIC_PATH,
   RESERVED_HANDLES,
   handleAppLinkAssociationRequest,
   parseVisitorHost,
-  schema,
   sha256Hex,
 } from "@bb/connect-db";
+import { openGateDb } from "./connect-db.js";
 import {
   getSetCookies,
   refreshAccountSessionCookies,
@@ -15,6 +20,7 @@ import {
   TUNNEL_OFFLINE_HEADER,
   TUNNEL_RESTART_REASON,
   TunnelDO,
+  tunnelOwnerKey,
   type Env,
 } from "./tunnel-do.js";
 import {
@@ -36,6 +42,11 @@ import {
   verifyDesktopSessionCookie,
 } from "./desktop-session.js";
 import { serveWithCache } from "./cache.js";
+import {
+  withGateDeadline,
+  type GateDelay,
+  type GateProgress,
+} from "./gate-deadline.js";
 import { BB_ICON_DATA_URI } from "./bb-icon.js";
 import { handleAssignMachineLabel } from "./machine-label.js";
 import {
@@ -48,6 +59,7 @@ import {
 import {
   GATE_AUTH_HEADER,
   GATE_MACHINE_ID_HEADER,
+  GATE_OWNER_HEADER,
   MACHINE_CREDENTIAL_HEADER,
   RELAY_CONTENT_LENGTH_HEADER,
   RELAY_HAS_BODY_HEADER,
@@ -60,6 +72,36 @@ import {
   isWorkerHeldResponse,
   workerHeldResponsesEnabled,
 } from "./relay.js";
+import {
+  RESP_HEAD_MAX_WAIT_MS,
+  RESP_HEAD_TIMEOUT_MS,
+} from "./response-head-timeout.js";
+import {
+  authorizeMcpToken,
+  isMcpLocalPath,
+  isMcpProtectedResourceMetadataPath,
+  mcpChallengeResponse,
+  mcpProtectedResourceMetadataResponse,
+  readBearerToken,
+  type McpForwardAuth,
+} from "./mcp-gate.js";
+import {
+  readTunnelLiveness,
+  tunnelServing,
+  type TunnelLiveness,
+} from "./tunnel-liveness.js";
+import {
+  handleGatePresence,
+  handleGatePresenceBatch,
+  handleGateResolve,
+  handleGateResolveBatch,
+} from "./gate-api.js";
+import {
+  GATE_PRESENCE_BATCH_PATH,
+  GATE_PRESENCE_PATH,
+  GATE_RESOLVE_BATCH_PATH,
+  GATE_RESOLVE_PATH,
+} from "@bb/tunnel-contract/next";
 
 export { TunnelDO };
 
@@ -295,6 +337,8 @@ async function fetchTunnelDo(
   routingKey: string,
   request: Request,
   transport: "direct" | "relay-when-enabled",
+  progress: GateProgress,
+  signal: AbortSignal,
 ): Promise<Response> {
   const replayable = REPLAYABLE_TUNNEL_METHODS.has(request.method);
   const relay =
@@ -303,12 +347,16 @@ async function fetchTunnelDo(
     request.headers.get("upgrade")?.toLowerCase() !== "websocket";
   for (let attempt = 0; ; attempt += 1) {
     const stub = env.TUNNEL_DO.get(env.TUNNEL_DO.idFromName(routingKey));
+    progress.stage = "tunnel-object";
+    progress.tunnelObjectAttempts += 1;
     try {
-      if (relay) {
-        const relayed = await fetchThroughRelay(stub, request);
-        if (relayed !== null) return relayed;
-      }
-      return await stub.fetch(replayable ? new Request(request) : request);
+      const response =
+        (relay
+          ? await fetchThroughRelay(stub, request, progress, signal)
+          : null) ??
+        (await stub.fetch(replayable ? new Request(request) : request));
+      progress.stage = "finishing";
+      return response;
     } catch (error) {
       const delayMs = TUNNEL_DO_RETRY_DELAYS_MS[attempt];
       if (
@@ -326,15 +374,20 @@ async function fetchTunnelDo(
 export function requestForTunnelDo(
   request: Request,
   target: string | null,
-  authKind?: "machine" | "session",
+  authKind?: "machine" | "session" | typeof GATE_OAUTH_AUTH_KIND,
   machineId?: string,
+  oauth?: McpForwardAuth,
 ): Request {
   const headers = new Headers(request.headers);
   stripPlatformCookies(headers);
+  headers.delete(GATE_OAUTH_SCOPE_HEADER);
+  headers.delete(GATE_OAUTH_GRANT_HEADER);
+  headers.delete(GATE_OAUTH_CLIENT_HEADER);
   headers.delete(TUNNEL_TARGET_HEADER);
   headers.delete(MACHINE_CREDENTIAL_HEADER);
   headers.delete(GATE_AUTH_HEADER);
   headers.delete(GATE_MACHINE_ID_HEADER);
+  headers.delete(GATE_OWNER_HEADER);
   headers.delete(RELAY_HEADER);
   headers.delete(RELAY_METHOD_HEADER);
   headers.delete(RELAY_HAS_BODY_HEADER);
@@ -349,7 +402,29 @@ export function requestForTunnelDo(
   if (machineId !== undefined) {
     headers.set(GATE_MACHINE_ID_HEADER, machineId);
   }
+  if (oauth !== undefined) {
+    headers.delete("authorization");
+    headers.delete("cookie");
+    headers.set(GATE_OAUTH_SCOPE_HEADER, oauth.scope);
+    headers.set(GATE_OAUTH_GRANT_HEADER, oauth.grantId);
+    headers.set(GATE_OAUTH_CLIENT_HEADER, oauth.clientName);
+  }
   return new Request(request, { headers });
+}
+
+export function mcpRequestForTunnelDo(
+  request: Request,
+  oauth: McpForwardAuth,
+): Request {
+  const forward = new URL(request.url);
+  forward.pathname = MCP_LOCAL_PATH;
+  return requestForTunnelDo(
+    new Request(forward, request),
+    null,
+    GATE_OAUTH_AUTH_KIND,
+    undefined,
+    oauth,
+  );
 }
 
 function isHostManagementMutation(request: Request, pathname: string): boolean {
@@ -402,23 +477,44 @@ const gate = {
     request: Request,
     env: Env,
     ctx: ExecutionContext,
+    progress: GateProgress,
+    signal: AbortSignal,
   ): Promise<Response> {
     const runtime = resolveConnectRuntime(env);
     const url = resolveConnectRequestUrl(request.url, request.headers, runtime);
-    if (url.pathname === "/api/connect/servers") {
-      return handleListAccountServers(request, env);
-    }
-    if (url.pathname === "/api/connect/disconnect") {
-      return handleDisconnectServer(request, env);
-    }
-    if (url.pathname === "/api/connect/desktop-session") {
-      return handleCreateDesktopSession(request, env);
-    }
-    if (url.pathname === "/api/connect/machine-label") {
-      return handleAssignMachineLabel(request, env);
-    }
     const host = resolveConnectRequestHost(request.headers, runtime);
     const parsed = parseVisitorHost(host, env.BASE_DOMAIN);
+    if (
+      parsed === null ||
+      (parsed.target === null && RESERVED_HANDLES.has(parsed.handle))
+    ) {
+      if (url.pathname === GATE_RESOLVE_PATH) {
+        return handleGateResolve(request, env, ctx);
+      }
+      if (url.pathname === GATE_PRESENCE_PATH) {
+        return handleGatePresence(request, env);
+      }
+      if (url.pathname === GATE_RESOLVE_BATCH_PATH) {
+        return handleGateResolveBatch(request, env, ctx);
+      }
+      if (url.pathname === GATE_PRESENCE_BATCH_PATH) {
+        return handleGatePresenceBatch(request, env);
+      }
+    }
+    if (parsed === null || parsed.target === null) {
+      if (url.pathname === "/api/connect/servers") {
+        return handleListAccountServers(request, env);
+      }
+      if (url.pathname === "/api/connect/disconnect") {
+        return handleDisconnectServer(request, env);
+      }
+      if (url.pathname === "/api/connect/desktop-session") {
+        return handleCreateDesktopSession(request, env);
+      }
+      if (url.pathname === "/api/connect/machine-label") {
+        return handleAssignMachineLabel(request, env);
+      }
+    }
     if (!parsed) return text("bb connect: unknown host\n", 404);
     if (parsed.target === null) {
       const appLinks = handleAppLinkAssociationRequest(
@@ -435,7 +531,7 @@ const gate = {
       );
     }
 
-    const db = drizzle(env.DB, { schema });
+    const { db } = openGateDb(env);
     const isTunnelDial = url.pathname === "/__tunnel";
     const resolved = await resolveLabel(
       label,
@@ -446,8 +542,23 @@ const gate = {
 
     const routingKey =
       resolved.kind === "machine" ? resolved.routingKey : label;
-    const tunnelDo = (doRequest: Request) =>
-      fetchTunnelDo(env, routingKey, doRequest, "relay-when-enabled");
+    progress.routingKey = routingKey;
+    const tunnelOwner =
+      resolved.kind === "machine"
+        ? tunnelOwnerKey("machine", resolved.machine.id)
+        : tunnelOwnerKey("server", resolved.server.id);
+    const tunnelDo = (doRequest: Request) => {
+      const headers = new Headers(doRequest.headers);
+      headers.set(GATE_OWNER_HEADER, tunnelOwner);
+      return fetchTunnelDo(
+        env,
+        routingKey,
+        new Request(doRequest, { headers }),
+        "relay-when-enabled",
+        progress,
+        signal,
+      );
+    };
 
     if (isTunnelDial) {
       if (target !== null) return text("bb connect: not found\n", 404);
@@ -482,6 +593,8 @@ const gate = {
         routingKey,
         new Request(new Request(forward, request), { headers }),
         "direct",
+        progress,
+        signal,
       );
     }
 
@@ -490,6 +603,45 @@ const gate = {
 
     if (resolved.kind === "machine" && target === null) {
       return machinePage(label, resolved.accountHandle, runtime);
+    }
+
+    if (resolved.kind === "server" && target === null) {
+      if (isMcpLocalPath(url.pathname)) {
+        return text("bb connect: not found\n", 404);
+      }
+      if (isMcpProtectedResourceMetadataPath(url.pathname)) {
+        if (resolved.server.revokedAt != null) {
+          return text("bb connect: not found\n", 404);
+        }
+        if (request.method === "GET" || request.method === "HEAD") {
+          return mcpProtectedResourceMetadataResponse(
+            url.origin,
+            runtime.accountAppUrl,
+          );
+        }
+      }
+      if (url.pathname === MCP_PUBLIC_PATH) {
+        const token = readBearerToken(request.headers);
+        if (token === null) return mcpChallengeResponse(url.origin, null);
+        const authorization = await authorizeMcpToken(token, {
+          origin: url.origin,
+          userId: resolved.userId,
+          server: resolved.server,
+          secret: env.BETTER_AUTH_SECRET,
+          db,
+        });
+        if (authorization === null) {
+          return mcpChallengeResponse(url.origin, "invalid_token");
+        }
+        if (authorization.recordUse !== null) {
+          ctx.waitUntil(authorization.recordUse());
+        }
+        return responseForVisitor(
+          await tunnelDo(mcpRequestForTunnelDo(request, authorization.forward)),
+          null,
+          [],
+        );
+      }
     }
 
     const isPublicInstallPath =
@@ -528,7 +680,7 @@ const gate = {
       if (isHostManagementMutation(request, url.pathname)) {
         return text("bb connect: machine cannot manage hosts\n", 403);
       }
-      ctx.waitUntil(markMachineSeen(verified.machineId, db));
+      ctx.waitUntil(markMachineSeen(verified, db));
       return responseForVisitor(
         await tunnelDo(
           requestForTunnelDo(request, null, "machine", verified.machineId),
@@ -635,19 +787,95 @@ const gate = {
   },
 };
 
+const SLOW_TUNNEL_DIAL_MS = 3_000;
+
+const TUNNEL_STATUS_TIMEOUT_MS = 2_000;
+
+function writeGateDelay(
+  env: Env,
+  delay: GateDelay,
+  tunnel: TunnelLiveness | null,
+): void {
+  console.error(`bb connect: request ${delay.kind}`, { ...delay, tunnel });
+  env.GATE_EVENTS.writeDataPoint({
+    indexes: [delay.host],
+    blobs: [
+      delay.kind,
+      delay.stage,
+      delay.method,
+      delay.host,
+      delay.path,
+      tunnel?.state ?? "",
+    ],
+    doubles: [
+      delay.elapsedMs,
+      delay.tunnelObjectAttempts,
+      tunnel?.state === "connected" ? (tunnel.lastHeartbeatAgeMs ?? -1) : -1,
+    ],
+  });
+}
+
+function recordGateDelay(
+  env: Env,
+  ctx: ExecutionContext,
+  delay: GateDelay,
+  routingKey: string | null,
+): void {
+  if (
+    delay.kind === "slow" ||
+    delay.tunnelObjectAttempts === 0 ||
+    routingKey === null
+  ) {
+    writeGateDelay(env, delay, null);
+    return;
+  }
+  ctx.waitUntil(
+    readTunnelLiveness(
+      env.TUNNEL_DO,
+      routingKey,
+      TUNNEL_STATUS_TIMEOUT_MS,
+    ).then((tunnel) => writeGateDelay(env, delay, tunnel)),
+  );
+}
+
 export default {
   async fetch(
     request: Request,
     env: Env,
     ctx: ExecutionContext,
   ): Promise<Response> {
+    const progress: GateProgress = {
+      stage: "routing",
+      tunnelObjectAttempts: 0,
+      routingKey: null,
+    };
+    const requestUrl = new URL(request.url);
     try {
-      return await gate.fetch(request, env, ctx);
+      return await withGateDeadline({
+        request,
+        deadlineMs: RESP_HEAD_TIMEOUT_MS,
+        maxWaitMs: RESP_HEAD_MAX_WAIT_MS,
+        slowAfterMs:
+          requestUrl.pathname === "/__tunnel" ? SLOW_TUNNEL_DIAL_MS : null,
+        progress,
+        run: (signal) => gate.fetch(request, env, ctx, progress, signal),
+        tunnelServing: async () =>
+          progress.routingKey !== null &&
+          tunnelServing(
+            await readTunnelLiveness(
+              env.TUNNEL_DO,
+              progress.routingKey,
+              TUNNEL_STATUS_TIMEOUT_MS,
+            ),
+          ),
+        onDelay: (delay) =>
+          recordGateDelay(env, ctx, delay, progress.routingKey),
+      });
     } catch (error) {
       console.error("bb connect: request failed", {
         method: request.method,
         path: new URL(request.url).pathname,
-        error,
+        error: String(error),
       });
       return gateErrorResponse(request);
     }

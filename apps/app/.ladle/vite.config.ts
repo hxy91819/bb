@@ -18,6 +18,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   cacheDir: "node_modules/.vite/ladle",
+  build: { target: "esnext" },
   worker: {
     format: "es",
   },
@@ -25,7 +26,6 @@ export default defineConfig({
     conditions: ["source"],
     dedupe: ["react", "react-dom"],
     alias: {
-      "@get-bb/plugin-sdk/app": path.resolve(__dirname, "./plugin-sdk-app.ts"),
       "@": path.resolve(__dirname, "../src"),
     },
   },

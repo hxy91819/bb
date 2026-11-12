@@ -16,6 +16,7 @@ export interface StoredPromptHistoryEntryRow {
   input: string;
   projectId: string;
   requestSequence: number;
+  scope: PromptHistoryScope;
   threadId: string;
 }
 
@@ -25,6 +26,7 @@ const storedPromptHistoryEntryColumns = {
   input: promptHistoryEntries.input,
   projectId: promptHistoryEntries.projectId,
   requestSequence: promptHistoryEntries.requestSequence,
+  scope: promptHistoryEntries.scope,
   threadId: promptHistoryEntries.threadId,
 };
 
@@ -59,6 +61,10 @@ export interface ListPromptHistoryPageArgs {
   before: PromptHistoryPosition | null;
   limit: number;
 }
+
+export const PROMPT_HISTORY_ENTRY_MAX_BYTES = 256 * 1024;
+
+const promptHistoryEntryWithinSizeLimit = sql`octet_length(${promptHistoryEntries.input}) <= ${PROMPT_HISTORY_ENTRY_MAX_BYTES}`;
 
 function rawPromptHistoryRowLimit(limit: number): number {
   return Math.min(
@@ -110,6 +116,7 @@ export function listStoredProjectPromptHistoryRows(
         eq(promptHistoryEntries.projectId, args.projectId),
         eq(promptHistoryEntries.scope, "project"),
         isNull(threads.deletedAt),
+        promptHistoryEntryWithinSizeLimit,
       ),
     )
     .orderBy(
@@ -132,6 +139,7 @@ export function listStoredThreadPromptHistoryRows(
       and(
         eq(promptHistoryEntries.threadId, args.threadId),
         eq(promptHistoryEntries.scope, "thread"),
+        promptHistoryEntryWithinSizeLimit,
       ),
     )
     .orderBy(
@@ -152,9 +160,12 @@ export function listPromptHistoryPage(
     .select(storedPromptHistoryEntryColumns)
     .from(promptHistoryEntries)
     .where(
-      before === null
-        ? undefined
-        : sql`(${promptHistoryEntries.createdAt}, ${promptHistoryEntries.requestSequence}, ${promptHistoryEntries.id}) < (${before.createdAt}, ${before.requestSequence}, ${before.id})`,
+      and(
+        promptHistoryEntryWithinSizeLimit,
+        before === null
+          ? undefined
+          : sql`(${promptHistoryEntries.createdAt}, ${promptHistoryEntries.requestSequence}, ${promptHistoryEntries.id}) < (${before.createdAt}, ${before.requestSequence}, ${before.id})`,
+      ),
     )
     .orderBy(
       desc(promptHistoryEntries.createdAt),

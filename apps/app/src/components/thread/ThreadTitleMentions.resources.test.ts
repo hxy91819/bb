@@ -3,6 +3,7 @@ import { makeThreadListEntry } from "@bb/test-helpers/domain-fixtures";
 import {
   buildThreadTitleMentionResources,
   EMPTY_TITLE_MENTION_RESOURCES,
+  resolveThreadTitleDisplayText,
   type ThreadTitleMentionNavigationSource,
 } from "./ThreadTitleMentions";
 
@@ -94,4 +95,53 @@ describe("buildThreadTitleMentionResources", () => {
       ),
     ).toBe(EMPTY_TITLE_MENTION_RESOURCES);
   });
+});
+
+describe("resolveThreadTitleDisplayText", () => {
+  const rawId = "thr_dcwivn5n8w";
+
+  function resourcesWithThread(title: string) {
+    return {
+      ...EMPTY_TITLE_MENTION_RESOURCES,
+      threadById: new Map([
+        [
+          rawId,
+          makeThreadListEntry({
+            id: rawId,
+            projectId: "proj_target",
+            title,
+            titleFallback: title,
+          }),
+        ],
+      ]),
+    };
+  }
+
+  it.each([
+    [
+      "mid-title",
+      `Continue from ${rawId} docs/foo.ts`,
+      "Continue from Raw title target docs/foo.ts",
+    ],
+    [
+      "before a straight closing quote",
+      `Review "${rawId}."`,
+      'Review "Raw title target."',
+    ],
+    [
+      "before a curly closing quote",
+      `Review \u201c${rawId}.\u201d`,
+      "Review \u201cRaw title target.\u201d",
+    ],
+  ])(
+    "shows a known raw thread id %s as its title",
+    (_label, title, expected) => {
+      expect(
+        resolveThreadTitleDisplayText(
+          title,
+          resourcesWithThread("Raw title target"),
+        ),
+      ).toBe(expected);
+    },
+  );
 });

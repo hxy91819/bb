@@ -32,7 +32,7 @@ vi.mock("@/lib/sdk", () => ({
     hosts: { list: vi.fn().mockResolvedValue([]) },
     system: {
       config: vi.fn().mockResolvedValue({ primaryHostId: null }),
-      executionOptions: vi.fn(),
+      executionOptions: vi.fn(() => new Promise<never>(() => undefined)),
     },
   },
 }));
@@ -84,6 +84,7 @@ function model(
     model: id,
     displayName,
     description: "",
+    reasoningDiscovery: "known" as const,
     supportedReasoningEfforts: reasoning.map((reasoningEffort) => ({
       reasoningEffort,
       description: reasoningEffort,

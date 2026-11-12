@@ -1,9 +1,4 @@
-import {
-  MAX_CHUNK_BYTES,
-  decodeFrame,
-  encodeFrame,
-  type Frame,
-} from "@bb/tunnel-contract";
+import { decodeFrame, encodeFrame, type Frame } from "@bb/tunnel-contract";
 import {
   HOP_HEADERS,
   RELAY_CONTENT_LENGTH_HEADER,
@@ -11,9 +6,10 @@ import {
   RELAY_HEADER,
   RELAY_METHOD_HEADER,
 } from "./protocol-headers.js";
+import type { GateProgress } from "./gate-deadline.js";
+import { requestBodyChunks } from "./request-body-chunks.js";
 import { relayedResponse } from "./response-encoding.js";
 
-export const RELAY_RESP_HEAD_TIMEOUT_MS = 30_000;
 const RELAY_DONE_CLOSE_CODE = 1000;
 const RELAY_PLACEHOLDER_STREAM_ID = 0;
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
@@ -82,23 +78,15 @@ function sendFrame(socket: WebSocket, frame: Frame): boolean {
 async function pumpRequestBody(
   body: ReadableStream<Uint8Array>,
   socket: WebSocket,
+  progress: GateProgress,
 ): Promise<void> {
   const streamId = RELAY_PLACEHOLDER_STREAM_ID;
   try {
-    const reader = body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (let offset = 0; offset < value.length; offset += MAX_CHUNK_BYTES) {
-        const sent = sendFrame(socket, {
-          type: "body-chunk",
-          streamId,
-          data: value.subarray(offset, offset + MAX_CHUNK_BYTES),
-        });
-        if (!sent) return;
-      }
+    for await (const data of requestBodyChunks(body)) {
+      if (!sendFrame(socket, { type: "body-chunk", streamId, data })) return;
     }
     sendFrame(socket, { type: "body-end", streamId });
+    progress.stage = "response-head";
   } catch {
     sendFrame(socket, {
       type: "close-stream",
@@ -109,7 +97,12 @@ async function pumpRequestBody(
   }
 }
 
-function relayResponse(socket: WebSocket, request: Request): Promise<Response> {
+function relayResponse(
+  socket: WebSocket,
+  request: Request,
+  progress: GateProgress,
+  signal: AbortSignal,
+): Promise<Response> {
   return new Promise<Response>((resolve) => {
     let headSettled = false;
     let finished = false;
@@ -118,14 +111,12 @@ function relayResponse(socket: WebSocket, request: Request): Promise<Response> {
     const finish = (reason: string) => {
       if (finished) return;
       finished = true;
-      clearTimeout(headTimeout);
       try {
         socket.close(RELAY_DONE_CLOSE_CODE, closeReason(reason));
       } catch {}
     };
     const settleHead = (response: Response) => {
       headSettled = true;
-      clearTimeout(headTimeout);
       resolve(response);
     };
     const fail = (status: number, message: string) => {
@@ -139,9 +130,13 @@ function relayResponse(socket: WebSocket, request: Request): Promise<Response> {
       }
       finish(message);
     };
-    const headTimeout = setTimeout(() => {
+    if (signal.aborted) {
       fail(504, "timed out waiting for the tunnel client");
-    }, RELAY_RESP_HEAD_TIMEOUT_MS);
+      return;
+    }
+    signal.addEventListener("abort", () => {
+      fail(504, "timed out waiting for the tunnel client");
+    });
 
     const onHead = (frame: Extract<Frame, { type: "resp-head" }>) => {
       if (headSettled) return;
@@ -213,13 +208,20 @@ function relayResponse(socket: WebSocket, request: Request): Promise<Response> {
       fail(502, "tunnel disconnected mid-request");
     });
 
-    if (request.body !== null) void pumpRequestBody(request.body, socket);
+    if (request.body === null) {
+      progress.stage = "response-head";
+    } else {
+      progress.stage = "request-body";
+      void pumpRequestBody(request.body, socket, progress);
+    }
   });
 }
 
 export async function fetchThroughRelay(
   stub: RelayStub,
   request: Request,
+  progress: GateProgress,
+  signal: AbortSignal,
 ): Promise<Response | null> {
   const upgraded = await stub.fetch(relayUpgradeRequest(request));
   const socket = upgraded.webSocket;
@@ -232,5 +234,5 @@ export async function fetchThroughRelay(
     } catch {}
     return null;
   }
-  return relayResponse(socket, request);
+  return relayResponse(socket, request, progress, signal);
 }

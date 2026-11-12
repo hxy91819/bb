@@ -46,17 +46,14 @@ it("requests full command output while the terminal renderer is still downloadin
           threadId="thr_main"
           timelineRows={[row]}
           threadRuntimeDisplayStatus="idle"
-          workspaceRootPath={undefined}
         />
       </Wrapper>
     </MemoryRouter>,
   );
 
-  await screen.findByRole("status", { name: "Loading output" });
+  await screen.findByRole("status", { name: "Loading" });
   await waitFor(() => {
     expect(sdk.threads.timelineTurnSummaryDetails).toHaveBeenCalledTimes(1);
   });
-  expect(
-    screen.getByTestId("timeline-output-preview-note").textContent,
-  ).toContain("Loading the full output");
+  expect(screen.queryByTestId("timeline-output-preview-note")).toBeNull();
 });

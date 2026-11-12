@@ -6,13 +6,12 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   claimPluginScheduledRun,
-  createConnection,
   getInstalledPlugin,
   listPluginSchedules,
-  migrate,
   pluginSchedules,
   type DbConnection,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import type { Logger } from "@bb/logger";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
 import {
@@ -72,8 +71,7 @@ describe("plugin background services", () => {
   let service: PluginService;
 
   beforeEach(async () => {
-    db = createConnection(":memory:");
-    migrate(db);
+    db = createMigratedConnection();
     workDir = await mkdtemp(join(tmpdir(), "bb-plugin-bg-test-"));
     service = createPluginService({
       aiServices: createAiServiceRegistry(),
@@ -81,6 +79,8 @@ describe("plugin background services", () => {
       db,
       hub: {
         getDaemonSessionIdForHost: () => null,
+        notifyPluginChanged: () => {},
+        onWatchedTargets: () => () => {},
         notifyPluginSignal: () => 0,
         notifySystem: () => {},
       },
@@ -202,6 +202,8 @@ describe("plugin background services", () => {
       db,
       hub: {
         getDaemonSessionIdForHost: () => null,
+        notifyPluginChanged: () => {},
+        onWatchedTargets: () => () => {},
         notifyPluginSignal: () => 0,
         notifySystem: () => {},
       },
@@ -209,6 +211,7 @@ describe("plugin background services", () => {
       pendingInteractions: {
         requestPluginInteraction,
         interruptPluginInteractions,
+        interruptOwnedPluginInteractions: vi.fn(() => []),
         setPluginDirectory: () => {},
       },
       dataDir: join(workDir, "data-dispose-request"),
@@ -263,6 +266,8 @@ describe("plugin background services", () => {
       db,
       hub: {
         getDaemonSessionIdForHost: () => null,
+        notifyPluginChanged: () => {},
+        onWatchedTargets: () => () => {},
         notifyPluginSignal: () => 0,
         notifySystem: () => {},
       },
@@ -288,8 +293,6 @@ describe("plugin background services", () => {
                 g.__slowMaxActive = Math.max(g.__slowMaxActive, g.__slowActive);
                 return new Promise<void>((resolve) => {
                   signal.addEventListener("abort", () => {
-                    // Slow-but-legitimate stop: the window in which an
-                    // unserialized concurrent load would double-start.
                     setTimeout(() => {
                       g.__slowActive -= 1;
                       resolve();
@@ -321,7 +324,6 @@ describe("plugin background services", () => {
         export default function plugin(bb: any) {
           bb.background.service("socket", {
             start() {
-              // Ignores the abort signal entirely.
               return new Promise(() => {});
             },
           });
@@ -432,7 +434,7 @@ describe("plugin background services", () => {
             async start(signal: any) {
               g.__emitterStarts += 1;
               if (g.__emitterStarts === 1) {
-                const client = new EventEmitter(); // no client.on("error")
+                const client = new EventEmitter();
                 setTimeout(() => client.emit("error", new Error("Socket timeout")), 5);
               }
               await new Promise<void>((resolve) =>
@@ -550,8 +552,7 @@ describe("plugin schedules", () => {
   let service: PluginService;
 
   beforeEach(async () => {
-    db = createConnection(":memory:");
-    migrate(db);
+    db = createMigratedConnection();
     workDir = await mkdtemp(join(tmpdir(), "bb-plugin-sched-test-"));
     service = createPluginService({
       aiServices: createAiServiceRegistry(),
@@ -559,6 +560,8 @@ describe("plugin schedules", () => {
       db,
       hub: {
         getDaemonSessionIdForHost: () => null,
+        notifyPluginChanged: () => {},
+        onWatchedTargets: () => () => {},
         notifyPluginSignal: () => 0,
         notifySystem: () => {},
       },

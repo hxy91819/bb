@@ -1,6 +1,4 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { createHash } from "node:crypto";
-import { isUtf8 } from "node:buffer";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
@@ -108,6 +106,13 @@ interface RegisterTestHostRpcCaptureArgs {
   onInspectGitSource?: (
     command: Extract<HostDaemonRpcCommand, { type: "host.inspect_git_source" }>,
   ) => void;
+  gitCheckoutInspectionResult?: HostDaemonOnlineRpcResult<"host.inspect_git_checkout">;
+  onInspectGitCheckout?: (
+    command: Extract<
+      HostDaemonRpcCommand,
+      { type: "host.inspect_git_checkout" }
+    >,
+  ) => void;
 }
 
 export interface TestHostRpcSocket {
@@ -115,17 +120,50 @@ export interface TestHostRpcSocket {
   send(data: string): void;
 }
 
-function isRuntimeWorkspaceFileCommand(command: HostDaemonRpcCommand): boolean {
-  if (command.type !== "host.list_files" && command.type !== "host.read_file") {
-    return false;
+function readWorkspaceAgentContextFromDisk(
+  rootPath: string,
+): HostDaemonOnlineRpcResult<"host.read_workspace_agent_context"> {
+  const skillsRootPath = path.join(rootPath, ".bb", "skills");
+  let directoryNames: string[] = [];
+  try {
+    directoryNames = readdirSync(skillsRootPath, { withFileTypes: true })
+      .filter((entry) => !entry.isSymbolicLink() && entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    directoryNames = [];
   }
-  const hostPath = command.path.replaceAll("\\", "/");
-  if (command.type === "host.list_files") {
-    return hostPath.endsWith(".bb/skills");
+  const projectSkills = directoryNames.flatMap((directoryName) => {
+    const skillFilePath = path.join(skillsRootPath, directoryName, "SKILL.md");
+    try {
+      if (!lstatSync(skillFilePath).isFile()) return [];
+      return [
+        {
+          kind: "file" as const,
+          directoryName,
+          content: readFileSync(skillFilePath, "utf8"),
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
+  let agentInstructions: string | null = null;
+  try {
+    const trimmed = readFileSync(
+      path.join(rootPath, ".bb", "AGENTS.md"),
+      "utf8",
+    ).trim();
+    agentInstructions = trimmed.length > 0 ? trimmed : null;
+  } catch {
+    agentInstructions = null;
   }
-  return (
-    hostPath.endsWith(".bb/AGENTS.md") || hostPath.includes("/.bb/skills/")
-  );
+  return {
+    agentInstructions,
+    projectSkills,
+    projectSkillsTruncated: false,
+    sharedSkills: [],
+  };
 }
 
 function respondToRuntimeWorkspaceFileCommand(
@@ -134,76 +172,14 @@ function respondToRuntimeWorkspaceFileCommand(
   message: HostDaemonOnlineRpcRequestMessage,
 ): boolean {
   const command = message.command;
-  if (!isRuntimeWorkspaceFileCommand(command)) return false;
-
-  if (command.type === "host.list_files") {
-    let files: Array<{ name: string; path: string }> = [];
-    try {
-      files = readdirSync(command.path, { withFileTypes: true })
-        .filter((entry) => !entry.isSymbolicLink() && entry.isDirectory())
-        .flatMap((entry) => {
-          const skillFilePath = path.join(command.path, entry.name, "SKILL.md");
-          try {
-            return lstatSync(skillFilePath).isFile()
-              ? [{ name: "SKILL.md", path: `${entry.name}/SKILL.md` }]
-              : [];
-          } catch {
-            return [];
-          }
-        })
-        .slice(0, command.limit);
-    } catch {
-      files = [];
-    }
-    deps.hub.recordHostOnlineRpcResponse({
-      message: hostDaemonOnlineRpcResponseMessageSchema.parse({
-        type: "host-rpc.response",
-        requestId: message.requestId,
-        commandType: command.type,
-        ok: true,
-        result: { files, truncated: false },
-      }),
-      sessionId: args.sessionId,
-    });
-    return true;
-  }
-
-  if (command.type !== "host.read_file") return false;
-  let bytes: Buffer;
-  let modifiedAtMs: number;
-  try {
-    const stat = lstatSync(command.path);
-    bytes = readFileSync(command.path);
-    modifiedAtMs = stat.mtimeMs;
-  } catch {
-    deps.hub.recordHostOnlineRpcResponse({
-      message: {
-        type: "host-rpc.response",
-        requestId: message.requestId,
-        commandType: command.type,
-        ok: false,
-        errorCode: "ENOENT",
-        errorMessage: `Path does not exist: ${command.path}`,
-      },
-      sessionId: args.sessionId,
-    });
-    return true;
-  }
-  const contentEncoding = isUtf8(bytes) ? "utf8" : "base64";
+  if (command.type !== "host.read_workspace_agent_context") return false;
   deps.hub.recordHostOnlineRpcResponse({
     message: hostDaemonOnlineRpcResponseMessageSchema.parse({
       type: "host-rpc.response",
       requestId: message.requestId,
       commandType: command.type,
       ok: true,
-      result: {
-        path: command.path,
-        content: bytes.toString(contentEncoding),
-        contentEncoding,
-        modifiedAtMs,
-        sha256: createHash("sha256").update(bytes).digest("hex"),
-        sizeBytes: bytes.length,
-      },
+      result: readWorkspaceAgentContextFromDisk(command.rootPath),
     }),
     sessionId: args.sessionId,
   });
@@ -320,11 +296,6 @@ function nextTestRpcCursor(
   return nextCursor;
 }
 
-/**
- * Registers the capturing daemon socket for a host and returns it, so a test
- * that reconnects a host can hand the same socket to the real
- * `onDaemonSocketOpen` instead of replacing the capture with a stub.
- */
 export function registerTestHostRpcCapture(
   deps: Pick<TestAppHarness, "db" | "hub">,
   args: RegisterTestHostRpcCaptureArgs,
@@ -465,6 +436,22 @@ export function registerTestHostRpcCapture(
         });
         return;
       }
+      if (command.type === "host.inspect_git_checkout") {
+        args.onInspectGitCheckout?.(command);
+        deps.hub.recordHostOnlineRpcResponse({
+          message: hostDaemonOnlineRpcResponseMessageSchema.parse({
+            type: "host-rpc.response",
+            requestId: message.requestId,
+            commandType: command.type,
+            ok: true,
+            result: args.gitCheckoutInspectionResult ?? {
+              checkout: buildDefaultGitSourceInspectionResult().checkout,
+            },
+          }),
+          sessionId: args.sessionId,
+        });
+        return;
+      }
       if (command.type === "host.inspect_git_source") {
         args.onInspectGitSource?.(command);
         deps.hub.recordHostOnlineRpcResponse({
@@ -527,6 +514,12 @@ function isCapturedRpcForHarness(
       .where(eq(hostDaemonSessions.hostId, queued.row.hostId))
       .get() !== undefined
   );
+}
+
+export function forgetQueuedCommand(queued: QueuedCommand): void {
+  if (queued.rpcRequest) {
+    removePendingHostRpcRequest(queued.rpcRequest.requestId);
+  }
 }
 
 export async function waitForQueuedCommand(

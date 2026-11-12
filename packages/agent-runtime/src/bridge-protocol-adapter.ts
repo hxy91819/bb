@@ -26,7 +26,6 @@ import {
   ASSEMBLER_GRAMMAR_VERSIONS,
   createDeltaAssembler,
 } from "@bb/provider-bridge-protocol/assembler";
-import { z } from "zod";
 import type {
   AdapterCommand,
   ProviderExecutionContext,
@@ -50,6 +49,11 @@ export type ProviderRecoveryHint = Omit<
   "providerId"
 >;
 
+export type DeferredThreadEventsListener = (
+  sourceThreadId: string,
+  events: ThreadEvent[],
+) => void;
+
 export interface BridgeProtocolAdapter {
   id: string;
   capabilities: BridgeEnforcedCapabilities;
@@ -62,6 +66,7 @@ export interface BridgeProtocolAdapter {
     selectedOnlyModels: AvailableModel[];
   };
   translateEvent(event: ProviderRuntimeEvent): ThreadEvent[];
+  onDeferredEvents(listener: DeferredThreadEventsListener): void;
   decodeRecoveryHint(event: ProviderRuntimeEvent): ProviderRecoveryHint | null;
   decodeToolCallRequest(
     request: ProviderInboundRequest,
@@ -97,10 +102,6 @@ interface BridgeProtocolAdapterOptions {
   staticProviderOptions?: Record<string, unknown>;
 }
 
-const providerNativeIdsParamsSchema = z
-  .object({ providerNativeIds: z.boolean().optional() })
-  .passthrough();
-
 function toBridgeWireOptions(
   options: ProviderExecutionContext,
   staticProviderOptions?: Record<string, unknown>,
@@ -110,6 +111,7 @@ function toBridgeWireOptions(
     serviceTier,
     reasoningLevel,
     promptMode,
+    sessionOptions,
     instructions,
     envVars,
     permissionMode,
@@ -126,6 +128,7 @@ function toBridgeWireOptions(
     ...(serviceTier !== undefined ? { serviceTier } : {}),
     ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
     ...(promptMode !== undefined ? { promptMode } : {}),
+    ...(sessionOptions !== undefined ? { sessionOptions } : {}),
     ...(instructions !== undefined ? { instructions } : {}),
     ...(envVars !== undefined ? { envVars } : {}),
     permissionMode,
@@ -151,7 +154,13 @@ export function createBridgeProtocolAdapter(
       ? handshake.fork
       : declaredFork;
   }
-  const deltaAssembler = createDeltaAssembler({ providerId: options.id });
+  let deferredEventsListener: DeferredThreadEventsListener | null = null;
+  const deltaAssembler = createDeltaAssembler({
+    providerId: options.id,
+    onDeferredEvents: (threadId, events) => {
+      deferredEventsListener?.(threadId, events);
+    },
+  });
 
   function gate(
     capability: keyof BridgeCapabilities & string,
@@ -204,6 +213,21 @@ export function createBridgeProtocolAdapter(
           return {
             kind: "request",
             method: BRIDGE_REQUEST_METHODS.modelList,
+            params: {
+              ...cwdAndStaticProviderOptions(command.cwd),
+              envVars: command.envVars,
+              ...(command.selectedModel === undefined
+                ? {}
+                : { selectedModel: command.selectedModel }),
+            },
+          };
+        case "commands/list":
+          if (!handshake.commands.list) {
+            return { kind: "noop", reason: "commands.list not advertised" };
+          }
+          return {
+            kind: "request",
+            method: BRIDGE_REQUEST_METHODS.commandList,
             params: cwdAndStaticProviderOptions(command.cwd),
           };
         case "provider/health":
@@ -461,6 +485,10 @@ export function createBridgeProtocolAdapter(
 
     parseModelListResult: parseAvailableModelList,
 
+    onDeferredEvents(listener: DeferredThreadEventsListener): void {
+      deferredEventsListener = listener;
+    },
+
     translateEvent(event: ProviderRuntimeEvent): ThreadEvent[] {
       const method = event.method;
       if (method === THREAD_DELTA_NOTIFICATION_METHOD) {
@@ -579,15 +607,7 @@ export function createBridgeProtocolAdapter(
         request.method,
         request.params,
       );
-      if (decoded === null) {
-        return decoded;
-      }
-      const marker = providerNativeIdsParamsSchema.safeParse(request.params);
-      if (
-        marker.success !== true ||
-        marker.data.providerNativeIds !== true ||
-        decoded.threadId === undefined
-      ) {
+      if (decoded === null || decoded.threadId === undefined) {
         return decoded;
       }
       return {
@@ -616,10 +636,10 @@ export function createBridgeProtocolAdapter(
       if (!parsed.success) {
         return null;
       }
-      const { providerNativeIds, threadId, ...decoded } = parsed.data;
+      const { threadId, ...decoded } = parsed.data;
       let turnId = decoded.turnId;
       let payload = decoded.payload;
-      if (providerNativeIds === true && threadId !== undefined) {
+      if (threadId !== undefined) {
         turnId =
           turnId === null
             ? null

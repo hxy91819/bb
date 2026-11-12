@@ -33,17 +33,21 @@ describe("internal event envelope threadId regression", () => {
         hostId: hostB.host.id,
         projectId: projectB.id,
       });
-      const threadA = seedThread(harness.deps, {
+      const threadA = createThread(harness.db, harness.hub, {
         projectId: projectA.id,
         environmentId: environmentA.id,
-        title: "Owned thread",
+        providerId: "codex",
+        title: null,
         titleFallback: "Owned thread",
+        status: "active",
       });
-      const threadB = seedThread(harness.deps, {
+      const threadB = createThread(harness.db, harness.hub, {
         projectId: projectB.id,
         environmentId: environmentB.id,
-        title: "Foreign thread",
+        providerId: "codex",
+        title: null,
         titleFallback: "Foreign thread",
+        status: "active",
       });
 
       const response = await harness.app.request("/internal/session/events", {
@@ -59,7 +63,8 @@ describe("internal event envelope threadId regression", () => {
                 threadId: threadB.id,
                 providerThreadId: "provider-envelope",
                 scope: threadScope(),
-                threadName: "hacked",
+                threadName: "Renamed by the agent",
+                source: "agent",
               },
             }),
           ]),
@@ -67,8 +72,10 @@ describe("internal event envelope threadId regression", () => {
       });
 
       expect(response.status).toBe(200);
-      expect(getThread(harness.db, threadA.id)?.title).toBe("Owned thread");
-      expect(getThread(harness.db, threadB.id)?.title).toBe("Foreign thread");
+      expect(getThread(harness.db, threadA.id)?.title).toBe(
+        "Renamed by the agent",
+      );
+      expect(getThread(harness.db, threadB.id)?.title).toBeNull();
     });
   });
 
@@ -117,6 +124,66 @@ describe("internal event envelope threadId regression", () => {
       expect(getThread(harness.db, thread.id)?.title).toBeNull();
       expect(getThread(harness.db, thread.id)?.titleFallback).toBe(
         "Summarize the work",
+      );
+    });
+  });
+
+  it("uses a title the agent itself set when the thread has none, and keeps an existing title", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-agent-title",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+      });
+      const untitled = createThread(harness.db, harness.hub, {
+        projectId: project.id,
+        environmentId: environment.id,
+        providerId: "acp-opencode",
+        title: null,
+        titleFallback: "fix it",
+        status: "active",
+      });
+      const titled = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: environment.id,
+        title: "Chosen by the user",
+        titleFallback: "Chosen by the user",
+      });
+
+      const response = await harness.app.request("/internal/session/events", {
+        method: "POST",
+        headers: internalAuthHeaders(harness, { hostId: host.id }),
+        body: JSON.stringify({
+          sessionId: session.id,
+          eventGroups: groupHostDaemonEvents(
+            [untitled.id, titled.id].map((threadId) =>
+              createTestDaemonEventEnvelope({
+                threadId,
+                event: {
+                  type: "thread/name/updated",
+                  threadId,
+                  providerThreadId: `provider-${threadId}`,
+                  scope: threadScope(),
+                  threadName: "  Fix the   login redirect ",
+                  source: "agent",
+                },
+              }),
+            ),
+          ),
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(getThread(harness.db, untitled.id)?.title).toBe(
+        "Fix the login redirect",
+      );
+      expect(getThread(harness.db, titled.id)?.title).toBe(
+        "Chosen by the user",
       );
     });
   });

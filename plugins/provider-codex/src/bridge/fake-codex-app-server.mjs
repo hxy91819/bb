@@ -117,6 +117,10 @@ function runCompaction(threadId) {
       turnId,
       item: { type: "contextCompaction", id: itemId },
     });
+    if (COMPACTION_MODE === "wait-for-interrupt") {
+      openTurnIdsByThreadId.set(threadId, turnId);
+      return;
+    }
     notify("item/completed", {
       threadId,
       turnId,
@@ -207,6 +211,16 @@ const scriptedTurns = script?.turns ?? null;
 const requestLogPath = script?.requestLogPath ?? null;
 const responseLogPath = script?.responseLogPath ?? null;
 const modelListFailOnceMarkerPath = script?.modelListFailOnceMarkerPath ?? null;
+if (script?.launchLogPath) {
+  appendFileSync(
+    script.launchLogPath,
+    `${JSON.stringify({
+      args: process.argv.slice(2),
+      poolToken: process.env.CODEX_POOL_AUTH_TOKEN ?? null,
+      codexHome: process.env.CODEX_HOME ?? null,
+    })}\n`,
+  );
+}
 
 const archiveStatePath = script?.archiveStatePath ?? null;
 
@@ -361,6 +375,23 @@ function requestFromClient(method, params) {
 }
 
 const turnCursorPath = script?.turnCursorPath ?? null;
+const goalsByThreadId = new Map();
+
+function setFakeGoalStatus(threadId, status) {
+  const goal = {
+    threadId,
+    objective: "Fake goal",
+    tokenBudget: null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...goalsByThreadId.get(threadId),
+    status,
+  };
+  goalsByThreadId.set(threadId, goal);
+  return goal;
+}
 
 function takeScriptedTurnIndex() {
   if (turnCursorPath === null) {
@@ -428,6 +459,13 @@ async function handleRequest(message) {
         respond(id, { data: [] });
         return;
       }
+      if (script?.modelList) {
+        setTimeout(
+          () => respond(id, script.modelList),
+          script.modelListDelayMs ?? 0,
+        );
+        return;
+      }
       respond(id, {
         data: [
           {
@@ -444,6 +482,16 @@ async function handleRequest(message) {
         ],
       });
       return;
+    case "config/read":
+      if (script?.configReadError) {
+        respondError(id, -32601, "Configuration read unavailable");
+      } else {
+        respond(id, script?.configRead ?? { config: { model: null } });
+      }
+      return;
+    case "skills/list":
+      respond(id, script?.skillsList ?? { data: [] });
+      return;
     case "skills/extraRoots/set":
       respond(id, {});
       return;
@@ -453,9 +501,15 @@ async function handleRequest(message) {
         await new Promise(() => undefined);
       }
       threadCounter += 1;
-      const threadId = `codex-fx-${process.pid}-${threadCounter}`;
+      const threadId = `codex-fx-${processInstanceId}-${threadCounter}`;
       notify("thread/started", { thread: { id: threadId } });
       respond(id, { thread: { id: threadId } });
+      if (script?.initialGoalStatus) {
+        notify("thread/goal/updated", {
+          threadId,
+          goal: setFakeGoalStatus(threadId, script.initialGoalStatus),
+        });
+      }
       return;
     }
     case "thread/resume": {
@@ -485,9 +539,23 @@ async function handleRequest(message) {
       if (String(params.threadId).startsWith("usage-replay-")) {
         replayLastTurnUsage(params.threadId);
       }
-      respond(id, { thread: { id: params.threadId } });
+      respond(id, {
+        thread: {
+          id: params.threadId,
+          ...(script?.resumedDaybreakEnabled === undefined
+            ? {}
+            : { daybreakEnabled: script.resumedDaybreakEnabled }),
+        },
+      });
       return;
     }
+    case "thread/metadata/update":
+      if (script?.metadataUpdateError) {
+        respondError(id, -32603, "Thread metadata is unavailable");
+      } else {
+        respond(id, { thread: { id: params.threadId } });
+      }
+      return;
     case "thread/fork": {
       servesThread = true;
 
@@ -505,8 +573,8 @@ async function handleRequest(message) {
       threadCounter += 1;
       const replaysUsage = String(params.threadId).startsWith("usage-replay-");
       const threadId = replaysUsage
-        ? `usage-replay-fork-${process.pid}-${threadCounter}`
-        : `codex-fx-${process.pid}-fork-${threadCounter}`;
+        ? `usage-replay-fork-${processInstanceId}-${threadCounter}`
+        : `codex-fx-${processInstanceId}-fork-${threadCounter}`;
       respond(id, { thread: { id: threadId } });
 
       if (replaysUsage) {
@@ -603,7 +671,7 @@ async function handleRequest(message) {
           threadId: params.threadId,
           turn: { id: turnId, status: "inProgress" },
         });
-        respond(id, {});
+        setTimeout(() => respond(id, {}), script?.startResponseDelayMs ?? 0);
         return;
       }
       if (scriptedTurns) {
@@ -738,8 +806,29 @@ async function handleRequest(message) {
       respond(id, {});
       runCompaction(params.threadId);
       return;
+    case "thread/goal/set": {
+      if (!goalsByThreadId.has(params.threadId)) {
+        respondError(id, -32600, "thread has no goal");
+        return;
+      }
+      const goal = setFakeGoalStatus(params.threadId, params.status);
+      respond(id, { goal });
+      notify("thread/goal/updated", { threadId: params.threadId, goal });
+      if (params.status === "active" && !script?.goalResumeStartsNoTurn) {
+        setTimeout(() => runScriptedTurn(params.threadId), 0);
+      }
+      return;
+    }
+    case "thread/goal/get":
+      respond(id, { goal: goalsByThreadId.get(params.threadId) ?? null });
+      return;
     case "thread/goal/clear":
-      respond(id, {});
+      goalsByThreadId.delete(params.threadId);
+      if (script?.goalClearError) {
+        respondError(id, -32600, script.goalClearError);
+      } else {
+        respond(id, script?.goalClearResult ?? { cleared: true });
+      }
       return;
     default:
       respondError(id, -32601, `Unknown method "${method}"`);

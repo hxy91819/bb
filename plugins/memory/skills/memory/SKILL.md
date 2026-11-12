@@ -6,10 +6,24 @@ description: "Retrieve relevant durable BB memories or save verified knowledge u
 # BB memory
 
 This plugin is provider-independent. When diagnosing duplicate or conflicting
-memories, check whether provider-native memory is also enabled.
+memories, check whether provider-native memory is also enabled; recommend
+turning it off with the `memoryEnabled` setting of each provider plugin:
+Settings → Plugins → Claude Code provider and Codex provider, or
+`bb plugin config provider-claude-code set memoryEnabled false` and
+`bb plugin config provider-codex set memoryEnabled false`.
 
 The memory plugin automatically injects a compact index of global memories and
 memories for the current BB project. The index contains summaries only.
+Settings → Memory lists every memory for the user to edit or delete.
+
+```sh
+bb memory catalog [--scope project|global|all] [--json]
+bb memory search <query> [--scope project|global|all] [--json]
+bb memory get <id> [--scope project|global|all] [--json]
+bb memory history <id> [--scope project|global|all] [--limit 1-100] [--json]
+```
+
+Project-scoped commands use the invoking CLI's current BB project.
 
 ## Retrieve progressively
 

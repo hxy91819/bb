@@ -10,7 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { DropdownMenuItem } from "@bb/shared-ui/dropdown-menu";
-import { CompactLongPressMenu } from "./compact-long-press-menu";
+import { CompactLongPressMenu } from "@bb/shared-ui/compact-long-press-menu";
 
 const LONG_PRESS_MS = 700;
 
@@ -146,6 +146,23 @@ describe("CompactLongPressMenu", () => {
     expect(onRename).toHaveBeenCalledOnce();
   });
 
+  it("ignores the opening release on the drawer backdrop but allows a fresh tap to dismiss", () => {
+    vi.useFakeTimers();
+    const { row, onOpenChange } = renderRow();
+    touchPointerDown(row);
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS + 500));
+    const backdrop = document.querySelector(
+      "[data-persistent-drawer-backdrop][data-state='open']",
+    );
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop!);
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    touchPointerDown(backdrop!);
+    fireEvent.click(backdrop!);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("cancels the press when the finger moves or lifts early, and ignores mouse pointers", () => {
     vi.useFakeTimers();
     const { row, onOpenChange, onRowClick } = renderRow();
@@ -231,6 +248,49 @@ describe("CompactLongPressMenu", () => {
     expect(onProjectOpenChange).toHaveBeenCalledWith(true);
   });
 
+  it("lets only the innermost menu open when the menus come from separately bundled copies", async () => {
+    vi.useFakeTimers();
+    const pluginBundleSpecifier =
+      "@bb/shared-ui/compact-long-press-menu?plugin-bundle";
+    const pluginBundleCopy: typeof import("@bb/shared-ui/compact-long-press-menu") =
+      await import(pluginBundleSpecifier);
+    expect(pluginBundleCopy.CompactLongPressMenu).not.toBe(
+      CompactLongPressMenu,
+    );
+    const ProjectMenu = pluginBundleCopy.CompactLongPressMenu;
+    const onProjectOpenChange = vi.fn();
+    const onThreadOpenChange = vi.fn();
+    render(
+      <CompactViewportOverrideProvider isCompactViewport>
+        <ProjectMenu
+          label="Project actions"
+          onOpenChange={onProjectOpenChange}
+          items={<DropdownMenuItem>Rename project</DropdownMenuItem>}
+        >
+          <div>
+            <span>Project</span>
+            <CompactLongPressMenu
+              label="Thread actions"
+              onOpenChange={onThreadOpenChange}
+              items={<DropdownMenuItem>Rename thread</DropdownMenuItem>}
+            >
+              <a href="#thread" data-testid="row">
+                Thread row
+              </a>
+            </CompactLongPressMenu>
+          </div>
+        </ProjectMenu>
+      </CompactViewportOverrideProvider>,
+    );
+
+    touchPointerDown(screen.getByTestId("row"));
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+    });
+    expect(onThreadOpenChange).toHaveBeenCalledWith(true);
+    expect(onProjectOpenChange).not.toHaveBeenCalled();
+  });
+
   it("opens from a right-click on a narrow window without the native menu", () => {
     const { row, onOpenChange } = renderRow();
     const event = new MouseEvent("contextmenu", {
@@ -240,5 +300,53 @@ describe("CompactLongPressMenu", () => {
     fireEvent(row, event);
     expect(event.defaultPrevented).toBe(true);
     expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("cancels a pending actions menu when dragging begins", () => {
+    vi.useFakeTimers();
+    const onOpenChange = vi.fn();
+    const renderMenu = (dragging: boolean) => (
+      <CompactLongPressMenu
+        label="Thread actions"
+        dragging={dragging}
+        items={<button type="button">Action</button>}
+        onOpenChange={onOpenChange}
+      >
+        <button type="button">Thread</button>
+      </CompactLongPressMenu>
+    );
+    const { getByRole, rerender } = render(renderMenu(false));
+    fireEvent.pointerDown(getByRole("button", { name: "Thread" }), {
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    });
+
+    rerender(renderMenu(true));
+    act(() => vi.advanceTimersByTime(800));
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it("dismisses an open actions menu when dragging begins", () => {
+    const onOpenChange = vi.fn();
+    const renderMenu = (dragging: boolean) => (
+      <CompactLongPressMenu
+        label="Thread actions"
+        dragging={dragging}
+        items={<button type="button">Action</button>}
+        onOpenChange={onOpenChange}
+      >
+        <button type="button">Thread</button>
+      </CompactLongPressMenu>
+    );
+    const { getByRole, rerender } = render(renderMenu(false));
+    fireEvent.contextMenu(getByRole("button", { name: "Thread" }));
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+
+    rerender(renderMenu(true));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
   });
 });

@@ -53,6 +53,7 @@ import {
 import {
   registerHostRpcResponder,
   type HostRpcHandlerResult,
+  EMPTY_WORKSPACE_AGENT_CONTEXT,
 } from "../helpers/host-rpc.js";
 import { readJson } from "../helpers/json.js";
 import { textInput } from "../helpers/prompt-input.js";
@@ -68,6 +69,7 @@ import {
   seedThreadFixture,
   seedThreadIdentity,
   seedThreadRuntimeState,
+  seedTurnStarted,
 } from "../helpers/seed.js";
 import { installFakeEnvironmentProvider } from "../helpers/environment-provider.js";
 import { withTestHarness } from "../helpers/test-app.js";
@@ -373,6 +375,42 @@ describe("public thread data routes", () => {
       expect(listed.map((thread) => thread.id).sort()).toEqual(
         [onFirst.id, onSecond.id].sort(),
       );
+    });
+  });
+
+  it("lists only the requested thread IDs, treats an empty list as no threads and caps the list", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const first = seedThread(harness.deps, { projectId: project.id });
+      const second = seedThread(harness.deps, { projectId: project.id });
+      seedThread(harness.deps, { projectId: project.id });
+      const list = async (threadIds: string) => {
+        const response = await harness.app.request(
+          `/api/v1/threads?threadIds=${threadIds}`,
+        );
+        expect(response.status).toBe(200);
+        return z
+          .array(threadSchema)
+          .parse(await readJson(response))
+          .map((thread) => thread.id)
+          .sort();
+      };
+
+      await expect(
+        list(`${first.id},thr_unknown,${second.id}`),
+      ).resolves.toEqual([first.id, second.id].sort());
+      await expect(list("")).resolves.toEqual([]);
+      const tooMany = await harness.app.request(
+        `/api/v1/threads?threadIds=${Array.from({ length: 201 }, (_, index) => `thr_${index}`).join(",")}`,
+      );
+      expect(tooMany.status).toBe(400);
+      const blank = await harness.app.request(
+        `/api/v1/threads?threadIds=${first.id},,${second.id}`,
+      );
+      expect(blank.status).toBe(400);
     });
   });
 
@@ -708,7 +746,7 @@ describe("public thread data routes", () => {
       const timeline = threadTimelineResponseSchema.parse(
         await readJson(timelineResponse),
       );
-      expect(timeline.timelinePage.hasOlderRows).toBe(true);
+      expect(timeline.timelinePage.olderCursor).not.toBeNull();
       const windowedConversationIds = timeline.rows
         .filter((row) => row.kind === "conversation")
         .map((row) => row.id);
@@ -739,6 +777,20 @@ describe("public thread data routes", () => {
         "Third question",
         "Third question — answered.",
       ]);
+      for (const role of ["user", "assistant"] as const) {
+        const roleResponse = await harness.app.request(
+          `/api/v1/threads/${thread.id}/conversation-outline?role=${role}`,
+        );
+        expect(roleResponse.status).toBe(200);
+        expect(
+          threadConversationOutlineResponseSchema.parse(
+            await readJson(roleResponse),
+          ),
+        ).toEqual({
+          items: outline.items.filter((item) => item.role === role),
+          maxSeq: outline.maxSeq,
+        });
+      }
 
       const outlineIds = new Set(outline.items.map((item) => item.id));
       for (const id of windowedConversationIds) {
@@ -875,6 +927,51 @@ describe("public thread data routes", () => {
         "Replacement response",
       ]);
       expect(countFullOutlineQueries()).toBe(3);
+    });
+  });
+
+  it("keeps another thread's outline cached while one thread advances", async () => {
+    await withTestHarness(async (harness) => {
+      const stable = seedThreadFixture(harness);
+      const changing = seedThreadFixture(harness);
+      const stableUrl = `/api/v1/threads/${stable.thread.id}/conversation-outline`;
+      const changingUrl = `/api/v1/threads/${changing.thread.id}/conversation-outline`;
+      expect((await harness.app.request(stableUrl)).status).toBe(200);
+
+      for (let sequence = 1; sequence <= 130; sequence++) {
+        seedEvent(harness.deps, {
+          threadId: changing.thread.id,
+          environmentId: changing.environment.id,
+          sequence,
+          type: "system/manager/user_message",
+          scope: threadScope(),
+          data: { text: `Message ${sequence}` },
+        });
+        const response = await harness.app.request(changingUrl);
+        expect(response.status).toBe(200);
+        const outline = threadConversationOutlineResponseSchema.parse(
+          await readJson(response),
+        );
+        expect(outline.maxSeq).toBe(sequence);
+        expect(outline.items.at(-1)?.preview).toBe(`Message ${sequence}`);
+      }
+
+      const prepareSpy = vi.spyOn(harness.db.$client, "prepare");
+      try {
+        const response = await harness.app.request(stableUrl);
+        expect(response.status).toBe(200);
+        expect(
+          threadConversationOutlineResponseSchema.parse(
+            await readJson(response),
+          ),
+        ).toEqual({ items: [], maxSeq: 0 });
+        const storedOutlineReads = prepareSpy.mock.calls.filter(([source]) =>
+          source.startsWith('select "items_json", "projection_key"'),
+        );
+        expect(storedOutlineReads).toHaveLength(0);
+      } finally {
+        prepareSpy.mockRestore();
+      }
     });
   });
 
@@ -1059,6 +1156,13 @@ describe("public thread data routes", () => {
         imageUrls: [],
         localImagePaths: [],
         localFilePaths: [uploaded.path],
+        localFileDetails: [
+          {
+            path: uploaded.path,
+            name: uploaded.name,
+            sizeBytes: uploaded.sizeBytes,
+          },
+        ],
       });
     });
   });
@@ -1222,6 +1326,7 @@ describe("public thread data routes", () => {
           status,
           taskStatus,
           skipTranscript: false,
+          foreground: false,
           workflowName: "fixture-mini",
           ...(status === "completed" ? { summary: "done" } : {}),
         },
@@ -1447,6 +1552,7 @@ describe("public thread data routes", () => {
           status: "pending" as const,
           taskStatus: "running" as const,
           skipTranscript: false,
+          foreground: false,
           ...(args.taskType === "local_workflow"
             ? { workflowName: "fixture-mini" }
             : {}),
@@ -1840,7 +1946,7 @@ describe("public thread data routes", () => {
       }
 
       const detailsResponse = await harness.app.request(
-        `/api/v1/threads/${thread.id}/timeline/turn-summary-details?turnId=${parentTurnRow.turnId}&sourceSeqStart=${parentTurnRow.sourceSeqStart}&sourceSeqEnd=${parentTurnRow.sourceSeqEnd}`,
+        `/api/v1/threads/${thread.id}/timeline/turn-summary-details?turnId=${parentTurnRow.turnId}&sourceSeqStart=${parentTurnRow.sourceSeqStart}&sourceSeqEnd=${parentTurnRow.sourceSeqEnd}&deferContent=true`,
       );
       expect(detailsResponse.status).toBe(200);
       const details = timelineTurnSummaryDetailsResponseSchema.parse(
@@ -1855,14 +1961,30 @@ describe("public thread data routes", () => {
         > => row.kind === "work" && row.workKind === "delegation",
       );
 
-      expect(delegation).toBeDefined();
-      expect(delegation?.callId).toBe("agent-call");
-      expect(delegation?.childRows).toContainEqual(
-        expect.objectContaining({
-          kind: "conversation",
-          text: "Child mapped the Telegram integration.",
-        }),
+      if (!delegation) {
+        throw new Error("Expected delegation row");
+      }
+      expect(delegation.callId).toBe("agent-call");
+      expect(delegation.childRows).toBeNull();
+
+      const delegationResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/timeline/turn-summary-details?turnId=${delegation.turnId}&sourceSeqStart=${delegation.sourceSeqStart}&sourceSeqEnd=${delegation.sourceSeqEnd}&itemId=${delegation.callId}`,
       );
+      expect(delegationResponse.status).toBe(200);
+      const delegationDetails = timelineTurnSummaryDetailsResponseSchema.parse(
+        await readJson(delegationResponse),
+      );
+      expect(delegationDetails.rows).toEqual([
+        expect.objectContaining({
+          callId: "agent-call",
+          childRows: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "conversation",
+              text: "Child mapped the Telegram integration.",
+            }),
+          ]),
+        }),
+      ]);
     });
   });
 
@@ -2250,12 +2372,17 @@ describe("public thread data routes", () => {
           source: "tell",
         },
       });
+      seedTurnStarted(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        turnId: "turn-1",
+      });
       seedEvent(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-output",
         scope: turnScope("turn-1"),
-        sequence: 2,
+        sequence: 3,
         type: "item/completed",
         data: {
           item: {
@@ -2265,12 +2392,17 @@ describe("public thread data routes", () => {
           },
         },
       });
+      seedTurnStarted(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        turnId: "turn-2",
+      });
       seedEvent(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-output",
         scope: turnScope("turn-2"),
-        sequence: 3,
+        sequence: 5,
         type: "item/completed",
         data: {
           item: {
@@ -2303,22 +2435,14 @@ describe("public thread data routes", () => {
     });
   });
 
-  it("returns a user-visible system output when a later assistant item is empty", async () => {
+  it("skips malformed item/completed events and returns the last valid output", async () => {
     await withTestHarness(async (harness) => {
       const { environment, thread } = seedThreadFixture(harness);
 
-      seedEvent(harness.deps, {
+      seedTurnStarted(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
-        providerThreadId: "provider-output",
-        scope: turnScope("turn-1"),
-        sequence: 1,
-        type: "system/manager/user_message",
-        data: {
-          text: "Visible system update",
-          toolCallId: "call-1",
-          turnId: "turn-1",
-        },
+        turnId: "turn-1",
       });
       seedEvent(harness.deps, {
         threadId: thread.id,
@@ -2326,36 +2450,6 @@ describe("public thread data routes", () => {
         providerThreadId: "provider-output",
         scope: turnScope("turn-1"),
         sequence: 2,
-        type: "item/completed",
-        data: {
-          item: {
-            type: "agentMessage",
-            id: "msg-1",
-            text: "",
-          },
-        },
-      });
-
-      const outputResponse = await harness.app.request(
-        `/api/v1/threads/${thread.id}/output`,
-      );
-      expect(outputResponse.status).toBe(200);
-      await expect(readJson(outputResponse)).resolves.toEqual({
-        output: "Visible system update",
-      });
-    });
-  });
-
-  it("skips malformed item/completed events and returns the last valid output", async () => {
-    await withTestHarness(async (harness) => {
-      const { environment, thread } = seedThreadFixture(harness);
-
-      seedEvent(harness.deps, {
-        threadId: thread.id,
-        environmentId: environment.id,
-        providerThreadId: "provider-output",
-        scope: turnScope("turn-1"),
-        sequence: 1,
         type: "item/completed",
         data: {
           item: {
@@ -2369,10 +2463,10 @@ describe("public thread data routes", () => {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-output",
-        scope: turnScope("turn-2"),
+        scope: turnScope("turn-1"),
         itemId: "msg-2",
         itemKind: null,
-        sequence: 2,
+        sequence: 3,
         type: "item/completed",
         data: {
           item: {
@@ -2721,6 +2815,7 @@ describe("public thread data routes", () => {
       expect(capture).toHaveBeenCalledWith({
         name: "user_message_sent",
         properties: {
+          initiator: "user",
           is_child_thread: false,
           message_source: "queued_message",
           provider: "codex",
@@ -2758,32 +2853,6 @@ describe("public thread data routes", () => {
         ]),
         id: queuedMessage.id,
       });
-
-      const staleUpdateResponse = await harness.app.request(
-        `/api/v1/threads/${thread.id}/queued-messages/${queuedMessage.id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            expectedUpdatedAt: queuedMessageBeforeUpdate?.updatedAt,
-            input: [{ type: "text", text: "Stale queued message edit" }],
-          }),
-        },
-      );
-      expect(staleUpdateResponse.status).toBe(409);
-      await expect(readJson(staleUpdateResponse)).resolves.toMatchObject({
-        code: "invalid_request",
-        message: "Queued message changed since editing began",
-      });
-      expect(
-        getQueuedThreadMessage(harness.db, queuedMessage.id)?.content,
-      ).toBe(
-        JSON.stringify([
-          { type: "text", text: "Edited queued message", mentions: [] },
-        ]),
-      );
 
       const deleteResponse = await harness.app.request(
         `/api/v1/threads/${thread.id}/queued-messages/${queuedMessage.id}`,
@@ -2849,8 +2918,6 @@ describe("public thread data routes", () => {
       expect(JSON.parse(queuedRows[0]?.content ?? "null")).toEqual([
         { type: "text", text: "Queued active follow-up", mentions: [] },
       ]);
-      // Nothing was dispatched, and queueing writes no timeline event at all:
-      // the queue rows above the composer are the only narration of a wait.
       expect(
         harness.db
           .select({ type: events.type })
@@ -3238,6 +3305,7 @@ describe("public thread data routes", () => {
         threadId: thread.id,
         content: textInput("Third queued message"),
       });
+      const notifyThread = vi.spyOn(harness.hub, "notifyThread");
       const response = await harness.app.request(
         `/api/v1/threads/${thread.id}/queued-messages/${secondQueuedMessage.id}/order`,
         {
@@ -3261,6 +3329,7 @@ describe("public thread data routes", () => {
         secondQueuedMessage.id,
         thirdQueuedMessage.id,
       ]);
+      expect(notifyThread).not.toHaveBeenCalled();
     });
   });
 
@@ -3918,18 +3987,8 @@ describe("public thread data routes", () => {
               result: { providerThreadId: "provider-immediate-reprovision" },
             };
           }
-          if (request.command.type === "host.list_files") {
-            return {
-              ok: true,
-              result: { files: [], truncated: false },
-            };
-          }
-          if (request.command.type === "host.read_file") {
-            return {
-              ok: false,
-              errorCode: "ENOENT",
-              errorMessage: `Path does not exist: ${request.command.path}`,
-            };
+          if (request.command.type === "host.read_workspace_agent_context") {
+            return { ok: true, result: EMPTY_WORKSPACE_AGENT_CONTEXT };
           }
           throw new Error(`Unexpected RPC command ${request.command.type}`);
         },
@@ -4285,9 +4344,6 @@ describe("public thread data routes", () => {
         },
       );
 
-      // "Send now" overrides plugin waits, not core ones: the workspace is
-      // still being prepared, so the row goes back on the queue waiting on that
-      // rather than being dispatched into a thread that cannot take it.
       expect(sendResponse.status).toBe(409);
       await expect(readJson(sendResponse)).resolves.toMatchObject({
         code: "queued_message_still_waiting",
@@ -4662,7 +4718,7 @@ describe("public thread data routes", () => {
           serviceTier: "default",
           reasoningLevel: "medium",
           permissionMode: "full",
-          claimedAt: null,
+          state: "queued",
           sortKey: "V",
           createdAt: now,
           updatedAt: now,

@@ -29,9 +29,11 @@ function queuedMessage(
     serviceTier: "default",
     groupWithNext: false,
     sendAt: null,
+    state: "queued",
     waitingOn: null,
     failureReason: null,
     payload: { kind: "inline" },
+    systemNotice: null,
     editable: true,
     createdAt: 1,
     updatedAt: 1,
@@ -265,6 +267,62 @@ describe("bb thread organization commands", () => {
     expect(output).toContain("System");
   });
 
+  it("titles a restart resume row as a resume and keeps other retry rows' text", async () => {
+    const list = vi.fn(async () => [
+      queuedMessage({
+        id: "queued-resume",
+        initiator: "system",
+        content: [
+          {
+            type: "text",
+            text: "[bb system] bb restarted while you were working",
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        payload: {
+          kind: "retry",
+          retryOfTurnRequestId: "creq_resume",
+          attempt: 2,
+          reason: "bb restarted",
+        },
+      }),
+      queuedMessage({
+        id: "queued-retry",
+        initiator: "system",
+        content: [
+          {
+            type: "text",
+            text: "Please continue.",
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        payload: {
+          kind: "retry",
+          retryOfTurnRequestId: "creq_retry",
+          attempt: 2,
+          reason: "Rate limited",
+        },
+      }),
+    ]);
+    stubServerApi({ "v1.queued-messages.$get": list });
+
+    await runCommand(["thread", "queue", "list"], register);
+
+    const lines = vi
+      .mocked(console.log)
+      .mock.calls.map((args) => args.join(" "))
+      .join("\n")
+      .split("\n");
+    const resumeRow = lines.find((line) => line.includes("queued-resume"));
+    expect(resumeRow).toContain("Resume after bb restarted");
+    expect(resumeRow).not.toContain("[bb system]");
+    expect(lines.find((line) => line.includes("queued-retry"))).toContain(
+      "Please continue.",
+    );
+  });
+
   it.each([false, true])(
     "shows failures and recovery commands in queue list (scoped: %s)",
     async (scoped) => {
@@ -272,6 +330,7 @@ describe("bb thread organization commands", () => {
         "The provider bridge is unavailable while the plugin is still building";
       const list = vi.fn(async () => [
         queuedMessage({
+          state: "failed_exhausted",
           waitingOn: { kind: "host-offline", hostName: "Michael-M4" },
           failureReason,
         }),
@@ -289,6 +348,7 @@ describe("bb thread organization commands", () => {
         .mocked(console.log)
         .mock.calls.map((args) => args.join(" "))
         .join("\n");
+      expect(output).toContain("failed_exhausted");
       expect(output).toContain(`Failed queued-1: ${failureReason}`);
       expect(output).toContain("bb thread queue send thread-1 queued-1");
       expect(output).not.toContain("waiting for Michael-M4 to reconnect");
@@ -343,6 +403,99 @@ describe("bb thread organization commands", () => {
     expect(list.mock.invocationCallOrder[0]).toBeLessThan(
       update.mock.invocationCallOrder[0],
     );
+  });
+
+  it.each([
+    {
+      flags: ["--send-at", "2h"],
+      sendAt: Date.parse("2026-10-30T12:00:00Z") + 2 * 3_600_000,
+    },
+    { flags: ["--clear-send-at"], sendAt: null },
+  ])(
+    "changes only the send time with $flags",
+    async ({ flags, sendAt }) => {
+      vi.useFakeTimers({ now: Date.parse("2026-10-30T12:00:00Z") });
+      try {
+        const list = vi.fn(async () => [{ id: "queued-1", updatedAt: 42 }]);
+        const update = vi.fn(async () => ({ id: "queued-1", sendAt }));
+        stubServerApi({
+          "v1.threads.:id.queued-messages.$get": list,
+          "v1.threads.:id.queued-messages.:queuedMessageId.$patch": update,
+        });
+
+        await runCommand(
+          ["thread", "queue", "update", "thread-1", "queued-1", ...flags],
+          register,
+        );
+
+        expect(update).toHaveBeenCalledWith({
+          param: { id: "thread-1", queuedMessageId: "queued-1" },
+          json: { expectedUpdatedAt: 42, sendAt },
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("changes only the execution options, mapping workspace-write to accept-edits", async () => {
+    const list = vi.fn(async () => [{ id: "queued-1", updatedAt: 42 }]);
+    const update = vi.fn(async () => ({ id: "queued-1", sendAt: null }));
+    stubServerApi({
+      "v1.threads.:id.queued-messages.$get": list,
+      "v1.threads.:id.queued-messages.:queuedMessageId.$patch": update,
+    });
+
+    await runCommand(
+      [
+        "thread",
+        "queue",
+        "update",
+        "thread-1",
+        "queued-1",
+        "--model",
+        "gpt-5.1-codex",
+        "--reasoning-level",
+        "high",
+        "--permission-mode",
+        "workspace-write",
+      ],
+      register,
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      param: { id: "thread-1", queuedMessageId: "queued-1" },
+      json: {
+        expectedUpdatedAt: 42,
+        model: "gpt-5.1-codex",
+        permissionMode: "accept-edits",
+        reasoningLevel: "high",
+      },
+    });
+  });
+
+  it("rejects a send time that has passed before contacting the server", async () => {
+    const update = vi.fn();
+    stubServerApi({
+      "v1.threads.:id.queued-messages.:queuedMessageId.$patch": update,
+    });
+
+    await expect(
+      runCommand(
+        [
+          "thread",
+          "queue",
+          "update",
+          "thread-1",
+          "queued-1",
+          "--send-at",
+          "2020-01-01T09:00",
+        ],
+        register,
+      ),
+    ).rejects.toThrow("process.exit:1");
+
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("rejects an update when the queued message is absent", async () => {

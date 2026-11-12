@@ -154,6 +154,45 @@ afterEach(() => {
 });
 
 describe("thread-list plugin", () => {
+  it.each([
+    ["empty", true],
+    ["empty", false],
+    ["hidden", false],
+    ["pinned", false],
+  ] as const)(
+    "with only %s threads, shows the project group when showEmptyProjects is %s",
+    async (kind, showEmptyProjects) => {
+      setPreferencesMirrorStorageForTest(null);
+      renderList(
+        { organizationMode: "project", showEmptyProjects },
+        {
+          sidebarThreads: {
+            projects: PROJECTS,
+            sections: [],
+            threads: [
+              ...THREADS.filter((thread) => thread.projectId === "proj_app"),
+              ...(kind === "empty"
+                ? []
+                : [
+                    makeSidebarThread({
+                      id: "thr_web_only",
+                      projectId: "proj_web",
+                      title: "Web only",
+                      isHidden: kind === "hidden",
+                      isPinned: kind === "pinned",
+                      pinnedAt: kind === "pinned" ? 10 : null,
+                    }),
+                  ]),
+            ],
+          },
+        },
+      );
+      await screen.findByText("Parent thread");
+      expect(sectionHeaders()).toContain("App");
+      expect(sectionHeaders().includes("Web")).toBe(showEmptyProjects);
+    },
+  );
+
   it("shows the navigation skeleton until preferences load", () => {
     setPreferencesMirrorStorageForTest(null);
     renderSlot(registration, props(), {
@@ -271,12 +310,12 @@ describe("thread-list plugin", () => {
       await screen.findByRole("button", { name: "New thread in Laptop" }),
     );
 
-    expect(inspection.sidebarActionCalls).toContainEqual({
-      method: "openNewThread",
+    expect(inspection.navigateCalls).toContainEqual({
+      method: "toCompose",
       options: {
         projectId: PERSONAL_PROJECT_ID,
         hostId: "host_laptop",
-        experimental_placement: { sectionId: null, pinned: false },
+        placement: { sectionId: null, pinned: false },
         focusPrompt: true,
       },
     });

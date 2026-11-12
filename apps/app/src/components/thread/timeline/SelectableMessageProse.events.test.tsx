@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MULTI_CLICK_SELECTION_REPORT_DELAY_MS,
   SelectableMessageProse,
+  TOUCH_SELECTION_HANDLE_CLEARANCE_PX,
 } from "./SelectableMessageProse.js";
 
 afterEach(() => {
@@ -269,6 +270,73 @@ describe("SelectableMessageProse", () => {
     );
   });
 
+  it("anchors a touch selection below its last line, clear of the native selection toolbar and handles", async () => {
+    const onSelect = vi.fn();
+    const { getByText } = render(
+      <SelectableMessageProse onSelect={onSelect}>
+        Two line touch selection
+      </SelectableMessageProse>,
+    );
+    const target = getByText("Two line touch selection");
+    const selection = makeWindowSelection({
+      node: target.firstChild!,
+      text: "line touch",
+    });
+    const firstLine = new DOMRect(40, 20, 60, 10);
+    const lastLine = new DOMRect(0, 30, 20, 10);
+    vi.spyOn(selection.getRangeAt(0), "getClientRects").mockReturnValue({
+      length: 2,
+      item: (index: number) => [firstLine, lastLine][index] ?? null,
+    } as unknown as DOMRectList);
+    vi.spyOn(window, "getSelection").mockReturnValue(selection);
+
+    fireEvent.pointerDown(target, { pointerType: "touch" });
+    fireEvent.pointerCancel(document, { pointerType: "touch" });
+    fireEvent(document, new Event("selectionchange"));
+
+    await waitFor(() =>
+      expect(onSelect).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          anchorPoint: { x: 10, y: 40 + TOUCH_SELECTION_HANDLE_CLEARANCE_PX },
+          anchorSide: "bottom",
+          rect: firstLine,
+        }),
+      ),
+    );
+
+    onSelect.mockClear();
+    fireEvent.pointerDown(target, { pointerType: "mouse" });
+    fireEvent.pointerCancel(document, { pointerType: "mouse" });
+    fireEvent.keyUp(document);
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    expect(onSelect.mock.lastCall?.[0]).not.toHaveProperty("anchorSide");
+  });
+
+  it("keeps iOS touch selections above, where iOS leaves room by opening its edit menu below", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+    );
+    const onSelect = vi.fn();
+    const { getByText } = render(
+      <SelectableMessageProse onSelect={onSelect}>
+        iOS touch selection
+      </SelectableMessageProse>,
+    );
+    const target = getByText("iOS touch selection");
+    mockWindowSelection({ node: target.firstChild!, text: "touch" });
+
+    fireEvent.pointerDown(target, { pointerType: "touch" });
+    fireEvent(document, new Event("selectionchange"));
+
+    await waitFor(() =>
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "touch" }),
+      ),
+    );
+    expect(onSelect.mock.lastCall?.[0]).not.toHaveProperty("anchorSide");
+  });
+
   it("includes the pointer release point and side when a pointer selection starts in the message", async () => {
     const onSelect = vi.fn();
     const { getByText } = render(
@@ -331,11 +399,6 @@ describe("SelectableMessageProse", () => {
   it("reports double-click selections from the message click target", async () => {
     vi.useFakeTimers();
     const onSelect = vi.fn();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(performance.now());
-      return 1;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     const { getByText } = render(
       <SelectableMessageProse onSelect={onSelect}>
         Double click target paragraph text
@@ -357,10 +420,12 @@ describe("SelectableMessageProse", () => {
     expect(onSelect).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(onSelect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text: "Double click target paragraph text",
-      }),
+    await vi.waitFor(() =>
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Double click target paragraph text",
+        }),
+      ),
     );
   });
 
@@ -393,11 +458,6 @@ describe("SelectableMessageProse", () => {
   it("cancels a delayed double-click report when a third click completes", async () => {
     vi.useFakeTimers();
     const onSelect = vi.fn();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(performance.now());
-      return 1;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     const { getByText } = render(
       <SelectableMessageProse onSelect={onSelect}>
         Triple click replaces word selection
@@ -424,6 +484,7 @@ describe("SelectableMessageProse", () => {
       text: "Triple click replaces word selection",
     });
     fireEvent.click(target, { detail: 3 });
+    await vi.advanceTimersToNextFrame();
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(

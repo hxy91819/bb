@@ -5,6 +5,7 @@ import {
   clientTurnRequestIdSchema,
   extensionKindSchema,
   jsonValueSchema,
+  promptCacheTtlMsSchema,
   providerErrorCategorySchema,
   providerErrorInfoSchema,
   providerRateLimitStateSchema,
@@ -16,6 +17,7 @@ import {
   threadEventTokenUsageBreakdownSchema,
   threadEventTurnStatusSchema,
   threadEventWarningCategorySchema,
+  threadUsageCostSchema,
   workflowProgressSnapshotSchema,
 } from "@bb/domain";
 import { z } from "zod";
@@ -62,6 +64,7 @@ export const deltaBackgroundTaskShapeSchema = z.object({
   status: threadEventItemStatusSchema,
   taskStatus: backgroundTaskStatusSchema,
   skipTranscript: z.boolean(),
+  foreground: z.boolean().optional(),
   workflowName: z.string().optional(),
   workflow: workflowProgressSnapshotSchema.optional(),
   usage: backgroundTaskUsageSchema.optional(),
@@ -117,6 +120,7 @@ export const deltaItemShapeSchema = z.discriminatedUnion("type", [
     type: z.literal("command"),
     command: z.string(),
     cwd: z.string(),
+    description: z.string().optional(),
     aggregatedOutput: z.string().optional(),
     exitCode: z.number().optional(),
     durationMs: z.number().optional(),
@@ -231,6 +235,11 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
   }),
 
   z.object({
+    kind: z.literal("turn.mainRun"),
+    state: z.enum(["idle", "running"]),
+  }),
+
+  z.object({
     kind: z.literal("turn.boundary"),
     status: threadEventTurnStatusSchema,
     error: deltaErrorSchema.optional(),
@@ -316,6 +325,7 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
     total: threadEventTokenUsageBreakdownSchema,
     last: threadEventTokenUsageBreakdownSchema,
     modelContextWindow: z.number().nullable(),
+    promptCacheTtlMs: promptCacheTtlMsSchema.optional(),
     providerTurnId: providerTurnIdSchema.optional(),
   }),
 
@@ -325,6 +335,7 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
     used: z.number().nullable(),
     size: z.number().nullable().optional(),
     estimated: z.boolean(),
+    cost: threadUsageCostSchema.optional(),
     attach: deltaAttachSchema,
     providerTurnId: providerTurnIdSchema.optional(),
   }),
@@ -347,7 +358,11 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
     kind: z.literal("thread.identity"),
     providerThreadId: z.string().min(1),
   }),
-  z.object({ kind: z.literal("thread.name"), name: z.string().min(1) }),
+  z.object({
+    kind: z.literal("thread.name"),
+    name: z.string().min(1),
+    source: z.literal("agent").optional(),
+  }),
 
   z.object({
     kind: z.literal("extension.state"),

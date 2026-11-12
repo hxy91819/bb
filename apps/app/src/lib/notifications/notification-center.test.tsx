@@ -7,12 +7,13 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { Toaster } from "sonner";
+import { AppToasterView } from "@/components/AppToasterView";
 import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { appToast } from "@/components/ui/app-toast";
 import {
   getNotificationCenterState,
+  getNotifications,
   openNotificationCenter,
   resetNotificationStore,
 } from "./notification-store";
@@ -35,7 +36,7 @@ it("keeps notification details open when dismissing the toast restores composer 
   render(
     <>
       <textarea aria-label="Composer" />
-      <Toaster />
+      <AppToasterView />
       <NotificationCenter />
     </>,
   );
@@ -55,6 +56,9 @@ it("keeps notification details open when dismissing the toast restores composer 
   });
   fireEvent.click(showMore);
   expect(getNotificationCenterState().open).toBe(true);
+  expect(getNotificationCenterState().focusedId).toBe(
+    getNotifications()[0]?.id,
+  );
   await act(async () => {
     await vi.advanceTimersByTimeAsync(5000);
   });

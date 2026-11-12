@@ -38,6 +38,7 @@ export type ProviderExtensionKindSchemas = Readonly<
 export interface ProviderRegistration {
   info: ProviderInfo;
   serverCapabilities: ProviderServerCapabilities;
+  guidedSignIn: boolean;
   bridgeOptions: Readonly<Record<string, JsonValue>>;
   extensionKinds: ProviderExtensionKindSchemas;
   visibility: "always" | "installed";
@@ -186,7 +187,6 @@ export function createProviderRegistryService(
       settled,
       new Promise<void>((resolve) => {
         timer = setTimeout(resolve, REGISTRATIONS_SETTLED_TIMEOUT_MS);
-        timer.unref?.();
       }),
     ]);
     clearTimeout(timer);

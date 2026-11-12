@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { Folder, Label, Preset } from "../../shared/contract.js";
 import { errorMessage } from "../../shared/errors.js";
 import {
-  listAllTasks,
+  selectLabels,
+  selectMachines,
   useFolders,
   usePresets,
   useProjects,
@@ -20,7 +21,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
-import { ConfirmDialog } from "../../components/confirm-dialog.js";
+import { HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS } from "@/components/ui/hover-reveal";
+import { cn } from "@/lib/utils";
+import {
+  ConfirmDeleteDialog,
+  ConfirmDeleteDialogContent,
+} from "@/components/ui/confirm-delete-dialog";
 import {
   PERMISSION_LABELS,
   PresetDialog,
@@ -108,12 +114,10 @@ function LabelsSection() {
   );
   const projectId = selectedProjectId ?? projectList[0]?.id ?? null;
   const labels = useTasksQuery(
-    async (rpc) =>
-      projectId
-        ? (await rpc.call("listLabels", { projectId })).labels
-        : ([] as Label[]),
-    ["projects:changed"],
-    [projectId],
+    "listLabels",
+    { projectId: projectId ?? "" },
+    selectLabels,
+    { enabled: projectId !== null },
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const { error, run } = useActionError();
@@ -124,7 +128,9 @@ function LabelsSection() {
 
   const askDelete = (label: Label) =>
     run(async () => {
-      const tasks = await listAllTasks(rpc, { labelIds: [label.id] });
+      const { tasks } = await rpc.call("listAllTasks", {
+        labelIds: [label.id],
+      });
       setConfirmDelete({ label, usedBy: tasks.length });
     });
 
@@ -194,7 +200,10 @@ function LabelsSection() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="size-6 text-muted-foreground opacity-0 group-hover:opacity-100"
+                  className={cn(
+                    "size-6 text-muted-foreground opacity-0 group-hover:opacity-100",
+                    HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS,
+                  )}
                   aria-label={`Edit label ${label.name}`}
                   onClick={() => setEditingId(label.id)}
                 >
@@ -203,7 +212,10 @@ function LabelsSection() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="size-6 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                  className={cn(
+                    "size-6 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100",
+                    HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS,
+                  )}
                   aria-label={`Delete label ${label.name}`}
                   onClick={() => void askDelete(label)}
                 >
@@ -235,27 +247,34 @@ function LabelsSection() {
           {error}
         </p>
       ) : null}
-      <ConfirmDialog
+      <ConfirmDeleteDialog
+        className="max-w-sm"
         open={confirmDelete !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
-        title={`Delete label “${confirmDelete?.label.name ?? ""}”?`}
-        description={
-          confirmDelete && confirmDelete.usedBy > 0
-            ? `Used by ${confirmDelete.usedBy} task${confirmDelete.usedBy > 1 ? "s" : ""} — removing it detaches them.`
-            : "This label isn't used by any tasks."
-        }
-        confirmLabel="Delete label"
-        onConfirm={() => {
-          const target = confirmDelete;
-          if (target) {
-            void run(() =>
-              rpc.call("deleteLabel", { labelId: target.label.id }),
-            );
-          }
-        }}
-      />
+      >
+        {confirmDelete ? (
+          <ConfirmDeleteDialogContent
+            title={`Delete label “${confirmDelete.label.name}”?`}
+            description={
+              confirmDelete.usedBy > 0
+                ? `Used by ${confirmDelete.usedBy} task${confirmDelete.usedBy > 1 ? "s" : ""} — removing it detaches them.`
+                : "This label isn't used by any tasks."
+            }
+            confirmLabel="Delete label"
+            pending={false}
+            size="sm"
+            onCancel={() => setConfirmDelete(null)}
+            onConfirm={() => {
+              setConfirmDelete(null);
+              void run(() =>
+                rpc.call("deleteLabel", { labelId: confirmDelete.label.id }),
+              );
+            }}
+          />
+        ) : null}
+      </ConfirmDeleteDialog>
     </div>
   );
 }
@@ -263,10 +282,7 @@ function LabelsSection() {
 function PresetsSection() {
   const rpc = useTasksRpc();
   const presets = usePresets();
-  const machines = useTasksQuery(
-    async (rpc) => (await rpc.call("listMachines", {})).machines,
-    [],
-  );
+  const machines = useTasksQuery("listMachines", {}, selectMachines);
   const [dialog, setDialog] = useState<{
     key: number;
     editing: Preset | null;
@@ -275,7 +291,6 @@ function PresetsSection() {
 
   const save = async (editing: Preset | null, draft: PresetDraft) => {
     await savePresetDraft(rpc, editing, draft);
-    presets.refresh();
   };
 
   return (
@@ -345,7 +360,12 @@ function PresetsSection() {
                   {preset.instructions === "" ? "—" : preset.instructions}
                 </td>
                 <td className="px-3 py-2">
-                  <span className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100">
+                  <span
+                    className={cn(
+                      "flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100",
+                      HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS,
+                    )}
+                  >
                     <Button
                       size="icon"
                       variant="ghost"
@@ -366,7 +386,6 @@ function PresetsSection() {
                         setError(null);
                         rpc
                           .call("deletePreset", { presetId: preset.id })
-                          .then(() => presets.refresh())
                           .catch((deleteError: unknown) =>
                             setError(errorMessage(deleteError)),
                           );
@@ -604,31 +623,40 @@ function FoldersSection() {
           {error}
         </p>
       ) : null}
-      <ConfirmDialog
+      <ConfirmDeleteDialog
+        className="max-w-sm"
         open={confirmDelete !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
-        title={`Delete folder “${confirmDelete?.name ?? ""}”?`}
-        description={confirmDelete ? describeDeleteImpact(confirmDelete) : ""}
-        confirmLabel="Delete folder"
-        confirmDisabled={!impactReady}
-        onConfirm={() => {
-          const target = confirmDelete;
-          if (target) {
-            void run(async () => {
-              const result = await rpc.call("deleteFolder", {
-                folderId: target.id,
+      >
+        {confirmDelete ? (
+          <ConfirmDeleteDialogContent
+            title={`Delete folder “${confirmDelete.name}”?`}
+            description={describeDeleteImpact(confirmDelete)}
+            confirmLabel="Delete folder"
+            pending={false}
+            confirmDisabled={!impactReady}
+            size="sm"
+            onCancel={() => setConfirmDelete(null)}
+            onConfirm={() => {
+              setConfirmDelete(null);
+              void run(async () => {
+                const result = await rpc.call("deleteFolder", {
+                  folderId: confirmDelete.id,
+                });
+                if (!result.deleted) {
+                  folders.refresh();
+                  projects.refresh();
+                  throw new Error(
+                    `Folder “${confirmDelete.name}” was already deleted.`,
+                  );
+                }
               });
-              if (!result.deleted) {
-                folders.refresh();
-                projects.refresh();
-                throw new Error(`Folder “${target.name}” was already deleted.`);
-              }
-            });
-          }
-        }}
-      />
+            }}
+          />
+        ) : null}
+      </ConfirmDeleteDialog>
     </div>
   );
 }

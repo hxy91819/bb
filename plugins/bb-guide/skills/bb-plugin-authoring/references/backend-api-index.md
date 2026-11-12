@@ -1,14 +1,14 @@
 # Backend API symbol index
 
-Use this index to check backend, host, AI-service, and test imports.
-Read the detailed backend references for behavior, fields, and examples.
-Read the installed declarations for exact current signatures.
+Check imports here, behavior in the Plugin Guide, and signatures in the installed declarations.
 
 ## `@get-bb/plugin-sdk`
 
 - `PLUGIN_CLI_OUTPUT_MAX_BYTES`
 - `defineRpcContract`
 - `experimental_defineHostEntry`
+- `experimental_joinHostPath`, `experimental_getHostPathDirname`, `experimental_getHostPathBasename`, `experimental_getRelativeHostPath`, `experimental_getHostPathComparisonKey`
+- `experimental_normalizeHostPath`, `experimental_resolveHostPath`, `experimental_isHostPathWithin`
 - `defineCli`
 - `cliCommand`
 - `PluginCliError`
@@ -26,8 +26,15 @@ Read the installed declarations for exact current signatures.
 - `ComposerInsertOptions`
 - `DiffProps`
 - `DiffViewMode`
-- `ExperimentalAppPanel`
-- `ExperimentalAppPanelSurface`
+- `ExperimentalTabRegistration`
+- `ExperimentalTabContext`
+- `ExperimentalTabReference`
+- `ExperimentalOpenTabOptions`
+- `ExperimentalTabTargetReference`
+- `ExperimentalThreadActionTabProps`
+- `ExperimentalThreadTabProps`
+- `ExperimentalThreadTabActionContext`
+- `ExperimentalPanelController`
 - `ExperimentalDesktopBrowserAcquireInput`
 - `ExperimentalDesktopBrowserCreateInput`
 - `ExperimentalDesktopBrowserLease`
@@ -57,7 +64,6 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalHostWatchSubscription`
 - `ExperimentalHostWorkerLease`
 - `ExperimentalLiveFileTarget`
-- `ExperimentalOpenFixedTabOptions`
 - `ExperimentalPermissionModePickerProps`
 - `ExperimentalPluginFixedTabReference`
 - `ExperimentalPluginRpcCaller`
@@ -70,8 +76,9 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalProviderModelPickerProps`
 - `ExperimentalProviderModelPickerRouting`
 - `ExperimentalProviderModelPickerValue`
+- `ExperimentalVoiceInputTextareaProps`
 - `JsonValue`
-- `ReadonlyJsonValue` — deep-readonly JSON, e.g. `context.pluginMetadata` values
+- `ReadonlyJsonValue`
 - `MarkdownProps`
 - `NewThreadComposerProps`
 - `NewThreadRequest`
@@ -81,25 +88,21 @@ Read the installed declarations for exact current signatures.
 - `PluginDispatchEnvironmentIntent`
 - `PluginDispatchExecution`
 - `PluginDispatchExecutionSources`
-- `PluginEnvironments` — `bb.experimental_environments`: `register` +
-  `recheck` (see backend-events.md, environment providers)
-- `PluginServerAccess` — `bb.experimental_serverAccess.register`
+- `PluginEnvironments`
+- `PluginServerAccess`
 - `ServerAccessProviderDeclaration`
 - `ServerAccessGrant`
-- `PluginMachineProviderResource` — non-null JSON persisted by machine checkpoints and lifecycle results
-- `PluginMachines` — `bb.experimental_machines.register` and bootstrap helper (see backend-machines.md)
-- `MachineExecutorRequest` — argv, timeout, signal, optional private stdin
-- `MachineExecutor` — transport exec
-- `MachineBootstrapRequest` — durable key, optional executor and access selection, report, signal
-- `MachineBootstrapApi` — bootstrap
+- `PluginMachineProviderResource`
+- `PluginMachines`
+- `MachineExecutorRequest`
+- `MachineExecutor`
+- `MachineBootstrapRequest`
+- `MachineBootstrapApi`
 - `PluginMachineProviderDeclaration`
 - `PluginMachineValidateDecision`
 - `PluginEnvironmentProviderDeclaration`
-- `PluginEnvironmentProviderRequirements` — `requires`, e.g.
-  `{ gitCheckout: true }`; also `projectCheckout`, `gitRemote` and `projectless`.
-  Anything else comes through the declaration's `inputs` validator
-- `PluginEnvironmentValidateDecision` — `{ action: "accept" }` or
-  `{ action: "refuse", message }`, the message being the caller's error
+- `PluginEnvironmentProviderRequirements`
+- `PluginEnvironmentValidateDecision`
 - `PluginDispatchInput`
 - `PluginHookHandler`
 - `PluginHookName`
@@ -128,8 +131,7 @@ Read the installed declarations for exact current signatures.
 - `PluginAppSetup`
 - `PluginAppSlots`
 - `PluginBackground`
-- `PluginBbSdk` — `bb.sdk`; thread plugin metadata calls default `pluginId`
-  (see backend-sdk.md)
+- `PluginBbSdk`
 - `PluginCli`
 - `PluginCliBooleanOption`
 - `PluginCliCommand`
@@ -155,11 +157,66 @@ Read the installed declarations for exact current signatures.
 - `PluginCodeThemeData`
 - `PluginCodeThemeState`
 - `PluginCodeThemeTokenRule`
+- `ExperimentalClipboardContent`
+- `ExperimentalSaveFileRequest`
+- `ExperimentalSaveFileOutcome`
 - `PluginAppCommands`
 - `PluginCommandContext`
 - `PluginCommandShortcut`
 - `PluginCommandRegistration`
+- `ExperimentalComposerAction`
+- `ExperimentalComposerAttachments`
+- `ExperimentalComposerClipboard`
 - `ExperimentalComposerCommandRegistration`
+- `ExperimentalComposerCommandSearch`
+- `ExperimentalComposerCommandSuggestion`
+- `ExperimentalComposerCommandTrigger`
+- `ExperimentalComposerContribution`
+- `ExperimentalComposerContributions`
+- `ExperimentalComposerDecorationSource`
+- `ExperimentalComposerEditor`
+- `ExperimentalComposerEditorState`
+- `ExperimentalComposerEditorVoice`
+- `ExperimentalComposerHistory`
+- `ExperimentalComposerInput`
+- `ExperimentalComposerMentionSearch`
+- `ExperimentalComposerMentionSuggestion`
+- `ExperimentalComposerMentionSuggestionGroup`
+- `ExperimentalComposerMentionTarget`
+- `ExperimentalComposerMenuEntryProps`
+- `ExperimentalComposerMenuSelection`
+- `ExperimentalComposerPendingUpload`
+- `ExperimentalComposerPlusMenuContribution`
+- `ExperimentalComposerPopupContribution`
+- `ExperimentalComposerPopupProps`
+- `ExperimentalComposerPromptAction`
+- `ExperimentalComposerProps`
+- `ExperimentalComposerRegistration`
+- `ExperimentalComposerRendererApi`
+- `ExperimentalComposerRootProps`
+- `ExperimentalComposerSearchQuery`
+- `ExperimentalComposerSelection`
+- `ExperimentalComposerSendMenuContribution`
+- `ExperimentalComposerSubmission`
+- `ExperimentalComposerSubmitOptions`
+- `ExperimentalComposerThreadLink`
+- `ExperimentalComposerThreadLinks`
+- `ExperimentalComposerThreadRelation`
+- `ExperimentalComposerVoice`
+- `ExperimentalDroppedThreadMention`
+- `ExperimentalFailedVoiceRecording`
+- `ExperimentalFailedVoiceRecordingsProps`
+- `ExperimentalImageLightboxProps`
+- `ExperimentalMessageClipboardPayload`
+- `ExperimentalOpenAttachmentRequest`
+- `ExperimentalPluginIconProps`
+- `ExperimentalPromptMentionIconProps`
+- `ExperimentalShortcutHintProps`
+- `ExperimentalShortcutPresentation`
+- `ExperimentalThreadTitleTextProps`
+- `ExperimentalVoiceDelivery`
+- `ExperimentalVoiceInputButtonProps`
+- `ExperimentalVoiceRecordingBarProps`
 - `PluginComposerApi`
 - `PluginComposerMention`
 - `PluginComposerScope`
@@ -174,8 +231,6 @@ Read the installed declarations for exact current signatures.
 - `PluginFileOpenerProps`
 - `PluginFileOpenerRegistration`
 - `PluginFileOpenerSource`
-- `PluginFixedTabDeclaration`
-- `PluginFixedTabRegistration`
 - `PluginHomepageSectionProps`
 - `PluginHomepageSectionRegistration`
 - `PluginHosts`
@@ -195,16 +250,25 @@ Read the installed declarations for exact current signatures.
 - `PluginMentionTrigger`
 - `PluginMessageActionContext`
 - `PluginMessageActionRegistration`
+- `ExperimentalMessageMetadataContext`
+- `ExperimentalMessageMetadataPlacement`
+- `ExperimentalMessageMetadataProps`
+- `ExperimentalMessageMetadataRegistration`
 - `PluginMessageDirectiveMessage`
 - `PluginMessageDirectiveOpenWorkspaceFile`
 - `PluginMessageDirectiveProps`
+- `ExperimentalCodeFenceRendererProps`
 - `PluginMessageDirectiveRegistration`
+- `ExperimentalCodeFenceRendererRegistration`
+- `ExperimentalCodeFenceStatus`
 - `PluginNavPanelProps`
 - `PluginNavPanelRegistration`
+- `ExperimentalPageTitle`
+- `ExperimentalPageBreadcrumb`
+- `ExperimentalBadge`
 - `PluginNewThreadPanelActionContext`
 - `PluginNewThreadPanelActionRegistration`
 - `PluginNewThreadPanelProps`
-- `PluginPanelActionOpenOptions`
 - `PluginPendingInteractionProps`
 - `PluginPendingInteractionRegistration`
 - `PluginPendingInteractionView`
@@ -261,30 +325,33 @@ Read the installed declarations for exact current signatures.
 - `PluginSidebarFooterActionProps`
 - `PluginSidebarFooterActionRegistration`
 - `PluginSidebarProject`
-- `PluginSidebarPullRequest`
 - `PluginSidebarSplitPane`
 - `PluginSidebarThread`
-- `PluginSidebarThreadActions`
 - `PluginSidebarThreadActivity`
 - `PluginSidebarThreadIndicator`
-- `PluginSidebarThreadPullRequestState`
 - `PluginSidebarThreadSplit`
+- `PluginSidebarThreadSplitOptions`
 - `PluginSidebarThreadsState`
 - `PluginSourceCodeRendererProps`
 - `PluginSourceCodeRendererRegistration`
 - `PluginStatusApi`
 - `PluginStorage`
-- `PluginTargetedPanelActionOpenOptions`
 - `PluginThreadEventHandler`
 - `PluginThreadEventName`
 - `PluginThreadEventPayloads`
-- `PluginThreadHeaderActionProps`
-- `PluginThreadHeaderActionRegistration`
+- `ExperimentalThreadInfoProps`
+- `ExperimentalThreadInfoRowRegistration`
+- `ExperimentalThreadInfoSectionRegistration`
+- `ExperimentalThreadContextCardRowRegistration`
+- `ExperimentalThreadContextCardSectionRegistration`
+- `ExperimentalThreadContextCardProps`
+- `ExperimentalThreadContextCardRowProps`
+- `ExperimentalInfoSectionProps`
+- `ExperimentalDetailRowProps`
+- `ExperimentalInfoListProps`
+- `ExperimentalInfoListRowProps`
 - `PluginThreadListProps`
 - `PluginThreadListRegistration`
-- `PluginThreadPanelActionContext`
-- `PluginThreadPanelActionRegistration`
-- `PluginThreadPanelProps`
 - `PluginTimelineRendererProps`
 - `PluginTimelineRendererRegistration`
 - `PluginTimelineRendererRow`
@@ -305,44 +372,28 @@ Read the installed declarations for exact current signatures.
 
 ## `@get-bb/plugin-sdk/environment-provider`
 
-- `PluginEnvironmentProviderAvailabilityContext` and
-  `PluginEnvironmentProviderAvailability` — context and result for a
-  declaration's optional `availability` method
-- `PluginEnvironmentProviderDefinition` — idempotent long-running `create`
-  and `remove`, plus optional `validate`, `availability`,
-  `restore`, `inputs` and policy
-- `PluginEnvironmentProviderInputsSchema` — the `inputs` type parameter:
-  a Standard Schema v1 validator (a zod schema is one), or `undefined` for
-  `inputs: null` in `create`
-- `PluginEnvironmentProviderPolicy` — `retireGraceMs`, `pathKeys`
-- `PluginEnvironmentProviderValidateContext` — the `validate` context
-  typed from `requires` and `inputs`, like the create context
-- `PluginEnvironmentProviderCreateContext` — facts for a fresh environment,
-  including the `suggestedBranchName` core would use
-- `PluginEnvironmentProviderRestoreContext` — `restore`'s
-  context: the creation inputs plus `previous.environment` and its private
-  `previous.resource`
-- `PluginEnvironmentProviderCreateResult` — `created` names the path and may
-  carry the private, 16 KiB-capped JSON `resource`; the selected machine owns
-  the host identity
-- `PluginEnvironmentProviderProgress` — durable `step` and `log` updates
-- `PluginEnvironmentProviderRemoveContext` — includes the private
-  `resource` returned by the launch that made the environment
+- `PluginEnvironmentProviderAvailabilityContext`
+- `PluginEnvironmentProviderAvailability`
+- `PluginEnvironmentProviderDefinition`
+- `PluginEnvironmentProviderInputsSchema`
+- `PluginEnvironmentProviderPolicy`
+- `PluginEnvironmentProviderValidateContext`
+- `PluginEnvironmentProviderCreateContext`
+- `PluginEnvironmentProviderRestoreContext`
+- `PluginEnvironmentProviderCreateResult`
+- `PluginEnvironmentProviderProgress`
+- `PluginEnvironmentProviderRemoveContext`
 - `PluginEnvironmentProviderRemoveResult`
 
 ## `@get-bb/plugin-sdk/machine-provider`
 
-- `PluginMachineProviderDefinition` — id, display, description, icon, inputs,
-  availability, validation, create, optional paired suspend/resume,
-  `ephemeral` automatic retirement policy, and remove
+- `PluginMachineProviderDefinition`
 - `PluginMachineProviderInputsSchema`
 - `PluginMachineProviderAvailability`
 - `PluginMachineProviderValidateContext`
-- `PluginMachineProviderCreateContext` — async `checkpoint(resource)` after
-  preparing enrollment and allocating, before bootstrap; never bundle credentials
+- `PluginMachineProviderCreateContext`
 - `PluginMachineProviderCreateResult`
-- `PluginMachineProviderLifecycleContext` — shared create, suspend and resume
-  context with a durable `checkpoint` resource callback
+- `PluginMachineProviderLifecycleContext`
 - `PluginMachineProviderProgress`
 - `PluginMachineProviderResourceResult`
 - `PluginMachineProviderRemoveResult`
@@ -351,13 +402,14 @@ Read the installed declarations for exact current signatures.
 
 - `experimental_defineHostEntry`
 - `experimental_filterResolvedNativeRoots`
-- `experimental_killProcessesWithCwdUnder` — reap processes whose cwd is under a
-  workspace a provider is tearing down, before removing the directory
+- `experimental_killProcessesWithCwdUnder`
 - `experimental_nativeRootsHostContract`
 - `experimental_nativeRootsResolveInputSchema`
 - `experimental_nativeRootsResolveOutputSchema`
+- `experimental_readProcessIdentity`
 - `experimental_resolveClaudePluginRoots`
 - `experimental_resolveVendorPluginRoots`
+- `experimental_runVcsProcess`
 - `experimental_sanitizeInheritedChildProcessEnv`
 - `experimental_spawnPortableOutputProcess`
 - `ExperimentalClaudePluginRoots`
@@ -381,9 +433,13 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalNativeRootsResolveAnswer`
 - `ExperimentalNativeRootsResolveInput`
 - `ExperimentalNativeRootsResolveOutput`
+- `ExperimentalProcessIdentity`
+- `ExperimentalQuestionFormAction`
 - `ExperimentalQuestionFormHost`
 - `ExperimentalQuestionShortcut`
 - `ExperimentalSanitizeInheritedChildProcessEnvArgs`
+- `ExperimentalVcsProcessOptions`
+- `ExperimentalVcsProcessPriority`
 - `ExperimentalVendorPlugin`
 - `ExperimentalVendorPluginRoots`
 - `ExperimentalVendorPluginRootsArgs`
@@ -396,6 +452,7 @@ Read the installed declarations for exact current signatures.
 - `createFakePluginHost`
 - `createFakeSdk`
 - `experimental_scanPublicSdkOnly`
+- `experimental_makePanelController`
 - `makeHostResponse`
 - `makeMessageDispatchHookContext`
 - `makePluginAgentConfigurationContext`
@@ -432,3 +489,11 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalCreateHostEntryHarnessOptions`
 - `ExperimentalHostEntryHarness`
 - `ExperimentalHostHarnessSignal`
+
+## Live RPC client types
+
+- `ExperimentalRpcKeyedMethod`, `ExperimentalRpcKeyedValue`
+- `experimental_PluginRpcCallError`
+
+The keyed method and row types are inferred from the `contract` option.
+Read-state and error behavior is documented in [Frontend hooks and UI](frontend-hooks-and-ui.md).

@@ -6,14 +6,13 @@ import {
 } from "@bb/domain";
 import type { ClientTurnRequestId, Thread } from "@bb/domain";
 import {
-  createConnection,
   createProject,
   createThread,
   insertEvents,
-  migrate,
   noopNotifier,
   upsertHost,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import type { DbConnection } from "@bb/db";
 import { buildThreadTimelineWithProfile } from "../../../src/services/threads/timeline.js";
 
@@ -30,8 +29,7 @@ const requestId = (value: number): ClientTurnRequestId =>
   encodeClientTurnRequestIdNumber({ value });
 
 function setup(): { db: DbConnection; thread: Thread } {
-  const db = createConnection(":memory:");
-  migrate(db);
+  const db = createMigratedConnection();
   const host = upsertHost(db, noopNotifier, {
     name: "test-host",
   });
@@ -187,6 +185,7 @@ function seedThreadWithEarlyHeadState(
               status: "pending",
               taskStatus: "running",
               skipTranscript: false,
+              foreground: false,
               workflowName: "fixture-mini",
               usage: { totalTokens: 100, toolUses: 2, durationMs: 1500 },
             },
@@ -217,8 +216,14 @@ function seedThreadWithEarlyHeadState(
   insertEvents(db, noopNotifier, events);
 }
 
+const CODEX_GOAL_KIND = "provider-codex/goal";
+
 const baseOptions = {
+  extensionStateKinds: [CODEX_GOAL_KIND],
+  includeClearedContextHistory: false,
   includeDiagnosticOperations: false,
+  compactionOfferEnabled: false,
+  summarizeShellCommands: true,
   includeNestedRows: true,
   maxInlineOutputChars: null,
   maxSeq: 0,
@@ -252,8 +257,8 @@ describe("timeline head state under a budgeted window", () => {
       "Shipping the thing",
     );
 
-    expect(unbudgeted.goal).not.toBeNull();
-    expect(budgeted.goal).toEqual(unbudgeted.goal);
+    expect(unbudgeted.extensionStates[CODEX_GOAL_KIND]).toBeDefined();
+    expect(budgeted.extensionStates).toEqual(unbudgeted.extensionStates);
 
     expect(unbudgeted.activeWorkflows).toHaveLength(1);
     expect(budgeted.activeWorkflows).toHaveLength(1);
@@ -271,7 +276,9 @@ describe("timeline head state under a budgeted window", () => {
     expect(
       latest.response.pendingTodos?.items.map((item) => item.text),
     ).toEqual(["Shipping the thing", "Write the docs"]);
-    expect(latest.response.goal?.objective).toBe("Land the timeline fix");
+    expect(latest.response.extensionStates[CODEX_GOAL_KIND]).toMatchObject({
+      objective: "Land the timeline fix",
+    });
     expect(latest.response.rows.some((row) => row.sourceSeqStart < 390)).toBe(
       false,
     );
@@ -319,7 +326,7 @@ describe("timeline head state under a budgeted window", () => {
       after.timelinePage.olderRowUpdates?.map((row) => row.sourceSeqEnd),
     ).toContain(before.maxSeq + 1);
     expect(after.pendingTodos).toEqual(before.pendingTodos);
-    expect(after.goal).toEqual(before.goal);
+    expect(after.extensionStates).toEqual(before.extensionStates);
     db.$client.close();
   });
 
@@ -354,7 +361,7 @@ describe("timeline head state under a budgeted window", () => {
       eventBudget: 100,
     }).response;
     expect(budgeted.pendingTodos).toBeNull();
-    expect(budgeted.goal).toBeNull();
+    expect(budgeted.extensionStates).toEqual({});
     expect(budgeted.activeWorkflows).toHaveLength(0);
   });
 });

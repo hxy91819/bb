@@ -1,4 +1,5 @@
 import {
+  getLatestThreadSequence,
   copyStoredThreadEventsInTransaction,
   findLastCompletedRootStoredTurn,
   findLastRootStoredTurnStarted,
@@ -24,6 +25,10 @@ export interface ThreadForkPoint {
 
 function forkPointUnavailable(message: string): never {
   throw new ApiError(400, "fork_source_session_unavailable", message);
+}
+
+function forkPointTurnIncomplete(message: string): never {
+  throw new ApiError(400, "fork_source_turn_incomplete", message);
 }
 
 interface StoredTurnCompletion {
@@ -103,7 +108,7 @@ function resolveAnchoredForkPoint(
     turnId: anchor.turnId,
   });
   if (completion === null) {
-    forkPointUnavailable(
+    forkPointTurnIncomplete(
       `Cannot fork at sequence ${args.sourceSeqEnd}: the turn containing it has not completed`,
     );
   }
@@ -314,6 +319,9 @@ export function copyForkSourceHistory(
     { behavior: "immediate" },
   );
   deps.hub.notifyThread(args.fork.id, ["events-appended"], {
+    timelineSequence: getLatestThreadSequence(deps.db, {
+      threadId: args.fork.id,
+    }),
     eventTypes: [...new Set(rows.map((row) => row.type))],
   });
 }

@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import {
   PROMPT_STACK_CARD_ROW_HEIGHT,
   PromptStackCard,
-  PromptStackCardChevron,
 } from "@/components/promptbox/banner/PromptStackCard";
 import {
   activityIconClass,
@@ -11,6 +10,12 @@ import {
 } from "@bb/shared-ui/activity-row-styles";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
+import {
+  PROMPT_STACK_DISCLOSURE_TRIGGER_CLASS,
+  PromptStackHoverChevron,
+  useDisclosureFocusHandoff,
+  AnimatedDisclosureBody,
+} from "@bb/shared-ui/prompt-stack-disclosure";
 
 const HEADER_GROUP_CLASS = activityRowClass(
   "active",
@@ -19,7 +24,7 @@ const HEADER_GROUP_CLASS = activityRowClass(
 const HEADER_BUTTON_CLASS =
   "flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-none bg-transparent px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background/80";
 const DISMISS_BUTTON_CLASS =
-  "flex min-h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border-l border-border/35 bg-transparent text-muted-foreground transition-colors hover:text-foreground disabled:cursor-wait disabled:text-muted-foreground/60";
+  "flex min-h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border-l border-border/35 bg-transparent text-muted-foreground transition-colors hover:text-foreground disabled:text-muted-foreground/60";
 
 interface CollapsibleActiveStackCardProps {
   cardAriaLabel: string;
@@ -29,6 +34,7 @@ interface CollapsibleActiveStackCardProps {
   toggleAriaLabel: string;
   iconName: IconName;
   title: string;
+  isActive: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   dismiss: {
@@ -47,11 +53,14 @@ export function CollapsibleActiveStackCard({
   toggleAriaLabel,
   iconName,
   title,
+  isActive,
   isExpanded,
   onToggle,
   dismiss,
   children,
 }: CollapsibleActiveStackCardProps) {
+  const activity = isActive ? "active" : "pending";
+  const focus = useDisclosureFocusHandoff(isExpanded, onToggle);
   return (
     <PromptStackCard
       ariaLabel={cardAriaLabel}
@@ -64,31 +73,32 @@ export function CollapsibleActiveStackCard({
         className={HEADER_GROUP_CLASS}
       >
         <button
+          ref={focus.triggerRef}
           type="button"
           id={toggleId}
           aria-expanded={isExpanded}
           aria-controls={bodyId}
           aria-label={toggleAriaLabel}
-          onClick={onToggle}
-          className={HEADER_BUTTON_CLASS}
+          onClick={focus.onTriggerClick}
+          className={cn(
+            HEADER_BUTTON_CLASS,
+            PROMPT_STACK_DISCLOSURE_TRIGGER_CLASS,
+          )}
         >
           <Icon
             name={iconName}
-            className={activityIconClass("active", "size-3.5 shrink-0")}
+            className={activityIconClass(activity, "size-3.5 shrink-0")}
             aria-hidden="true"
           />
           <span
             className={activityTextClass(
-              "active",
+              activity,
               "min-w-0 flex-1 truncate text-left",
             )}
           >
             {title}
           </span>
-          <PromptStackCardChevron
-            isExpanded={isExpanded}
-            className={activityIconClass("active")}
-          />
+          <PromptStackHoverChevron isExpanded={isExpanded} />
         </button>
         {dismiss ? (
           <button
@@ -106,20 +116,17 @@ export function CollapsibleActiveStackCard({
           </button>
         ) : null}
       </div>
-      <section
+      <AnimatedDisclosureBody
         id={bodyId}
-        role="region"
-        aria-labelledby={toggleId}
-        aria-hidden={!isExpanded}
-        className={cn(
-          "grid overflow-hidden transition-[grid-template-rows,opacity,border-color] duration-200 ease-out",
-          isExpanded
-            ? "grid-rows-[1fr] border-t border-border opacity-100"
-            : "pointer-events-none grid-rows-[0fr] opacity-0",
-        )}
+        labelledBy={toggleId}
+        isExpanded={isExpanded}
+        collapsedBorder="none"
+        collapseLabel={`Collapse ${title}`}
+        collapseRef={focus.collapseRef}
+        onCollapse={focus.onCollapseClick}
       >
-        <div className="overflow-hidden bg-popover">{children}</div>
-      </section>
+        {children}
+      </AnimatedDisclosureBody>
     </PromptStackCard>
   );
 }

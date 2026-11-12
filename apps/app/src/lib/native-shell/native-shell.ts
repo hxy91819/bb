@@ -2,9 +2,11 @@ import {
   compareBridgeVersions,
   isBridgeUsable,
   NATIVE_BRIDGE_GLOBAL,
+  parseBridgeServers,
   parseNativeShellHandshake,
   parseShellToPageEvent,
   safeAreaInsetsSchema,
+  type BridgeServer,
   type NativeScreen,
   type NativeCapability,
   type NativeShellHandshake,
@@ -15,16 +17,22 @@ import {
 interface NativeBridgeGlobal {
   post(message: unknown): void;
   request(kind: string, payload: unknown): Promise<unknown>;
+  copyTextAndImage?(text: string, imageUrl: string): Promise<unknown>;
+  copyRichText?(text: string, html: string): Promise<unknown>;
   subscribe(listener: (event: unknown) => void): () => void;
   safeArea?: unknown;
+  servers?: unknown;
 }
 
 export interface NativeShell {
   handshake: NativeShellHandshake;
   safeArea(): SafeAreaInsets;
+  servers(): readonly BridgeServer[] | null;
   has(capability: NativeCapability): boolean;
   post(message: unknown): void;
   request(kind: string, payload: unknown): Promise<unknown>;
+  copyTextAndImage?(text: string, imageUrl: string): Promise<unknown>;
+  copyRichText?(text: string, html: string): Promise<unknown>;
   subscribe(listener: (event: ShellToPageEvent) => void): () => void;
 }
 
@@ -52,11 +60,13 @@ function pickHandshakeFields(bridge: NativeBridgeGlobal): unknown {
   return {
     bridgeVersion: source.bridgeVersion,
     appVersion: source.appVersion,
+    androidVersionCode: source.androidVersionCode,
     platform: source.platform,
     profileMode: source.profileMode,
     secureContext: source.secureContext,
     safeArea: source.safeArea,
     capabilities: source.capabilities,
+    nativeDownloads: source.nativeDownloads,
   };
 }
 
@@ -75,9 +85,18 @@ function buildNativeShell(): NativeShell | null {
       const live = safeAreaInsetsSchema.safeParse(bridge.safeArea);
       return live.success ? live.data : handshake.safeArea;
     },
+    servers: () => parseBridgeServers(bridge.servers),
     has: (capability) => capabilities.has(capability),
     post: (message) => bridge.post(message),
     request: (kind, payload) => bridge.request(kind, payload),
+    copyRichText:
+      typeof bridge.copyRichText === "function"
+        ? bridge.copyRichText.bind(bridge)
+        : undefined,
+    copyTextAndImage:
+      typeof bridge.copyTextAndImage === "function"
+        ? bridge.copyTextAndImage.bind(bridge)
+        : undefined,
     subscribe: (listener) =>
       bridge.subscribe((event) => {
         const parsed = parseShellToPageEvent(event);
@@ -126,4 +145,10 @@ export function shellReportReady(path: string): void {
 
 export function shellReportPath(title: string, path: string): void {
   getNativeShell()?.post({ type: "title", title, path });
+}
+
+export function shellSetBadge(count: number): void {
+  const shell = getNativeShell();
+  if (shell === null || !shell.has("badge")) return;
+  shell.post({ type: "badge", count });
 }

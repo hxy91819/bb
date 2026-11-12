@@ -441,6 +441,8 @@ function ProviderGlyph() {
   );
 }
 
+const MOBILE_SCREEN_CLASS = "aspect-[9/19]";
+
 function WindowFrame({
   children,
   className,
@@ -471,14 +473,17 @@ function TrafficLights() {
   );
 }
 
-const SIDEBAR_THREADS: readonly { title: string; glyph?: "spin" | "dot" }[] = [
+const SIDEBAR_THREADS: readonly {
+  title: string;
+  glyph?: "spin" | "dot";
+  pullRequest?: boolean;
+}[] = [
   { title: "Fix flaky checkout tests", glyph: "spin" },
   { title: "Refactor settings page" },
-  { title: "Ship dark mode", glyph: "dot" },
+  { title: "Ship dark mode", glyph: "dot", pullRequest: true },
 ];
 
 const FOOTER_ITEM_RENDERERS: Record<string, () => ReactNode> = {
-  settings: () => <MiniIcon icon="Settings" className="size-4" />,
   "plugin-footer-items": () => (
     <span className="flex items-center gap-1.5">
       <span className="flex size-5.5 items-center justify-center rounded-md">
@@ -492,6 +497,50 @@ const FOOTER_ITEM_RENDERERS: Record<string, () => ReactNode> = {
   "bug-report": () => <MiniIcon icon="Bug" className="size-4" />,
 };
 
+const RAIL_BUTTON_CLASS = "flex size-7 items-center justify-center rounded-md";
+
+function SidebarRail() {
+  return (
+    <RegionMark
+      id="sidebar-navigation"
+      label="The sidebar navigation, drawn by bb or one plugin"
+      className="flex shrink-0"
+      showChip={false}
+    >
+      <div
+        data-guide-fixture="sidebar-rail"
+        className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-border-hairline py-3"
+      >
+        <span className={cn(RAIL_BUTTON_CLASS, "bg-sidebar-accent")}>
+          <MiniIcon icon="Home" className="text-foreground" />
+        </span>
+        <span className={RAIL_BUTTON_CLASS}>
+          <MiniIcon icon="Plug02" />
+        </span>
+        <span className={RAIL_BUTTON_CLASS}>
+          <MiniIcon icon="Zap" />
+        </span>
+        <Mark
+          id="nav-panel"
+          label="Plugin nav panels, in the navigation rail"
+          className="z-[2] flex size-7 items-center justify-center text-sidebar-foreground"
+          showChip={false}
+        >
+          <PluginGlyph />
+          <span className="sr-only">Your panel</span>
+        </Mark>
+        <span className={RAIL_BUTTON_CLASS}>
+          <MiniIcon icon="MoreHorizontal" />
+        </span>
+        <span className="flex-1" />
+        <span className={RAIL_BUTTON_CLASS}>
+          <MiniIcon icon="Settings" />
+        </span>
+      </div>
+    </RegionMark>
+  );
+}
+
 const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
   "top-reserve": () => (
     <div
@@ -501,46 +550,6 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
       <MiniIcon icon="ChevronLeft" className="size-3.5" />
       <MiniIcon icon="ChevronRight" className="ml-1.5 size-3.5" />
     </div>
-  ),
-  "sidebar-navigation": () => (
-    <RegionMark
-      id="sidebar-navigation"
-      label="The sidebar navigation controls, replaceable by one plugin"
-      showChip={false}
-    >
-      <div
-        data-guide-fixture="sidebar-navigation-primary-actions"
-        className="space-y-0.5 px-2 py-2"
-      >
-        <span className="flex h-6.5 items-center gap-2 rounded-md px-2 text-foreground">
-          <MiniIcon icon="MessageSquarePlus" className="text-foreground" />
-          New thread
-        </span>
-        <span className="flex h-6.5 items-center gap-2 rounded-md px-2">
-          <MiniIcon icon="Search" />
-          Search threads
-        </span>
-        <span className="flex h-6.5 items-center gap-2 rounded-md px-2">
-          <MiniIcon icon="Plug02" />
-          Plugins
-        </span>
-        <span className="flex h-6.5 items-center gap-2 rounded-md px-2">
-          <MiniIcon icon="Zap" />
-          Skills
-        </span>
-      </div>
-      <Mark
-        id="nav-panel"
-        label="Plugin nav panels, above the thread list"
-        className="mx-1.5 z-[2] block space-y-0.5 px-2 pb-2"
-        showChip={false}
-      >
-        <span className="flex h-6.5 items-center gap-2 rounded-md bg-sidebar-accent px-2 font-medium text-sidebar-foreground">
-          <PluginGlyph />
-          Your panel
-        </span>
-      </Mark>
-    </RegionMark>
   ),
   "thread-list": () => (
     <RegionMark
@@ -555,9 +564,28 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
       {SIDEBAR_THREADS.map((thread) => (
         <span
           key={thread.title}
-          className="flex h-6.5 items-center gap-2 rounded-md px-2"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2",
+            thread.pullRequest ? "py-1" : "h-6.5",
+          )}
         >
-          <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate">{thread.title}</span>
+            {thread.pullRequest ? (
+              <Mark
+                id="thread-row-metadata"
+                label="A pull request badge a plugin added to the row's metadata line"
+                chip="side"
+                className="z-[2] flex h-4 w-28 items-center gap-1 text-xs tabular-nums text-success"
+              >
+                <MiniIcon icon="GitPullRequestArrow" className="size-3" />
+                <span className="font-mono text-muted-foreground">#412</span>
+                <span className="flex size-3 items-center justify-center">
+                  <span className="size-1.5 rounded-full bg-attention" />
+                </span>
+              </Mark>
+            ) : null}
+          </span>
           {thread.glyph === "spin" ? (
             <Mark
               id="thread-row-status"
@@ -626,9 +654,6 @@ const SIDEBAR_SECTION_RENDERERS: Record<string, () => ReactNode> = {
 const MESSAGE_ACTION_RENDERERS: Record<string, () => ReactNode> = {
   copy: () => <MiniIcon icon="Copy" className="size-3.5" />,
   edit: () => <MiniIcon icon="Edit" className="size-3.5" />,
-  "send-to-main-thread": () => (
-    <MiniIcon icon="ArrowTurnBackward" className="size-3.5" />
-  ),
   "plugin-actions": () => <PluginGlyph className="size-3.5" />,
   "message-menu": () => <MiniIcon icon="MoreHorizontal" className="size-3.5" />,
 };
@@ -640,15 +665,25 @@ export const ANATOMY_RENDERER_KEYS = {
 };
 
 export type AppShellRightPanelTab =
+  | "thread-info"
   | "browser-toolbar"
   | "thread-panel"
   | "file-opener"
   | "code-renderers";
 
 function RightPanelTabLaneBadges({ mobile }: { mobile: boolean }) {
-  const clipTo = mobile ? '[data-guide-fixture="right-panel-tab-strip"]' : undefined;
+  const clipTo = mobile
+    ? '[data-guide-fixture="right-panel-tab-strip"]'
+    : undefined;
   return (
     <>
+      <MeasuredBadge
+        id="thread-info"
+        label="Plugin rows and sections in bb's Info tab"
+        anchor='[data-guide-region="thread-info"]'
+        clipTo={clipTo}
+        at="lane"
+      />
       <MeasuredBadge
         id="code-renderers"
         label="Plugin code and diff renderers on bb's Diff tab"
@@ -706,13 +741,24 @@ export function CommandPaletteWireframe({
     <div
       data-guide-fixture="command-palette-flow"
       data-guide-state={paletteOpen ? "palette-open" : "release-checklist-open"}
-      className={cn("relative pb-2 pt-4", mobile ? "px-3" : "px-7")}
+      className={cn("relative pb-2 pt-4", mobile ? "px-6" : "px-7")}
     >
-      <WindowFrame>
-        <div className="relative min-h-[500px]">
+      <WindowFrame
+        className={
+          mobile ? cn("flex flex-col", MOBILE_SCREEN_CLASS) : undefined
+        }
+      >
+        <div
+          className={
+            mobile ? "relative min-h-0 flex-1" : "relative min-h-[500px]"
+          }
+        >
           <div
             data-guide-fixture="command-palette-thread"
-            className="flex min-h-[500px] bg-background"
+            className={cn(
+              "flex bg-background",
+              mobile ? "h-full" : "min-h-[500px]",
+            )}
           >
             {mobile ? null : (
               <aside className="flex w-48 shrink-0 flex-col border-r border-border-seam bg-sidebar px-2.5 py-3">
@@ -864,10 +910,18 @@ export function CommandPaletteWireframe({
                 className={cn(
                   "absolute grid grid-cols-[minmax(0,1fr)] gap-0 overflow-visible rounded-lg border border-border bg-background shadow-sm",
                   mobile
-                    ? "bottom-0 left-7 right-0 pb-4"
+                    ? "inset-x-0 bottom-0 rounded-b-none rounded-t-xl border-x-0 border-b-0 pb-3"
                     : "left-1/2 top-[12%] w-full max-w-xl -translate-x-1/2",
                 )}
               >
+                {mobile ? (
+                  <span
+                    aria-hidden
+                    className="flex h-6 items-center justify-center"
+                  >
+                    <span className="h-1 w-10 rounded-full bg-muted-foreground/20" />
+                  </span>
+                ) : null}
                 <div className="flex items-center gap-2 border-b px-3 text-sm">
                   <MiniIcon
                     icon="Search"
@@ -893,24 +947,34 @@ export function CommandPaletteWireframe({
                   </span>
                   <CommandPaletteActionMark onRun={runReleaseChecklist} />
                   <span className="flex w-full min-w-0 items-center gap-1.5 rounded px-2 py-1.5 text-left">
-                    Copy thread link
+                    Copy link
                     <span className="ml-auto text-muted-foreground">
                       Thread
                     </span>
                   </span>
                 </div>
-                <MeasuredBadge
-                  id="command-palette-actions"
-                  label="Plugin actions in bb's quick command palette"
-                  anchor='[data-guide-region="command-palette-actions"]'
-                  at="start"
-                  flush
-                />
+                {mobile ? null : (
+                  <MeasuredBadge
+                    id="command-palette-actions"
+                    label="Plugin actions in bb's quick command palette"
+                    anchor='[data-guide-region="command-palette-actions"]'
+                    at="start"
+                    flush
+                  />
+                )}
               </div>
             </div>
           ) : null}
         </div>
       </WindowFrame>
+      {mobile && paletteOpen ? (
+        <MeasuredBadge
+          id="command-palette-actions"
+          label="Plugin actions in bb's quick command palette"
+          anchor='[data-guide-region="command-palette-actions"]'
+          at="start"
+        />
+      ) : null}
     </div>
   );
 }
@@ -928,6 +992,7 @@ export function AppShellWireframe({
 
   useEffect(() => {
     if (
+      expandedId === "thread-info" ||
       expandedId === "browser-toolbar" ||
       expandedId === "code-renderers" ||
       expandedId === "thread-panel" ||
@@ -952,17 +1017,17 @@ export function AppShellWireframe({
       {scene === "desktop" || scene === "navigation" ? (
         <>
           <MeasuredBadge
-            id="nav-panel"
-            label="Plugin nav panels, above the thread list"
-            anchor='[data-guide-region="nav-panel"]'
-            at="start"
-          />
-          <MeasuredBadge
             id="sidebar-navigation"
-            label="The sidebar navigation controls, replaceable by one plugin"
+            label="The sidebar navigation, drawn by bb or one plugin"
             anchor='[data-guide-region="sidebar-navigation"]'
             at="start"
             align="start"
+          />
+          <MeasuredBadge
+            id="nav-panel"
+            label="Plugin nav panels, in the navigation rail"
+            anchor='[data-guide-region="nav-panel"]'
+            at="start"
           />
           <MeasuredBadge
             id="thread-list"
@@ -976,8 +1041,14 @@ export function AppShellWireframe({
         <>
           <MeasuredBadge
             id="thread-header"
-            label="Plugin thread-header control, left end of the action row"
+            label="Plugin header buttons, after the workspace's Open button"
             anchor='[data-guide-region="thread-header"]'
+            at="above"
+          />
+          <MeasuredBadge
+            id="thread-actions"
+            label="Plugin thread actions, in the thread menu"
+            anchor='[data-guide-region="thread-actions"]'
             at="above"
           />
           <MeasuredBadge
@@ -990,10 +1061,7 @@ export function AppShellWireframe({
         </>
       ) : null}
       {scene === "desktop" || scene === "panel" ? (
-        <RightPanelTabLaneBadges
-          key={rightPanelTab}
-          mobile={mobile}
-        />
+        <RightPanelTabLaneBadges key={rightPanelTab} mobile={mobile} />
       ) : null}
       <AppShellWireframeBody
         scene={scene}
@@ -1018,30 +1086,35 @@ function AppShellWireframeBody({
   const contentScripts = useEngagement("content-scripts");
   const messageActionsSelected = expandedId === "message-actions";
   const messageActionRowVisible =
-    scene === "conversation" || assistantMessageHovered || messageActionsSelected;
+    scene === "conversation" ||
+    assistantMessageHovered ||
+    messageActionsSelected;
 
   if (scene === "navigation") {
     return (
-      <WindowFrame className="flex min-h-[500px] bg-background">
-        <div className="flex w-[76%] flex-col border-r border-border-seam bg-sidebar text-sidebar-foreground">
-          <div className="flex h-12 items-center gap-3 px-3 text-sm">
-            <MiniIcon icon="PanelLeft" />
-            Navigation
+      <WindowFrame className={cn("flex bg-background", MOBILE_SCREEN_CLASS)}>
+        <div className="flex w-[86%] border-r border-border-seam bg-sidebar text-sidebar-foreground">
+          <SidebarRail />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex h-12 items-center gap-3 px-3 text-sm">
+              <MiniIcon icon="MessageSquarePlus" />
+              New thread
+            </div>
+            {anatomy.appSidebar
+              .filter((key) => key !== "top-reserve")
+              .map((key) => (
+                <Fragment key={key}>
+                  {SIDEBAR_SECTION_RENDERERS[key]?.()}
+                </Fragment>
+              ))}
           </div>
-          {anatomy.appSidebar
-            .filter((key) => key !== "top-reserve")
-            .map((key) => (
-              <Fragment key={key}>
-                {SIDEBAR_SECTION_RENDERERS[key]?.()}
-              </Fragment>
-            ))}
         </div>
       </WindowFrame>
     );
   }
   if (scene === "panel") {
     return (
-      <WindowFrame>
+      <WindowFrame className={cn("flex flex-col", MOBILE_SCREEN_CLASS)}>
         <AppShellRightPanel
           compact
           activeTab={rightPanelTab}
@@ -1052,7 +1125,13 @@ function AppShellWireframeBody({
   }
   const mobile = scene === "conversation";
   return (
-    <WindowFrame className="relative overflow-visible">
+    <WindowFrame
+      className={
+        mobile
+          ? cn("relative flex flex-col", MOBILE_SCREEN_CLASS)
+          : "relative overflow-visible"
+      }
+    >
       <span
         aria-hidden
         data-guide-target="content-scripts"
@@ -1073,58 +1152,72 @@ function AppShellWireframeBody({
       <div
         className={
           mobile
-            ? "flex min-h-[500px] items-stretch"
+            ? "flex min-h-0 flex-1 items-stretch"
             : "flex min-h-[650px] items-stretch"
         }
       >
         {mobile ? null : (
-          <div className="flex w-[300px] shrink-0 flex-col border-r border-border-seam bg-sidebar text-sidebar-foreground">
-            {anatomy.appSidebar.map((key) => (
-              <Fragment key={key}>
-                {SIDEBAR_SECTION_RENDERERS[key]?.()}
-              </Fragment>
-            ))}
+          <div className="flex w-[300px] shrink-0 border-r border-border-seam bg-sidebar text-sidebar-foreground">
+            <SidebarRail />
+            <div className="flex min-w-0 flex-1 flex-col">
+              {anatomy.appSidebar.map((key) => (
+                <Fragment key={key}>
+                  {SIDEBAR_SECTION_RENDERERS[key]?.()}
+                </Fragment>
+              ))}
+            </div>
           </div>
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-12 items-center gap-2 border-b border-border-hairline px-4">
-            {mobile ? (
-              <MiniIcon icon="PanelLeft" className="size-5" />
-            ) : null}
+            {mobile ? <MiniIcon icon="PanelLeft" className="size-5" /> : null}
             <span className="truncate text-foreground">
               Fix flaky checkout tests
             </span>
-            <MiniIcon icon="MoreHorizontal" className="size-3.5" />
+            <Mark
+              id="thread-actions"
+              label="Plugin thread actions, in the thread menu"
+              className="flex h-6.5 items-center px-1"
+              showChip={false}
+            >
+              <MiniIcon icon="MoreHorizontal" className="size-3.5" />
+            </Mark>
             <span className="flex-1" />
             <Mark
               id="thread-header"
-              label="Plugin thread-header control, left end of the action row"
+              label="Plugin header buttons, after the workspace's Open button"
               className="flex h-6.5 items-center gap-1 px-2"
               showChip={false}
             >
               <PluginGlyph className="size-3.5" />
             </Mark>
-            {mobile ? (
-              <MiniIcon icon="PanelRight" className="size-5" />
-            ) : null}
+            {mobile ? <ThreadContextCardMark compact /> : null}
+            {mobile ? <MiniIcon icon="PanelRight" className="size-5" /> : null}
           </div>
 
           <div
             data-guide-fixture="app-window-timeline"
-            className={
+            className={cn(
+              "relative",
               mobile
-                ? "flex-1 space-y-7 overflow-hidden px-4 py-6 text-sm leading-relaxed"
-                : "min-h-[510px] flex-1 space-y-7 overflow-hidden px-5 py-6"
-            }
+                ? "flex min-h-0 flex-1 flex-col justify-end gap-5 overflow-hidden px-4 py-4 text-sm leading-relaxed"
+                : "min-h-[510px] flex-1 space-y-7 overflow-hidden px-5 py-6",
+            )}
           >
-            <div className="flex justify-end">
+            {mobile ? null : <ThreadContextCardMark compact={false} />}
+            <div className={cn("flex justify-end", !mobile && "mr-44")}>
               <span className="max-w-[70%] rounded-xl border border-border-seam bg-surface-recessed px-2.5 py-2 leading-snug text-foreground">
                 Fix the flaky checkout tests
               </span>
             </div>
 
-            <div className="w-[78%] space-y-1">
+            <div
+              className={cn(
+                "w-[78%] space-y-1",
+                !mobile && "max-w-[calc(100%-11rem)]",
+              )}
+            >
               <span className="flex items-center gap-1.5 text-foreground">
                 <PluginGlyph className="size-3.5" />
                 Re-ran checkout suite
@@ -1169,6 +1262,20 @@ function AppShellWireframeBody({
                 <span className="mt-1.5 flex items-center gap-1.5">
                   <PluginGlyph className="size-3.5" />
                   ::your-directive
+                </span>
+              </Mark>
+              <Mark
+                id="code-fence-renderers"
+                label="A plugin component rendering a fenced code block"
+                className="block w-3/5 px-2.5 py-2.5"
+              >
+                <span className="flex gap-1.5" aria-hidden>
+                  <span className="h-5 w-12 rounded-sm bg-muted" />
+                  <span className="h-5 w-8 rounded-sm bg-foreground/40" />
+                </span>
+                <span className="mt-1.5 flex items-center gap-1.5">
+                  <PluginGlyph className="size-3.5" />
+                  ```ui
                 </span>
               </Mark>
               <div className="space-y-1.5">
@@ -1225,6 +1332,14 @@ function AppShellWireframeBody({
                   </span>
                 </Mark>
               </div>
+              <Mark
+                id="message-metadata"
+                label="React message metadata beside realized messages"
+                className="inline-flex items-center py-0.5 pr-6 pl-2 text-2xs text-muted-foreground"
+              >
+                <PluginGlyph className="mr-1 size-3" />
+                Yesterday, 3:42 PM
+              </Mark>
             </div>
           </div>
 
@@ -1264,7 +1379,9 @@ function AppShellWireframeBody({
         label="App-wide floating plugin interface"
         className={cn(
           "z-[6] flex w-44 items-center gap-2 border border-border bg-popover px-3 py-2 text-foreground shadow-md",
-          mobile ? "relative ml-auto mr-4 mb-4" : "absolute bottom-24 right-12",
+          mobile
+            ? "relative mb-4 ml-auto mr-4 shrink-0"
+            : "absolute bottom-24 right-12",
         )}
       >
         <PluginGlyph className="size-4 shrink-0" />
@@ -1276,6 +1393,130 @@ function AppShellWireframeBody({
         </span>
       </Mark>
     </WindowFrame>
+  );
+}
+
+function ThreadContextCardMark({ compact }: { compact: boolean }) {
+  const label = "Plugin sections in the thread context card";
+  if (compact) {
+    return (
+      <Mark
+        id="thread-context-card"
+        label={label}
+        chip="corner"
+        className="flex size-7 items-center justify-center"
+      >
+        <MiniIcon icon="LayoutList" className="size-5" />
+      </Mark>
+    );
+  }
+  return (
+    <Mark
+      id="thread-context-card"
+      label={label}
+      chip="corner-inset"
+      className="absolute right-4 top-4 block w-40 rounded-md border border-border bg-popover p-1 text-foreground"
+    >
+      <span className="flex h-6.5 items-center gap-2 px-1.5">
+        <MiniIcon icon="GitPullRequest" className="size-3.5" />
+        <span className="truncate">PR #482</span>
+      </span>
+      <span className="flex h-6.5 items-center gap-2 px-1.5">
+        <MiniIcon icon="FileDiff" className="size-3.5" />
+        Changes
+        <span className="ml-auto font-mono text-2xs">
+          <span className="text-success">+12</span>{" "}
+          <span className="text-destructive">-3</span>
+        </span>
+      </span>
+    </Mark>
+  );
+}
+
+const THREAD_INFO_FIXTURE_ROWS = [
+  { icon: "Folder", label: "Project", value: "checkout-service" },
+  { icon: "GitBranch", label: "Branch", value: "fix/retry-flake" },
+] as const;
+
+function ThreadInfoFixtureRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-x-3 py-0.5 text-xs leading-5">
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-foreground">{children}</span>
+    </div>
+  );
+}
+
+function ThreadInfoFixture() {
+  return (
+    <div data-guide-fixture="thread-info" className="flex flex-col text-xs">
+      <div className="flex flex-col gap-1.5">
+        {THREAD_INFO_FIXTURE_ROWS.map((row) => (
+          <ThreadInfoFixtureRow
+            key={row.label}
+            icon={<MiniIcon icon={row.icon} className="size-3" />}
+            label={row.label}
+          >
+            {row.value}
+          </ThreadInfoFixtureRow>
+        ))}
+        <Mark
+          id="thread-info"
+          label="Plugin rows and sections in bb's Info tab"
+          className="block rounded-md"
+          showChip={false}
+        >
+          <ThreadInfoFixtureRow
+            icon={<PluginGlyph className="size-3" />}
+            label="Deploy"
+          >
+            Staging · healthy
+          </ThreadInfoFixtureRow>
+        </Mark>
+      </div>
+      <Mark
+        id="thread-info"
+        label="Plugin rows and sections in bb's Info tab"
+        className="mt-3 block rounded-md border-t border-border-hairline pt-3"
+        showChip={false}
+      >
+        <span className="mb-1 flex items-center font-medium text-muted-foreground">
+          Automations
+          <span className="ml-1.5 rounded-full bg-surface-recessed px-1.5 text-2xs leading-4 font-normal tabular-nums">
+            1
+          </span>
+        </span>
+        <span className="flex h-6 items-center gap-1.5">
+          <MiniIcon icon="Calendar" className="size-3" />
+          <span className="min-w-0 flex-1 truncate text-foreground">
+            Nightly CI check
+          </span>
+          <span className="shrink-0 text-2xs text-subtle-foreground">
+            Next 9:00 AM
+          </span>
+        </span>
+      </Mark>
+      <div className="mt-3 border-t border-border-hairline pt-3">
+        <span className="mb-1 flex items-center font-medium text-muted-foreground">
+          Commits
+          <span className="ml-1.5 rounded-full bg-surface-recessed px-1.5 text-2xs leading-4 font-normal tabular-nums">
+            2
+          </span>
+        </span>
+        <span className="block h-2 w-3/5 rounded-sm bg-muted/60" />
+      </div>
+    </div>
   );
 }
 
@@ -1317,7 +1558,7 @@ export function AppShellRightPanel({
       className={cn(
         "flex shrink-0 flex-col bg-sidebar",
         compact
-          ? "min-h-[360px] w-full"
+          ? "min-h-0 w-full flex-1"
           : "w-[380px] border-l border-border-seam",
       )}
     >
@@ -1333,12 +1574,17 @@ export function AppShellRightPanel({
           data-guide-fixture="right-panel-fixed-tabs"
           className="flex shrink-0 items-center gap-1.5"
         >
-          <span
-            data-guide-tab="info"
-            className="flex h-6 items-center rounded-md px-1.5"
+          <Mark
+            id="thread-info"
+            label="Plugin rows and sections in bb's Info tab"
+            className={cn(tabClass("thread-info"), "px-1.5")}
+            showChip={false}
+            onActivate={() => onTabSelect("thread-info")}
           >
-            <MiniIcon icon="Info" className="size-3.5" />
-          </span>
+            <span data-guide-tab="thread-info" className="contents">
+              <MiniIcon icon="Info" className="size-3.5" />
+            </span>
+          </Mark>
           <Mark
             id="code-renderers"
             label="Plugin code and diff renderers on bb's Diff tab"
@@ -1359,7 +1605,7 @@ export function AppShellRightPanel({
           data-guide-fixture="right-panel-content-tabs"
           className={cn(
             "flex items-center gap-1.5",
-            compact ? "shrink-0" : "min-w-0",
+            compact ? "shrink-0" : "min-w-0 overflow-hidden",
           )}
         >
           <Mark
@@ -1395,19 +1641,22 @@ export function AppShellRightPanel({
             className={cn(
               tabClass("file-opener"),
               "gap-1.5 whitespace-nowrap pl-1.5 pr-2",
+              !compact && "min-w-0 shrink",
             )}
             showChip={false}
             onActivate={() => onTabSelect("file-opener")}
           >
             <span data-guide-tab="file-opener" className="contents">
-              <MiniIcon icon="FileText" className="size-3.5" />
-              <span className="text-foreground">retry-notes.md</span>
+              <MiniIcon icon="FileText" className="size-3.5 shrink-0" />
+              <span className="min-w-0 truncate text-foreground">
+                retry-notes.md
+              </span>
             </span>
           </Mark>
         </span>
         <span className="flex-1" />
-        <MiniIcon icon="Plus" className="size-3.5" />
-        <MiniIcon icon="PanelRight" className="size-3.5" />
+        <MiniIcon icon="Plus" className="size-3.5 shrink-0" />
+        <MiniIcon icon="PanelRight" className="size-3.5 shrink-0" />
       </div>
       <div
         data-guide-tab-body={activeTab}
@@ -1416,7 +1665,9 @@ export function AppShellRightPanel({
           compact && "text-sm leading-relaxed",
         )}
       >
-        {activeTab === "browser-toolbar" ? (
+        {activeTab === "thread-info" ? (
+          <ThreadInfoFixture />
+        ) : activeTab === "browser-toolbar" ? (
           <div data-guide-fixture="browser-toolbar" className="space-y-4">
             <div className="flex items-center gap-2 border-b border-border-hairline pb-3">
               <MiniIcon icon="ChevronLeft" className="size-3.5" />
@@ -1497,7 +1748,7 @@ export function AppShellRightPanel({
                 <span>18</span>
                 <span>beforeEach(() =&gt; &#123;</span>
               </div>
-              <div className="grid grid-cols-[24px_24px_1fr] bg-danger/10 px-2 py-1 text-danger">
+              <div className="grid grid-cols-[24px_24px_1fr] bg-destructive/10 px-2 py-1 text-destructive-text">
                 <span>19</span>
                 <span></span>
                 <span>− sharedMock.reset()</span>
@@ -1531,9 +1782,9 @@ export function RealComposerAnnotated({
   mobile?: boolean;
 }) {
   const banners = useEngagement("composer-banners");
-  const mention = useEngagement("mention-provider");
+  const [contextExpanded, setContextExpanded] = useState(false);
   return (
-    <div className={cn("relative pb-2 pt-4", mobile ? "px-3" : "px-7")}>
+    <div className={cn("relative pb-2 pt-4", mobile ? "px-6" : "px-7")}>
       <div className="relative w-full select-none text-xs leading-none text-muted-foreground">
         <div
           data-guide-annotation-layer="composer-controls"
@@ -1541,9 +1792,15 @@ export function RealComposerAnnotated({
         >
           <MeasuredBadge
             id="composer-banners"
-            label="Plugin composer banners, above the prompt box"
+            label="Plugin banners and thread context, above the prompt box"
             anchor='[data-guide-target="composer-banners"]'
             at="end"
+          />
+          <MeasuredBadge
+            id="composer-replacement"
+            label="The composer box, replaceable by one plugin"
+            anchor='[data-guide-region="composer-replacement"]'
+            at="start"
           />
           <MeasuredBadge
             id="composer-state"
@@ -1570,8 +1827,17 @@ export function RealComposerAnnotated({
             at="above"
           />
         </div>
-        <WindowFrame>
-          <div className="flex min-h-[506px] flex-col">
+        <WindowFrame
+          className={
+            mobile ? cn("flex flex-col", MOBILE_SCREEN_CLASS) : undefined
+          }
+        >
+          <div
+            className={cn(
+              "flex flex-col",
+              mobile ? "min-h-0 flex-1" : "min-h-[506px]",
+            )}
+          >
             <div
               aria-hidden
               className="flex h-11 items-center gap-2 border-b border-border-hairline px-4 text-sm"
@@ -1584,7 +1850,7 @@ export function RealComposerAnnotated({
             </div>
             <div
               aria-hidden
-              className="flex-1 space-y-4 px-4 py-4 text-sm leading-relaxed"
+              className="min-h-0 flex-1 space-y-4 overflow-hidden px-4 py-4 text-sm leading-relaxed"
             >
               <div className="flex justify-end">
                 <span className="max-w-[70%] rounded-xl border border-border-seam bg-surface-recessed px-3 py-2 text-foreground">
@@ -1600,35 +1866,37 @@ export function RealComposerAnnotated({
             <div className="px-4 pb-4">
               <Mark
                 id="composer-banners"
-                label="Plugin composer banners, above the prompt box"
+                label="Plugin banners and thread context, above the prompt box"
                 showChip={false}
                 target
                 className={cn(
-                  "relative mb-2.5 flex items-center gap-2 rounded-md border border-border-hairline bg-surface-raised px-3 py-3 text-sm",
+                  "relative mb-2.5 block space-y-2 text-sm",
                   engagedRingClass(banners.outlined),
                 )}
+                onActivate={() => setContextExpanded((value) => !value)}
               >
-                {mention.outlined ? (
-                  <div
-                    aria-hidden
-                    data-guide-transient-for="mention-provider"
-                    className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-1 overflow-hidden rounded-md border border-border bg-popover pb-1 text-xs shadow-md"
-                  >
-                    <span className="block px-3 pb-1 pt-1.5 text-muted-foreground">
-                      Your plugin
-                    </span>
-                    <span className="mx-1 flex h-7 items-center gap-1.5 rounded-md bg-state-hover px-2 text-foreground">
+                <span className="flex items-center gap-2 rounded-md border border-border-hairline bg-surface-raised px-3 py-3">
+                  <PluginGlyph className="size-3.5" />
+                  <span className="text-foreground">Your banner</span>
+                </span>
+                <span
+                  data-guide-fixture="thread-context-segment"
+                  className="block overflow-hidden rounded-lg border border-border-hairline bg-surface-raised text-xs"
+                >
+                  <span className="flex items-center gap-2 px-3 py-2">
+                    <MiniIcon icon="UserRound" className="size-3.5" />
+                    <span className="flex items-center gap-1.5 text-foreground">
                       <PluginGlyph className="size-3.5" />
-                      release-notes
+                      Your context
                     </span>
-                    <span className="mx-1 flex h-7 items-center gap-1.5 px-2">
-                      <PluginGlyph className="size-3.5 opacity-60" />
-                      roadmap
+                    <span className="flex-1">Changed files</span>
+                  </span>
+                  {contextExpanded ? (
+                    <span className="block border-t border-border-hairline px-3 py-2">
+                      Context details
                     </span>
-                  </div>
-                ) : null}
-                <PluginGlyph className="size-3.5" />
-                <span className="text-foreground">Your banner</span>
+                  ) : null}
+                </span>
               </Mark>
 
               <StaticEmbeddedComposer mobile={mobile} />
@@ -1642,154 +1910,190 @@ export function RealComposerAnnotated({
 
 function StaticEmbeddedComposer({ mobile = false }: { mobile?: boolean }) {
   const draft = useEngagement("composer-state");
+  const mention = useEngagement("mention-provider");
   const plus = useEngagement("composer-plus-menu");
   const picker = useEngagement("provider-picker");
   const actions = useEngagement("composer-actions");
   return (
     <div data-guide-fixture="embedded-composer" className="space-y-2">
-      <div
+      <RegionMark
+        id="composer-replacement"
+        label="The composer box, replaceable by one plugin"
+        showChip={false}
         className={cn(
-          "relative flex flex-col rounded-xl border border-border bg-background px-2 pb-2 pt-7 shadow-lift",
-          mobile ? "min-h-48 gap-7" : "h-36",
+          "flex flex-col rounded-xl border border-border bg-background shadow-lift",
+          mobile ? "min-h-48" : "h-36",
         )}
       >
-        {actions.outlined ? (
-          <div
-            aria-hidden
-            data-guide-transient-for="composer-actions"
-            className="pointer-events-none absolute bottom-full left-2 right-2 z-20 mb-2 rounded-md border border-border bg-popover p-2 shadow-md"
-          >
-            <span className="block border-b border-border pb-1 text-xs text-subtle-foreground">
-              Search saved prompts
-            </span>
-            <span className="mt-1 block rounded bg-state-hover px-2 py-1 text-xs">
-              Review this change
-            </span>
-          </div>
-        ) : null}
-        {plus.outlined ? (
-          <div
-            aria-hidden
-            data-guide-transient-for="composer-plus-menu"
-            className="pointer-events-none absolute bottom-full left-2 z-20 mb-1 w-44 rounded-md border border-border bg-popover p-1 shadow-md"
-          >
-            <span className="flex h-6 items-center gap-1.5 px-1.5">
-              <MiniIcon icon="Paperclip" className="size-3.5" />
-              Attach files
-            </span>
-            <span className="flex h-6 items-center gap-1.5 px-1.5">
-              <MiniIcon icon="Zap" className="size-3.5" />
-              Skills
-            </span>
-            <span className="flex h-6 items-center gap-1.5 rounded bg-state-hover px-1.5 text-foreground">
-              <PluginGlyph className="size-3.5" />
-              Your action
-            </span>
-          </div>
-        ) : null}
-
         <div
+          data-guide-layer="composer-content"
           className={cn(
-            "mx-2 flex items-center rounded-md text-sm leading-none text-foreground",
-            mobile ? "min-h-7 flex-wrap gap-y-7" : "h-7",
-            engagedRingClass(draft.outlined),
+            "pointer-events-none relative z-[2] flex flex-1 flex-col px-2 pb-2 pt-7 [&_a]:pointer-events-auto",
+            mobile && "gap-7",
           )}
         >
-          <Mark
-            id="composer-state"
-            label="The draft prompt a plugin can read and lock"
-            showChip={false}
-            target
-            className="whitespace-pre"
-          >
-            Summarize{" "}
-          </Mark>
-          <RegionMark
-            id="mention-provider"
-            label="Plugin mention results in the @ typeahead"
-            className="flex h-5.5 items-center rounded-full border border-surface-selected-border bg-surface-selected px-1.5"
-            chip="outside-above"
-            showChip={!plus.outlined}
-          >
-            <span aria-hidden>@release-notes</span>
-          </RegionMark>
-          <span aria-hidden className="whitespace-pre">
-            {" "}
-            and fix the{" "}
-          </span>
-          <RegionMark
-            id="composer-rich-text"
-            label="Plugin highlighting, painted over the draft prompt"
-            className="flex h-5.5 items-center rounded bg-warning/25 px-1 ring-1 ring-warning/40"
-            chip="outside-above"
-            showChip={!plus.outlined}
-          >
-            <span aria-hidden>TODO</span>
-          </RegionMark>
-          <span aria-hidden className="whitespace-pre">
-            {" "}
-            in checkout.
-          </span>
-        </div>
-
-        <div className="mt-auto flex h-10 items-center gap-1">
-          <Mark
-            id="composer-plus-menu"
-            label="Plugin rows in the composer's + menu"
-            showChip={false}
-            target
+          <div
             className={cn(
-              "flex size-10 items-center justify-center rounded-md",
-              engagedRingClass(plus.outlined),
+              "mx-2 flex items-center rounded-md text-sm leading-none text-foreground",
+              mobile ? "min-h-7 flex-wrap gap-y-7" : "h-7",
+              engagedRingClass(draft.outlined),
             )}
           >
-            <MiniIcon icon="Plus" className="size-4" />
-          </Mark>
-          <Mark
-            id="provider-picker"
-            label="Your agent provider and its mark, in the model picker"
-            showChip={false}
-            target
-            className={cn(
-              "flex h-10 items-center gap-1.5 rounded-md px-2 text-foreground",
-              engagedRingClass(picker.outlined),
-            )}
-          >
-            <ProviderGlyph />
-            Fable 5
-            {mobile ? null : (
-              <span className="text-subtle-foreground">High</span>
-            )}
-          </Mark>
-          <span className="flex-1" />
-          <Mark
-            id="composer-actions"
-            label="Plugin composer actions, before voice and send"
-            showChip={false}
-            target
-            className={cn(
-              "flex size-9 items-center justify-center rounded-md bg-state-hover",
-              engagedRingClass(actions.outlined),
-            )}
-          >
-            <span data-guide-fixture="plugin-composer-action">
-              <PluginGlyph className="size-3.5" />
+            <Mark
+              id="composer-state"
+              label="The draft prompt a plugin can read and lock"
+              showChip={false}
+              target
+              className="whitespace-pre"
+            >
+              Summarize{" "}
+            </Mark>
+            <span className="relative">
+              {mention.outlined ? (
+                <span
+                  aria-hidden
+                  data-guide-transient-for="mention-provider"
+                  className="pointer-events-none absolute bottom-full left-0 z-[60] mb-7 block w-44 overflow-hidden rounded-md border border-border bg-popover pb-1 text-xs shadow-md"
+                >
+                  <span className="block px-3 pb-1 pt-1.5 text-muted-foreground">
+                    Your plugin
+                  </span>
+                  <span className="mx-1 flex h-7 items-center gap-1.5 rounded-md bg-state-hover px-2 text-foreground">
+                    <PluginGlyph className="size-3.5" />
+                    release-notes
+                  </span>
+                  <span className="mx-1 flex h-7 items-center gap-1.5 px-2">
+                    <PluginGlyph className="size-3.5 opacity-60" />
+                    roadmap
+                  </span>
+                </span>
+              ) : null}
+              <RegionMark
+                id="mention-provider"
+                label="Plugin mention results in the @ typeahead"
+                className="flex h-5.5 items-center rounded-full border border-surface-selected-border bg-surface-selected px-1.5"
+                chip="outside-above"
+                showChip={!plus.outlined}
+              >
+                <span aria-hidden>@release-notes</span>
+              </RegionMark>
             </span>
-          </Mark>
-          <span className="flex size-9 items-center justify-center">
-            <MiniIcon icon="Mic" className="size-4" />
-          </span>
-          <span
-            data-guide-icon="CornerDownLeft"
-            className="flex size-9 items-center justify-center rounded-md bg-foreground"
-          >
-            <MiniIcon
-              icon="CornerDownLeft"
-              className="size-3.5 text-background"
-            />
-          </span>
+            <span aria-hidden className="whitespace-pre">
+              {" "}
+              and fix the{" "}
+            </span>
+            <RegionMark
+              id="composer-rich-text"
+              label="Plugin highlighting, painted over the draft prompt"
+              className="flex h-5.5 items-center rounded bg-warning/25 px-1 ring-1 ring-warning/40"
+              chip="outside-above"
+              showChip={!plus.outlined}
+            >
+              <span aria-hidden>TODO</span>
+            </RegionMark>
+            <span aria-hidden className="whitespace-pre">
+              {" "}
+              in checkout.
+            </span>
+          </div>
+
+          <div className="mt-auto flex h-10 items-center gap-1">
+            <span className="relative">
+              {plus.outlined ? (
+                <span
+                  aria-hidden
+                  data-guide-transient-for="composer-plus-menu"
+                  className="pointer-events-none absolute bottom-full left-0 z-[60] mb-7 block w-44 rounded-md border border-border bg-popover p-1 shadow-md"
+                >
+                  <span className="flex h-6 items-center gap-1.5 px-1.5">
+                    <MiniIcon icon="Paperclip" className="size-3.5" />
+                    Attach files
+                  </span>
+                  <span className="flex h-6 items-center gap-1.5 px-1.5">
+                    <MiniIcon icon="Zap" className="size-3.5" />
+                    Skills
+                  </span>
+                  <span className="flex h-6 items-center gap-1.5 rounded bg-state-hover px-1.5 text-foreground">
+                    <PluginGlyph className="size-3.5" />
+                    Your action
+                  </span>
+                </span>
+              ) : null}
+              <Mark
+                id="composer-plus-menu"
+                label="Plugin rows in the composer's + menu"
+                showChip={false}
+                target
+                className={cn(
+                  "flex size-10 items-center justify-center rounded-md",
+                  engagedRingClass(plus.outlined),
+                )}
+              >
+                <MiniIcon icon="Plus" className="size-4" />
+              </Mark>
+            </span>
+            <Mark
+              id="provider-picker"
+              label="Your agent provider and its mark, in the model picker"
+              showChip={false}
+              target
+              className={cn(
+                "flex h-10 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-foreground",
+                engagedRingClass(picker.outlined),
+              )}
+            >
+              <ProviderGlyph />
+              Fable 5
+              {mobile ? null : (
+                <span className="text-subtle-foreground">High</span>
+              )}
+            </Mark>
+            <span className="flex-1" />
+            <span className="relative">
+              {actions.outlined ? (
+                <span
+                  aria-hidden
+                  data-guide-transient-for="composer-actions"
+                  className="pointer-events-none absolute bottom-full right-0 z-[60] mb-7 block w-48 rounded-md border border-border bg-popover p-2 shadow-md"
+                >
+                  <span className="block border-b border-border pb-1 text-xs text-subtle-foreground">
+                    Search saved prompts
+                  </span>
+                  <span className="mt-1 block rounded bg-state-hover px-2 py-1 text-xs">
+                    Review this change
+                  </span>
+                </span>
+              ) : null}
+              <Mark
+                id="composer-actions"
+                label="Plugin composer actions, before voice and send"
+                showChip={false}
+                target
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-md bg-state-hover",
+                  engagedRingClass(actions.outlined),
+                )}
+              >
+                <span data-guide-fixture="plugin-composer-action">
+                  <PluginGlyph className="size-3.5" />
+                </span>
+              </Mark>
+            </span>
+            <span className="flex size-9 items-center justify-center">
+              <MiniIcon icon="Mic" className="size-4" />
+            </span>
+            <span
+              data-guide-icon="CornerDownLeft"
+              className="flex size-9 items-center justify-center rounded-md bg-foreground"
+            >
+              <MiniIcon
+                icon="CornerDownLeft"
+                className="size-3.5 text-background"
+              />
+            </span>
+          </div>
         </div>
-      </div>
+      </RegionMark>
       <div className="flex items-center justify-between px-2.5" aria-hidden>
         <span className="flex items-center gap-1.5">
           <MiniIcon icon="Folder" className="size-3.5" />
@@ -1810,9 +2114,9 @@ export function ComposeScreenWireframe({
 }) {
   if (mobile) {
     return (
-      <div className="px-3 pt-4">
-        <WindowFrame>
-          <div className="flex h-12 items-center gap-3 border-b border-border-seam px-3 text-sm">
+      <div className="px-6 pt-4">
+        <WindowFrame className={cn("flex flex-col", MOBILE_SCREEN_CLASS)}>
+          <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border-seam px-3 text-sm">
             <MiniIcon icon="PanelLeft" className="size-5" />
             <span className="min-w-0 flex-1">New thread</span>
             <MiniIcon icon="PanelRight" className="size-5" />
@@ -1820,28 +2124,28 @@ export function ComposeScreenWireframe({
           {panel ? (
             <div
               data-guide-mobile-scene="panel"
-              className="min-h-[450px] space-y-3 p-4 text-sm"
+              className="min-h-0 flex-1 space-y-1 p-3 text-sm"
             >
-              <div className="text-subtle-foreground">Actions</div>
-              <div className="flex items-center gap-2 py-2">
+              <div className="px-2 pb-1 text-subtle-foreground">Actions</div>
+              <div className="flex h-10 items-center gap-2 rounded-md px-2">
                 <MiniIcon icon="Globe" />
                 Open browser
               </div>
-              <div className="flex items-center gap-2 py-2">
+              <div className="flex h-10 items-center gap-2 rounded-md px-2">
                 <MiniIcon icon="Terminal" />
                 Start terminal
               </div>
               <Mark
                 id="new-thread-panel"
                 label="A plugin action in the new-thread panel launcher"
-                className="flex items-center gap-2 px-3 py-3"
+                className="flex h-10 items-center gap-2 px-2"
               >
                 <PluginGlyph />
                 Your action
               </Mark>
             </div>
           ) : (
-            <div className="flex min-h-[450px] flex-col justify-end gap-4 p-4 text-sm leading-relaxed">
+            <div className="flex min-h-0 flex-1 flex-col justify-end gap-4 overflow-hidden p-4 text-sm leading-relaxed">
               <div className="text-xs text-subtle-foreground">
                 Recent threads
               </div>
@@ -1924,7 +2228,7 @@ export function ComposeScreenWireframe({
               <Mark
                 id="new-thread-panel"
                 label="A plugin action in the new-thread panel launcher"
-                className="flex h-6.5 items-center gap-2 px-2.5"
+                className="flex h-6.5 items-center gap-2 px-2"
                 showChip={false}
               >
                 <PluginGlyph className="size-3.5" />
@@ -1939,8 +2243,10 @@ export function ComposeScreenWireframe({
 }
 
 export function SettingsWireframe({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <WindowFrame>
+  const frame = (
+    <WindowFrame
+      className={mobile ? cn("flex flex-col", MOBILE_SCREEN_CLASS) : undefined}
+    >
       <div className="flex items-center gap-2 border-b border-border-hairline px-3 py-2.5">
         {mobile ? (
           <MiniIcon icon="PanelLeft" className="size-5" />
@@ -1950,7 +2256,12 @@ export function SettingsWireframe({ mobile = false }: { mobile?: boolean }) {
         <span className="pl-1 font-medium text-foreground">Settings</span>
       </div>
 
-      <div className="mx-auto min-h-[470px] w-full max-w-[520px] space-y-4 px-4 pb-5 pt-4">
+      <div
+        className={cn(
+          "mx-auto w-full max-w-[520px] space-y-4 px-4 pb-5 pt-4",
+          mobile ? "min-h-0 flex-1 overflow-hidden" : "min-h-[470px]",
+        )}
+      >
         <span className="flex items-center gap-1 text-muted-foreground">
           <MiniIcon icon="ChevronLeft" className="size-3.5" />
           Plugin details
@@ -2027,37 +2338,45 @@ export function SettingsWireframe({ mobile = false }: { mobile?: boolean }) {
                 className="pointer-events-none mt-0.5"
               />
             </span>
-            <span
-              className={cn(
-                "flex items-start justify-between gap-3 py-1.5",
-                mobile && "flex-wrap",
-              )}
-            >
-              <span className="min-w-0">
-                <span className="block text-foreground">Retry attempts</span>
-                <span className="block pt-1 leading-relaxed">
-                  Maximum retries before stopping.
+            {mobile ? null : (
+              <>
+                <span
+                  className={cn(
+                    "flex items-start justify-between gap-3 py-1.5",
+                    mobile && "flex-wrap",
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-foreground">
+                      Retry attempts
+                    </span>
+                    <span className="block pt-1 leading-relaxed">
+                      Maximum retries before stopping.
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden
+                    className="flex h-6 w-32 shrink-0 items-center rounded-md border border-border bg-card px-2 text-xs text-foreground"
+                  >
+                    3
+                  </span>
                 </span>
-              </span>
-              <span
-                aria-hidden
-                className="flex h-6 w-32 shrink-0 items-center rounded-md border border-border bg-card px-2 text-xs text-foreground"
-              >
-                3
-              </span>
-            </span>
-            <span className="block py-1.5">
-              <span className="block text-foreground">Custom instructions</span>
-              <span className="block pt-1 leading-relaxed">
-                Added to every agent task on this host.
-              </span>
-              <span
-                aria-hidden
-                className="mt-2 block h-12 rounded-md border border-border bg-card px-2 py-1.5 text-subtle-foreground"
-              >
-                Keep answers concise and run focused tests.
-              </span>
-            </span>
+                <span className="block py-1.5">
+                  <span className="block text-foreground">
+                    Custom instructions
+                  </span>
+                  <span className="block pt-1 leading-relaxed">
+                    Added to every agent task on this host.
+                  </span>
+                  <span
+                    aria-hidden
+                    className="mt-2 block h-12 rounded-md border border-border bg-card px-2 py-1.5 text-subtle-foreground"
+                  >
+                    Keep answers concise and run focused tests.
+                  </span>
+                </span>
+              </>
+            )}
           </Mark>
 
           <Mark
@@ -2086,6 +2405,7 @@ export function SettingsWireframe({ mobile = false }: { mobile?: boolean }) {
       </div>
     </WindowFrame>
   );
+  return mobile ? <div className="px-6 pt-4">{frame}</div> : frame;
 }
 
 export function ExtensionsPluginPageWireframe({
@@ -2093,9 +2413,11 @@ export function ExtensionsPluginPageWireframe({
 }: {
   mobile?: boolean;
 }) {
-  return (
-    <WindowFrame>
-      <div className="flex h-10 items-center gap-2 border-b border-border-hairline px-3 text-sm">
+  const frame = (
+    <WindowFrame
+      className={mobile ? cn("flex flex-col", MOBILE_SCREEN_CLASS) : undefined}
+    >
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border-hairline px-3 text-sm">
         {mobile ? (
           <MiniIcon icon="PanelLeft" className="size-5" />
         ) : (
@@ -2103,7 +2425,12 @@ export function ExtensionsPluginPageWireframe({
         )}
         <span className="text-foreground">Plugins</span>
       </div>
-      <div className="flex min-h-[470px] flex-col">
+      <div
+        className={cn(
+          "flex flex-col",
+          mobile ? "min-h-0 flex-1" : "min-h-[470px]",
+        )}
+      >
         <Mark
           id="plugin-status"
           label="The needs-configuration banner bb shows for a plugin that reports it"
@@ -2189,6 +2516,7 @@ export function ExtensionsPluginPageWireframe({
       </div>
     </WindowFrame>
   );
+  return mobile ? <div className="px-6 pt-4">{frame}</div> : frame;
 }
 
 function MockHomeComposer() {
@@ -2217,13 +2545,17 @@ function MockHomeComposer() {
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between px-2.5" aria-hidden>
-        <span className="flex items-center gap-1.5">
-          <MiniIcon icon="Folder" className="size-3.5" />
-          acme-app
-          <span className="text-subtle-foreground">· worktree</span>
+      <div
+        className="flex items-center justify-between gap-2 whitespace-nowrap px-2.5"
+        aria-hidden
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <MiniIcon icon="Folder" className="size-3.5 shrink-0" />
+          <span className="truncate">
+            acme-app <span className="text-subtle-foreground">· worktree</span>
+          </span>
         </span>
-        <span>Full Access</span>
+        <span className="shrink-0">Full Access</span>
       </div>
     </>
   );

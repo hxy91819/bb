@@ -37,6 +37,7 @@ export function conversationRow(args: {
     ...baseRow(threadId, turnId, seq, at),
     id: `${threadId}:conversation:${seq}`,
     kind: "conversation" as const,
+    messageSeq: seq,
     text,
   };
   if (role === "assistant") {
@@ -53,6 +54,7 @@ export function conversationRow(args: {
       imageUrls: [],
       localImagePaths: [],
       localFilePaths: [],
+      localFileDetails: [],
     },
     initiator: "user",
     senderThreadId: null,
@@ -79,6 +81,7 @@ export function commandRow(args: {
     status: "completed",
     callId: `${threadId}-call-${seq}`,
     command,
+    description: null,
     cwd: CWD,
     source: null,
     output,

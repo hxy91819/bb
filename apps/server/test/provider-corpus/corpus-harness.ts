@@ -3,15 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  createConnection,
   createProject,
   getLatestThreadSequence,
   getThread,
-  migrate,
   noopNotifier,
   threads,
   upsertHost,
 } from "@bb/db";
+import { createMigratedConnection } from "@bb/db/testing";
 import type { DbConnection } from "@bb/db";
 import { defaultFeatureFlags } from "@bb/domain";
 import type { Thread } from "@bb/domain";
@@ -28,13 +27,14 @@ import {
 import type { ThreadTimelinePageRequest } from "../../src/services/threads/timeline-pagination.js";
 import { resolveProviderPlanCommand } from "../../src/services/providers/provider-plan-command.js";
 import type { ProviderRegistryService } from "../../src/services/providers/provider-registry.js";
-import { previewTimelineResponseOutputs } from "../../src/services/threads/timeline-output-preview.js";
 import { clearStoredEventDecodeCache } from "../../src/services/threads/stored-event-decode-cache.js";
 import { clearTimelineSelectionMemo } from "../../src/services/threads/timeline-selection-memo.js";
+import { clearTimelineProjectionFolds } from "../../src/services/threads/timeline-projection-fold.js";
 import {
   DEFAULT_MAX_INLINE_OUTPUT_CHARS,
-  truncateTimelineResponseOutputs,
-} from "../../src/services/threads/timeline-output-truncation.js";
+  shortenTimelineResponseOutputs,
+} from "../../src/services/threads/timeline-output-shortening.js";
+import { timelineWindowTag } from "../../src/services/threads/timeline-window-tag.js";
 
 export const SNAPSHOT_MODE_ENV = "BB_PROVIDER_CORPUS_SNAPSHOT";
 
@@ -79,8 +79,7 @@ export function loadCorpusThreadIntoDb(
   corpusThread: CorpusThread,
   connection?: DbConnection,
 ): LoadedCorpusThread {
-  const db = connection ?? createConnection(":memory:");
-  if (connection === undefined) migrate(db);
+  const db = connection ?? createMigratedConnection();
   const host = upsertHost(db, noopNotifier, {
     name: "provider-corpus-host",
   });
@@ -155,6 +154,7 @@ export interface BuiltTimelinePage {
 export interface BuildRouteTimelinePageArgs {
   db: DbConnection;
   eventBudget?: number;
+  extensionStateKinds?: readonly string[];
   includeDiagnosticOperations?: boolean;
   maxSeq?: number;
   page: ThreadTimelinePageRequest;
@@ -174,7 +174,11 @@ export function buildRouteTimelinePage(
       completedTurnDisplay: "collapse",
       eventBudget:
         args.eventBudget ?? defaultFeatureFlags.timelineWindowEventBudget,
+      extensionStateKinds: args.extensionStateKinds ?? [],
+      includeClearedContextHistory: false,
       includeDiagnosticOperations: args.includeDiagnosticOperations ?? true,
+      compactionOfferEnabled: false,
+      summarizeShellCommands: true,
       includeNestedRows,
       maxInlineOutputChars: DEFAULT_MAX_INLINE_OUTPUT_CHARS,
       maxSeq:
@@ -190,21 +194,17 @@ export function buildRouteTimelinePage(
       summaryOnly: false,
     },
   );
-  const truncated = truncateTimelineResponseOutputs(
-    response,
-    DEFAULT_MAX_INLINE_OUTPUT_CHARS,
-  );
-  return {
-    profile,
-    response: includeNestedRows
-      ? truncated
-      : previewTimelineResponseOutputs(truncated),
-  };
+  const window = shortenTimelineResponseOutputs(response, {
+    maxInlineOutputChars: DEFAULT_MAX_INLINE_OUTPUT_CHARS,
+    preview: !includeNestedRows,
+  });
+  return { profile, response: { ...window, tag: timelineWindowTag(window) } };
 }
 
 export function clearCrossBuildTimelineCaches(db: DbConnection): void {
   clearStoredEventDecodeCache(db);
   clearTimelineSelectionMemo(db);
+  clearTimelineProjectionFolds(db);
 }
 
 export function selectionWasReused(
@@ -234,8 +234,8 @@ export function buildAllRouteTimelinePages(
   for (;;) {
     const built = buildRouteTimelinePage({ ...args, page });
     pages.push(built);
-    const { hasOlderRows, olderCursor } = built.response.timelinePage;
-    if (!hasOlderRows || olderCursor === null) {
+    const { olderCursor } = built.response.timelinePage;
+    if (olderCursor === null) {
       return pages;
     }
     const cursorKey = `${olderCursor.anchorId}\0${olderCursor.anchorSeq}`;

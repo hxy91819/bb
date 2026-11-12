@@ -15,6 +15,11 @@
     "icon": "Repeat"
   },
   {
+    "id": "bb--composer",
+    "name": "Composer",
+    "icon": "MessageSquare"
+  },
+  {
     "id": "bb-ai",
     "name": "bb cloud AI",
     "icon": "AiBrain01"
@@ -55,6 +60,16 @@
     "icon": "Github"
   },
   {
+    "id": "bb--git",
+    "name": "Git",
+    "icon": "GitBranch"
+  },
+  {
+    "id": "bb--github-pr-status",
+    "name": "GitHub PR Status",
+    "icon": "GitPullRequest"
+  },
+  {
     "id": "inline-vis",
     "name": "Inline visualizations",
     "icon": "AppWindow"
@@ -63,6 +78,11 @@
     "id": "keep-awake",
     "name": "Keep Awake",
     "icon": "Coffee"
+  },
+  {
+    "id": "bb--github-star",
+    "name": "GitHub Star",
+    "icon": "Star"
   },
   {
     "id": "memory",
@@ -125,6 +145,11 @@
     "icon": "SideChat"
   },
   {
+    "id": "bb--storage-retention",
+    "name": "Storage & retention [Experimental]",
+    "icon": null
+  },
+  {
     "id": "tasks",
     "name": "Tasks",
     "icon": "ListTodo"
@@ -158,5 +183,35 @@
     "id": "provider-pi",
     "name": "Pi provider",
     "icon": null
+  },
+  {
+    "id": "agent-annotations",
+    "name": "Agent Annotations",
+    "icon": "MessageSquarePlus"
+  },
+  {
+    "id": "bb-account",
+    "name": "bb account",
+    "icon": "UserRound"
+  },
+  {
+    "id": "bb-guide",
+    "name": "BB guide",
+    "icon": "Explore"
+  },
+  {
+    "id": "pdf-preview",
+    "name": "PDF preview",
+    "icon": "FileText"
+  },
+  {
+    "id": "theme-preview",
+    "name": "Theme Preview",
+    "icon": "Palette"
+  },
+  {
+    "id": "thread-list",
+    "name": "Thread list",
+    "icon": "ListView"
   }
 ]

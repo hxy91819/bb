@@ -1,4 +1,10 @@
-import { createContext, useCallback, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { CopyButton } from "../../ui/copy-button.js";
 import { Icon } from "@bb/shared-ui/icon";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
@@ -16,10 +22,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@bb/shared-ui/tooltip";
+import { HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS } from "@bb/shared-ui/hover-reveal";
 import { cn } from "@bb/shared-ui/lib/utils";
 import type { PromptDraftAttachment } from "@bb/client-core";
 import { PluginItemIcon, pluginIconName } from "@/components/plugin/PluginIcon";
 import type { ThreadTimelinePluginMessageAction } from "./types.js";
+import { formatDayMessageTime, MessageTime } from "./message-time.js";
 
 function PluginActionIcon({
   pluginId,
@@ -52,15 +60,16 @@ interface MessageActionBarProps {
     text: string,
     attachments?: readonly PromptDraftAttachment[],
   ) => void;
+  onCopyLink?: () => void;
   onEdit?: () => void;
   onFork?: () => void;
-  onSendToMain?: () => void;
   disabled?: boolean;
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
+  metadata?: ReactNode;
 }
 
 interface MessageOverflowAction {
-  icon: "Copy" | "Edit" | "MessageSquarePlus" | "Fork" | "ArrowTurnBackward";
+  icon: "Copy" | "Link" | "Edit" | "MessageSquarePlus" | "Fork";
   plugin?: { pluginId: string | null; icon: string | null };
   key?: string;
   label: string;
@@ -178,18 +187,26 @@ export const MessageColumnWidthContext =
 
 const ACTION_BUTTON_CLASS =
   "inline-flex size-5 cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
-const HOVER_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100";
+const HOVER_REVEAL_CLASS = cn(
+  "opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100",
+  HOVER_REVEAL_NO_HOVER_VISIBLE_CLASS,
+);
+export const ACTION_ROW_METADATA_CLASS = cn(
+  "hidden items-center gap-2 whitespace-nowrap text-xs text-subtle-foreground has-[>*>*]:flex",
+  HOVER_REVEAL_CLASS,
+);
 const MOBILE_INLINE_ACTION_CLASS =
-  "max-md:pointer-coarse:size-7 max-md:pointer-coarse:opacity-100 max-md:pointer-coarse:disabled:opacity-40 max-md:pointer-coarse:[&_[data-icon-root]]:size-4";
+  "max-md:pointer-coarse:size-7 max-md:pointer-coarse:[&_[data-icon-root]]:size-4";
 const MOBILE_OVERFLOW_ACTION_CLASS = "max-md:pointer-coarse:hidden";
 const ACTION_TOOLTIP_SIDE = "bottom";
 const MENU_CONTENT_WIDTH_CLASS = "max-w-[min(16rem,calc(100vw-1rem))]";
 
-const ACTION_ROW_CLASS =
-  "absolute top-0 flex max-w-full items-center gap-2 overflow-hidden data-[menu-open]:[&_button]:opacity-100";
+const ACTION_ROW_POSITION_CLASS =
+  "absolute top-0 flex w-max items-center gap-2 data-[menu-open]:[&_button]:opacity-100 data-[menu-open]:[&_[data-message-action-metadata]]:opacity-100";
+const ACTION_ROW_CLASS = "flex max-w-full items-center gap-2 overflow-hidden";
 
-const BUBBLE_ALIGN_INSET_CLASS = "pr-[13px] max-md:pointer-coarse:pr-[11px]";
+export const BUBBLE_ALIGN_INSET_CLASS =
+  "pr-[13px] max-md:pointer-coarse:pr-[11px]";
 const BUBBLE_ALIGN_OFFSET_CLASS =
   "right-[13px] max-md:pointer-coarse:right-[11px]";
 const PROSE_ALIGN_INSET_CLASS = "-ml-1 max-md:pointer-coarse:-ml-1.5";
@@ -260,35 +277,16 @@ function MessageActionMenuItems({
   ));
 }
 
-function formatMessageDay(date: Date, now: Date): string {
-  if (date.toDateString() === now.toDateString()) {
-    return "Today";
-  }
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(date.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
-  });
-}
-
 function MessageTimestampFooter({ timestamp }: { timestamp: number }) {
-  const date = new Date(timestamp);
-  const time = date.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const fullDate = date.toLocaleString(undefined, {
-    dateStyle: "full",
-    timeStyle: "long",
-  });
   return (
     <div
-      className="-mx-1 -mb-1 mt-1 border-t border-border bg-surface-recessed px-3 py-3 text-xs text-muted-foreground max-md:-mx-2 max-md:-mb-2 max-md:px-4"
+      className="mt-1 border-t border-border px-2 pt-2 pb-1 text-xs text-subtle-foreground"
       data-message-metadata=""
     >
-      <time dateTime={date.toISOString()} title={fullDate}>
-        {formatMessageDay(date, new Date())}, {time}
-      </time>
+      <MessageTime
+        timestamp={timestamp}
+        label={formatDayMessageTime(timestamp, new Date())}
+      />
     </div>
   );
 }
@@ -301,11 +299,12 @@ export function MessageActionBar({
   addToChatAttachments = [],
   copyImageUrl,
   onAddToChat,
+  onCopyLink,
   onEdit,
   onFork,
-  onSendToMain,
   disabled,
   pluginActions = [],
+  metadata,
 }: MessageActionBarProps) {
   const isCompactViewport = useIsCompactViewport();
   const isPointerCoarse = usePointerCoarse();
@@ -366,15 +365,6 @@ export function MessageActionBar({
           },
         ]
       : []),
-    ...(onSendToMain
-      ? [
-          {
-            icon: "ArrowTurnBackward" as const,
-            label: "Send to main thread",
-            onSelect: onSendToMain,
-          },
-        ]
-      : []),
     ...pluginActions.map((action) => ({
       icon: "Copy" as const,
       plugin: { pluginId: action.pluginId, icon: action.icon },
@@ -416,12 +406,21 @@ export function MessageActionBar({
       ? 0
       : layout.inlineCount;
   const menuActions = [
+    ...(onCopyLink
+      ? [
+          {
+            icon: "Link" as const,
+            label: "Copy link",
+            onSelect: onCopyLink,
+          },
+        ]
+      : []),
     ...inlineCandidates.slice(isCompactViewport ? 0 : inlineCount),
     ...trailingMenuActions,
   ];
 
-  const rowClass = cn(
-    ACTION_ROW_CLASS,
+  const rowPositionClass = cn(
+    ACTION_ROW_POSITION_CLASS,
     alignment === "end"
       ? BUBBLE_ALIGN_OFFSET_CLASS
       : cn("left-0", PROSE_ALIGN_INSET_CLASS),
@@ -437,49 +436,63 @@ export function MessageActionBar({
         ref={slotRef}
         className={cn(slotClass, "h-5 max-md:pointer-coarse:h-7")}
       >
-        <div className={rowClass} data-menu-open={isMenuOpen ? "" : undefined}>
-          {isCompactTouch ? (
-            <MobileInlineActions
-              actions={inlineCandidates.slice(0, inlineCount)}
-            />
-          ) : (
-            inlineCandidates
-              .slice(0, inlineCount)
-              .map((action) => (
-                <DesktopMessageAction
-                  key={action.key ?? action.label}
-                  action={action}
-                  className={cn(HOVER_REVEAL_CLASS, mobileDirectActionClass)}
-                  collisionBoundary={collisionBoundary}
-                />
-              ))
-          )}
-          <DropdownMenu onOpenChange={setIsMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  ACTION_BUTTON_CLASS,
-                  HOVER_REVEAL_CLASS,
-                  MOBILE_INLINE_ACTION_CLASS,
-                  inlineCount > 0 && OVERFLOW_TRIGGER_TIGHTEN_CLASS,
-                  "data-[state=open]:text-foreground data-[state=open]:opacity-100",
-                )}
-                aria-label="Message actions"
-                data-no-sidebar-swipe=""
+        <div
+          className={rowPositionClass}
+          data-menu-open={isMenuOpen ? "" : undefined}
+        >
+          {alignment === "end" ? metadata : null}
+          <div
+            className={ACTION_ROW_CLASS}
+            style={
+              availableWidth === undefined
+                ? undefined
+                : { maxWidth: availableWidth }
+            }
+          >
+            {isCompactTouch ? (
+              <MobileInlineActions
+                actions={inlineCandidates.slice(0, inlineCount)}
+              />
+            ) : (
+              inlineCandidates
+                .slice(0, inlineCount)
+                .map((action) => (
+                  <DesktopMessageAction
+                    key={action.key ?? action.label}
+                    action={action}
+                    className={cn(HOVER_REVEAL_CLASS, mobileDirectActionClass)}
+                    collisionBoundary={collisionBoundary}
+                  />
+                ))
+            )}
+            <DropdownMenu onOpenChange={setIsMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    ACTION_BUTTON_CLASS,
+                    HOVER_REVEAL_CLASS,
+                    MOBILE_INLINE_ACTION_CLASS,
+                    inlineCount > 0 && OVERFLOW_TRIGGER_TIGHTEN_CLASS,
+                    "data-[state=open]:text-foreground data-[state=open]:opacity-100",
+                  )}
+                  aria-label="Message actions"
+                  data-no-sidebar-swipe=""
+                >
+                  <Icon name="MoreHorizontal" className="size-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align={alignment === "end" ? "end" : "start"}
+                mobileTitle="Message actions"
+                className={MENU_CONTENT_WIDTH_CLASS}
               >
-                <Icon name="MoreHorizontal" className="size-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align={alignment === "end" ? "end" : "start"}
-              mobileTitle="Message actions"
-              className={MENU_CONTENT_WIDTH_CLASS}
-            >
-              <MessageActionMenuItems actions={menuActions} />
-              <MessageTimestampFooter timestamp={timestamp} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <MessageActionMenuItems actions={menuActions} />
+                <MessageTimestampFooter timestamp={timestamp} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {alignment === "start" ? metadata : null}
         </div>
       </div>
     </TooltipProvider>

@@ -46,28 +46,6 @@ function renderPicker(props: {
 }
 
 describe("PluginBranchPicker", () => {
-  it("shows the placeholder while nothing is picked", () => {
-    renderPicker({ value: null, placeholder: "Pick a base" });
-    expect(
-      screen.getByRole("combobox", { name: "Branch" }).textContent,
-    ).toContain("Pick a base");
-  });
-
-  it("prefixes the picked branch with the label and nothing else", () => {
-    renderPicker({ value: "release", label: "Base:" });
-    expect(
-      screen.getByRole("combobox", { name: "Branch" }).textContent,
-    ).toContain("Base: release");
-  });
-
-  it("shows the branch alone without a label", () => {
-    renderPicker({ value: "release" });
-    const text =
-      screen.getByRole("combobox", { name: "Branch" }).textContent ?? "";
-    expect(text).toContain("release");
-    expect(text).not.toContain("Branch from");
-  });
-
   it.each(["Compare with:", "Checkout:", "Branch from:"])(
     "uses %s for the trigger prefix and menu heading",
     (label) => {

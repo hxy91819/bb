@@ -1,33 +1,29 @@
-import type { ReactNode } from "react";
 import type { Host } from "@bb/domain";
 import type { SystemAppUpdateStatus } from "@bb/server-contract";
-import { UPDATE_ACTION_ICON } from "@bb/domain/update-state";
 import {
   HOST_DAEMON_PROTOCOL_VERSION,
   type ProviderCliKey,
 } from "@bb/host-daemon-contract";
 import type { ProviderCliIssue } from "@/components/provider-cli/provider-cli-install";
 import type { ProviderCliInstallFailure } from "@/components/provider-cli/provider-cli-install-store";
-import type { UpdateInventoryMachine } from "@/hooks/useUpdateInventory";
-import { SettingsStoryChrome } from "../../../.ladle/story-settings-chrome";
+import {
+  buildUpdateInventoryPlugins,
+  type UpdateInventoryMachine,
+} from "@/hooks/useUpdateInventory";
+import { makePluginListItem } from "@/test/fixtures/plugins";
 import {
   makeHost,
   makeProviderCliStatus,
 } from "../../../.ladle/story-fixtures";
+import { StoryCard, StoryRow } from "../../../.ladle/story-card";
+import { ReleaseNotesPanel } from "./ReleaseNotesPanel";
 import {
-  StoryState as State,
-  StoryStateGroup as Group,
-  StoryStates as Story,
-} from "../../../.ladle/story-states";
-import {
+  AutoAppUpdateSetting,
   BbAppUpdateRows,
-  BbDaemonUpdateRow,
-  ChangelogPreviewCard,
-  MachineUpdatesFleetSection,
-  MachineUpdatesRows,
-  MachineUpdatesSection,
-  ProviderCliCheckRow,
-  UpdateActionButton,
+  BbUpdatesCard,
+  MachineUpdateRow,
+  PluginUpdatesSection,
+  ProviderCliUpdatesSection,
 } from "./UpdatesSettingsSection";
 
 export default {
@@ -35,12 +31,35 @@ export default {
 };
 
 const noop = () => {};
+
+function storyReleaseNotes(version: string, expanded = false) {
+  return {
+    version,
+    panelId: `story-release-notes-${version}`,
+    expanded,
+    onToggle: noop,
+  };
+}
+const SOURCE_FROM_COMMIT = "916d684a1b2c3d4e5f60718293a4b5c6d7e8f901";
+const SOURCE_INCOMING_SUBJECTS = [
+  "Wait for a moved server's ready state on desktop, with one shared health probe (#6757)",
+  "Use launcher resolution for the desktop local server URL (#6758)",
+  "Show all changes in the thread context card's diff stats (#6848)",
+  "Cancel dnd-kit drags released before the drag-start render (#6847)",
+  "Add @neoromantic to allow list",
+  "Let queued messages change their send time and execution options (#6750)",
+];
+
+const SOURCE_TO_COMMIT = "1555ccfc15a1b2c3d4e5f60718293a4b5c6d7e8f";
 const NO_JOBS: ReadonlySet<string> = new Set();
+const NO_FAILURES: ReadonlyMap<string, ProviderCliInstallFailure> = new Map();
 const STORY_NOW = 1_800_000_000_000;
 
 const NPM_VERSION = {
   currentVersion: "0.38.0",
   latestVersion: "0.38.0",
+  currentCommit: null,
+  installKind: "npm" as const,
   source: "npm" as const,
   updateAvailable: false,
   isDevelopment: false,
@@ -50,6 +69,7 @@ const NPM_VERSION = {
 const IN_APP_UPDATE: SystemAppUpdateStatus = {
   activity: { phase: "idle" },
   available: {
+    behindSince: null,
     channel: "latest",
     commit: null,
     commitCount: null,
@@ -59,7 +79,10 @@ const IN_APP_UPDATE: SystemAppUpdateStatus = {
   blocked: null,
   current: { commit: null, version: "0.38.0" },
   lastResult: null,
+  autoUpdate: false,
+  availableSkipped: false,
   runningThreadCount: 0,
+  scheduled: null,
   support: { kind: "supported", mode: "npm" },
 };
 
@@ -107,27 +130,26 @@ function machineOf({
   issues = [],
   statusError = false,
   canRetryDaemonUpdate = false,
+  providers = ["codex", "claude-code", "acp-cursor"],
 }: {
   host: Host;
   isPrimary?: boolean;
   issues?: ProviderCliIssue[];
   statusError?: boolean;
   canRetryDaemonUpdate?: boolean;
+  providers?: readonly ProviderCliKey[];
 }): UpdateInventoryMachine {
   const statusFor = (provider: ProviderCliKey) =>
     issues.find((issue) => issue.provider === provider)?.status ??
     makeProviderCliStatus(provider);
+  const providerStatus: NonNullable<UpdateInventoryMachine["providerStatus"]> =
+    {};
+  for (const provider of providers)
+    providerStatus[provider] = statusFor(provider);
   return {
     host,
     isPrimary,
-    providerStatus:
-      host.status === "connected"
-        ? {
-            codex: statusFor("codex"),
-            "claude-code": statusFor("claude-code"),
-            "acp-cursor": statusFor("acp-cursor"),
-          }
-        : null,
+    providerStatus: host.status === "connected" ? providerStatus : null,
     statusPending: false,
     statusFetching: false,
     statusError,
@@ -136,36 +158,13 @@ function machineOf({
   };
 }
 
-function StoryPage({ children }: { children: ReactNode }) {
-  return (
-    <SettingsStoryChrome activeSection="updates">
-      <div className="space-y-6">{children}</div>
-    </SettingsStoryChrome>
-  );
-}
-
-export function ChangelogPreviewExperiment() {
-  window.localStorage.removeItem(
-    "bb.settings.updates.dismissed-changelog-version",
-  );
-  const workstation = machineOf({
-    host: makeHost({ id: "changelog-workstation", name: "workstation" }),
-    isPrimary: true,
-    issues: [updateIssue("codex", "0.145.0", "0.146.0")],
-  });
-  return (
-    <StoryPage>
-      <ChangelogPreviewCard />
-      <MachineUpdatesFleetSection>
-        <StoryMachineSection machine={workstation} app />
-      </MachineUpdatesFleetSection>
-    </StoryPage>
-  );
-}
-
-function failedProviderMachine(hostId: string): UpdateInventoryMachine {
+function failedProviderMachine(
+  hostId: string,
+  providers: readonly ProviderCliKey[] = ["codex", "claude-code", "acp-cursor"],
+): UpdateInventoryMachine {
   return machineOf({
     host: makeHost({ id: hostId, name: "Old Air" }),
+    providers,
     issues: [
       updateIssue("codex", "0.157.0", "0.159.3"),
       updateIssue("claude-code", "2.1.282", "2.1.287"),
@@ -196,90 +195,71 @@ function failedProviderFailures(
   );
 }
 
-function StoryMachineSection({
+function StoryMachineRow({
   machine,
-  app = false,
-  appUpdate = false,
-  failuresByJobKey,
+  expanded = false,
+  tags = [],
+  runningJobKey = null,
+  queuedJobKeys = NO_JOBS,
+  failuresByJobKey = NO_FAILURES,
 }: {
   machine: UpdateInventoryMachine;
-  app?: boolean;
-  appUpdate?: boolean;
+  expanded?: boolean;
+  tags?: readonly string[];
+  runningJobKey?: string | null;
+  queuedJobKeys?: ReadonlySet<string>;
   failuresByJobKey?: ReadonlyMap<string, ProviderCliInstallFailure>;
 }) {
-  const showDaemon =
-    machine.canRetryDaemonUpdate || machine.host.status !== "connected";
   return (
-    <MachineUpdatesSection
-      machine={machine}
-      isThisMachine={false}
-      showServerBadge={false}
-    >
-      {app ? (
-        <BbAppUpdateRows
-          systemVersion={appUpdate ? undefined : NPM_VERSION}
-          desktopInfo={appUpdate ? DESKTOP_UPDATE : null}
-          isDesktop={appUpdate}
-          onRelaunchDesktop={noop}
-          onRetryDesktop={noop}
-        />
-      ) : null}
-      {showDaemon ? (
-        <BbDaemonUpdateRow
-          machine={machine}
-          now={STORY_NOW}
-          retryUpdatePending={false}
-          onRetryDaemonUpdate={noop}
-          onOpenMachine={noop}
-        />
-      ) : null}
-      {machine.statusError ? (
-        <ProviderCliCheckRow
-          machine={machine}
-          onRecheckClis={noop}
-          onOpenMachine={noop}
-        />
-      ) : null}
-      <MachineUpdatesRows
+    <div className="w-full overflow-hidden rounded-lg border border-border bg-card">
+      <MachineUpdateRow
         machine={machine}
-        runningJobKey={null}
-        queuedJobKeys={NO_JOBS}
+        now={STORY_NOW}
+        tags={tags}
+        expanded={expanded}
+        retryUpdatePending={false}
+        runningJobKey={runningJobKey}
+        queuedJobKeys={queuedJobKeys}
         failuresByJobKey={failuresByJobKey}
+        onToggle={noop}
         onStartInstall={noop}
-        onOpenProvider={noop}
+        onRetryDaemonUpdate={noop}
+        onRecheckClis={noop}
       />
-    </MachineUpdatesSection>
+    </div>
   );
 }
 
-function Why({ items }: { items: readonly string[] }) {
+function StoryProviderClis({
+  machines,
+  serverHostId = null,
+  localDaemonHostId = null,
+  runningJobKey = null,
+  queuedJobKeys = NO_JOBS,
+  failuresByJobKey = NO_FAILURES,
+}: {
+  machines: readonly UpdateInventoryMachine[];
+  serverHostId?: string | null;
+  localDaemonHostId?: string | null;
+  runningJobKey?: string | null;
+  queuedJobKeys?: ReadonlySet<string>;
+  failuresByJobKey?: ReadonlyMap<string, ProviderCliInstallFailure>;
+}) {
   return (
-    <ul className="space-y-1">
-      {items.map((item) => (
-        <li key={item} className="flex gap-1.5">
-          <span aria-hidden className="text-subtle-foreground">
-            •
-          </span>
-          <span className="min-w-0">{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function StoryAppState({ children }: { children: ReactNode }) {
-  const machine = machineOf({
-    host: makeHost({ id: "state-app", name: "workstation" }),
-    isPrimary: true,
-  });
-  return (
-    <MachineUpdatesSection
-      machine={machine}
-      isThisMachine={false}
-      showServerBadge={false}
-    >
-      {children}
-    </MachineUpdatesSection>
+    <ProviderCliUpdatesSection
+      machines={machines}
+      now={STORY_NOW}
+      localDaemonHostId={localDaemonHostId}
+      serverHostId={serverHostId}
+      retryPendingHostId={null}
+      runningJobKey={runningJobKey}
+      queuedJobKeys={queuedJobKeys}
+      failuresByJobKey={failuresByJobKey}
+      onStartInstall={noop}
+      onRetryDaemonUpdate={noop}
+      onRetryAllDaemonUpdates={noop}
+      onRecheckClis={noop}
+    />
   );
 }
 
@@ -304,50 +284,27 @@ function manualUpdateIssue(
   };
 }
 
-function missingProviderIssue(provider: ProviderCliKey): ProviderCliIssue {
-  const status = makeProviderCliStatus(provider, {
-    executablePath: null,
-    installed: false,
-    installSource: "notInstalled",
-    currentVersion: null,
-    latestVersion: "2.1.0",
-    installAction: {
-      kind: "install",
-      label: "Install",
-      command: "npm install -g @anthropic-ai/claude-code",
-    },
-    needsUpdate: false,
-  });
-  return {
-    provider,
-    status,
-    action: status.installAction,
-    title: `${status.displayName} CLI not installed`,
-    description: "Not installed",
-    fingerprint: `${provider}:not-installed`,
-  };
-}
-
-export function UpdateStates() {
+export function RowVariations() {
   const providerUpdate = machineOf({
     host: makeHost({ id: "state-provider-update", name: "workstation" }),
+    providers: ["codex"],
     issues: [updateIssue("codex", "0.145.0", "0.146.0")],
   });
   const providerInstalling = machineOf({
     host: makeHost({ id: "state-provider-installing", name: "studio-mac" }),
-    issues: [updateIssue("claude-code", "2.0.1", "2.1.0")],
-  });
-  const providerFailed = failedProviderMachine("state-provider-failed");
-  const providerManual = machineOf({
-    host: makeHost({ id: "state-provider-manual", name: "homelab" }),
-    issues: [manualUpdateIssue("codex", "0.145.0", "0.146.0")],
-  });
-  const providerMissing = machineOf({
-    host: makeHost({ id: "state-provider-missing", name: "workstation" }),
+    providers: ["codex", "claude-code"],
     issues: [
       updateIssue("codex", "0.145.0", "0.146.0"),
-      missingProviderIssue("claude-code"),
+      updateIssue("claude-code", "2.0.1", "2.1.0"),
     ],
+  });
+  const providerFailed = failedProviderMachine("state-provider-failed", [
+    "codex",
+  ]);
+  const providerManual = machineOf({
+    host: makeHost({ id: "state-provider-manual", name: "homelab" }),
+    providers: ["codex"],
+    issues: [manualUpdateIssue("codex", "0.145.0", "0.146.0")],
   });
   const daemonUpdating = machineOf({
     host: makeHost({
@@ -382,342 +339,910 @@ export function UpdateStates() {
   });
 
   return (
-    <SettingsStoryChrome activeSection="updates" contentOwnsPageShell>
-      <Story
-        title="Updates — every state"
-        description="Each state Settings → Updates can reach, once, rendered by the production component."
-        renderedLabel="Rendered card"
-        renderedNote="The real Updates section"
-      >
-        <Group
-          title="bb"
-          note="The app itself, and the machine daemons it runs."
-        />
-
-        <State
-          name="Up to date"
-          note="Nothing to do. The settled state stays visually quiet."
+    <>
+      <StoryCard className="max-w-5xl" labelWidth="240px">
+        <h2 className="px-4 py-3 text-sm font-semibold">Server and desktop</h2>
+        <StoryRow
+          label="Up to date"
+          hint="Nothing to do. The settled state stays visually quiet; Changelog opens the installed version's changes below the row."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={NPM_VERSION}
-              desktopInfo={null}
-              isDesktop={false}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                releaseNotes={storyReleaseNotes(NPM_VERSION.currentVersion)}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Checking"
-          note="The app version check is still in progress."
+        <StoryRow
+          label="Checking"
+          hint="The app version check is still in progress."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={undefined}
-              desktopInfo={null}
-              isDesktop={false}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Update available"
-          note="A web install cannot replace itself, so its action copies the upgrade command."
+        <StoryRow
+          label="Update available"
+          hint="A web install cannot replace itself, so its action copies the upgrade command. Changelog opens the new version's changes below the row."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={{
-                ...NPM_VERSION,
-                latestVersion: "0.39.0",
-                updateAvailable: true,
-              }}
-              desktopInfo={null}
-              isDesktop={false}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  latestVersion: "0.48.0",
+                  updateAvailable: true,
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                releaseNotes={storyReleaseNotes("0.48.0", true)}
+              />
+              <ReleaseNotesPanel
+                id="story-release-notes-0.48.0"
+                version="0.48.0"
+                sourceUpdate={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="In-app update available"
-          note="bb runs under the update shim, so it can download the update and restart itself."
+        <StoryRow
+          label="In-app update available"
+          hint="bb runs under the update shim, so it can download the update and restart itself."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={NPM_VERSION}
-              appUpdate={IN_APP_UPDATE}
-              desktopInfo={null}
-              isDesktop={false}
-              onApplyAppUpdate={noop}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-              onShowAppUpdateResult={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={IN_APP_UPDATE}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+                releaseNotes={storyReleaseNotes("0.39.0")}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="In-app update downloading"
-          note="The launcher is installing the new version while bb keeps running."
+        <StoryRow
+          label="In-app update downloading"
+          hint="The launcher is installing the new version while bb keeps running."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={NPM_VERSION}
-              appUpdate={{
-                ...IN_APP_UPDATE,
-                activity: {
-                  output: [],
-                  phase: "preparing",
-                  startedAt: "2026-09-23T00:00:00.000Z",
-                  step: "Downloading bb-app 0.39.0",
-                  targetVersion: "0.39.0",
-                },
-              }}
-              desktopInfo={null}
-              isDesktop={false}
-              onApplyAppUpdate={noop}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-              onShowAppUpdateResult={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  activity: {
+                    output: [],
+                    phase: "preparing",
+                    startedAt: "2026-09-23T00:00:00.000Z",
+                    step: "Downloading bb-app 0.39.0",
+                    targetVersion: "0.39.0",
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="In-app update failed"
-          note="The download failed, bb kept running the current version, and the row keeps the details until dismissed."
+        <StoryRow
+          label="In-app update while threads run"
+          hint="Update asks before interrupting running threads. With automatic updates on, the update waits for them instead."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={NPM_VERSION}
-              appUpdate={{
-                ...IN_APP_UPDATE,
-                lastResult: {
-                  acknowledged: false,
-                  finishedAt: "2026-09-23T00:00:00.000Z",
-                  from: { commit: null, version: "0.38.0" },
-                  id: "update-1",
-                  logTail: ["npm error code E404"],
-                  message: "npm install failed",
-                  outcome: "failed",
-                  phase: "install",
-                  to: { commit: null, version: "0.39.0" },
-                },
-              }}
-              desktopInfo={null}
-              isDesktop={false}
-              onApplyAppUpdate={noop}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-              onShowAppUpdateResult={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{ ...IN_APP_UPDATE, runningThreadCount: 2 }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Source checkout blocked"
-          note="A pnpm start checkout explains why it cannot fast-forward instead of offering a button."
+        <StoryRow
+          label="In-app update waiting for threads"
+          hint="Automatic updates found this version; the server starts it once no thread has run for 15 minutes. Skip this version keeps it from installing until a newer one appears."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={NPM_VERSION}
-              appUpdate={{
-                ...IN_APP_UPDATE,
-                available: {
-                  channel: "main",
-                  commit: "4f1c2e9a7b0d3c5e8f1a2b3c4d5e6f7a8b9c0d1e",
-                  commitCount: 12,
-                  subjects: ["Fix sidebar flicker"],
-                  version: "0.38.0",
-                },
-                blocked: {
-                  message:
-                    "The working tree has uncommitted changes. Commit or stash them to update from the app.",
-                  reason: "uncommitted-changes",
-                },
-                current: {
-                  commit: "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
-                  version: "0.38.0",
-                },
-                support: { kind: "supported", mode: "source" },
-              }}
-              desktopInfo={null}
-              isDesktop={false}
-              onApplyAppUpdate={noop}
-              onRelaunchDesktop={null}
-              onRetryDesktop={null}
-              onShowAppUpdateResult={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  runningThreadCount: 2,
+                  scheduled: {
+                    requestedAt: "2026-10-23T00:00:00.000Z",
+                    requiredIdleMs: 15 * 60_000,
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onCancelScheduledAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+              <AutoAppUpdateSetting
+                label="Restart and update bb automatically"
+                checked
+                onCheckedChange={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Downloading"
-          note="The desktop shell is fetching the update automatically."
+        <StoryRow
+          label="In-app update waiting for idle time"
+          hint="Every thread has finished; the automatic update still waits until no thread has run for 15 minutes, so bb does not restart between turns."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={undefined}
-              desktopInfo={{
-                ...DESKTOP_UPDATE,
-                downloadState: "downloading",
-                pendingVersion: null,
-                updateDownloaded: false,
-              }}
-              isDesktop
-              onRelaunchDesktop={noop}
-              onRetryDesktop={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  runningThreadCount: 0,
+                  scheduled: {
+                    requestedAt: "2026-10-23T00:00:00.000Z",
+                    requiredIdleMs: 15 * 60_000,
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onCancelScheduledAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+              <AutoAppUpdateSetting
+                label="Restart and update bb automatically"
+                checked
+                onCheckedChange={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Downloaded — relaunch"
-          note="The update is ready and needs one explicit relaunch."
+        <StoryRow
+          label="Requested update waiting for threads"
+          hint="bb updates app apply --when-idle asked for this update; the server starts it a few seconds after the running threads finish."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={undefined}
-              desktopInfo={DESKTOP_UPDATE}
-              isDesktop
-              onRelaunchDesktop={noop}
-              onRetryDesktop={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  runningThreadCount: 2,
+                  scheduled: {
+                    requestedAt: "2026-10-23T00:00:00.000Z",
+                    requiredIdleMs: 5_000,
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onCancelScheduledAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Download failed"
-          note="The red caption states the failure; the neutral Retry button is the recovery."
+        <StoryRow
+          label="In-app update failed"
+          hint="The download failed, bb kept running the current version, and the row keeps the details until dismissed."
         >
-          <StoryAppState>
-            <BbAppUpdateRows
-              systemVersion={undefined}
-              desktopInfo={{
-                ...DESKTOP_UPDATE,
-                downloadState: "failed",
-                pendingVersion: null,
-                updateDownloaded: false,
-              }}
-              isDesktop
-              onRelaunchDesktop={noop}
-              onRetryDesktop={noop}
-            />
-          </StoryAppState>
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={NPM_VERSION}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  lastResult: {
+                    acknowledged: false,
+                    finishedAt: "2026-09-23T00:00:00.000Z",
+                    from: { commit: null, version: "0.38.0" },
+                    id: "update-1",
+                    logTail: ["npm error code E404"],
+                    message: "npm install failed",
+                    outcome: "failed",
+                    phase: "install",
+                    to: { commit: null, version: "0.39.0" },
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Machine updating bb"
-          note="The enrolled daemon is applying its required update automatically."
+        <StoryRow
+          label="Source checkout — manual Git updates"
+          hint="Runs from a checkout without an update shim. No comparison with npm or origin/main has been made."
         >
-          <StoryMachineSection machine={daemonUpdating} />
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Machine offline"
-          note="bb cannot currently reach this machine."
+        <StoryRow
+          label="Source checkout — revision unavailable"
+          hint="A source tree with no detected Git revision shows its declared build version without claiming freshness."
         >
-          <StoryMachineSection machine={daemonOffline} />
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: null,
+                  latestVersion: null,
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Machine update stalled"
-          note="The daemon update did not finish and can be retried."
+        <StoryRow
+          label="Release check unavailable"
+          hint="The npm lookup failed. Retry forces another lookup without upgrading the app."
         >
-          <StoryMachineSection machine={daemonStalled} />
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{ ...NPM_VERSION, latestVersion: null }}
+                desktopInfo={null}
+                isDesktop={false}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onRetryAppCheck={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <Group
-          title="Provider CLIs"
-          note="Agent CLIs installed on each machine."
-        />
-
-        <State
-          name="Update available"
-          note="bb has an installer it can run for this provider."
+        <StoryRow
+          label="Source checkout — up to date"
+          hint="The managed checkout has successfully checked origin/main and has no incoming commits."
         >
-          <StoryMachineSection machine={providerUpdate} />
-        </State>
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: null,
+                  blocked: null,
+                  current: { commit: "a".repeat(40), version: "0.38.0" },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
 
-        <State
-          name="Installing"
-          note="The provider update is currently running."
+        <StoryRow
+          label="Source checkout — check unavailable"
+          hint="The managed checkout could not fetch origin/main."
         >
-          <MachineUpdatesSection
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: null,
+                  blocked: {
+                    reason: "fetch-failed",
+                    message: "Could not fetch origin/main.",
+                  },
+                  current: { commit: "a".repeat(40), version: "0.38.0" },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout — branch blocked"
+          hint="This branch cannot use automatic updates; no incoming update is shown."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: null,
+                  blocked: {
+                    reason: "not-on-main",
+                    message:
+                      "The checkout is on feature. Only main can be updated from the app.",
+                  },
+                  current: { commit: "a".repeat(40), version: "0.38.0" },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout update available"
+          hint="A clean pnpm start checkout on main shows commits instead of a release version and offers to fast-forward."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  currentCommit: "a".repeat(40),
+                  installKind: "source",
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: "76a1ebcaf5c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5",
+                    commitCount: 54,
+                    subjects: ["Restore closed right-panel tabs"],
+                    version: "0.45.0",
+                  },
+                  current: {
+                    commit: "1b973d5584e10963018f4ae7d9c001e8ec09b99b",
+                    version: "0.44.0",
+                  },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout — changelog"
+          hint="Changelog lists the incoming commits on main and compares the range on GitHub."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  currentVersion: "0.48.0",
+                  currentCommit: SOURCE_FROM_COMMIT,
+                  installKind: "source",
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: SOURCE_TO_COMMIT,
+                    commitCount: 41,
+                    subjects: SOURCE_INCOMING_SUBJECTS,
+                    version: "0.48.0",
+                  },
+                  current: { commit: SOURCE_FROM_COMMIT, version: "0.48.0" },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+                releaseNotes={storyReleaseNotes("0.48.0", true)}
+              />
+              <ReleaseNotesPanel
+                id="story-release-notes-source"
+                version="0.48.0"
+                sourceUpdate={{
+                  from: SOURCE_FROM_COMMIT,
+                  to: SOURCE_TO_COMMIT,
+                  commitCount: 41,
+                  subjects: SOURCE_INCOMING_SUBJECTS,
+                }}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout — checking update"
+          hint="The launcher rechecks origin/main before accepting the update target. The spinner and step replace the Update button."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: "b".repeat(40),
+                    commitCount: 54,
+                    subjects: ["Restore closed right-panel tabs"],
+                    version: "0.45.0",
+                  },
+                  current: { commit: "a".repeat(40), version: "0.44.0" },
+                  support: { kind: "supported", mode: "source" },
+                  activity: {
+                    phase: "preparing",
+                    startedAt: "2026-09-23T00:00:00.000Z",
+                    step: "Checking origin/main",
+                    output: [],
+                    targetVersion: "0.45.0",
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout — ready to restart"
+          hint="Validation succeeded. The launcher is waiting for the server to approve the restart."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: "b".repeat(40),
+                    commitCount: 54,
+                    subjects: ["Restore closed right-panel tabs"],
+                    version: "0.45.0",
+                  },
+                  current: { commit: "a".repeat(40), version: "0.44.0" },
+                  support: { kind: "supported", mode: "source" },
+                  activity: {
+                    phase: "preparing",
+                    startedAt: "2026-09-23T00:00:00.000Z",
+                    step: "Ready to restart",
+                    output: [],
+                    targetVersion: "0.45.0",
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout — restarting"
+          hint="The last row before shutdown. Git fast-forward, dependency installation, and rebuilding happen while the server is offline; there are no live rows during those steps."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  installKind: "source",
+                  currentCommit: "a".repeat(40),
+                  latestVersion: null,
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: "b".repeat(40),
+                    commitCount: 54,
+                    subjects: ["Restore closed right-panel tabs"],
+                    version: "0.45.0",
+                  },
+                  current: { commit: "a".repeat(40), version: "0.44.0" },
+                  support: { kind: "supported", mode: "source" },
+                  activity: {
+                    phase: "restarting",
+                    startedAt: "2026-09-23T00:00:00.000Z",
+                    targetCommit: "b".repeat(40),
+                    targetVersion: "0.45.0",
+                  },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Source checkout blocked"
+          hint="Incoming commits stay visible, but there is no update button until the working tree is clean."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={{
+                  ...NPM_VERSION,
+                  currentCommit: "a".repeat(40),
+                  installKind: "source",
+                }}
+                appUpdate={{
+                  ...IN_APP_UPDATE,
+                  available: {
+                    behindSince: "2026-11-02T12:00:00.000Z",
+                    channel: "main",
+                    commit: "4f1c2e9a7b0d3c5e8f1a2b3c4d5e6f7a8b9c0d1e",
+                    commitCount: 12,
+                    subjects: ["Fix sidebar flicker"],
+                    version: "0.38.0",
+                  },
+                  blocked: {
+                    message:
+                      "The working tree has uncommitted changes. Commit or stash them to update from the app.",
+                    reason: "uncommitted-changes",
+                  },
+                  current: {
+                    commit: "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
+                    version: "0.38.0",
+                  },
+                  support: { kind: "supported", mode: "source" },
+                }}
+                desktopInfo={null}
+                isDesktop={false}
+                onApplyAppUpdate={noop}
+                onRelaunchDesktop={null}
+                onRetryDesktop={null}
+                onShowAppUpdateResult={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Downloading"
+          hint="The desktop shell is fetching the update automatically."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={{
+                  ...DESKTOP_UPDATE,
+                  downloadState: "downloading",
+                  pendingVersion: null,
+                  updateDownloaded: false,
+                }}
+                isDesktop
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Desktop — not checked"
+          hint="No check has completed yet. Check starts a lookup without claiming the installed version is current."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={{
+                  ...DESKTOP_UPDATE,
+                  lastCheckedAt: null,
+                  latestVersion: null,
+                  pendingVersion: null,
+                  updateDownloaded: false,
+                  updateAvailable: false,
+                  downloadState: "idle",
+                }}
+                isDesktop
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Desktop — checking release"
+          hint="The check is running. The action is disabled until it completes."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={{
+                  ...DESKTOP_UPDATE,
+                  lastCheckedAt: null,
+                  latestVersion: null,
+                  pendingVersion: null,
+                  updateDownloaded: false,
+                  updateAvailable: false,
+                  downloadState: "idle",
+                }}
+                isDesktop
+                isChecking
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Desktop — release check unavailable"
+          hint="A check completed without establishing the latest release. The installed version stays visible with an explanation and Retry."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={{
+                  ...DESKTOP_UPDATE,
+                  latestVersion: null,
+                  pendingVersion: null,
+                  updateDownloaded: false,
+                  updateAvailable: false,
+                  downloadState: "idle",
+                }}
+                isDesktop
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Downloaded — relaunch"
+          hint="The update is ready and needs one explicit relaunch."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={DESKTOP_UPDATE}
+                isDesktop
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+
+        <StoryRow
+          label="Download failed"
+          hint="The red caption states the failure; the neutral Retry button is the recovery."
+        >
+          <div className="w-full">
+            <BbUpdatesCard>
+              <BbAppUpdateRows
+                systemVersion={undefined}
+                desktopInfo={{
+                  ...DESKTOP_UPDATE,
+                  downloadState: "failed",
+                  pendingVersion: null,
+                  updateDownloaded: false,
+                }}
+                isDesktop
+                onRelaunchDesktop={noop}
+                onRetryDesktop={noop}
+              />
+            </BbUpdatesCard>
+          </div>
+        </StoryRow>
+      </StoryCard>
+      <StoryCard className="max-w-5xl" labelWidth="240px">
+        <h2 className="px-4 py-3 text-sm font-semibold">Machine rows</h2>
+        <StoryRow
+          label="Updates available"
+          hint="One line per machine: the face pile shows which provider CLIs are behind."
+        >
+          <StoryMachineRow machine={providerUpdate} tags={["Server"]} />
+        </StoryRow>
+
+        <StoryRow
+          label="Expanded"
+          hint="Each installed CLI with its versions and the updater bb will run."
+        >
+          <StoryMachineRow machine={providerUpdate} expanded />
+        </StoryRow>
+
+        <StoryRow
+          label="Installing"
+          hint="The running CLI spins in the pile; queued ones wait."
+        >
+          <StoryMachineRow
             machine={providerInstalling}
-            isThisMachine={false}
-            showServerBadge={false}
-          >
-            <MachineUpdatesRows
-              machine={providerInstalling}
-              runningJobKey="state-provider-installing:claude-code"
-              queuedJobKeys={NO_JOBS}
-              onStartInstall={noop}
-              onOpenProvider={noop}
-            />
-          </MachineUpdatesSection>
-        </State>
+            expanded
+            runningJobKey={`${providerInstalling.host.id}:codex`}
+            queuedJobKeys={
+              new Set([`${providerInstalling.host.id}:claude-code`])
+            }
+          />
+        </StoryRow>
 
-        <State
-          name="Update failed"
-          note="The red warning marks the failure and opens the log; Retry is the recovery."
+        <StoryRow
+          label="Update failed"
+          hint="The row names the failure and retries; the expanded row opens the log."
         >
-          <MachineUpdatesSection
+          <StoryMachineRow
             machine={providerFailed}
-            isThisMachine={false}
-            showServerBadge={false}
-          >
-            <MachineUpdatesRows
-              machine={providerFailed}
-              runningJobKey={null}
-              queuedJobKeys={NO_JOBS}
-              failuresByJobKey={failedProviderFailures(providerFailed)}
-              onStartInstall={noop}
-              onOpenProvider={noop}
-            />
-          </MachineUpdatesSection>
-        </State>
+            expanded
+            failuresByJobKey={failedProviderFailures(providerFailed)}
+          />
+        </StoryRow>
 
-        <State
-          name="Update in terminal"
-          note="The CLI was installed outside bb, so the update must run in its own package manager."
+        <StoryRow
+          label="Update in terminal"
+          hint="bb cannot run this update, so the avatar is dashed and Update all skips it."
         >
-          <StoryMachineSection machine={providerManual} />
-        </State>
+          <StoryMachineRow machine={providerManual} expanded />
+        </StoryRow>
 
-        <State
-          name="Never installed — no row"
-          note={
-            <Why
-              items={[
-                "A CLI with no installed version has no update, so it stays off this page.",
-                "Claude Code is absent in this fixture; only the stale Codex row renders.",
-              ]}
-            />
-          }
+        <StoryRow
+          label="Status check failed"
+          hint="The provider CLI check failed and can be retried."
         >
-          <StoryMachineSection machine={providerMissing} />
-        </State>
+          <StoryMachineRow machine={providerCheckFailed} />
+        </StoryRow>
 
-        <State
-          name="Status check failed"
-          note="The machine is connected, but bb could not inspect its provider CLIs."
+        <StoryRow
+          label="Machine updating bb"
+          hint="The enrolled daemon is applying its required update automatically."
         >
-          <StoryMachineSection machine={providerCheckFailed} />
-        </State>
-      </Story>
-    </SettingsStoryChrome>
+          <StoryMachineRow machine={daemonUpdating} />
+        </StoryRow>
+
+        <StoryRow
+          label="Machine update stalled"
+          hint="The daemon update did not finish and can be retried."
+        >
+          <StoryMachineRow machine={daemonStalled} />
+        </StoryRow>
+
+        <StoryRow
+          label="Machine offline"
+          hint="Shown only after Show all; bb cannot currently reach this machine."
+        >
+          <StoryMachineRow machine={daemonOffline} />
+        </StoryRow>
+      </StoryCard>
+    </>
   );
 }
 
-export function MultiMachine() {
+export function SectionVariations() {
+  const current = machineOf({
+    host: makeHost({ id: "section-current", name: "workstation" }),
+    isPrimary: true,
+  });
   const workstation = machineOf({
-    host: makeHost({ id: "host-primary", name: "workstation" }),
+    host: makeHost({ id: "section-workstation", name: "workstation" }),
     isPrimary: true,
     issues: [
       updateIssue("codex", "0.145.0", "0.146.0"),
@@ -725,12 +1250,29 @@ export function MultiMachine() {
     ],
   });
   const studioMac = machineOf({
-    host: makeHost({ id: "host-studio", name: "studio-mac" }),
-    issues: [updateIssue("claude-code", "2.0.1", "2.1.0")],
+    host: makeHost({ id: "section-studio", name: "studio-mac" }),
+    issues: [
+      updateIssue("codex", "0.145.0", "0.146.0"),
+      updateIssue("claude-code", "2.0.1", "2.1.0"),
+    ],
   });
-  const ciRunner = machineOf({
+  const homelab = machineOf({
+    host: makeHost({ id: "section-homelab", name: "homelab" }),
+    issues: [
+      updateIssue("codex", "0.145.0", "0.146.0"),
+      manualUpdateIssue("claude-code", "2.0.1", "2.1.0"),
+    ],
+  });
+  const offline = machineOf({
     host: makeHost({
-      id: "host-ci",
+      id: "section-offline",
+      name: "old-laptop",
+      status: "disconnected",
+    }),
+  });
+  const stalled = machineOf({
+    host: makeHost({
+      id: "section-stalled",
       name: "ci-runner-3",
       status: "disconnected",
       lastRejectedProtocolVersion: HOST_DAEMON_PROTOCOL_VERSION - 1,
@@ -738,57 +1280,212 @@ export function MultiMachine() {
     }),
     canRetryDaemonUpdate: true,
   });
-  const oldAir = failedProviderMachine("host-old-air");
+  const failed = failedProviderMachine("section-failed");
+  const serverRow = (
+    <BbAppUpdateRows
+      systemVersion={NPM_VERSION}
+      desktopInfo={null}
+      isDesktop={false}
+      onRelaunchDesktop={null}
+      onRetryDesktop={null}
+    />
+  );
+  const serverUpdateRow = (
+    <BbAppUpdateRows
+      systemVersion={NPM_VERSION}
+      appUpdate={IN_APP_UPDATE}
+      desktopInfo={null}
+      isDesktop={false}
+      onApplyAppUpdate={noop}
+      onRelaunchDesktop={null}
+      onRetryDesktop={null}
+      onShowAppUpdateResult={noop}
+    />
+  );
+  const desktopRow = (
+    <BbAppUpdateRows
+      name="Desktop"
+      systemVersion={undefined}
+      desktopInfo={DESKTOP_UPDATE}
+      isDesktop
+      onRelaunchDesktop={noop}
+      onRetryDesktop={noop}
+    />
+  );
 
   return (
-    <StoryPage>
-      <MachineUpdatesFleetSection
-        action={
-          <div role="toolbar" aria-label="Bulk update actions">
-            <UpdateActionButton
-              label="Update all 3 CLI tools"
-              tooltipLabel="Update all"
-              icon={UPDATE_ACTION_ICON}
-              visibleLabel="Update all"
-              variant="default"
-              onClick={noop}
-            />
-          </div>
-        }
+    <StoryCard className="max-w-6xl" labelWidth="240px">
+      <StoryRow
+        label="Everything current"
+        hint="One Server row and one quiet line for the fleet."
       >
-        <StoryMachineSection machine={workstation} app appUpdate />
-        <StoryMachineSection machine={studioMac} />
-        <StoryMachineSection
-          machine={oldAir}
-          failuresByJobKey={failedProviderFailures(oldAir)}
-        />
-        <StoryMachineSection machine={ciRunner} />
-      </MachineUpdatesFleetSection>
-    </StoryPage>
+        <div className="w-full space-y-6">
+          <BbUpdatesCard>{serverRow}</BbUpdatesCard>
+          <StoryProviderClis machines={[current, offline]} />
+        </div>
+      </StoryRow>
+      <StoryRow
+        label="Single machine — updates available"
+        hint="Update all sits beside the Provider CLIs heading."
+      >
+        <div className="w-full space-y-6">
+          <BbUpdatesCard>{serverRow}</BbUpdatesCard>
+          <StoryProviderClis
+            machines={[workstation]}
+            serverHostId={workstation.host.id}
+          />
+        </div>
+      </StoryRow>
+      <StoryRow
+        label="Multiple machines"
+        hint="Server and desktop updates, provider updates, a manual update, a failed install, and a stalled daemon; quiet machines fold into the footer."
+      >
+        <div className="w-full space-y-6">
+          <BbUpdatesCard>
+            {serverUpdateRow}
+            {desktopRow}
+          </BbUpdatesCard>
+          <StoryProviderClis
+            machines={[
+              workstation,
+              studioMac,
+              homelab,
+              failed,
+              stalled,
+              current,
+              offline,
+            ]}
+            serverHostId={workstation.host.id}
+            localDaemonHostId={studioMac.host.id}
+            failuresByJobKey={failedProviderFailures(failed)}
+          />
+        </div>
+      </StoryRow>
+      <StoryRow
+        label="Updating"
+        hint="Update all gives way to progress while the queue drains."
+      >
+        <div className="w-full space-y-6">
+          <BbUpdatesCard>{serverRow}</BbUpdatesCard>
+          <StoryProviderClis
+            machines={[workstation, studioMac]}
+            runningJobKey={`${workstation.host.id}:codex`}
+            queuedJobKeys={
+              new Set([
+                `${workstation.host.id}:acp-cursor`,
+                `${studioMac.host.id}:codex`,
+                `${studioMac.host.id}:claude-code`,
+              ])
+            }
+          />
+        </div>
+      </StoryRow>
+    </StoryCard>
   );
 }
 
-export function SingleMachine() {
-  const workstation = machineOf({
-    host: makeHost({ id: "host-primary", name: "workstation" }),
-    isPrimary: true,
-    issues: [updateIssue("claude-code", "2.0.1", "2.1.0")],
-  });
-  return (
-    <StoryPage>
-      <StoryMachineSection machine={workstation} app />
-    </StoryPage>
-  );
-}
+const STORY_PLUGINS = buildUpdateInventoryPlugins([
+  makePluginListItem({
+    id: "github-pr-status",
+    name: "GitHub PR Status",
+    icon: "GitPullRequest",
+    source: "npm:@acme/github-pr-status@^1.2.0",
+    version: "1.2.0",
+    updateState: {
+      outcome: "update-available",
+      availableVersion: "1.4.1",
+      availableLabel: "1.4.1",
+    },
+  }),
+  makePluginListItem({
+    id: "linear",
+    name: "Linear",
+    icon: "Zap",
+    source: "git:github.com/acme/linear@^0.8.0",
+    version: "0.8.2",
+    updateState: {
+      outcome: "update-available",
+      availableVersion: "0.9.0",
+      availableLabel: "0.9.0",
+      lastFailure: {
+        version: "0.9.0",
+        label: "0.9.0",
+        at: STORY_NOW,
+        detail: "activation failed: settings schema rejected stored values",
+      },
+    },
+  }),
+  makePluginListItem({
+    id: "notes",
+    name: "Notes",
+    icon: "File",
+    source: "npm:@acme/notes@^2.0.0",
+    version: "2.3.0",
+    updateState: {
+      outcome: "incompatible",
+      blockedVersion: "3.0.0",
+      blockedLabel: "3.0.0",
+      blockedReasons: ["engines.bb requires >=0.40.0 (running 0.38.0)"],
+    },
+  }),
+  makePluginListItem({
+    id: "pinned",
+    name: "Pinned",
+    source: "npm:@acme/pinned@1.0.0",
+    updateState: { outcome: "pinned" },
+  }),
+]);
 
-export function NoUpdatesAvailable() {
-  const workstation = machineOf({
-    host: makeHost({ id: "host-primary", name: "workstation" }),
-    isPrimary: true,
-  });
+export function PluginSectionVariations() {
   return (
-    <StoryPage>
-      <StoryMachineSection machine={workstation} app />
-    </StoryPage>
+    <StoryCard className="max-w-5xl" labelWidth="240px">
+      <h2 className="px-4 py-3 text-sm font-semibold">Plugins</h2>
+      <StoryRow
+        label="Updates"
+        hint="Update, a failed update with Retry, and an engines-blocked candidate."
+      >
+        <div className="w-full">
+          <PluginUpdatesSection
+            plugins={STORY_PLUGINS}
+            updatingPluginIds={NO_JOBS}
+            checking={false}
+            onStartUpdates={noop}
+          />
+        </div>
+      </StoryRow>
+      <StoryRow
+        label="Updating"
+        hint="Update all gives way to progress while the queue drains."
+      >
+        <div className="w-full">
+          <PluginUpdatesSection
+            plugins={STORY_PLUGINS}
+            updatingPluginIds={new Set(["github-pr-status", "linear"])}
+            checking={false}
+            onStartUpdates={noop}
+          />
+        </div>
+      </StoryRow>
+      <StoryRow label="Quiet" hint="Every tracking plugin is current.">
+        <div className="w-full">
+          <PluginUpdatesSection
+            plugins={{ trackedCount: 6, items: [] }}
+            updatingPluginIds={NO_JOBS}
+            checking={false}
+            onStartUpdates={noop}
+          />
+        </div>
+      </StoryRow>
+      <StoryRow label="Checking" hint="The page-load check is running.">
+        <div className="w-full">
+          <PluginUpdatesSection
+            plugins={{ trackedCount: 6, items: [] }}
+            updatingPluginIds={NO_JOBS}
+            checking
+            onStartUpdates={noop}
+          />
+        </div>
+      </StoryRow>
+    </StoryCard>
   );
 }

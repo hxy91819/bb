@@ -22,7 +22,16 @@ import {
 import { providerHealthSchema as providerHealthSchema } from "@bb/provider-bridge-protocol/provider-maintenance";
 import { hostPlatformSchema } from "@bb/host-daemon-contract/local";
 import { machineEnvironmentSetSchema } from "./machine-environment.js";
-
+import { systemVoiceTranscriptionResponseSchema } from "./system-voice.js";
+import {
+  systemEnvironmentProviderSchema,
+  systemEnvironmentProvidersResponseSchema,
+} from "./system-environment-providers.js";
+export {
+  systemEnvironmentProviderSchema,
+  systemEnvironmentProvidersResponseSchema,
+} from "./system-environment-providers.js";
+export { systemVoiceTranscriptionResponseSchema } from "./system-voice.js";
 const machineEnvironmentReplacementVariableSchema =
   machineEnvironmentSetSchema.extend({
     value: machineEnvironmentSetSchema.shape.value.nullable(),
@@ -99,14 +108,26 @@ export const systemExecutionOptionsQuerySchema = z
   .object({
     ...systemProviderHostQueryFields,
     providerId: z.string().min(1),
+    projectId: z.string().min(1),
+    selectedModel: z.string().min(1),
+    preferCached: z.enum(["true", "false"]),
   })
   .partial()
-  .superRefine(rejectMultipleWorkspaceSelectors);
+  .superRefine(rejectMultipleWorkspaceSelectors)
+  .superRefine((query, context) => {
+    if (query.projectId !== undefined && query.environmentId !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "projectId and environmentId are mutually exclusive",
+      });
+    }
+  });
 export type SystemExecutionOptionsQuery = z.infer<
   typeof systemExecutionOptionsQuerySchema
 >;
 
 export const systemUsageLimitsQuerySchema = z.object({
+  refresh: z.enum(["true", "false"]).optional(),
   hostId: z.string().min(1).optional(),
   providerId: z.string().min(1).optional(),
 });
@@ -121,9 +142,6 @@ export interface SystemVoiceTranscriptionForm {
 export { providerInfoSchema as systemProviderInfoSchema } from "@bb/domain";
 export type { ProviderInfo as SystemProviderInfo } from "@bb/domain";
 
-export const systemVoiceTranscriptionResponseSchema = z.object({
-  text: z.string(),
-});
 export type SystemVoiceTranscriptionResponse = z.infer<
   typeof systemVoiceTranscriptionResponseSchema
 >;
@@ -131,6 +149,9 @@ export type SystemVoiceTranscriptionResponse = z.infer<
 export const systemProviderStateSchema = providerHealthSchema.extend({
   providerId: z.string().min(1),
   displayName: z.string().min(1),
+  localLoginCommand: z.string().min(1).nullable(),
+  internal_DO_NOT_USE_guidedSignIn: z.boolean(),
+  internal_DO_NOT_USE_setupGuidePlanLabel: z.string().min(1).nullable(),
 });
 export type SystemProviderState = z.infer<typeof systemProviderStateSchema>;
 
@@ -191,6 +212,249 @@ export const testAiServiceResponseSchema = z.discriminatedUnion("ok", [
 ]);
 export type TestAiServiceResponse = z.infer<typeof testAiServiceResponseSchema>;
 
+const onboardingStepTelemetrySchema = z.enum([
+  "agent",
+  "projects",
+  "plugins",
+  "devices",
+]);
+const onboardingEntryTelemetrySchema = z.enum(["first_run", "replay"]);
+const onboardingStepTelemetryPropertiesSchema = z
+  .object({
+    step: onboardingStepTelemetrySchema,
+    entry: onboardingEntryTelemetrySchema,
+  })
+  .strict();
+
+const onboardingFailureReasonTelemetrySchema = z.enum([
+  "no_host",
+  "host_unavailable",
+  "timed_out",
+  "not_found",
+  "permission",
+  "command_failed",
+  "unsupported",
+  "other",
+]);
+
+const telemetryResourceIdSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,127}$/);
+
+const agentStatusesTelemetrySchema = z
+  .record(z.string().min(1).max(256), providerHealthSchema.shape.status)
+  .refine((statuses) => Object.keys(statuses).length <= 64);
+
+const releaseVersionTelemetrySchema = z
+  .string()
+  .max(32)
+  .regex(/^\d+(\.\d+){1,3}$/);
+
+export const recordTelemetryEventRequestSchema = z.discriminatedUnion("name", [
+  z
+    .object({
+      name: z.literal("recommendation"),
+      properties: z
+        .object({
+          resource_type: z.enum(["plugin"]),
+          resource_id: telemetryResourceIdSchema,
+          recommendation_id: z.string().regex(/^[A-Za-z0-9_-]{21}$/),
+          action: z.enum(["shown", "selected", "deselected"]),
+          surface: z.enum(["onboarding"]),
+          entry: onboardingEntryTelemetrySchema,
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_operation"),
+      properties: z
+        .object({
+          entry: onboardingEntryTelemetrySchema,
+          step: onboardingStepTelemetrySchema,
+          operation: z.enum([
+            "install",
+            "update",
+            "scan",
+            "import",
+            "remote_access",
+            "add_machine",
+            "enable",
+            "disable",
+            "load",
+            "finish",
+          ]),
+          outcome: z.enum(["started", "succeeded", "failed"]),
+          resource_id: telemetryResourceIdSchema.optional(),
+          item_count: z.number().int().nonnegative().optional(),
+          succeeded_count: z.number().int().nonnegative().optional(),
+          timed_out: z.boolean().optional(),
+          unreadable_count: z.number().int().nonnegative().optional(),
+          failure_reason: onboardingFailureReasonTelemetrySchema.optional(),
+          failure_stage: z.enum(["sign_in", "pairing", "turn_on"]).optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_agent_state"),
+      properties: z
+        .object({
+          entry: onboardingEntryTelemetrySchema,
+          agent_installed: z.boolean().nullable(),
+          agent_ready: z.boolean().nullable(),
+          agent_statuses: agentStatusesTelemetrySchema.optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_sign_in"),
+      properties: z
+        .object({
+          entry: onboardingEntryTelemetrySchema,
+          outcome: z.enum([
+            "started",
+            "ready",
+            "exited",
+            "failed",
+            "cancelled",
+          ]),
+          resource_id: telemetryResourceIdSchema,
+          failure_reason: onboardingFailureReasonTelemetrySchema.optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("new_thread_blocker"),
+      properties: z
+        .object({
+          reason: z.enum([
+            "agent_missing",
+            "agent_update",
+            "sign_in",
+            "model_unavailable",
+            "provider_selection",
+            "model_selection",
+            "project_setup",
+          ]),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("new_thread_submit"),
+      properties: z.discriminatedUnion("outcome", [
+        z.object({ outcome: z.enum(["started", "accepted"]) }).strict(),
+        z
+          .object({
+            outcome: z.literal("failed"),
+            failure_reason: onboardingFailureReasonTelemetrySchema.optional(),
+          })
+          .strict(),
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_exposed"),
+      properties: z.object({ entry: onboardingEntryTelemetrySchema }).strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_started"),
+      properties: z
+        .object({ agent_installed: z.boolean(), agent_ready: z.boolean() })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_step_reached"),
+      properties: onboardingStepTelemetryPropertiesSchema,
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_step_completed"),
+      properties: onboardingStepTelemetryPropertiesSchema,
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_step_skipped"),
+      properties: onboardingStepTelemetryPropertiesSchema,
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_finished"),
+      properties: z
+        .object({
+          outcome: z.enum(["completed", "skipped"]),
+          entry: onboardingEntryTelemetrySchema,
+          last_step: onboardingStepTelemetrySchema,
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_left"),
+      properties: onboardingStepTelemetryPropertiesSchema,
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("onboarding_error"),
+      properties: z
+        .object({
+          step: onboardingStepTelemetrySchema,
+          entry: onboardingEntryTelemetrySchema,
+          kind: z.enum(["render", "uncaught", "unhandled_rejection"]),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("release_notes_opened"),
+      properties: z
+        .object({
+          release_version: releaseVersionTelemetrySchema,
+          view: z.enum(["inline", "web"]),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      name: z.literal("plugin_creation_started"),
+      properties: z.object({}).strict(),
+    })
+    .strict(),
+]);
+export type RecordTelemetryEventRequest = z.infer<
+  typeof recordTelemetryEventRequestSchema
+>;
+
+export const setupGuideVariantSchema = z.enum(["control", "new"]);
+export type SetupGuideVariant = z.infer<typeof setupGuideVariantSchema>;
+
+export const systemSetupGuideResponseSchema = z.object({
+  variant: setupGuideVariantSchema,
+});
+export type SystemSetupGuideResponse = z.infer<
+  typeof systemSetupGuideResponseSchema
+>;
+
 export const serverAccessStatusSchema = z.object({
   providers: z.array(
     z.object({
@@ -228,6 +492,7 @@ export const systemConfigResponseSchema = z.object({
   defaultKeybindings: appDefaultKeybindingsSchema,
   keybindingOverrides: appKeybindingOverridesSchema,
   experiments: experimentsSchema,
+  performanceDiagnosticsAvailable: z.boolean(),
   appearance: appThemeSchema,
   customThemes: z.array(z.string()),
   pluginThemes: z.array(pluginThemeMetaSchema),
@@ -258,6 +523,11 @@ export const themeCatalogResponseSchema = z.object({
 export type ThemeCatalogResponse = z.infer<typeof themeCatalogResponseSchema>;
 
 export const systemVersionResponseSchema = z.object({
+  currentCommit: z
+    .string()
+    .regex(/^[a-f0-9]{40}$/i)
+    .nullable(),
+  installKind: z.enum(["desktop", "npm", "source"]).nullable(),
   currentVersion: z.string(),
   latestVersion: z.string().nullable(),
   source: z.literal("npm"),
@@ -271,6 +541,24 @@ export const systemVersionQuerySchema = z.object({
   force: z.enum(["true", "false"]).optional(),
 });
 export type SystemVersionQuery = z.infer<typeof systemVersionQuerySchema>;
+
+export const systemCliCommandShadowSchema = z.object({
+  path: z.string().min(1),
+  source: z.enum(["machine", "npm", "other"]),
+});
+export type SystemCliCommandShadow = z.infer<
+  typeof systemCliCommandShadowSchema
+>;
+
+export const systemCliCommandStatusSchema = z.object({
+  installedPath: z.string().min(1).nullable(),
+  onPath: z.boolean(),
+  shadowedBy: systemCliCommandShadowSchema.nullable(),
+  supported: z.boolean(),
+});
+export type SystemCliCommandStatus = z.infer<
+  typeof systemCliCommandStatusSchema
+>;
 
 export const systemAppUpdateRevisionSchema = z.object({
   commit: z.string().nullable(),
@@ -295,6 +583,7 @@ export type SystemAppUpdateSupport = z.infer<
 >;
 
 export const systemAppUpdateAvailableSchema = z.object({
+  behindSince: z.iso.datetime().nullable(),
   channel: z.enum(["latest", "nightly", "main"]),
   commit: z.string().nullable(),
   commitCount: z.number().int().nonnegative().nullable(),
@@ -328,6 +617,7 @@ export const systemAppUpdateActivitySchema = z.discriminatedUnion("phase", [
   z.object({
     phase: z.literal("restarting"),
     startedAt: z.string(),
+    targetCommit: z.string().nullable(),
     targetVersion: z.string(),
   }),
 ]);
@@ -349,12 +639,21 @@ export const systemAppUpdateResultSchema = z.object({
 export type SystemAppUpdateResult = z.infer<typeof systemAppUpdateResultSchema>;
 
 export const systemAppUpdateStatusSchema = z.object({
+  desktopUpdateSupported: z.literal(true).optional(),
   activity: systemAppUpdateActivitySchema,
+  autoUpdate: z.boolean(),
   available: systemAppUpdateAvailableSchema.nullable(),
+  availableSkipped: z.boolean(),
   blocked: systemAppUpdateBlockedSchema.nullable(),
   current: systemAppUpdateRevisionSchema,
   lastResult: systemAppUpdateResultSchema.nullable(),
   runningThreadCount: z.number().int().nonnegative(),
+  scheduled: z
+    .object({
+      requestedAt: z.string(),
+      requiredIdleMs: z.number().int().nonnegative(),
+    })
+    .nullable(),
   support: systemAppUpdateSupportSchema,
 });
 export type SystemAppUpdateStatus = z.infer<typeof systemAppUpdateStatusSchema>;
@@ -369,6 +668,13 @@ export const systemAppUpdateApplyRequestSchema = z.object({
 });
 export type SystemAppUpdateApplyRequest = z.infer<
   typeof systemAppUpdateApplyRequestSchema
+>;
+
+export const systemAppUpdateAutoRequestSchema = z.object({
+  enabled: z.boolean(),
+});
+export type SystemAppUpdateAutoRequest = z.infer<
+  typeof systemAppUpdateAutoRequestSchema
 >;
 
 export const systemAppUpdateAcknowledgeRequestSchema = z.object({
@@ -447,54 +753,10 @@ export type SystemConfigReloadResponse = z.infer<
   typeof systemConfigReloadResponseSchema
 >;
 
-const systemEnvironmentProviderAvailabilitySchema = z.discriminatedUnion(
-  "status",
-  [
-    z.object({ status: z.literal("available") }),
-    z.object({
-      status: z.literal("setup-required"),
-      message: z.string().min(1),
-    }),
-    z.object({
-      status: z.literal("unavailable"),
-      message: z.string().min(1),
-    }),
-  ],
-);
-
-export const systemEnvironmentProviderSchema = z.object({
-  environmentProviderId: z.string().min(1).optional(),
-  machineProviderId: z.string().min(1).nullable(),
-  id: z.string().min(1),
-  displayName: z.string().min(1),
-  description: z.string().min(1).nullable(),
-  icon: z.string().min(1).nullable(),
-  logoUrl: z.string().min(1).nullable(),
-  pluginId: z.string().min(1),
-  requires: z.object({
-    projectCheckout: z.boolean(),
-    gitCheckout: z.boolean(),
-    gitRemote: z.boolean(),
-    projectless: z.boolean(),
-  }),
-  inputs: jsonValueSchema.nullable(),
-  acceptsEmptyInputs: z.boolean(),
-  availability: systemEnvironmentProviderAvailabilitySchema.nullable(),
-  machineAvailability: z.record(
-    z.string().min(1),
-    systemEnvironmentProviderAvailabilitySchema.nullable(),
-  ),
-  machineInputs: jsonValueSchema.nullable().optional(),
-  machineAcceptsEmptyInputs: z.boolean().optional(),
-  machineProviderPluginId: z.string().min(1).optional(),
-});
 export type SystemEnvironmentProvider = z.infer<
   typeof systemEnvironmentProviderSchema
 >;
 
-export const systemEnvironmentProvidersResponseSchema = z.object({
-  providers: z.array(systemEnvironmentProviderSchema),
-});
 export type SystemEnvironmentProvidersResponse = z.infer<
   typeof systemEnvironmentProvidersResponseSchema
 >;

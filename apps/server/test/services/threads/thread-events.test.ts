@@ -61,6 +61,7 @@ describe("thread event appends", () => {
         threadId: thread.id,
         environmentId: environment.id,
         type: "client/turn/requested",
+        originPluginId: null,
         input: textInput("Keep working"),
         target: { kind: "new-turn" },
         execution: {
@@ -96,6 +97,7 @@ describe("thread event appends", () => {
         threadId: thread.id,
         environmentId: environment.id,
         type: "client/turn/requested",
+        originPluginId: null,
         input: createStandaloneBuiltinCompactCommandInput(),
         target: { kind: "steer", expectedTurnId: turnId },
         execution: {
@@ -324,6 +326,7 @@ describe("thread event appends", () => {
         threadId: thread.id,
         environmentId: environment.id,
         type: "client/turn/requested",
+        originPluginId: null,
         input: textInput("kick off the audit"),
         target: { kind: "new-turn" },
         execution: {
@@ -345,6 +348,7 @@ describe("thread event appends", () => {
         ["events-appended", "read-state-changed"],
         {
           eventTypes: ["client/turn/requested"],
+          timelineSequence: 1,
           projectId: thread.projectId,
         },
       );
@@ -373,6 +377,7 @@ describe("thread event appends", () => {
         threadId: thread.id,
         environmentId: environment.id,
         type: "client/turn/requested",
+        originPluginId: null,
         input: textInput("agent handoff"),
         target: { kind: "new-turn" },
         execution: {
@@ -392,7 +397,7 @@ describe("thread event appends", () => {
       expect(notifyThreadSpy).toHaveBeenCalledWith(
         thread.id,
         ["events-appended"],
-        { eventTypes: ["client/turn/requested"] },
+        { eventTypes: ["client/turn/requested"], timelineSequence: 1 },
       );
     } finally {
       await harness.cleanup();

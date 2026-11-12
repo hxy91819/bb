@@ -1,22 +1,13 @@
-import {
-  createContext,
-  useContext,
-  type ComponentType,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import type { Nodes, Paragraph, Parent, RootContent } from "mdast";
 import type {} from "mdast-util-to-hast";
-import type {
-  BbNavigate,
-  PluginMessageDirectiveProps,
-} from "@get-bb/plugin-sdk";
+import type { PluginMessageDirectiveProps } from "@get-bb/plugin-sdk";
 import { SKIP, visit } from "unist-util-visit";
 import type {} from "remark-parse";
 import { directive as directiveSyntax } from "micromark-extension-directive";
 import type { Extension } from "micromark-util-types";
 import type { Processor } from "unified";
 import { PluginSlotMount } from "@/components/plugin/PluginSlotMount.js";
-import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation.js";
 import {
   resolveMessageDirectiveRegistry,
   type ResolvedMessageDirective,
@@ -46,14 +37,7 @@ export interface MarkdownMessageDirectives {
   registry: MessageDirectiveRegistry;
   message: PluginMessageDirectiveProps["message"];
   openWorkspaceFile: PluginMessageDirectiveProps["openWorkspaceFile"];
-  openThreadPanel: MarkdownMessageDirectiveOpenThreadPanel | null;
 }
-
-export type MarkdownMessageDirectiveOpenThreadPanel = (
-  options: Parameters<BbNavigate["openThreadPanel"]>[0] & {
-    pluginId: string;
-  },
-) => boolean;
 
 type DirectiveNodeType = "textDirective" | "leafDirective";
 
@@ -349,66 +333,48 @@ export function remarkMessageDirectives(
   };
 }
 
-export interface BuildMessageDirectiveComponentArgs {
+export interface MessageDirectiveRenderContext {
   message: PluginMessageDirectiveProps["message"];
   openWorkspaceFile: PluginMessageDirectiveProps["openWorkspaceFile"];
-  openThreadPanel: MarkdownMessageDirectiveOpenThreadPanel | null;
 }
 
 export const EMPTY_MOUNTED_MESSAGE_DIRECTIVES: readonly MountedMessageDirective[] =
   [];
 
-export const MessageDirectiveMountsContext = createContext<
-  readonly MountedMessageDirective[]
->(EMPTY_MOUNTED_MESSAGE_DIRECTIVES);
+export const MessageDirectiveMountsContext = createContext<{
+  mounts: readonly MountedMessageDirective[];
+  render: MessageDirectiveRenderContext | null;
+}>({ mounts: EMPTY_MOUNTED_MESSAGE_DIRECTIVES, render: null });
 
-export function buildMessageDirectiveComponent({
-  message,
-  openWorkspaceFile,
-  openThreadPanel,
-}: BuildMessageDirectiveComponentArgs): ComponentType<MessageDirectiveElementProps> {
-  function MessageDirectiveElement(props: MessageDirectiveElementProps) {
-    const mounts = useContext(MessageDirectiveMountsContext);
-    const rawIndex = props["data-directive-index"];
-    if (rawIndex === undefined) {
-      return null;
-    }
-    const mount = mounts[Number(rawIndex)];
-    if (mount === undefined) {
-      return null;
-    }
-    const { slot, attributes, source } = mount;
-    const Component = slot.component;
-    const element = (
+export function MessageDirectiveElement(props: MessageDirectiveElementProps) {
+  const { mounts, render } = useContext(MessageDirectiveMountsContext);
+  const rawIndex = props["data-directive-index"];
+  if (rawIndex === undefined || render === null) {
+    return null;
+  }
+  const mount = mounts[Number(rawIndex)];
+  if (mount === undefined) {
+    return null;
+  }
+  const { message, openWorkspaceFile } = render;
+  const { slot, attributes, source } = mount;
+  const Component = slot.component;
+  return (
+    <PluginSlotMount
+      key={`${slot.pluginId}/${slot.id}/${slot.generation}`}
+      pluginId={slot.pluginId}
+      slotKind="messageDirective"
+      slotId={slot.id}
+      crashFallback={source}
+    >
       <Component
         attributes={attributes}
         source={source}
         message={message}
         openWorkspaceFile={openWorkspaceFile}
       />
-    );
-    return (
-      <PluginSlotMount
-        key={`${slot.pluginId}/${slot.id}/${slot.generation}`}
-        pluginId={slot.pluginId}
-        slotKind="messageDirective"
-        slotId={slot.id}
-        crashFallback={source}
-      >
-        {openThreadPanel === null ? (
-          element
-        ) : (
-          <PluginThreadPanelNavigationProvider
-            openThreadPanel={openThreadPanel}
-          >
-            {element}
-          </PluginThreadPanelNavigationProvider>
-        )}
-      </PluginSlotMount>
-    );
-  }
-
-  return MessageDirectiveElement;
+    </PluginSlotMount>
+  );
 }
 
 const MessageDirectiveRegistryContext =

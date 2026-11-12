@@ -6,14 +6,14 @@ export const JSON_SHAPE_BY_COMMAND_PATH: Readonly<Record<string, string>> = {
   "thread show":
     "{thread: {id, status, title, projectId, environmentId, parentThreadId, ...}, environment: {id, hostId, path, branchName, ...} | null, pendingTodos}    (thread fields are under .thread)",
   "thread log":
-    "[{id, seq, type, createdAt, threadId, scope, data}]    (bare array of raw events, oldest first; page with --after-seq <seq>)",
+    "[{id, seq, type, createdAt, threadId, scope, data}]    (bare array of raw events, oldest first; page with --after-seq <seq>); with --message: {message, before, after} of conversation rows",
   "thread output": "{output}",
   "thread spawn":
     "the created thread: {id, status, title, projectId, environmentId, ...}",
   "thread wait": "{threadId, matched: true, target}",
   "thread search": "{active: {total, results}, archived: {total, results}}",
   "prompt-history list":
-    "{entries: [{id, createdAt, input, projectId, threadId}], nextCursor: string | null}",
+    "{entries: [{id, createdAt, input, projectId, threadId, scope}], nextCursor: string | null}",
   "project list":
     "[{id, kind, name, gitRemoteUrl, sources: [{id, hostId, path, isDefault}]}]    (bare array)",
   "machine list":
@@ -30,7 +30,10 @@ export const JSON_SHAPE_BY_COMMAND_PATH: Readonly<Record<string, string>> = {
     "{sessions: [{id, title, status, exitCode, closeReason, cols, rows}]}    (wrapped in .sessions)",
   "terminal output":
     '{chunks: [{seq, dataBase64}], nextSeq, truncated, status, exitCode, closeReason}    (chunk data is base64; status is "exited" once the command has finished)',
-  "terminal wait": "{terminalId, matched, nextSeq, exitCode}",
+  "terminal run":
+    '{terminalId, hostId, environmentId, cwd, status, observation, exitCode, closeReason, output, truncated, nextSeq}    (observation is "exited", "matched", or "timed-out"; output is plain text with terminal escapes removed, or null once the machine no longer keeps it)',
+  "terminal wait":
+    "{terminalId, hostId, environmentId, cwd, status, observation, exitCode, closeReason, output, truncated, nextSeq}    (same shape as terminal run)",
   "plugin list":
     "{plugins: [{id, version, enabled, status, source, rootDir}]}    (wrapped in .plugins)",
   "skill list":

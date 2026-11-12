@@ -1,5 +1,6 @@
+import { HOST_TAILWIND_VERSION } from "@bb/plugin-build/host-tailwind-version";
+import type { PluginUpdateJobs } from "../services/plugins/plugin-update-jobs.js";
 import { timingSafeEqual } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Context, Hono } from "hono";
@@ -20,23 +21,31 @@ import type {
   PluginService,
   PluginWireLookup,
 } from "../services/plugins/plugin-service.js";
+import type { LoadedPlugin } from "../services/plugins/plugin-service-internal.js";
 import type {
   PluginMentionTrigger,
   PluginWebSocketRouteRecord,
 } from "../services/plugins/plugin-api.js";
 import { PluginSettingsValidationError } from "../services/plugins/plugin-settings.js";
 import { PLUGIN_RPC_CALLER_HEADER } from "../services/plugins/plugin-rpc-caller.js";
+import type { PluginInstallJobs } from "../services/plugins/plugin-install-jobs.js";
+import {
+  prefersRespondAsync,
+  respondWithInstallJob,
+} from "./plugin-install-jobs.js";
 import {
   createAppAssetCompressionCache,
   type AppAssetCompressionCache,
 } from "../services/plugins/app-asset-compression-cache.js";
 import { rankAcceptedAssetEncodings } from "../asset-content-encoding.js";
+import { declineWebSocketCompression } from "../ws/compression.js";
 import {
   hashedAssetCacheControl,
   pluginImageResponse,
 } from "./plugin-image-response.js";
 import {
   pluginApplyUpdateRequestSchema,
+  pluginCachePruneRequestSchema,
   pluginRpcDiscoveryQuerySchema,
   pluginInstallRequestSchema,
   pluginSafeModeRequestSchema,
@@ -286,7 +295,7 @@ function pluginWebSocketError(event: Event): Error {
 
 function pluginWebSocketEvents(args: {
   handlers: ExperimentalPluginWebSocketHandlers;
-  id: string;
+  owner: LoadedPlugin;
   plugins: PluginService;
   route: PluginWebSocketRouteRecord;
 }): WSEvents {
@@ -306,7 +315,7 @@ function pluginWebSocketEvents(args: {
   ): void => {
     const previous = eventQueues.get(socket) ?? Promise.resolve();
     const current = args.plugins.invokeWebSocketEvent(
-      args.id,
+      args.owner,
       args.route,
       event,
       async () => {
@@ -373,13 +382,19 @@ export function registerPluginRoutes(
   app: Hono,
   deps: PluginRoutesDeps,
   plugins: PluginService,
+  installJobs: PluginInstallJobs,
+  updateJobs: PluginUpdateJobs,
   upgradeWebSocket?: UpgradeWebSocket,
 ): void {
   const appAssetCompressionCache = createAppAssetCompressionCache(
     MAX_CACHED_APP_ASSETS,
   );
   const upgradePluginWebSocket = upgradeWebSocket?.(async (context) => {
+    declineWebSocketCompression(context);
     const id = context.req.param("id");
+    if (id === undefined) {
+      throw new ApiError(404, "unknown_plugin", "missing plugin id");
+    }
     const subPath = pluginHttpSubPath(context, id);
     const lookup = plugins.getWebSocketRoute(id, subPath);
     if (lookup.outcome === "unknown-plugin") {
@@ -421,11 +436,15 @@ export function registerPluginRoutes(
         `plugin "${id}" reloaded during the request — retry`,
       );
     }
-    const result = await plugins.invokeWebSocketRoute(id, fresh.value, {
-      request: context.req.raw,
-      url: new URL(context.req.url),
-      headers: context.req.raw.headers,
-    });
+    const result = await plugins.invokeWebSocketRoute(
+      fresh.owner,
+      fresh.value,
+      {
+        request: context.req.raw,
+        url: new URL(context.req.url),
+        headers: context.req.raw.headers,
+      },
+    );
     if (!result.ok) {
       throw new ApiError(
         500,
@@ -435,7 +454,7 @@ export function registerPluginRoutes(
     }
     return pluginWebSocketEvents({
       handlers: result.handlers,
-      id,
+      owner: fresh.owner,
       plugins,
       route: fresh.value,
     });
@@ -549,14 +568,19 @@ export function registerPluginRoutes(
         404,
       );
     }
+    const hostTailwind =
+      spec.kind === "css" &&
+      context.req.query("host-tailwind") === HOST_TAILWIND_VERSION;
+    const ownedRoot =
+      spec.kind === "css" && context.req.query("css-scope") === "owned-root-v1";
     let bytes: Buffer;
     try {
-      bytes = await readFile(asset.path);
+      bytes = await asset.read({ hostTailwind, ownedRoot });
     } catch {
       return context.json({ ok: false, error: "bundle file missing" }, 404);
     }
     return appAssetResponse(context, bytes, {
-      assetKey: `${hash}:${spec.kind}`,
+      assetKey: `${hash}:${spec.kind}:${hostTailwind}:${ownedRoot}`,
       cache: appAssetCompressionCache,
       contentType: spec.contentType,
       cacheControl: "public, max-age=31536000, immutable",
@@ -611,9 +635,14 @@ export function registerPluginRoutes(
         404,
       );
     }
+    const hostTailwind =
+      spec.kind === "css" &&
+      context.req.query("host-tailwind") === HOST_TAILWIND_VERSION;
+    const ownedRoot =
+      spec.kind === "css" && context.req.query("css-scope") === "owned-root-v1";
     let bytes: Buffer;
     try {
-      bytes = await readFile(asset.path);
+      bytes = await asset.read({ hostTailwind, ownedRoot });
     } catch {
       return context.json({ ok: false, error: "bundle file missing" }, 404);
     }
@@ -622,7 +651,7 @@ export function registerPluginRoutes(
       asset.hash,
     );
     return appAssetResponse(context, bytes, {
-      assetKey: `${context.req.param("id")}:${spec.kind}`,
+      assetKey: `${context.req.param("id")}:${spec.kind}:${hostTailwind}:${ownedRoot}`,
       cache: appAssetCompressionCache,
       contentType: spec.contentType,
       cacheControl,
@@ -670,22 +699,44 @@ export function registerPluginRoutes(
     }
   });
 
+  app.post("/plugins/cache/prune", async (context) => {
+    const json: unknown = await context.req.json().catch(() => null);
+    const body = pluginCachePruneRequestSchema.safeParse(json);
+    if (!body.success) {
+      return context.json({ error: 'expected { "dryRun"?: boolean }' }, 400);
+    }
+    return context.json(await plugins.pruneCache({ dryRun: body.data.dryRun }));
+  });
+
   app.post("/plugins/:id/update", async (context) => {
     const json: unknown = await context.req.json().catch(() => null);
     const body = pluginApplyUpdateRequestSchema.safeParse(json);
     if (!body.success) {
       return context.json({ error: "expected an empty JSON object" }, 400);
     }
-    try {
-      const outcome = await plugins.applyUpdate(context.req.param("id"));
-      if (!outcome.ok) return context.json({ error: outcome.error }, 422);
-      return context.json(outcome.result);
-    } catch (error) {
-      return context.json(
-        { error: error instanceof Error ? error.message : String(error) },
-        422,
-      );
-    }
+    const pluginId = context.req.param("id");
+    const job = updateJobs.start({
+      pluginId,
+      displayName: plugins.getDisplayName(pluginId),
+      run: async () => {
+        const outcome = await plugins.applyUpdate(pluginId);
+        if (!outcome.ok) throw new Error(outcome.error);
+        return outcome.result;
+      },
+    });
+    if (prefersRespondAsync(context)) return context.json({ job }, 202);
+    const settled = (await updateJobs.settled(job.id)) ?? job;
+    return settled.state === "completed"
+      ? context.json(settled.result)
+      : context.json(
+          {
+            error:
+              settled.state === "failed"
+                ? settled.error
+                : "update did not complete",
+          },
+          422,
+        );
   });
 
   app.post("/plugins/install", async (context) => {
@@ -705,21 +756,16 @@ export function registerPluginRoutes(
         422,
       );
     }
-    try {
-      const plugin = await plugins.install(
-        parsed.data.source,
-        parsed.data.selection,
-      );
-      return context.json({ ok: true, plugin });
-    } catch (error) {
-      return context.json(
-        {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        422,
-      );
-    }
+    const { source, selection } = parsed.data;
+    const job = installJobs.start({
+      target: { kind: "source", source, selection },
+      displayName: source,
+      run: () => plugins.install(source, selection),
+    });
+    return respondWithInstallJob(context, installJobs, job, (error) => ({
+      ok: false,
+      error,
+    }));
   });
 
   app.get("/plugins/:id/source", async (context) => {
@@ -896,7 +942,7 @@ export function registerPluginRoutes(
         503,
       );
     }
-    return plugins.invokeHttpRoute(id, fresh.value, context);
+    return plugins.invokeHttpRoute(fresh.owner, fresh.value, context);
   });
 
   app.post("/plugins/:id/rpc/:method", async (context) => {
@@ -960,16 +1006,33 @@ export function registerPluginRoutes(
       );
     }
     const outcome = await plugins.invokeRpcHandler(
-      id,
+      lookup.owner,
       method,
       lookup.value,
       input,
       callerResolution.caller,
+      context.req.raw.signal,
     );
     if (!outcome.ok) {
       return context.json(
         { ok: false, error: outcome.error },
-        outcome.error.code === "invalid_input" ? 400 : 500,
+        (
+          {
+            invalid_json: 400,
+            invalid_input: 400,
+            forbidden: 403,
+            not_found: 404,
+            conflict: 409,
+            invalid: 422,
+            handler_error: 500,
+            invalid_output: 500,
+            non_json_result: 500,
+            unknown_method: 404,
+            transport_error: 500,
+            invalid_response: 500,
+            unknown_error: 500,
+          } as const
+        )[outcome.error.code],
       );
     }
     return context.json({ ok: true, result: outcome.result });

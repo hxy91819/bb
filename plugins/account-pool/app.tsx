@@ -25,6 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   definePluginApp,
+  experimental_copyToClipboard,
   useBbNavigate,
   useRealtime,
   useRpc,
@@ -61,6 +62,8 @@ import type {
   AccountPoolConfigSetInput,
   FamilyQuota,
   LimitWindow,
+  LimitWindowSlot,
+  LoginTarget,
   ModelFamily,
   PoolAvailability,
   PoolProvider,
@@ -71,6 +74,7 @@ import type { OAuthLoginStart } from "./src/oauth-login.js";
 import type { CodexDeviceLoginStart } from "./src/codex-device-login.js";
 import {
   DEFAULT_ACCOUNT_POOL_CONFIG,
+  limitWindowSlotSchema,
   modelFamilySchema,
   statusSchema,
 } from "./src/contracts.js";
@@ -82,10 +86,27 @@ import {
 
 type DialogState =
   | { kind: "account" | "priority" | "remove"; accountId: string }
-  | { kind: "claude-login" | "codex-login" | "api-key" }
+  | { kind: "claude-login" | "codex-login"; target: LoginTarget }
+  | { kind: "api-key" }
   | null;
 
+const NEW_LOGIN: LoginTarget = { kind: "add", label: null, priority: 100 };
+
 type ConfigField = Exclude<keyof AccountPoolConfig, "parentMode">;
+
+const CONFIG_FIELDS: readonly ConfigField[] = [
+  "anthropicUpstreamBaseUrl",
+  "codexUpstreamBaseUrl",
+  "switchThreshold",
+];
+
+const ACCOUNT_ACTIONS = [
+  "toggle",
+  "priority",
+  "refresh",
+  "relogin",
+  "remove",
+] as const;
 
 const PROVIDERS: Array<{
   id: PoolProvider;
@@ -217,10 +238,7 @@ function writeCachedStatus(status: PoolStatus): void {
   }
 }
 
-function statusPresentation(
-  account: AccountSummary,
-  threshold: number,
-): {
+function statusPresentation(account: AccountSummary): {
   label: string;
   dot: string;
 } {
@@ -230,7 +248,7 @@ function statusPresentation(
       dot: "bg-warning",
     };
   if (account.status === "exhausted") {
-    const resetAt = blockingResetAt(account, null, threshold, Date.now());
+    const resetAt = blockingResetAt(account, null, Date.now());
     return {
       label: `Exhausted${resetAt === null ? "" : ` · ${resetLabel(resetAt)}`}`,
       dot: "bg-destructive",
@@ -273,8 +291,8 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <section className="@container/pool-section space-y-3">
+      <div className="flex flex-col gap-3 @min-[36rem]/pool-section:flex-row @min-[36rem]/pool-section:items-start @min-[36rem]/pool-section:justify-between @min-[36rem]/pool-section:gap-4">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           <p className="mt-0.5 text-xs leading-snug text-subtle-foreground/75">
@@ -295,32 +313,53 @@ type QuotaSlot = {
   status: string | null;
 };
 
-function quotaSlots(account: AccountSummary): QuotaSlot[] {
-  if (account.provider === "codex") {
-    if (account.limitWindows.length === 0)
-      return [
-        { key: "primary", label: "LIMIT", utilization: null, status: null },
-      ];
+const CLAUDE_WINDOW_LABELS = {
+  primary: { short: "5H", long: "5 hour" },
+  secondary: { short: "7D", long: "7 day" },
+} as const satisfies Record<LimitWindowSlot, { short: string; long: string }>;
+
+type DisplayWindow = {
+  key: string;
+  short: string;
+  long: string;
+  quota: FamilyQuota | null;
+};
+
+function displayWindows(account: AccountSummary): DisplayWindow[] {
+  if (account.provider === "codex")
     return account.limitWindows.map((window) => ({
       key: window.slot,
-      label: windowShortLabel(window),
-      utilization: window.utilization,
-      status: window.status,
+      short: windowShortLabel(window),
+      long: windowLongLabel(window),
+      quota: window,
     }));
-  }
+  const observed =
+    account.limitWindows.length === 0
+      ? limitWindowSlotSchema.options.map((slot) => ({ slot, quota: null }))
+      : account.limitWindows.map((window) => ({
+          slot: window.slot,
+          quota: window,
+        }));
+  return observed.map(({ slot, quota }) => ({
+    key: slot,
+    ...CLAUDE_WINDOW_LABELS[slot],
+    quota,
+  }));
+}
+
+function quotaSlots(account: AccountSummary): QuotaSlot[] {
+  const windows = displayWindows(account).map((window) => ({
+    key: window.key,
+    label: window.short,
+    utilization: window.quota?.utilization ?? null,
+    status: window.quota?.status ?? null,
+  }));
+  if (account.provider === "codex")
+    return windows.length === 0
+      ? [{ key: "primary", label: "LIMIT", utilization: null, status: null }]
+      : windows;
   return [
-    {
-      key: "five-hour",
-      label: "5H",
-      utilization: account.fiveHourUtilization,
-      status: account.fiveHourStatus,
-    },
-    {
-      key: "seven-day",
-      label: "7D",
-      utilization: account.sevenDayUtilization,
-      status: account.sevenDayStatus,
-    },
+    ...windows,
     {
       key: "fable",
       label: "FABLE",
@@ -355,7 +394,7 @@ function QuotaValue({
   return (
     <div
       className={cn(
-        "w-16 text-left tabular-nums transition-opacity sm:text-right",
+        "w-16 text-left tabular-nums transition-opacity @min-[32rem]/account-row:text-right",
         refreshing && "opacity-50",
       )}
     >
@@ -390,11 +429,11 @@ function AccountRow({
   threshold: number;
   pending: boolean;
   refreshing: boolean;
-  onAction: (action: "toggle" | "priority" | "refresh" | "remove") => void;
+  onAction: (action: (typeof ACCOUNT_ACTIONS)[number]) => void;
   onOpen: () => void;
   reorderDisabled: boolean;
 }) {
-  const status = statusPresentation(account, threshold);
+  const status = statusPresentation(account);
   const slots = quotaSlots(account);
   const email = secondaryEmail(account);
   const {
@@ -411,7 +450,7 @@ function AccountRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "flex items-center gap-3 text-sm",
+        "@container/account-row flex items-center gap-3 text-sm",
         isDragging && "relative z-10 rounded-md bg-card opacity-90 shadow-lift",
       )}
     >
@@ -430,13 +469,13 @@ function AccountRow({
       </Button>
       <div
         className={cn(
-          "group -mx-2 flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2.5 transition-colors hover:bg-state-hover focus-within:bg-state-hover",
+          "group relative -mx-2 flex min-w-0 flex-1 select-none items-center gap-2 rounded-md px-2 py-2.5 transition-colors hover:bg-state-hover focus-within:bg-state-hover",
           !account.enabled && "opacity-55",
         )}
       >
         <button
           type="button"
-          className="grid min-w-0 flex-1 grid-cols-1 items-center gap-y-1.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-y-0"
+          className="grid min-w-0 flex-1 grid-cols-1 items-center gap-y-1.5 rounded-md text-left outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:ring-2 focus-visible:ring-ring @min-[32rem]/account-row:grid-cols-[minmax(0,1fr)_auto] @min-[32rem]/account-row:gap-y-0"
           aria-label={`Open ${account.label}`}
           onClick={onOpen}
         >
@@ -466,7 +505,7 @@ function AccountRow({
               {refreshing ? <span>refreshing usage…</span> : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:flex-nowrap sm:gap-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 @min-[32rem]/account-row:flex-nowrap @min-[32rem]/account-row:gap-1">
             {slots.map((slot) => (
               <QuotaValue
                 key={slot.key}
@@ -482,7 +521,7 @@ function AccountRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0 data-[state=open]:bg-state-active"
+              className="relative h-7 w-7 shrink-0 data-[state=open]:bg-state-active"
               aria-label={`${account.label} actions`}
             >
               <Icon name="MoreHorizontal" className="size-4" />
@@ -510,6 +549,15 @@ function AccountRow({
               <Icon name="RotateCcw" />
               Refresh usage
             </DropdownMenuItem>
+            {account.kind === "oauth" ? (
+              <DropdownMenuItem
+                disabled={pending}
+                onSelect={() => onAction("relogin")}
+              >
+                <Icon name="UserRound" />
+                Sign in again…
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
@@ -524,6 +572,7 @@ function AccountRow({
         <button
           type="button"
           aria-label={`Open ${account.label} details`}
+          className="relative"
           onClick={onOpen}
         >
           <ResourceRowDetailChevron />
@@ -538,7 +587,7 @@ function AddAccountMenu({
   onChoose,
 }: {
   provider: PoolProvider;
-  onChoose: (choice: "login" | "import" | "api-key") => void;
+  onChoose: (choice: "login" | "api-key") => void;
 }) {
   return (
     <DropdownMenu>
@@ -562,19 +611,6 @@ function AddAccountMenu({
               {provider === "claude"
                 ? "Opens claude.ai, paste the code back"
                 : "Opens ChatGPT with a device code"}
-            </span>
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="items-start py-2"
-          onSelect={() => onChoose("import")}
-        >
-          <Icon name="Download" className="mt-0.5" />
-          <span>
-            <span className="block">Import from this machine</span>
-            <span className="block text-xs text-muted-foreground">
-              Copies the server host&apos;s{" "}
-              {provider === "claude" ? "~/.claude" : "Codex"} login
             </span>
           </span>
         </DropdownMenuItem>
@@ -649,7 +685,7 @@ function QuotaDetail({
           {quota?.resetAt === null || quota === null
             ? ""
             : ` · ${resetLabel(quota.resetAt)}`}{" "}
-          · will be skipped at {Math.round(threshold * 100)}%
+          · other accounts preferred from {Math.round(threshold * 100)}%
         </div>
       </div>
     </div>
@@ -673,17 +709,16 @@ function useCopyToClipboard(text: string, selectFallback: () => void) {
   }, [text]);
 
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopyState("copied");
-        if (timerRef.current !== null) clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(() => setCopyState("idle"), 1500);
-      },
-      () => {
+    void experimental_copyToClipboard({ text }).then((copied) => {
+      if (!copied) {
         selectFallback();
         setCopyState("manual");
-      },
-    );
+        return;
+      }
+      setCopyState("copied");
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopyState("idle"), 1500);
+    });
   }, [text, selectFallback]);
 
   return { copyState, copy };
@@ -717,7 +752,7 @@ function UserCodeBlock({ userCode }: { userCode: string }) {
           type="button"
           variant="ghost"
           aria-label="Copy Codex sign-in code"
-          className="col-start-3 size-11 justify-self-start text-muted-foreground hover:text-foreground sm:size-9"
+          className="col-start-3 size-9 justify-self-start text-muted-foreground hover:text-foreground max-sm:pointer-coarse:size-11"
           onClick={copy}
         >
           <Icon name={copyState === "copied" ? "Check" : "Copy"} />
@@ -868,7 +903,12 @@ function AccountPoolSettings() {
   });
   const [dialog, setDialog] = useState<DialogState>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
+  const [pending, setPending] = useState<ReadonlyMap<string, boolean | null>>(
+    () => new Map(),
+  );
+  const configSaving = CONFIG_FIELDS.some((field) =>
+    pending.has(`config-${field}`),
+  );
   const [optimisticOrder, setOptimisticOrder] = useState<{
     provider: PoolProvider;
     ids: string[];
@@ -967,15 +1007,37 @@ function AccountPoolSettings() {
     };
   }, [codexStep, loginDone, refresh, rpc]);
   const accounts = status?.accounts ?? [];
+  const loginTarget =
+    dialog?.kind === "claude-login" || dialog?.kind === "codex-login"
+      ? dialog.target
+      : null;
+  const reloginId =
+    loginTarget?.kind === "relogin" ? loginTarget.accountId : null;
+  const reloginAccount =
+    accounts.find((account) => account.id === reloginId) ?? null;
   const selectedAccount =
     dialog?.kind === "account" ||
     dialog?.kind === "priority" ||
     dialog?.kind === "remove"
       ? (accounts.find((account) => account.id === dialog.accountId) ?? null)
       : null;
-  async function run(key: string, action: () => Promise<void>): Promise<void> {
-    if (pending !== null) return;
-    setPending(key);
+  function markPending(key: string, target: boolean | null): void {
+    setPending((current) => new Map(current).set(key, target));
+  }
+  function clearPending(key: string): void {
+    setPending((current) => {
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
+  }
+  async function run(
+    key: string,
+    action: () => Promise<void>,
+    target: boolean | null = null,
+  ): Promise<void> {
+    if (pending.has(key)) return;
+    markPending(key, target);
     setError(null);
     try {
       await action();
@@ -983,15 +1045,23 @@ function AccountPoolSettings() {
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
-      setPending(null);
+      clearPending(key);
     }
+  }
+  function switchValue(key: string, stored: boolean): boolean {
+    return pending.get(key) ?? stored;
+  }
+  function accountPending(accountId: string): boolean {
+    return ACCOUNT_ACTIONS.some((action) =>
+      pending.has(`${action}-${accountId}`),
+    );
   }
   function updateConfigDraft(field: ConfigField, value: string): void {
     setDrafts((current) => ({ ...current, [field]: value }));
     setConfigErrors((current) => ({ ...current, [field]: null }));
   }
   async function saveConfigField(field: ConfigField): Promise<void> {
-    if (config === null || pending !== null) return;
+    if (config === null || configSaving) return;
     let update: AccountPoolConfigSetInput;
     if (field === "switchThreshold") {
       const raw = drafts.switchThreshold.trim();
@@ -1026,7 +1096,7 @@ function AccountPoolSettings() {
           ? { anthropicUpstreamBaseUrl: value }
           : { codexUpstreamBaseUrl: value };
     }
-    setPending(`config-${field}`);
+    markPending(`config-${field}`, null);
     setConfigErrors((current) => ({ ...current, [field]: null }));
     try {
       applyConfig(await rpc.call("config.set", update));
@@ -1036,50 +1106,45 @@ function AccountPoolSettings() {
         [field]: errorText(saveError),
       }));
     } finally {
-      setPending(null);
+      clearPending(`config-${field}`);
     }
   }
-  async function startClaude(): Promise<void> {
-    setDialog({ kind: "claude-login" });
+  async function startClaude(target: LoginTarget): Promise<void> {
+    setDialog({ kind: "claude-login", target });
     setLoginDone(null);
     await run("claude-login", async () => {
-      const started = await rpc.call("login.start", null);
+      const started = await rpc.call("login.start", target);
       setLoginStep(started);
       setPastedCode("");
     });
   }
-  async function startCodex(): Promise<void> {
-    setDialog({ kind: "codex-login" });
+  async function startCodex(target: LoginTarget): Promise<void> {
+    setDialog({ kind: "codex-login", target });
     setLoginDone(null);
     await run("codex-login", async () => {
-      setCodexStep(await rpc.call("codexLogin.start", null));
+      setCodexStep(await rpc.call("codexLogin.start", target));
     });
+  }
+  async function startLogin(
+    provider: PoolProvider,
+    target: LoginTarget,
+  ): Promise<void> {
+    if (provider === "claude") await startClaude(target);
+    else await startCodex(target);
   }
   async function chooseAdd(
     provider: PoolProvider,
-    choice: "login" | "import" | "api-key",
+    choice: "login" | "api-key",
   ): Promise<void> {
     if (choice === "login") {
-      if (provider === "claude") await startClaude();
-      else await startCodex();
+      await startLogin(provider, NEW_LOGIN);
       return;
     }
-    if (choice === "api-key") {
-      setDialog({ kind: "api-key" });
-      return;
-    }
-    await run(`import-${provider}`, async () => {
-      await rpc.call("account.add", {
-        provider,
-        source: { kind: "import" },
-        label: null,
-        priority: 100,
-      });
-    });
+    setDialog({ kind: "api-key" });
   }
   async function accountAction(
     account: AccountSummary,
-    action: "toggle" | "priority" | "refresh" | "remove",
+    action: (typeof ACCOUNT_ACTIONS)[number],
   ): Promise<void> {
     if (action === "priority") {
       setPriority(String(account.priority));
@@ -1088,6 +1153,13 @@ function AccountPoolSettings() {
     }
     if (action === "remove") {
       setDialog({ kind: "remove", accountId: account.id });
+      return;
+    }
+    if (action === "relogin") {
+      await startLogin(account.provider, {
+        kind: "relogin",
+        accountId: account.id,
+      });
       return;
     }
     await run(`${action}-${account.id}`, async () => {
@@ -1103,7 +1175,7 @@ function AccountPoolSettings() {
     provider: PoolProvider,
     event: DragEndEvent,
   ): Promise<void> {
-    if (pending !== null || event.over === null) return;
+    if (pending.has(`order-${provider}`) || event.over === null) return;
     const ids = accounts
       .filter((account) => account.provider === provider)
       .map((account) => account.id);
@@ -1150,15 +1222,18 @@ function AccountPoolSettings() {
               </p>
             </div>
             <Switch
-              checked={proxying}
-              disabled={pending !== null}
+              checked={switchValue("parent-mode", proxying)}
               aria-label="Use the parent Account Pooler"
               onCheckedChange={(enabled) =>
-                void run("parent-mode", async () => {
-                  await rpc.call("config.set", {
-                    parentMode: enabled ? "proxy" : "isolate",
-                  });
-                })
+                void run(
+                  "parent-mode",
+                  async () => {
+                    await rpc.call("config.set", {
+                      parentMode: enabled ? "proxy" : "isolate",
+                    });
+                  },
+                  enabled,
+                )
               }
             />
           </div>
@@ -1192,17 +1267,13 @@ function AccountPoolSettings() {
               until then.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Button size="sm" onClick={() => void startClaude()}>
+              <Button size="sm" onClick={() => void startClaude(NEW_LOGIN)}>
                 Sign in to Claude
               </Button>
-              <Button size="sm" onClick={() => void startCodex()}>
+              <Button size="sm" onClick={() => void startCodex(NEW_LOGIN)}>
                 Sign in to Codex
               </Button>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              or use either provider&apos;s Add account menu to import this
-              machine&apos;s login
-            </p>
           </div>
         ) : null}
         {PROVIDERS.map((provider) => {
@@ -1229,16 +1300,22 @@ function AccountPoolSettings() {
               action={
                 <div className="flex items-center gap-2">
                   <Switch
-                    checked={status?.routing[provider.id] ?? true}
-                    disabled={pending !== null}
+                    checked={switchValue(
+                      `routing-${provider.id}`,
+                      status?.routing[provider.id] ?? true,
+                    )}
                     aria-label={`Route ${provider.title} threads`}
                     onCheckedChange={(enabled) =>
-                      void run(`routing-${provider.id}`, async () => {
-                        await rpc.call("routing.set", {
-                          provider: provider.id,
-                          enabled,
-                        });
-                      })
+                      void run(
+                        `routing-${provider.id}`,
+                        async () => {
+                          await rpc.call("routing.set", {
+                            provider: provider.id,
+                            enabled,
+                          });
+                        },
+                        enabled,
+                      )
                     }
                   />
                   <AddAccountMenu
@@ -1273,12 +1350,15 @@ function AccountPoolSettings() {
                           key={account.id}
                           account={account}
                           threshold={threshold}
-                          pending={pending !== null}
+                          pending={accountPending(account.id)}
                           refreshing={
                             statusIsCached ||
-                            pending === `refresh-${account.id}`
+                            pending.has(`refresh-${account.id}`)
                           }
-                          reorderDisabled={providerAccounts.length < 2}
+                          reorderDisabled={
+                            providerAccounts.length < 2 ||
+                            pending.has(`order-${provider.id}`)
+                          }
                           onAction={(action) =>
                             void accountAction(account, action)
                           }
@@ -1319,7 +1399,7 @@ function AccountPoolSettings() {
                       ? undefined
                       : true
                   }
-                  disabled={config === null || pending !== null}
+                  disabled={config === null || configSaving}
                   value={drafts.anthropicUpstreamBaseUrl}
                   onChange={(event) =>
                     updateConfigDraft(
@@ -1347,7 +1427,7 @@ function AccountPoolSettings() {
                       ? undefined
                       : true
                   }
-                  disabled={config === null || pending !== null}
+                  disabled={config === null || configSaving}
                   value={drafts.codexUpstreamBaseUrl}
                   onChange={(event) =>
                     updateConfigDraft(
@@ -1363,7 +1443,7 @@ function AccountPoolSettings() {
               </ConfigFieldRow>
               <ConfigFieldRow
                 label="Quota switch threshold"
-                description="Stop selecting an account at this quota fraction."
+                description="Prefer accounts below this quota fraction. Accounts above it still serve while the provider accepts them."
                 error={configErrors.switchThreshold}
               >
                 <Input
@@ -1375,7 +1455,7 @@ function AccountPoolSettings() {
                   aria-invalid={
                     configErrors.switchThreshold === null ? undefined : true
                   }
-                  disabled={config === null || pending !== null}
+                  disabled={config === null || configSaving}
                   value={drafts.switchThreshold}
                   onChange={(event) =>
                     updateConfigDraft("switchThreshold", event.target.value)
@@ -1440,7 +1520,8 @@ function AccountPoolSettings() {
                 </Button>
                 <Button
                   disabled={
-                    !Number.isInteger(Number(priority)) || pending !== null
+                    !Number.isInteger(Number(priority)) ||
+                    pending.has(`priority-${selectedAccount.id}`)
                   }
                   onClick={() =>
                     void run(`priority-${selectedAccount.id}`, async () => {
@@ -1479,12 +1560,14 @@ function AccountPoolSettings() {
                   Cancel
                 </Button>
                 <Button
-                  disabled={apiKey.trim().length === 0 || pending !== null}
+                  disabled={
+                    apiKey.trim().length === 0 || pending.has("api-key")
+                  }
                   onClick={() =>
                     void run("api-key", async () => {
                       await rpc.call("account.add", {
                         provider: "claude",
-                        source: { kind: "api-key", apiKey: apiKey.trim() },
+                        apiKey: apiKey.trim(),
                         label: null,
                         priority: 100,
                       });
@@ -1523,7 +1606,7 @@ function AccountPoolSettings() {
                 </Button>
                 <Button
                   variant="destructive"
-                  disabled={pending !== null}
+                  disabled={pending.has(`remove-${selectedAccount.id}`)}
                   onClick={() =>
                     void run(`remove-${selectedAccount.id}`, async () => {
                       await rpc.call("account.remove", {
@@ -1547,10 +1630,13 @@ function AccountPoolSettings() {
         {dialog?.kind === "claude-login" ? (
           <LoginDialog
             provider="claude"
+            relogin={reloginAccount}
             loginStep={loginStep}
             codexStep={null}
             loginDone={loginDone}
-            pending={pending !== null}
+            pending={
+              pending.has("claude-login") || pending.has("complete-claude")
+            }
             pastedCode={pastedCode}
             countdown={0}
             error={error}
@@ -1568,16 +1654,18 @@ function AccountPoolSettings() {
                 setLoginStep(null);
               })
             }
-            restart={() => void startClaude()}
+            restart={() => void startClaude(dialog.target)}
+            addAnother={() => void startClaude(NEW_LOGIN)}
           />
         ) : null}
         {dialog?.kind === "codex-login" ? (
           <LoginDialog
             provider="codex"
+            relogin={reloginAccount}
             loginStep={null}
             codexStep={codexStep}
             loginDone={loginDone}
-            pending={pending !== null}
+            pending={pending.has("codex-login")}
             pastedCode=""
             countdown={countdown}
             error={error}
@@ -1585,7 +1673,8 @@ function AccountPoolSettings() {
             openUrl={navigate.openUrl}
             setPastedCode={() => {}}
             complete={() => {}}
-            restart={() => void startCodex()}
+            restart={() => void startCodex(dialog.target)}
+            addAnother={() => void startCodex(NEW_LOGIN)}
           />
         ) : null}
       </Dialog>
@@ -1600,19 +1689,9 @@ function AccountDialog({
 }: {
   account: AccountSummary;
   threshold: number;
-  act: (action: "toggle" | "refresh" | "remove") => void;
+  act: (action: "toggle" | "refresh" | "relogin" | "remove") => void;
 }) {
-  const shared = (
-    utilization: number | null,
-    resetAt: number | null,
-    status: string | null,
-  ): FamilyQuota => ({
-    utilization,
-    resetAt,
-    status,
-    observedAt: account.observedAt ?? 0,
-    source: "header",
-  });
+  const windows = displayWindows(account);
   const providerId =
     account.provider === "claude"
       ? account.accountUuid
@@ -1629,6 +1708,11 @@ function AccountDialog({
           <Button size="sm" variant="outline" onClick={() => act("refresh")}>
             Refresh usage
           </Button>
+          {account.kind === "oauth" ? (
+            <Button size="sm" variant="outline" onClick={() => act("relogin")}>
+              Sign in again
+            </Button>
+          ) : null}
           <span className="flex-1" />
           <Button
             size="sm"
@@ -1643,59 +1727,34 @@ function AccountDialog({
     >
       <div className="flex items-center gap-2">
         <SettingsBadge>{tier(account)}</SettingsBadge>
-        <SettingsBadge>
-          {statusPresentation(account, threshold).label}
-        </SettingsBadge>
+        <SettingsBadge>{statusPresentation(account).label}</SettingsBadge>
       </div>
       <div className="space-y-4">
-        {account.provider === "codex" ? (
-          account.limitWindows.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No usage limits observed yet.
-            </div>
-          ) : (
-            account.limitWindows.map((window) => (
-              <QuotaDetail
-                key={window.slot}
-                label={windowLongLabel(window)}
-                quota={window}
-                threshold={threshold}
-              />
-            ))
-          )
+        {windows.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No usage limits observed yet.
+          </div>
         ) : (
-          <>
+          windows.map((window) => (
             <QuotaDetail
-              label="5 hour"
-              quota={shared(
-                account.fiveHourUtilization,
-                account.fiveHourResetAt,
-                account.fiveHourStatus,
-              )}
+              key={window.key}
+              label={window.long}
+              quota={window.quota}
               threshold={threshold}
             />
-            <QuotaDetail
-              label="7 day"
-              quota={shared(
-                account.sevenDayUtilization,
-                account.sevenDayResetAt,
-                account.sevenDayStatus,
-              )}
-              threshold={threshold}
-            />
-            {modelFamilySchema.options.flatMap((family) =>
-              account.familyWeekly[family] === null
-                ? []
-                : [
-                    <QuotaDetail
-                      key={family}
-                      label={FAMILY_LABELS[family]}
-                      quota={account.familyWeekly[family]}
-                      threshold={threshold}
-                    />,
-                  ],
-            )}
-          </>
+          ))
+        )}
+        {modelFamilySchema.options.flatMap((family) =>
+          account.familyWeekly[family] === null
+            ? []
+            : [
+                <QuotaDetail
+                  key={family}
+                  label={FAMILY_LABELS[family]}
+                  quota={account.familyWeekly[family]}
+                  threshold={threshold}
+                />,
+              ],
         )}
       </div>
       <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 border-t border-border pt-4 text-sm">
@@ -1734,8 +1793,32 @@ function AccountDialog({
   );
 }
 
+function LoginError({
+  message,
+  restart,
+}: {
+  message: string;
+  restart: () => void;
+}) {
+  return (
+    <p className="text-sm text-destructive-text">
+      {message.replace(/\s*Start again\.$/u, "")}{" "}
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 align-baseline text-sm text-foreground underline underline-offset-4"
+        onClick={restart}
+      >
+        Start again
+      </Button>
+    </p>
+  );
+}
+
 function LoginDialog({
   provider,
+  relogin,
   loginStep,
   codexStep,
   loginDone,
@@ -1748,8 +1831,10 @@ function LoginDialog({
   setPastedCode,
   complete,
   restart,
+  addAnother,
 }: {
   provider: PoolProvider;
+  relogin: AccountSummary | null;
   loginStep: OAuthLoginStart | null;
   codexStep: CodexDeviceLoginStart | null;
   loginDone: string | null;
@@ -1762,6 +1847,7 @@ function LoginDialog({
   setPastedCode: (value: string) => void;
   complete: () => void;
   restart: () => void;
+  addAnother: () => void;
 }) {
   const name = provider === "claude" ? "Claude" : "Codex";
   const url =
@@ -1770,15 +1856,21 @@ function LoginDialog({
       : codexStep?.verificationUri;
   return (
     <DialogFrame
-      title={`Sign in to ${name}`}
+      title={
+        relogin === null
+          ? `Sign in to ${name}`
+          : `Sign in again to ${relogin.label}`
+      }
       className="sm:max-w-xl"
       footer={
         loginDone !== null ? (
           <>
             <span className="flex-1" />
-            <Button variant="outline" onClick={restart}>
-              Add another
-            </Button>
+            {relogin === null ? (
+              <Button variant="outline" onClick={addAnother}>
+                Add another
+              </Button>
+            ) : null}
             <Button onClick={close}>Done</Button>
           </>
         ) : provider === "claude" ? (
@@ -1786,7 +1878,10 @@ function LoginDialog({
             <span className="flex-1" />
             <Button
               disabled={
-                loginStep === null || pastedCode.trim().length === 0 || pending
+                loginStep === null ||
+                pastedCode.trim().length === 0 ||
+                pending ||
+                error !== null
               }
               onClick={complete}
             >
@@ -1798,27 +1893,37 @@ function LoginDialog({
     >
       <StepIndicator step={loginDone === null ? 2 : 3} />
       {loginDone !== null ? (
-        <div>
-          <h3 className="text-base font-semibold">Connected {loginDone}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {name} threads on every machine now route through this account.
-            Usage refreshes in the background.
-          </p>
-        </div>
+        relogin === null ? (
+          <div>
+            <h3 className="text-base font-semibold">Connected {loginDone}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {name} threads on every machine now route through this account.
+              Usage refreshes in the background.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <h3 className="text-base font-semibold">
+              Signed in again to {loginDone}
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Its priority, enabled state, and pinned conversations are
+              unchanged.
+            </p>
+          </div>
+        )
       ) : url === undefined ? (
         provider === "codex" && error !== null ? (
-          <div className="space-y-3">
-            <p className="text-sm text-destructive-text">{error}</p>
-            <Button variant="outline" onClick={restart}>
-              Try again
-            </Button>
-          </div>
+          <LoginError message={error} restart={restart} />
         ) : (
           <p className="text-sm text-muted-foreground">Starting sign-in…</p>
         )
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
+            {relogin === null
+              ? null
+              : `Sign in as ${relogin.email ?? relogin.label}. `}
             {provider === "claude"
               ? "Sign in at claude.ai, then paste the code from the final page."
               : "Open the verification page, sign in to ChatGPT, and enter this code."}
@@ -1828,12 +1933,17 @@ function LoginDialog({
           )}
           <AuthorizationUrlRow name={name} url={url} openUrl={openUrl} />
           {provider === "claude" ? (
-            <Input
-              aria-label="Claude authorization code"
-              placeholder="Paste code#state here"
-              value={pastedCode}
-              onChange={(event) => setPastedCode(event.target.value)}
-            />
+            <>
+              <Input
+                aria-label="Claude authorization code"
+                placeholder="Paste code#state here"
+                value={pastedCode}
+                onChange={(event) => setPastedCode(event.target.value)}
+              />
+              {error === null ? null : (
+                <LoginError message={error} restart={restart} />
+              )}
+            </>
           ) : (
             <p className="text-center text-sm text-muted-foreground">
               Waiting for you to authorize… expires in{" "}

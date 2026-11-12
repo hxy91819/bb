@@ -1,10 +1,12 @@
 import {
   createPendingInteraction,
   getActivePendingInteractionForThread,
+  hasTurnBoundActivePendingInteractionForThread,
   getEnvironment,
   getPendingInteraction,
   getPendingInteractionByProviderRequest,
   getThread,
+  hasStoredTurnCompleted,
   interruptPendingInteractionsForThreadIds,
   interruptPendingInteractionsForThreads,
   interruptPendingInteractionsForPlugin,
@@ -17,6 +19,7 @@ import {
   type DbNotifier,
   type DbTransaction,
 } from "@bb/db";
+import { NotificationBuffer } from "../lib/notification-buffer.js";
 import {
   isApprovalPendingInteractionPayload,
   isPluginPendingInteractionPayload,
@@ -133,9 +136,15 @@ interface RequestPluginInteractionArgs {
   describeSubmission: DescribePluginSubmission | null;
   timeoutMs: number;
   signal?: AbortSignal;
+  owner: PluginInteractionOwner;
+}
+
+export interface PluginInteractionOwner {
+  readonly pluginId: string;
 }
 
 interface PluginInteractionWaiter {
+  owner: PluginInteractionOwner;
   resolve: (result: PluginInteractionResult) => void;
   timer: ReturnType<typeof setTimeout>;
   removeAbortListener: () => void;
@@ -214,7 +223,6 @@ interface PendingInteractionTransactionDeps {
 
 interface BuildInteractionChangeMetadataArgs {
   db: AppDeps["db"] | DbTransaction;
-  hasPendingInteraction: boolean;
   threadId: string;
 }
 
@@ -225,7 +233,6 @@ interface InteractionChangeNotificationDeps {
 
 interface NotifyInteractionChangedArgs {
   deps: InteractionChangeNotificationDeps;
-  hasPendingInteraction: boolean;
   threadId: string;
 }
 
@@ -300,7 +307,6 @@ export type ThreadInteractionSettledListener = (threadId: string) => void;
 
 function buildInteractionChangeMetadata({
   db,
-  hasPendingInteraction,
   threadId,
 }: BuildInteractionChangeMetadataArgs): ThreadChangeMetadata | undefined {
   const thread = getThread(db, threadId);
@@ -308,14 +314,14 @@ function buildInteractionChangeMetadata({
     return undefined;
   }
   return {
-    hasPendingInteraction,
+    hasPendingInteraction:
+      getActivePendingInteractionForThread(db, threadId) !== null,
     projectId: thread.projectId,
   };
 }
 
 function notifyInteractionChanged({
   deps,
-  hasPendingInteraction,
   threadId,
 }: NotifyInteractionChangedArgs): void {
   deps.hub.notifyThread(
@@ -323,7 +329,6 @@ function notifyInteractionChanged({
     ["interactions-changed"],
     buildInteractionChangeMetadata({
       db: deps.db,
-      hasPendingInteraction,
       threadId,
     }),
   );
@@ -332,6 +337,8 @@ function notifyInteractionChanged({
 export class PendingInteractionLifecycle {
   private readonly deps: CreateLifecycleDeps;
   private readonly pluginWaiters = new Map<string, PluginInteractionWaiter>();
+  private readonly answersAwaitingDaemon = new Set<string>();
+  private readonly redeliveredAnswers = new Set<string>();
   private pluginDirectory: PendingInteractionPluginDirectory | null = null;
   private started = false;
   private interactionSettledListener: ThreadInteractionSettledListener | null =
@@ -408,8 +415,10 @@ export class PendingInteractionLifecycle {
    * blocks a send; whatever answers it later steers or starts a turn.
    */
   hasTurnBoundPendingThreadInteraction(threadId: string): boolean {
-    const active = getActivePendingInteractionForThread(this.deps.db, threadId);
-    return active !== null && active.turnId !== null;
+    return hasTurnBoundActivePendingInteractionForThread(
+      this.deps.db,
+      threadId,
+    );
   }
 
   registerPendingInteraction(
@@ -427,6 +436,17 @@ export class PendingInteractionLifecycle {
       return {
         outcome: "rejected",
         reason: `Thread ${interaction.threadId} belongs to provider ${thread.providerId}, not ${interaction.providerId}`,
+      };
+    }
+    if (
+      hasStoredTurnCompleted(this.deps.db, {
+        threadId: interaction.threadId,
+        turnId: interaction.turnId,
+      })
+    ) {
+      return {
+        outcome: "rejected",
+        reason: `Turn ${interaction.turnId} already ended`,
       };
     }
     const unsupportedReason = getUnsupportedPendingInteractionReason(
@@ -467,17 +487,6 @@ export class PendingInteractionLifecycle {
         };
       }
 
-      const pendingForThread = getActivePendingInteractionForThread(
-        tx,
-        interaction.threadId,
-      );
-      if (pendingForThread) {
-        return {
-          outcome: "rejected" as const,
-          reason: `Thread ${interaction.threadId} is already awaiting user interaction`,
-        };
-      }
-
       return {
         outcome: "created" as const,
         row: createPendingInteraction(tx, {
@@ -503,7 +512,6 @@ export class PendingInteractionLifecycle {
       appendPendingInteractionTimelineEvent(this.deps, pendingInteraction);
       notifyInteractionChanged({
         deps: this.deps,
-        hasPendingInteraction: true,
         threadId: pendingInteraction.threadId,
       });
       emitPluginInteractionPending(thread, pendingInteraction);
@@ -530,15 +538,8 @@ export class PendingInteractionLifecycle {
     }
 
     const expiresAt = Date.now() + args.timeoutMs;
-    const row = this.deps.db.transaction((tx) => {
-      if (getActivePendingInteractionForThread(tx, args.threadId)) {
-        throw new ApiError(
-          409,
-          "invalid_request",
-          `Thread ${args.threadId} is already awaiting user interaction`,
-        );
-      }
-      return createPendingInteraction(tx, {
+    const row = this.deps.db.transaction((tx) =>
+      createPendingInteraction(tx, {
         originKind: "plugin",
         pluginId: args.pluginId,
         rendererId: args.rendererId,
@@ -551,8 +552,8 @@ export class PendingInteractionLifecycle {
           data: args.payload,
           presentation: args.presentation,
         }),
-      });
-    });
+      }),
+    );
     const interaction = toPendingInteraction(row);
 
     const pending = new Promise<PluginInteractionResult>((resolve) => {
@@ -578,6 +579,7 @@ export class PendingInteractionLifecycle {
       };
       const timer = setTimeout(expire, args.timeoutMs);
       this.pluginWaiters.set(interaction.id, {
+        owner: args.owner,
         resolve,
         timer,
         removeAbortListener: () =>
@@ -596,7 +598,6 @@ export class PendingInteractionLifecycle {
       appendPendingInteractionTimelineEvent(this.deps, interaction);
       notifyInteractionChanged({
         deps: this.deps,
-        hasPendingInteraction: true,
         threadId: interaction.threadId,
       });
       emitPluginInteractionPending(thread, interaction);
@@ -736,6 +737,28 @@ export class PendingInteractionLifecycle {
     );
   }
 
+  interruptOwnedPluginInteractions(
+    owner: PluginInteractionOwner,
+  ): PendingInteraction[] {
+    const ids = [...this.pluginWaiters]
+      .filter(([, waiter]) => waiter.owner === owner)
+      .map(([id]) => id);
+    return this.settleInterruptedRows(
+      ids.flatMap((id) => {
+        const updated = setPendingInteractionInterrupted(this.deps.db, {
+          id,
+          statusReason: "plugin-disposed",
+        });
+        if (updated) return [updated];
+        this.settlePluginWaiter(id, {
+          outcome: "cancelled",
+          reason: "plugin-disposed",
+        });
+        return [];
+      }),
+    );
+  }
+
   resolvePendingInteraction(
     args: ResolvePendingInteractionArgs,
   ): PendingInteraction {
@@ -822,6 +845,20 @@ export class PendingInteractionLifecycle {
     args: SettleInteractiveResolveCommandResultArgs,
   ): void {
     if (!args.report.ok) {
+      if (args.report.errorCode === "host_unavailable") {
+        this.answersAwaitingDaemon.add(args.command.interactionId);
+        return;
+      }
+      if (
+        args.report.errorCode === "stale_interactive_request" &&
+        this.redeliveredAnswers.delete(args.command.interactionId)
+      ) {
+        this.completeResolvingInteractionInTransaction(args.deps, {
+          interactionId: args.command.interactionId,
+          resolution: args.command.resolution,
+        });
+        return;
+      }
       this.interruptPendingInteractionInTransaction(args.deps, {
         interactionId: args.command.interactionId,
         reason: args.report.errorMessage,
@@ -829,6 +866,7 @@ export class PendingInteractionLifecycle {
       return;
     }
 
+    this.redeliveredAnswers.delete(args.command.interactionId);
     const completed = this.completeResolvingInteractionInTransaction(
       args.deps,
       {
@@ -942,23 +980,86 @@ export class PendingInteractionLifecycle {
     );
 
     if (updated) {
-      startLiveHostCommand(
-        { ...this.deps, pendingInteractions: this },
-        {
-          command,
-          hostId: environment.hostId,
-          timeoutMs: LIVE_DAEMON_COMMAND_TIMEOUT_MS,
-          onError: ({ error }) => {
-            this.deps.logger.warn(
-              { err: error, interactionId: args.interaction.id },
-              "Live interactive resolve command failed",
-            );
-          },
-        },
-      );
+      this.startInteractiveResolveCommand(command, environment.hostId);
     }
 
     return updated;
+  }
+
+  private startInteractiveResolveCommand(
+    command: ReturnType<typeof buildInteractiveResolveCommand>,
+    hostId: string,
+  ): void {
+    startLiveHostCommand(
+      { ...this.deps, pendingInteractions: this },
+      {
+        command,
+        hostId,
+        timeoutMs: LIVE_DAEMON_COMMAND_TIMEOUT_MS,
+        onError: ({ error }) => {
+          this.deps.logger.warn(
+            { err: error, interactionId: command.interactionId },
+            "Live interactive resolve command failed",
+          );
+        },
+      },
+    );
+  }
+
+  completeResolvingInteractionWithoutAck(interactionId: string): void {
+    const row = getPendingInteraction(this.deps.db, interactionId);
+    if (row === null || row.status !== "resolving") return;
+    const interaction = toPendingInteraction(row);
+    if (interaction.resolution === null) return;
+    const resolution = interaction.resolution;
+    const notifications = new NotificationBuffer();
+    this.deps.db.transaction(
+      (tx) =>
+        this.completeResolvingInteractionInTransaction(
+          { db: tx, hub: notifications },
+          { interactionId, resolution },
+        ),
+      { behavior: "immediate" },
+    );
+    notifications.flushInto(this.deps.hub);
+  }
+
+  redeliverAnswersAwaitingDaemon(hostId: string): void {
+    for (const interactionId of this.answersAwaitingDaemon) {
+      const row = getPendingInteraction(this.deps.db, interactionId);
+      if (row === null || row.status !== "resolving") {
+        this.answersAwaitingDaemon.delete(interactionId);
+        continue;
+      }
+      if (this.interactionEnvironment(row)?.hostId !== hostId) continue;
+      this.answersAwaitingDaemon.delete(interactionId);
+      this.redeliverResolvingInteraction(interactionId);
+    }
+  }
+
+  redeliverResolvingInteraction(interactionId: string): void {
+    const row = getPendingInteraction(this.deps.db, interactionId);
+    if (row === null || row.status !== "resolving") return;
+    const interaction = toPendingInteraction(row);
+    const environment = this.interactionEnvironment(row);
+    if (environment === null || interaction.resolution === null) return;
+    this.redeliveredAnswers.add(interactionId);
+    this.startInteractiveResolveCommand(
+      buildInteractiveResolveCommand({
+        environmentId: environment.id,
+        interaction,
+        resolution: interaction.resolution,
+      }),
+      environment.hostId,
+    );
+  }
+
+  private interactionEnvironment(row: PendingInteractionRow) {
+    const environmentId =
+      getThread(this.deps.db, row.threadId)?.environmentId ?? null;
+    return environmentId === null
+      ? null
+      : getEnvironment(this.deps.db, environmentId);
   }
 
   private requireInteraction(interactionId: string): PendingInteraction {
@@ -1001,13 +1102,44 @@ export class PendingInteractionLifecycle {
     return interaction;
   }
 
+  private endProviderWaitForInterruptedInteraction(
+    interaction: PendingInteraction,
+  ): void {
+    if (interaction.status !== "interrupted") return;
+    const row = getPendingInteraction(this.deps.db, interaction.id);
+    if (
+      row === null ||
+      row.status !== "interrupted" ||
+      row.originKind !== "provider" ||
+      row.providerId === null ||
+      row.providerThreadId === null ||
+      row.providerRequestId === null
+    ) {
+      return;
+    }
+    const environment = this.interactionEnvironment(row);
+    if (environment === null) return;
+    this.deps.hub.sendDaemonMessage(environment.hostId, {
+      type: "interactive-requests.end",
+      requests: [
+        {
+          threadId: row.threadId,
+          providerId: row.providerId,
+          providerThreadId: row.providerThreadId,
+          providerRequestId: row.providerRequestId,
+        },
+      ],
+      reason: row.statusReason ?? "The question was closed",
+    });
+  }
+
   private settleInteractionTerminalState(
     interaction: PendingInteraction,
   ): void {
+    this.endProviderWaitForInterruptedInteraction(interaction);
     appendPendingInteractionTimelineEvent(this.deps, interaction);
     notifyInteractionChanged({
       deps: this.deps,
-      hasPendingInteraction: false,
       threadId: interaction.threadId,
     });
     this.notifyInteractionSettled(interaction.threadId);
@@ -1017,10 +1149,14 @@ export class PendingInteractionLifecycle {
     deps: PendingInteractionTransactionDeps,
     interaction: PendingInteraction,
   ): void {
+    if (interaction.status === "interrupted") {
+      queueMicrotask(() =>
+        this.endProviderWaitForInterruptedInteraction(interaction),
+      );
+    }
     appendPendingInteractionTimelineEventInTransaction(deps, interaction);
     notifyInteractionChanged({
       deps,
-      hasPendingInteraction: false,
       threadId: interaction.threadId,
     });
     this.notifyInteractionSettled(interaction.threadId);

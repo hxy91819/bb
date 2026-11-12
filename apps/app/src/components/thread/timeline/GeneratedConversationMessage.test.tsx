@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import type { PromptTextMention, ThreadListEntry } from "@bb/domain";
+import { ThreadTimelineNavigationProvider } from "./ThreadTimelineNavigationContext";
 import { ConversationMessageContent } from "./ConversationMessageContent";
 import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
 import { RouteNavigationProvider } from "@/components/ui/app-route-anchor";
@@ -49,27 +50,33 @@ function renderChildCompleted(text = MARKDOWN_BODY) {
   return render(
     <MemoryRouter>
       <RouteNavigationProvider>
-        <ConversationMessageContent
-          role="user"
-          initiator="system"
-          originKind={null}
-          senderThreadId={null}
-          senderThreadTitle={null}
-          systemMessageKind="child-completed"
-          systemMessageSubject={{
-            kind: "thread",
-            threadId: "thr_child",
-            threadName: "Rebuild comments",
-          }}
-          attachments={null}
-          mentions={mentions}
-          text={text}
-          timestamp={0}
+        <ThreadTimelineNavigationProvider
+          environmentId={null}
+          onOpenLocalFileLink={() => false}
+          resolveMentionLink={() => null}
           threadId="thr_parent"
-          turnRequest={{ kind: "message", status: "accepted" }}
           workspaceRootPath="/workspace"
-          projectId="proj_demo"
-        />
+        >
+          <ConversationMessageContent
+            role="user"
+            initiator="system"
+            senderThreadId={null}
+            senderThreadTitle={null}
+            systemMessageKind="child-completed"
+            systemMessageSubject={{
+              kind: "thread",
+              threadId: "thr_child",
+              threadName: "Rebuild comments",
+            }}
+            attachments={null}
+            mentions={mentions}
+            text={text}
+            timestamp={0}
+            threadId="thr_parent"
+            turnRequest={{ kind: "message", status: "accepted" }}
+            projectId="proj_demo"
+          />
+        </ThreadTimelineNavigationProvider>
       </RouteNavigationProvider>
     </MemoryRouter>,
   );
@@ -168,7 +175,6 @@ function renderAgentMessage(
           <ConversationMessageContent
             role="user"
             initiator="agent"
-            originKind={null}
             senderThreadId="thr_agent"
             senderThreadTitle={senderThreadTitle}
             senderIsPluginSideChat={senderIsPluginSideChat}
@@ -569,7 +575,7 @@ describe("GeneratedConversationMessage markdown body", () => {
     expect(screen.queryByText("**Ready** to merge.")).toBeNull();
 
     const toggle = screen.getByRole("button", {
-      name: /Replying to side chat/u,
+      name: /Message from side chat/u,
     });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
 
@@ -589,7 +595,7 @@ describe("GeneratedConversationMessage markdown body", () => {
     ).not.toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Replying to side chat/u }),
+      screen.getByRole("button", { name: /Message from side chat/u }),
     );
 
     expect(

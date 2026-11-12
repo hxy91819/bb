@@ -1,12 +1,14 @@
-import { spawn } from "node:child_process";
+import { experimental_spawnHostProcess as spawn } from "@get-bb/plugin-sdk/process";
 import {
   query,
   type CanUseTool,
   type McpSdkServerConfigWithInstance,
   type Options,
   type Query,
+  type Settings,
   type SDKMessage,
   type SDKUserMessage,
+  type SlashCommand,
   type SpawnedProcess,
   type SpawnOptions,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -34,6 +36,7 @@ export interface SdkSessionOptions {
   hooks?: Options["hooks"];
   mcpServers?: Record<string, McpSdkServerConfigWithInstance>;
   allowedTools?: string[];
+  disallowedTools?: string[];
   canUseTool?: CanUseTool;
   env?: NodeJS.ProcessEnv;
   pathToClaudeCodeExecutable?: Options["pathToClaudeCodeExecutable"];
@@ -190,12 +193,18 @@ export class SdkSession {
   }
 
   async setPermissionMode(mode: ClaudePermissionMode): Promise<void> {
-    this.options.permissionMode = mode;
     await this.query?.setPermissionMode(mode);
+    this.options.permissionMode = mode;
   }
 
-  async getContextUsage(): Promise<unknown> {
-    return this.query ? this.query.getContextUsage() : null;
+  async applyPermissionSettings(
+    settings: Pick<Settings, "sandbox" | "permissions">,
+  ): Promise<void> {
+    await this.query?.applyFlagSettings(settings);
+  }
+
+  async supportedCommands(): Promise<SlashCommand[]> {
+    return this.query ? this.query.supportedCommands() : [];
   }
 
   async setModel(model: string | undefined): Promise<void> {
@@ -262,6 +271,9 @@ export class SdkSession {
         : {}),
       ...(this.options.allowedTools
         ? { allowedTools: this.options.allowedTools }
+        : {}),
+      ...(this.options.disallowedTools
+        ? { disallowedTools: this.options.disallowedTools }
         : {}),
       ...(this.options.canUseTool
         ? { canUseTool: this.options.canUseTool }

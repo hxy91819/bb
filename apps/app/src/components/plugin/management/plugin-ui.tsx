@@ -1,3 +1,4 @@
+import { pluginInstallBadge } from "@bb/domain/plugin-install-badge";
 import { PluginBrandIcon } from "@bb/shared-ui/plugin-icon";
 import { useState, type ReactNode } from "react";
 import { Icon } from "@bb/shared-ui/icon";
@@ -15,10 +16,6 @@ export function isReadablePluginVersion(version: string): boolean {
   return /^v?\d+\.\d+/u.test(version);
 }
 
-export function displayPluginVersion(version: string): string {
-  return /^[0-9a-f]{12,}$/iu.test(version) ? version.slice(0, 7) : version;
-}
-
 export const SUCCESS_TEXT_STYLE = {
   color: "color-mix(in oklab, var(--success) 80%, var(--ink))",
 } as const;
@@ -28,15 +25,40 @@ const PLUGIN_INSTALL_COUNT_FORMATTER = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
 });
 
+export type PluginInstallCountPresentation = {
+  display: string;
+  accessibleLabel: string;
+  tone: "count" | "new" | "builtin";
+};
+
 export function pluginInstallCountPresentation(
-  installs: number | null,
-): { display: string; accessibleLabel: string } | undefined {
-  if (installs === null) return undefined;
+  entry: Parameters<typeof pluginInstallBadge>[0],
+  now: number = Date.now(),
+): PluginInstallCountPresentation | undefined {
+  const badge = pluginInstallBadge(entry, now);
+  if (badge === null) return undefined;
+  if (badge.kind === "builtin") {
+    return {
+      display: "Built in",
+      accessibleLabel: "Built in",
+      tone: "builtin",
+    };
+  }
+  if (badge.kind === "new") {
+    return { display: "New", accessibleLabel: "New", tone: "new" };
+  }
+  return countPresentation(badge.installs);
+}
+
+function countPresentation(installs: number): PluginInstallCountPresentation {
   return {
     display: PLUGIN_INSTALL_COUNT_FORMATTER.format(installs),
     accessibleLabel: `${installs.toLocaleString()} ${installs === 1 ? "install" : "installs"}`,
+    tone: "count",
   };
 }
+
+export const NEW_TEXT_STYLE = { color: "var(--file-accent)" } as const;
 
 const PLUGIN_CATEGORY_ACCENT_TOKENS: Record<string, string> = {
   "themes-and-appearance": "--file-accent",
@@ -91,7 +113,9 @@ const PLUGIN_CATEGORY_ICONS: Record<string, string> = {
 export function pluginCatalogCategoryIconName(
   categoryId: string | undefined,
 ): string | undefined {
-  return categoryId === undefined ? undefined : PLUGIN_CATEGORY_ICONS[categoryId];
+  return categoryId === undefined
+    ? undefined
+    : PLUGIN_CATEGORY_ICONS[categoryId];
 }
 
 export function PluginCategoryIcon({

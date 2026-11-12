@@ -48,17 +48,28 @@ function ExtensionUiInteraction({
     );
   }
 
+  const send = async (value: unknown) => {
+    setBusy(true);
+    try {
+      await submit(value as never);
+    } catch (cause) {
+      setBusy(false);
+      throw cause;
+    }
+  };
+
+  const dismiss = async () => {
+    setBusy(true);
+    try {
+      await cancel();
+    } catch {
+      setBusy(false);
+    }
+  };
+
   const finish = (value: unknown) => {
     if (busy) return;
-    setBusy(true);
-    void (async () => {
-      try {
-        await submit(value as never);
-      } catch {
-      } finally {
-        setBusy(false);
-      }
-    })();
+    void send(value).catch(() => {});
   };
 
   if (request.method === "select") {
@@ -69,10 +80,11 @@ function ExtensionUiInteraction({
         questions={[
           {
             id: request.requestId,
-            prompt: request.message ?? "",
+            prompt: request.fullTitle ?? request.message ?? "",
             shortLabel: "Select",
             multiSelect: false,
             allowFreeText: false,
+            required: true,
             options: options.map((label, index) => ({
               value: `option-${index}`,
               label,
@@ -81,14 +93,16 @@ function ExtensionUiInteraction({
         ]}
         disabled={busy}
         cancelDisabled={busy}
-        onCancel={() => void cancel()}
-        onSubmit={(answers) => {
+        onCancel={cancel}
+        onSubmit={async (answers) => {
           const selected = answers[request.requestId]?.selected[0];
           const index = selected?.startsWith("option-")
             ? Number(selected.slice("option-".length))
             : Number.NaN;
           const option = options[index];
-          if (option !== undefined) finish(option);
+          if (option === undefined)
+            throw new Error(`Unknown option: ${selected}`);
+          await send(option);
         }}
       />
     );
@@ -105,6 +119,9 @@ function ExtensionUiInteraction({
       onSubmit={onSubmit}
       className="flex flex-col gap-3 text-xs text-muted-foreground"
     >
+      {request.fullTitle ? (
+        <p className="text-sm text-foreground">{request.fullTitle}</p>
+      ) : null}
       {request.message ? (
         <p className="text-sm text-foreground">{request.message}</p>
       ) : null}
@@ -155,7 +172,7 @@ function ExtensionUiInteraction({
             size="sm"
             variant="ghost"
             disabled={busy}
-            onClick={() => void cancel()}
+            onClick={() => void dismiss()}
           >
             Cancel
           </Button>

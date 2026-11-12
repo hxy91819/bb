@@ -23,10 +23,7 @@ import {
 import plugin from "./server.js";
 import { createConnectPlugin } from "./plugin.js";
 import { ConnectTunnel } from "./tunnel.js";
-import {
-  DEFAULT_CONNECT_BASE_URL,
-  resolveDefaultConnectBaseUrl,
-} from "./base-url.js";
+import { DEFAULT_CONNECT_BASE_URL } from "@bb/connect-client";
 import type { ConnectStatus } from "./types.js";
 import { ShareHostResolver } from "./hosts.js";
 import {
@@ -89,53 +86,6 @@ function createConnectFakeHost(options?: {
       : {}),
   });
 }
-
-describe("resolveDefaultConnectBaseUrl", () => {
-  it("uses the local Cloud origin only in development", () => {
-    expect(
-      resolveDefaultConnectBaseUrl({
-        NODE_ENV: "development",
-        BB_DEV_CONNECT_BASE_URL: "http://bb.localhost:42745/",
-      }),
-    ).toBe("http://bb.localhost:42745");
-    expect(
-      resolveDefaultConnectBaseUrl({
-        NODE_ENV: "production",
-        BB_DEV_CONNECT_BASE_URL: "http://bb.localhost:42745",
-      }),
-    ).toBe(DEFAULT_CONNECT_BASE_URL);
-    expect(resolveDefaultConnectBaseUrl({ NODE_ENV: "development" })).toBe(
-      DEFAULT_CONNECT_BASE_URL,
-    );
-    expect(
-      resolveDefaultConnectBaseUrl({
-        NODE_ENV: "development",
-        BB_DEV_CONNECT_BASE_URL: "https://vibecodethis.site/",
-      }),
-    ).toBe("https://vibecodethis.site");
-  });
-
-  it("rejects non-local or non-origin development values", () => {
-    for (const value of [
-      "https://bb.localhost:42745",
-      "http://getbb.app:42745",
-      "http://bb.localhost:42745/dashboard",
-      "http://vibecodethis.site",
-      "https://sawyer.vibecodethis.site",
-      "https://vibecodethis.site/dashboard",
-      "not a url",
-    ]) {
-      expect(() =>
-        resolveDefaultConnectBaseUrl({
-          NODE_ENV: "development",
-          BB_DEV_CONNECT_BASE_URL: value,
-        }),
-      ).toThrow(
-        "BB_DEV_CONNECT_BASE_URL must be an http://bb.localhost:<port> origin or https://vibecodethis.site",
-      );
-    }
-  });
-});
 
 describe("headersForLoopbackRequest", () => {
   it("rewrites the paired connect origin to the loopback app origin only", () => {
@@ -2413,6 +2363,49 @@ describe("connect plugin", () => {
     await expect(current.harness.callRpc("createMachineCode")).rejects.toThrow(
       "machine_limit",
     );
+  });
+
+  it("lookupMachineCode reports whether a phone redeemed the code", async () => {
+    const current = await loadPlugin();
+    const lookups: unknown[] = [];
+    account.route(
+      "api",
+      "POST",
+      "/api/connect/machine-code-lookup",
+      (request) => {
+        lookups.push(request.body);
+        return {
+          status: 200,
+          body: { consumed: true, machineId: "machine-1" },
+        };
+      },
+    );
+    await signIn(current);
+
+    await expect(
+      current.harness.callRpc("lookupMachineCode", { code: "ABCD-EFGH" }),
+    ).resolves.toEqual({ consumed: true, machineId: "machine-1" });
+    expect(lookups).toEqual([{ code: "ABCD-EFGH" }]);
+  });
+
+  it("lookupMachineCode reports not_paired without making a request", async () => {
+    const { harness } = await loadPlugin();
+    await expect(
+      harness.callRpc("lookupMachineCode", { code: "ABCD-EFGH" }),
+    ).rejects.toThrow("not_paired");
+    expect(account.fetches).toEqual([]);
+  });
+
+  it("lookupMachineCode maps a failed lookup to network", async () => {
+    const current = await loadPlugin();
+    account.route("api", "POST", "/api/connect/machine-code-lookup", () => ({
+      status: 500,
+      body: { error: "boom" },
+    }));
+    await signIn(current);
+    await expect(
+      current.harness.callRpc("lookupMachineCode", { code: "ABCD-EFGH" }),
+    ).rejects.toThrow("network");
   });
 
   it("revokeMachine posts through bb account", async () => {

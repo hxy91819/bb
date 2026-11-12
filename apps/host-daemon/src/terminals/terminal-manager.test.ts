@@ -4,11 +4,7 @@ import path from "node:path";
 import type { AgentRuntime } from "@bb/agent-runtime";
 import type { HostDaemonDaemonWsMessage } from "@bb/host-daemon-contract";
 import type { HostWorkspace } from "@bb/host-workspace";
-import {
-  createDeferredPromise,
-  makeWorkspaceMergeBase,
-  makeWorkspaceStatus,
-} from "@bb/test-helpers";
+import { createDeferredPromise, makeTempDir } from "@bb/test-helpers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HostDaemonLogger } from "../logger.js";
 import { RuntimeManager } from "../runtime-manager.js";
@@ -24,7 +20,6 @@ import {
   type TerminalPtyProcess,
 } from "./terminal-manager.js";
 
-const tempDirs: string[] = [];
 const DEFAULT_TERMINAL_START = { mode: "shell" } as const;
 
 interface ResizeCall {
@@ -78,12 +73,6 @@ type TerminalOutputChunk = Extract<
 
 type SteerTurnResult = Awaited<ReturnType<AgentRuntime["steerTurn"]>>;
 
-async function makeTempDir(prefix: string): Promise<string> {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-  tempDirs.push(tempDir);
-  return tempDir;
-}
-
 async function writeEmptyFile(filePath: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, "");
@@ -98,16 +87,11 @@ function createFakeLogger(): HostDaemonLogger {
   };
 }
 
-async function cleanupTempDirs(): Promise<void> {
-  await Promise.all(
-    tempDirs
-      .splice(0)
-      .map((tempDir) => fs.rm(tempDir, { force: true, recursive: true })),
-  );
-}
-
 class FakeTerminalPty implements TerminalPtyProcess {
   disposeCount: number;
+  exited = false;
+  paused = false;
+  pauseCount = 0;
   readonly killCalls: (string | null)[];
   readonly resizeCalls: ResizeCall[];
   readonly writeCalls: (Buffer | string)[];
@@ -131,6 +115,19 @@ class FakeTerminalPty implements TerminalPtyProcess {
 
   dispose(): void {
     this.disposeCount += 1;
+  }
+
+  hasExited(): boolean {
+    return this.exited;
+  }
+
+  pause(): void {
+    this.paused = true;
+    this.pauseCount += 1;
+  }
+
+  resume(): void {
+    this.paused = false;
   }
 
   kill(signal?: string): void {
@@ -224,7 +221,7 @@ function createFakeRuntime(): AgentRuntime {
     resumeThread: vi.fn(async () => ({
       providerThreadId: "provider-thread",
     })),
-    runTurn: vi.fn(async () => undefined),
+    runTurn: vi.fn(async () => ({ status: "started" as const })),
     steerTurn: vi.fn(async () => steerTurnResult),
     stopThread: vi.fn(async () => ({ providerCheckpointId: null })),
     clearThreadGoal: vi.fn(async () => ({ cleared: true })),
@@ -232,6 +229,7 @@ function createFakeRuntime(): AgentRuntime {
     archiveThread: vi.fn(async () => undefined),
     unarchiveThread: vi.fn(async () => undefined),
     listModels: vi.fn(async () => ({ models: [], selectedOnlyModels: [] })),
+    listCommands: vi.fn(async () => ({ commands: [] })),
     providerHealth: vi.fn(async () => ({ supported: false as const })),
     providerUsage: vi.fn(async () => ({ supported: false as const })),
     providerInstallationStatus: vi.fn(async () => {
@@ -248,6 +246,7 @@ function createFakeRuntime(): AgentRuntime {
     hasThread: vi.fn(() => false),
     getLiveThreadIds: vi.fn(() => []),
     hasOpenBackgroundWork: vi.fn(() => false),
+    listOpenBackgroundWork: vi.fn(() => []),
     shutdown: vi.fn(async () => undefined),
   };
 }
@@ -257,37 +256,24 @@ function createFakeWorkspace(path: string): HostWorkspace {
     path,
     isGitRepo: true,
     isWorktree: false,
+    gitCommonDir: `${path}/.git`,
     getCurrentBranch: vi.fn(async () => "main"),
     getHeadSha: vi.fn(async () => "commit-1"),
-    getLocalStateFingerprint: vi.fn(async () => "local-1"),
-    getSharedGitRefsFingerprint: vi.fn(async () => "refs-1"),
+    getLocalStateSnapshot: vi.fn(async () => ({
+      fingerprint: "local-1",
+      branchName: "main",
+    })),
+    getSharedGitRefsSnapshot: vi.fn(async () => ({
+      defaultBranch: "main",
+      branchNamesFingerprint: "names-1",
+      fingerprintFor: () => "refs-1",
+    })),
     getAdditionalWorkspaceWriteRoots: vi.fn(async () => []),
-    getStatus: vi.fn(async () =>
-      makeWorkspaceStatus({
-        mergeBase: makeWorkspaceMergeBase(),
-      }),
-    ),
     getDefaultBranch: vi.fn(async () => "main"),
-    getDiff: vi.fn(async () => ({
-      diff: "",
-      files: "",
-      mergeBaseRef: null,
-      shortstat: "",
-      truncated: false,
-    })),
-    diffFiles: vi.fn(async () => ({
-      files: [],
-      shortstat: "",
-      mergeBaseRef: null,
-      truncated: false,
-    })),
-    diffPatch: vi.fn(async () => []),
-    getPullRequest: vi.fn(async () => ({ outcome: "none" as const })),
     commit: vi.fn(async () => ({
       commitSha: "commit-1",
       commitSubject: "commit",
     })),
-    runPullRequestAction: vi.fn(async () => undefined),
   };
 }
 
@@ -462,10 +448,9 @@ function textChunk(text: string, seq: number): TerminalOutputChunk {
 }
 
 describe("TerminalManager", () => {
-  afterEach(async () => {
+  afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
-    await cleanupTempDirs();
   });
 
   it("opens a PTY in the workspace and keeps the environment active", async () => {
@@ -1061,6 +1046,111 @@ describe("TerminalManager", () => {
       replayStartSeq: 0,
       nextSeq: 1,
     });
+  });
+
+  it("flushes the first output after an idle period without the batch delay", async () => {
+    const harness = createHarness();
+    const pty = await openTerminal(harness);
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setImmediate",
+        "clearImmediate",
+        "performance",
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(4);
+
+    pty.emitData("a");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(collectTerminalOutput(harness.messages)).toBe("a");
+
+    pty.emitData("b");
+    await vi.advanceTimersByTimeAsync(3);
+
+    expect(collectTerminalOutput(harness.messages)).toBe("a");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(collectTerminalOutput(harness.messages)).toBe("ab");
+
+    await vi.advanceTimersByTimeAsync(4);
+    pty.emitData("c");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(collectTerminalOutput(harness.messages)).toBe("abc");
+  });
+
+  it("pauses the PTY a window ahead of acknowledged output and resumes on acknowledgement", async () => {
+    const harness = createHarness();
+    const pty = await openTerminal(harness);
+    await harness.manager.handleMessage({
+      type: "terminal.flow-control",
+      terminalId: "term-1",
+      enabled: true,
+    });
+    const chunk = "x".repeat(64 * 1024);
+
+    for (let index = 0; index < 16; index += 1) {
+      pty.emitData(chunk);
+    }
+    expect(pty.paused).toBe(false);
+    pty.emitData(chunk);
+    expect(pty.paused).toBe(true);
+
+    await harness.manager.handleMessage({
+      type: "terminal.ack",
+      terminalId: "term-1",
+      nextSeq: 8,
+    });
+    expect(pty.paused).toBe(true);
+    await harness.manager.handleMessage({
+      type: "terminal.ack",
+      terminalId: "term-1",
+      nextSeq: 9,
+    });
+    expect(pty.paused).toBe(false);
+  });
+
+  it("resumes a paused PTY whose process exited so node-pty can drain it", async () => {
+    const harness = createHarness();
+    const pty = await openTerminal(harness);
+    await harness.manager.handleMessage({
+      type: "terminal.flow-control",
+      terminalId: "term-1",
+      enabled: true,
+    });
+    for (let index = 0; index < 17; index += 1) {
+      pty.emitData("x".repeat(64 * 1024));
+    }
+    expect(pty.paused).toBe(true);
+
+    pty.exited = true;
+
+    await vi.waitFor(() => {
+      expect(pty.paused).toBe(false);
+    });
+  });
+
+  it("stops pacing every PTY when the server connection is released", async () => {
+    const harness = createHarness();
+    const pty = await openTerminal(harness);
+    await harness.manager.handleMessage({
+      type: "terminal.flow-control",
+      terminalId: "term-1",
+      enabled: true,
+    });
+    for (let index = 0; index < 17; index += 1) {
+      pty.emitData("x".repeat(64 * 1024));
+    }
+    expect(pty.paused).toBe(true);
+
+    harness.manager.releaseOutputFlowControl();
+    for (let index = 0; index < 17; index += 1) {
+      pty.emitData("x".repeat(64 * 1024));
+    }
+
+    expect(pty.paused).toBe(false);
+    expect(pty.pauseCount).toBe(1);
   });
 
   it("keeps a retained terminal read-only after it exits", async () => {

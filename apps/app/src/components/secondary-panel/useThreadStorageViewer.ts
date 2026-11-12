@@ -1,6 +1,6 @@
 import type { FixedPanelTab } from "@/lib/fixed-panel-tabs-state";
 import { DEFAULT_THREAD_STORAGE_FILE_LIST_OPTIONS } from "@/lib/thread-storage-files";
-import { useThreadStorageFiles } from "../../hooks/queries/thread-queries";
+import { useThreadStorageFiles } from "../../hooks/queries/thread-panel-queries";
 
 interface UseThreadStorageViewerParams {
   fileListEnabled?: boolean;
@@ -25,7 +25,8 @@ export function useThreadStorageViewer({
   );
   return {
     isThreadStorageFilesLoading,
-    threadStorageFilesError,
+    threadStorageFilesError:
+      threadStorageFiles === undefined ? threadStorageFilesError : null,
     threadStorageFiles,
   };
 }

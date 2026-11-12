@@ -7,10 +7,12 @@ import {
   getThread,
   listDueScheduledQueuedThreadMessages,
   listIdleThreadsWithQueuedMessages,
+  listReadySystemNoticesOnBusyThreads,
   listQueuedThreadMessagePluginWaitRefs,
   listQueuedThreadMessagesByWaitHolder,
   listQueuedThreadMessagesWaitingOnKind,
   listRetryableFailedQueuedThreadMessages,
+  listThreadIdsWithAppUpdateQueueWaits,
   listThreadIdsWithHostOfflineQueueWaits,
 } from "@bb/db";
 import {
@@ -43,7 +45,9 @@ export type QueuedMessageDispatchWake =
   | { kind: "workspace-ready"; threadId: string }
   | { kind: "provisioning-ended"; threadId: string }
   | { kind: "interaction-settled"; threadId: string }
+  | { kind: "edit-released"; queuedMessageId: string; threadId: string }
   | { kind: "host-connected"; hostId: string }
+  | { kind: "app-update-released" }
   | { kind: "time-reached"; now: number }
   | { kind: "plugin-recheck" }
   | { kind: "plugin-unregistered"; pluginId: string }
@@ -117,10 +121,17 @@ function dispatchWakeContext(
     case "turn-started":
     case "interaction-settled":
       return { threadId: wake.threadId, wake: wake.kind };
+    case "edit-released":
+      return {
+        queuedMessageId: wake.queuedMessageId,
+        threadId: wake.threadId,
+        wake: wake.kind,
+      };
     case "idle-recovery":
     case "failed-retry":
       return { now: wake.now, wake: wake.kind };
     case "orphaned-plugin-recovery":
+    case "app-update-released":
       return { wake: wake.kind };
     case "time-reached":
       return { now: wake.now, wake: wake.kind };
@@ -205,6 +216,25 @@ export function requestQueuedMessageDispatch(
   }
 }
 
+export function requestQueuedMessageDispatchAt(
+  deps: QueueDispatchDeps,
+  at: number,
+): void {
+  setTimeout(
+    () => {
+      if (Date.now() < at) {
+        requestQueuedMessageDispatchAt(deps, at);
+        return;
+      }
+      requestQueuedMessageDispatch(deps, {
+        kind: "time-reached",
+        now: Date.now(),
+      });
+    },
+    Math.max(0, at - Date.now()),
+  ).unref();
+}
+
 export async function runQueuedMessageDispatch(
   deps: QueueDispatchDeps,
   wake: QueuedMessageDispatchWake,
@@ -239,6 +269,20 @@ async function executePreparedQueuedMessageDispatch(
         }
       }
       return;
+    case "app-update-released":
+      for (const threadId of listThreadIdsWithAppUpdateQueueWaits(deps.db)) {
+        for (const row of listQueuedThreadMessagesWaitingOnKind(deps.db, {
+          kind: "app-update",
+          threadId,
+        })) {
+          await attemptAutomaticQueuedMessage(deps, row, {
+            now: Date.now(),
+            respectRequeuePacing: false,
+            retryingFailure: false,
+          });
+        }
+      }
+      return;
     case "workspace-ready":
       await runWorkspaceReadyDispatch(deps, wake.threadId);
       return;
@@ -250,6 +294,12 @@ async function executePreparedQueuedMessageDispatch(
       return;
     case "interaction-settled":
       await runInteractionSettledDispatch(deps, wake.threadId);
+      return;
+    case "edit-released":
+      await runEditReleasedDispatch(deps, {
+        id: wake.queuedMessageId,
+        threadId: wake.threadId,
+      });
       return;
     case "plugin-recheck":
       await runPluginRecheckDispatch(deps);
@@ -360,7 +410,8 @@ async function runInteractionSettledDispatch(
   deps: QueueDispatchDeps,
   threadId: string,
 ): Promise<void> {
-  if (deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(threadId)) return;
+  if (deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(threadId))
+    return;
   const cleared = clearThreadQueueWaitsOfKind(deps, {
     threadId,
     kind: "interaction",
@@ -368,6 +419,29 @@ async function runInteractionSettledDispatch(
   if (cleared > 0) {
     await runThreadReadyDispatch(deps, threadId);
   }
+}
+
+async function runEditReleasedDispatch(
+  deps: QueueDispatchDeps,
+  row: QueuedMessageDispatchRef,
+): Promise<void> {
+  await attemptAutomaticQueuedMessage(deps, row, {
+    now: Date.now(),
+    respectRequeuePacing: false,
+    retryingFailure: false,
+  });
+  await runThreadReadyDispatch(deps, row.threadId);
+}
+
+export async function attemptQueuedMessageNow(
+  deps: QueueDispatchDeps,
+  row: QueuedMessageDispatchRef,
+): Promise<void> {
+  await attemptAutomaticQueuedMessage(deps, row, {
+    now: Date.now(),
+    respectRequeuePacing: false,
+    retryingFailure: false,
+  });
 }
 
 async function attemptAutomaticQueuedMessage(
@@ -511,6 +585,13 @@ async function runFailedRetryDispatch(
 async function runIdleThreadRecovery(deps: QueueDispatchDeps): Promise<void> {
   for (const candidate of listIdleThreadsWithQueuedMessages(deps.db)) {
     await runThreadReadyDispatch(deps, candidate.threadId);
+  }
+  for (const row of listReadySystemNoticesOnBusyThreads(deps.db)) {
+    await attemptAutomaticQueuedMessage(deps, row, {
+      now: Date.now(),
+      respectRequeuePacing: true,
+      retryingFailure: false,
+    });
   }
 }
 

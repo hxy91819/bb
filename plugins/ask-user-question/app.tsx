@@ -19,6 +19,16 @@ function AskUserQuestionInteraction({
     () => interactionPayloadSchema.safeParse(interaction.payload),
     [interaction.payload],
   );
+  const questions = useMemo(
+    () =>
+      parsed.success
+        ? parsed.data.questions.map((question) => ({
+            ...question,
+            required: true,
+          }))
+        : [],
+    [parsed],
+  );
   const [busy, setBusy] = useState(false);
   const handleCancel = () => {
     void cancel().catch(() => {});
@@ -38,16 +48,15 @@ function AskUserQuestionInteraction({
   return (
     <QuestionForm
       key={interaction.id}
-      questions={parsed.data.questions}
+      draftKey={`${interaction.threadId}:${interaction.id}`}
+      questions={questions}
       disabled={busy}
       cancelDisabled={busy}
       onSubmit={(answers) => {
         setBusy(true);
-        void submit({ answers })
-          .catch(() => {})
-          .finally(() => setBusy(false));
+        return submit({ answers }).finally(() => setBusy(false));
       }}
-      onCancel={handleCancel}
+      onCancel={cancel}
     />
   );
 }

@@ -53,8 +53,12 @@ try {
   assert.deepEqual(env, original);
   const output = await execute(${JSON.stringify(process.execPath)}, ["-e", "process.stdout.write(JSON.stringify(process.env))"], env, deadline);
   const executedEnv = JSON.parse(output);
-  for (const [key, value] of Object.entries(original)) {
+  const { PATH: originalPath, ...rest } = original;
+  for (const [key, value] of Object.entries(rest)) {
     assert.equal(executedEnv[key], value);
+  }
+  for (const entry of originalPath.split(":")) {
+    assert.ok(executedEnv.PATH.split(":").includes(entry));
   }
   assert.equal(executedEnv.ELECTRON_RUN_AS_NODE, undefined);
   assert.deepEqual(env, original);
@@ -97,7 +101,7 @@ try {
     const root = await mkdtemp(join(tmpdir(), "db-worker-death-"));
     const file = join(root, "pid");
     const childCode =
-      'require("node:fs").writeFileSync(process.argv[1], String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);';
+      'process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000);';
     const code = `import { supervise } from ${JSON.stringify(new URL("./process.ts", import.meta.url).href)}; supervise(process.execPath, ["-e", ${JSON.stringify(childCode)}, ${JSON.stringify(file)}], process.env); setInterval(() => {}, 1000);`;
     const worker = spawn(
       process.execPath,
@@ -109,6 +113,7 @@ try {
       await vi.waitFor(
         async () => {
           pid = Number(await readFile(file, "utf8"));
+          expect(pid).toBeGreaterThan(0);
         },
         { timeout: 5000 },
       );
@@ -127,7 +132,7 @@ try {
   it("kills a TERM-resistant child group without touching another session", async () => {
     const root = await mkdtemp(join(tmpdir(), "db-supervisor-"));
     const code =
-      'require("node:fs").writeFileSync(process.argv[1], String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);';
+      'process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000);';
     const a = supervise(
       process.execPath,
       ["-e", code, join(root, "a")],
@@ -145,6 +150,8 @@ try {
         async () => {
           pidA = Number(await readFile(join(root, "a"), "utf8"));
           pidB = Number(await readFile(join(root, "b"), "utf8"));
+          expect(pidA).toBeGreaterThan(0);
+          expect(pidB).toBeGreaterThan(0);
         },
         { timeout: 5000 },
       );

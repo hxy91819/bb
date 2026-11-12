@@ -1,4 +1,5 @@
 import type { IconSvgElement } from "@hugeicons/react";
+import KeyboardIcon from "@hugeicons/core-free-icons/KeyboardIcon";
 import AiBrain01Icon from "@hugeicons/core-free-icons/AiBrain01Icon";
 import AiBrowserIcon from "@hugeicons/core-free-icons/AiBrowserIcon";
 import AiContentGenerator01Icon from "@hugeicons/core-free-icons/AiContentGenerator01Icon";
@@ -61,15 +62,18 @@ import GridViewIcon from "@hugeicons/core-free-icons/GridViewIcon";
 import InternetIcon from "@hugeicons/core-free-icons/InternetIcon";
 import LaptopIcon from "@hugeicons/core-free-icons/LaptopIcon";
 import Layers01Icon from "@hugeicons/core-free-icons/Layers01Icon";
+import LayoutListIcon from "@hugeicons/core-free-icons/LayoutListIcon";
 import LayoutTwoColumnIcon from "@hugeicons/core-free-icons/Layout2ColumnIcon";
 import LayoutTwoRowIcon from "@hugeicons/core-free-icons/Layout2RowIcon";
 import LimitationIcon from "@hugeicons/core-free-icons/LimitationIcon";
+import Link02Icon from "@hugeicons/core-free-icons/Link02Icon";
 import LinkSquare02Icon from "@hugeicons/core-free-icons/LinkSquare02Icon";
 import ListEndIcon from "@hugeicons/core-free-icons/ListEndIcon";
 import ListViewIcon from "@hugeicons/core-free-icons/ListViewIcon";
 import LockIcon from "@hugeicons/core-free-icons/LockIcon";
 import Mail02Icon from "@hugeicons/core-free-icons/Mail02Icon";
 import MailOpen01Icon from "@hugeicons/core-free-icons/MailOpen01Icon";
+import Megaphone02Icon from "@hugeicons/core-free-icons/Megaphone02Icon";
 import Menu02Icon from "@hugeicons/core-free-icons/Menu02Icon";
 import MessageAdd02Icon from "@hugeicons/core-free-icons/MessageAdd02Icon";
 import Mic02Icon from "@hugeicons/core-free-icons/Mic02Icon";
@@ -101,14 +105,21 @@ import SquareIcon from "@hugeicons/core-free-icons/SquareIcon";
 import SquareUnlock02Icon from "@hugeicons/core-free-icons/SquareUnlock02Icon";
 import StarIcon from "@hugeicons/core-free-icons/StarIcon";
 import TestTube01Icon from "@hugeicons/core-free-icons/TestTube01Icon";
+import SpaceIcon from "@hugeicons/core-free-icons/SpaceIcon";
 import TextWrapIcon from "@hugeicons/core-free-icons/TextWrapIcon";
 import TimeScheduleIcon from "@hugeicons/core-free-icons/TimeScheduleIcon";
 import Unarchive03Icon from "@hugeicons/core-free-icons/Unarchive03Icon";
 import UserIcon from "@hugeicons/core-free-icons/UserIcon";
+import UserMultiple02Icon from "@hugeicons/core-free-icons/UserMultiple02Icon";
 import ViewIcon from "@hugeicons/core-free-icons/ViewIcon";
 import ViewOffIcon from "@hugeicons/core-free-icons/ViewOffIcon";
 import ZoomInAreaIcon from "@hugeicons/core-free-icons/ZoomInAreaIcon";
 import ZoomOutAreaIcon from "@hugeicons/core-free-icons/ZoomOutAreaIcon";
+import AddSquareIcon from "@hugeicons/core-free-icons/AddSquareIcon";
+import AlertSquareIcon from "@hugeicons/core-free-icons/AlertSquareIcon";
+import SquareDotIcon from "@hugeicons/core-free-icons/SquareDotIcon";
+import MinusSignSquareIcon from "@hugeicons/core-free-icons/MinusSignSquareIcon";
+import SquareArrowRight01Icon from "@hugeicons/core-free-icons/SquareArrowRight01Icon";
 import { type ExtendedIconMap, registerExtendedIcons } from "./icon-registry";
 
 const PaletteStrokeRoundedIcon: IconSvgElement = [
@@ -216,6 +227,11 @@ const GithubLogoIcon: IconSvgElement = [
 ];
 
 export const EXTENDED_ICON_MAP: ExtendedIconMap = {
+  DiffAdded: AddSquareIcon,
+  DiffConflict: AlertSquareIcon,
+  DiffModified: SquareDotIcon,
+  DiffRemoved: MinusSignSquareIcon,
+  DiffRenamed: SquareArrowRight01Icon,
   AiBrain01: AiBrain01Icon,
   AiBrowser: AiBrowserIcon,
   AiContentGenerator01: AiContentGenerator01Icon,
@@ -241,6 +257,7 @@ export const EXTENDED_ICON_MAP: ExtendedIconMap = {
   ChevronUp: ArrowUp01Icon,
   ChevronsDown: ArrowDownDoubleIcon,
   ChevronsUp: ArrowUpDoubleIcon,
+  ChildThread: UserMultiple02Icon,
   CircleArrowShrink: CircleArrowShrink01Icon,
   Clean: CleanIcon,
   Clock: Clock01Icon,
@@ -283,15 +300,19 @@ export const EXTENDED_ICON_MAP: ExtendedIconMap = {
   GitPullRequestDraft: GitPullRequestDraftIcon,
   Globe: InternetIcon,
   GridView: GridViewIcon,
+  Keyboard: KeyboardIcon,
   Laptop: LaptopIcon,
   Layers: Layers01Icon,
+  LayoutList: LayoutListIcon,
   Limitation: LimitationIcon,
+  Link: Link02Icon,
   ListEnd: ListEndIcon,
   ListView: ListViewIcon,
   Lock: LockIcon,
   Mail: Mail02Icon,
   MailOpen: MailOpen01Icon,
   Maximize2: ExpandIcon,
+  Megaphone02: Megaphone02Icon,
   Mic: Mic02Icon,
   Minus: MinusSignIcon,
   Minimize2: CollapseIcon,
@@ -322,6 +343,7 @@ export const EXTENDED_ICON_MAP: ExtendedIconMap = {
   SortingZA01: SortingZA01Icon,
   SortingOneNine: SortingOneNineIcon,
   SortingNineOne: SortingNineOneIcon,
+  Space: SpaceIcon,
   Square: SquareIcon,
   SquareUnlock02: SquareUnlock02Icon,
   Star: StarIcon,

@@ -8,6 +8,7 @@ import { providerCliJobKey } from "@/components/provider-cli/provider-cli-instal
 import { SidebarMenuItem } from "@/components/ui/sidebar.js";
 import { useSystemProviders } from "@/hooks/queries/system-queries";
 import { useUpdateInventory } from "@/hooks/useUpdateInventory";
+import { useMachineAttention } from "@/hooks/useMachineAttention";
 import { ProviderIconMark } from "@/components/settings/ProviderIconMark";
 import { getProviderIconInfo } from "@/lib/provider-icon";
 import { getSettingsRoutePath } from "@/lib/route-paths";
@@ -38,13 +39,13 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
   const providers = useSystemProviders().data;
   const { runningJobKey } = useProviderCliInstallRunner();
 
-  const stuckDaemonCount = inventory.machines.filter(
-    (machine) => machine.canRetryDaemonUpdate,
-  ).length;
+  const machineAttention = useMachineAttention(
+    inventory.machines.map((machine) => machine.host),
+    inventory.isLoading,
+  );
   const bbUpdateCount =
     (inventory.appUpdateAvailable ? 1 : 0) +
-    (inventory.desktopUpdateReady ? 1 : 0) +
-    stuckDaemonCount;
+    (inventory.desktopUpdateReady ? 1 : 0);
 
   const staleProvidersByKey = new Map<ProviderCliKey, StaleProvider>();
   for (const machine of inventory.machines) {
@@ -61,6 +62,9 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
     }
   }
   const staleProviders = [...staleProvidersByKey.values()];
+  const pluginUpdateCount =
+    inventory.plugins?.items.filter((item) => item.kind === "update").length ??
+    0;
   const providerUpdateRunning = inventory.machines.some((machine) =>
     machine.issues.some(
       (issue) =>
@@ -69,7 +73,12 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
     ),
   );
 
-  if (bbUpdateCount === 0 && staleProviders.length === 0) {
+  if (
+    bbUpdateCount === 0 &&
+    staleProviders.length === 0 &&
+    pluginUpdateCount === 0 &&
+    machineAttention.label === null
+  ) {
     return null;
   }
 
@@ -79,9 +88,32 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
   const providerLabel = `${joinNames(
     staleProviders.map((stale) => stale.displayName),
   )} ${staleProviders.length === 1 ? "update" : "updates"} available`;
+  const pluginLabel =
+    pluginUpdateCount === 1
+      ? "1 plugin update available"
+      : `${pluginUpdateCount} plugin updates available`;
 
   return (
-    <SidebarMenuItem className="flex min-w-0 max-w-[50%] items-center gap-1">
+    <SidebarMenuItem className="flex min-w-0 items-center gap-1">
+      {machineAttention.label !== null ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to={getSettingsRoutePath("machines")}
+              onClick={() => {
+                machineAttention.acknowledge();
+                onNavigate?.();
+              }}
+              aria-label={machineAttention.label}
+              data-testid="sidebar-machines-attention-badge"
+              className={cn(CHIP_CLASS, "text-warning-text")}
+            >
+              <Icon name="AlertTriangle" className="size-3" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="top">{machineAttention.label}</TooltipContent>
+        </Tooltip>
+      ) : null}
       {bbUpdateCount > 0 ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -112,7 +144,7 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
               <Icon
                 name={providerUpdateRunning ? "Loading" : "Download"}
                 className={cn(
-                  "size-3 text-muted-foreground",
+                  "size-3 shrink-0 text-muted-foreground",
                   providerUpdateRunning && "animate-spin",
                 )}
               />
@@ -153,6 +185,23 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="top">{providerLabel}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {pluginUpdateCount > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to={updatesRoutePath}
+              onClick={onNavigate}
+              aria-label={pluginLabel}
+              data-testid="sidebar-updates-badge-plugins"
+              className={CHIP_CLASS}
+            >
+              <Icon name="Plug02" className="size-3 text-muted-foreground" />
+              {pluginUpdateCount}
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="top">{pluginLabel}</TooltipContent>
         </Tooltip>
       ) : null}
     </SidebarMenuItem>

@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import type { ReuseThreadOption } from "@/components/pickers/ReuseEnvironmentPicker";
 import {
   resolveNewThreadProjectDefaultsState,
+  resolveNewThreadBlocker,
   resolveNewThreadSubmitDisabledReason,
   restorePromptDraftAfterOptionChange,
   type ResolveNewThreadSubmitDisabledReasonArgs,
@@ -20,6 +21,7 @@ import {
 import { getProjectStoredPromptAttachmentPaths } from "@bb/client-core";
 import {
   buildRootComposeTerminalSessions,
+  isRootComposeTerminalSession,
   buildMobileRecentThreads,
   canCreateRootComposeTerminal,
   hasSingleUseRootComposeTargetState,
@@ -142,6 +144,22 @@ describe("root-compose project file routing", () => {
         selectedHostId: "host_selected",
       }),
     ).toEqual({ environmentId: null, hostId: null });
+  });
+
+  it("keeps a persisted opener's host after compose context changes", () => {
+    expect(
+      resolveRootComposeProjectFileRouting({
+        fileOpenerSource: {
+          kind: "workspace",
+          threadId: null,
+          environmentId: null,
+          experimental_hostId: "host_opened",
+          projectId: "proj_opened",
+        },
+        selectedEnvironmentId: "env_selected",
+        selectedHostId: "host_selected",
+      }),
+    ).toEqual({ environmentId: null, hostId: "host_opened" });
   });
 
   it("retains live routing for a native project file tab", () => {
@@ -311,6 +329,42 @@ describe("resolveNewThreadSubmitDisabledReason", () => {
     expect(
       resolveNewThreadSubmitDisabledReason({ ...readyState, ...change }),
     ).toBe(reason);
+  });
+
+  it.each<
+    [
+      change: Partial<ResolveNewThreadSubmitDisabledReasonArgs>,
+      reason: string | null,
+    ]
+  >([
+    [{ isLoadingModels: true }, null],
+    [{ promptInputEmpty: true }, null],
+    [
+      {
+        modelLoadError: {
+          providerId: "codex",
+          code: "missing_executable",
+          detail: null,
+        },
+      },
+      "agent_missing",
+    ],
+    [
+      {
+        modelLoadError: {
+          providerId: "codex",
+          code: "auth_required",
+          detail: null,
+        },
+      },
+      "sign_in",
+    ],
+    [{ selectedThreadModel: "" }, "model_selection"],
+    [{ submissionEnvironmentUnavailable: true }, "project_setup"],
+  ])("classifies blocker %o as %s", (change, reason) => {
+    expect(resolveNewThreadBlocker({ ...readyState, ...change })?.reason).toBe(
+      reason,
+    );
   });
 
   it("returns no reason when every submission requirement is ready", () => {
@@ -1144,6 +1198,30 @@ describe("buildRootComposeTerminalSessions", () => {
         },
       }),
     ).toEqual([matching]);
+  });
+});
+
+describe("isRootComposeTerminalSession", () => {
+  it("accepts only threadless terminals of the root environment", () => {
+    const target = { kind: "environment" as const, environmentId: "env_1" };
+    expect(
+      isRootComposeTerminalSession(
+        makeTerminalSession({ environmentId: "env_1" }),
+        target,
+      ),
+    ).toBe(true);
+    expect(
+      isRootComposeTerminalSession(
+        makeTerminalSession({ environmentId: "env_1", threadId: "thr_1" }),
+        target,
+      ),
+    ).toBe(false);
+    expect(
+      isRootComposeTerminalSession(
+        makeTerminalSession({ environmentId: "env_2" }),
+        target,
+      ),
+    ).toBe(false);
   });
 });
 

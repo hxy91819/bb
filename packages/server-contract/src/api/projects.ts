@@ -2,14 +2,14 @@ import { z } from "zod";
 import {
   FILE_LIST_QUERY_MAX_LENGTH,
   getProjectPathValidationMessage,
-  gitBranchNameSchema,
   normalizeProjectPathInput,
   projectExecutionDefaultsSchema,
   projectSchema,
-  projectSourceCheckoutSchema,
   projectSourceSchema,
   promptHistoryEntrySchema,
   threadListEntrySchema,
+  gitBranchNameSchema,
+  projectSourceCheckoutSchema,
 } from "@bb/domain";
 import {
   rejectMultipleWorkspaceSelectors,
@@ -441,6 +441,7 @@ export type SidebarBootstrapResponse = z.infer<
 >;
 
 export const uploadedPromptAttachmentSchema = z.object({
+  sourceProjectId: z.string().min(1).optional(),
   type: z.enum(["localImage", "localFile"]),
   path: z.string(),
   name: z.string(),

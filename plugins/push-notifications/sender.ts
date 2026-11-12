@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   BbPluginApi,
+  ExperimentalPluginRpcCaller,
   PluginThreadEventPayloads,
 } from "@get-bb/plugin-sdk";
 import { EnvHttpProxyAgent, fetch as undiciFetch } from "undici";
@@ -8,25 +9,37 @@ import type { Dispatcher } from "undici";
 import { z } from "zod";
 import {
   CLIENT_NOTIFICATION_CHANNEL,
+  CLIENT_NOTIFICATION_DISMISS_CHANNEL,
+  NOTIFICATION_BODY_MAX_LENGTH,
+  NOTIFICATION_TITLE_MAX_LENGTH,
   type ClientNotification,
+  type ClientNotificationDismissal,
+  type DeliveryChannel,
   type PushSubscription,
+  type SendNotificationInput,
 } from "./contract.js";
+import { notificationPreviewText, truncate } from "./notification-text.js";
+import {
+  NOTIFICATION_KINDS_BY_LEVEL,
+  type NotificationLevel,
+  type PushNotificationKind,
+} from "./preferences.js";
 import type { PushSubscriptionStore } from "./subscriptions.js";
 
 type ThreadResponse = PluginThreadEventPayloads["thread.idle"]["thread"];
 type PendingInteraction =
   PluginThreadEventPayloads["interaction.pending"]["interaction"];
-type PushNotificationKind =
-  | "pending-interaction"
-  | "turn-finished"
-  | "thread-error";
 
 const EXPO_PUSH_BATCH_SIZE = 100;
 const DEFAULT_COALESCE_MS = 2_000;
-const PUSH_TITLE_MAX_LENGTH = 80;
-const PUSH_BODY_MAX_LENGTH = 180;
 const NETWORK_WARNING_INTERVAL_MS = 60 * 60 * 1_000;
 const LAST_OUTCOME_KEY = "last-send-outcome";
+const DELIVERED_THREAD_KEY_PREFIX = "delivered-thread:";
+const FALLBACK_BODIES: Record<PushNotificationKind, string> = {
+  "pending-interaction": "Waiting for your input",
+  "thread-error": "The thread hit an error",
+  "turn-finished": "Finished and waiting for you",
+};
 const PUSH_KIND_PRIORITY: readonly PushNotificationKind[] = [
   "pending-interaction",
   "thread-error",
@@ -73,14 +86,42 @@ export const lastSendOutcomeSchema = z.discriminatedUnion("status", [
 
 export type LastSendOutcome = z.infer<typeof lastSendOutcomeSchema>;
 
+export const SENT_NOTIFICATION_KIND = "message";
+export const DISMISS_NOTIFICATION_KIND = "dismiss";
+
 interface PushNotificationData {
-  kind: PushNotificationKind;
-  projectId: string;
+  kind: PushNotificationKind | typeof SENT_NOTIFICATION_KIND;
+  projectId?: string;
   serverUrl?: string;
+  subscriptionId: string;
+  threadId?: string;
+}
+
+interface DismissNotificationData {
+  kind: typeof DISMISS_NOTIFICATION_KIND;
+  serverUrl?: string;
+  subscriptionId: string;
   threadId: string;
 }
 
-export interface ExpoPushMessage {
+export class SendNotificationError extends Error {
+  readonly code: "thread_not_found" | "sender_stopped";
+
+  constructor(code: SendNotificationError["code"], message: string) {
+    super(message);
+    this.name = "SendNotificationError";
+    this.code = code;
+  }
+}
+
+interface OutgoingNotification {
+  title: string;
+  body: string;
+  kind: PushNotificationData["kind"];
+  thread: { id: string; projectId: string } | null;
+}
+
+export interface ExpoAlertPushMessage {
   to: string;
   title: string;
   body: string;
@@ -89,6 +130,15 @@ export interface ExpoPushMessage {
   channelId: "threads";
   priority: "high";
 }
+
+export interface ExpoBackgroundPushMessage {
+  to: string;
+  data: DismissNotificationData;
+  _contentAvailable: true;
+  priority: "normal";
+}
+
+export type ExpoPushMessage = ExpoAlertPushMessage | ExpoBackgroundPushMessage;
 
 export type PushSenderFetch = (
   url: string,
@@ -124,6 +174,13 @@ export interface PushSender {
   ): void;
   onThreadFailed(payload: PluginThreadEventPayloads["thread.failed"]): void;
   onThreadIdle(payload: PluginThreadEventPayloads["thread.idle"]): void;
+  onThreadRead(
+    payload: PluginThreadEventPayloads["experimental_thread.read"],
+  ): void;
+  send(
+    input: SendNotificationInput,
+    caller: ExperimentalPluginRpcCaller,
+  ): Promise<DeliveryChannel[]>;
   settle(): Promise<void>;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -133,6 +190,11 @@ export interface CreatePushSenderArgs {
   bb: BbPluginApi;
   subscriptions: PushSubscriptionStore;
   getExpoPushUrl(): Promise<string>;
+  isDismissalEnabled(): Promise<boolean>;
+  getNotificationLevel(thread: {
+    id: string;
+    parentThreadId: string | null;
+  }): Promise<NotificationLevel>;
   getDeliverySettings(): Promise<{
     mobileEnabled: boolean;
     webEnabled: boolean;
@@ -149,11 +211,6 @@ function firstLine(text: string): string {
     if (trimmed.length > 0) return trimmed;
   }
   return "";
-}
-
-function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function threadDisplayTitle(thread: ThreadResponse): string {
@@ -196,6 +253,10 @@ function pickKind(
   return null;
 }
 
+function describeCaller(caller: ExperimentalPluginRpcCaller): string {
+  return caller.kind === "plugin" ? `plugin ${caller.pluginId}` : "a client";
+}
+
 function chunks<T>(items: readonly T[], size: number): T[][] {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -224,6 +285,16 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
     await bb.storage.kv.set(LAST_OUTCOME_KEY, outcome);
   }
 
+  function track(work: Promise<void>, description: string): void {
+    const tracked = work.catch((error: unknown) => {
+      bb.log.error(
+        `${description} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+    inFlight.add(tracked);
+    void tracked.finally(() => inFlight.delete(tracked));
+  }
+
   function cancel(threadId: string): void {
     const entry = pending.get(threadId);
     if (!entry) return;
@@ -249,13 +320,10 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
       const entry = pending.get(threadId);
       pending.delete(threadId);
       if (!entry || !running) return;
-      const flush = flushThread(threadId, entry).catch((error: unknown) => {
-        bb.log.error(
-          `Push notification flush failed for thread ${threadId}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-      inFlight.add(flush);
-      void flush.finally(() => inFlight.delete(flush));
+      track(
+        flushThread(threadId, entry),
+        `Push notification flush for thread ${threadId}`,
+      );
     }, coalesceMs);
     timer.unref?.();
     pending.set(threadId, {
@@ -269,8 +337,12 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
   async function resolvePush(
     thread: ThreadResponse,
     entry: PendingThreadPush,
+    allowedKinds: ReadonlySet<PushNotificationKind>,
   ): Promise<{ kind: PushNotificationKind; body: string } | null> {
-    const kinds = new Set(entry.kinds);
+    const kinds = new Set(
+      [...entry.kinds].filter((kind) => allowedKinds.has(kind)),
+    );
+    if (kinds.size === 0) return null;
     let interaction: PendingInteraction | null = null;
     if (kinds.has("pending-interaction")) {
       const interactions = await bb.sdk.threads.interactions.list({
@@ -292,19 +364,20 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
     if (kind === "pending-interaction") {
       return {
         kind,
-        body: interaction
-          ? describePendingInteraction(interaction)
-          : "Waiting for your input",
+        body: interaction ? describePendingInteraction(interaction) : "",
       };
     }
-    return {
-      kind,
-      body:
-        entry.bodies.get(kind) ??
-        (kind === "thread-error"
-          ? "The thread hit an error"
-          : "Finished and waiting for you"),
-    };
+    return { kind, body: entry.bodies.get(kind) ?? "" };
+  }
+
+  async function referencedThreadTitle(
+    threadId: string,
+  ): Promise<string | null> {
+    try {
+      return threadDisplayTitle(await bb.sdk.threads.get({ threadId }));
+    } catch {
+      return null;
+    }
   }
 
   async function flushThread(
@@ -328,10 +401,30 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
     if (lastReadAt >= thread.latestAttentionAt && lastReadAt >= entry.eventAt) {
       return;
     }
-    const resolved = await resolvePush(thread, entry);
+    const level = await args.getNotificationLevel(thread);
+    const resolved = await resolvePush(
+      thread,
+      entry,
+      NOTIFICATION_KINDS_BY_LEVEL[level],
+    );
     if (resolved === null) return;
-    const title = truncate(threadDisplayTitle(thread), PUSH_TITLE_MAX_LENGTH);
-    const body = truncate(resolved.body, PUSH_BODY_MAX_LENGTH);
+    const preview = await notificationPreviewText(
+      resolved.body,
+      referencedThreadTitle,
+    );
+    await deliver({
+      title: threadDisplayTitle(thread),
+      body: preview || FALLBACK_BODIES[resolved.kind],
+      kind: resolved.kind,
+      thread,
+    });
+  }
+
+  async function deliver(
+    notification: OutgoingNotification,
+  ): Promise<DeliveryChannel[]> {
+    const title = truncate(notification.title, NOTIFICATION_TITLE_MAX_LENGTH);
+    const body = truncate(notification.body, NOTIFICATION_BODY_MAX_LENGTH);
     const config = await args.getDeliverySettings();
     const channels: ClientNotification["channels"] = [];
     if (config.webEnabled) channels.push("web");
@@ -341,26 +434,40 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
         id: randomUUID(),
         title,
         body,
-        threadId: thread.id,
+        threadId: notification.thread?.id ?? null,
         channels,
       } satisfies ClientNotification);
     }
-    if (!config.mobileEnabled) return;
-    const rows = await subscriptions.list();
-    if (rows.length === 0) return;
+    const rows = config.mobileEnabled ? await subscriptions.list() : [];
+    if (
+      notification.thread !== null &&
+      (channels.length > 0 || rows.length > 0) &&
+      (await args.isDismissalEnabled())
+    ) {
+      await bb.storage.kv.set(
+        `${DELIVERED_THREAD_KEY_PREFIX}${notification.thread.id}`,
+        true,
+      );
+    }
+    if (rows.length === 0) return channels;
     const serverUrl = bb.server.experimental_appUrl;
+    const data = {
+      kind: notification.kind,
+      ...(notification.thread === null
+        ? {}
+        : {
+            projectId: notification.thread.projectId,
+            threadId: notification.thread.id,
+          }),
+      ...(serverUrl === null ? {} : { serverUrl }),
+    };
     const deliveries: Delivery[] = rows.map((subscription) => ({
       subscription,
       message: {
         to: subscription.expoPushToken,
         title,
         body,
-        data: {
-          kind: resolved.kind,
-          projectId: thread.projectId,
-          ...(serverUrl === null ? {} : { serverUrl }),
-          threadId: thread.id,
-        },
+        data: { ...data, subscriptionId: subscription.id },
         sound: "default",
         channelId: "threads",
         priority: "high",
@@ -378,6 +485,77 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
         ? { status: "sent", at: now(), sentCount }
         : { status: "failed", at: now(), reason: failure },
     );
+    return sentCount > 0 ? [...channels, "mobile"] : channels;
+  }
+
+  async function dismissThread(threadId: string): Promise<void> {
+    const key = `${DELIVERED_THREAD_KEY_PREFIX}${threadId}`;
+    if ((await bb.storage.kv.get<unknown>(key)) === undefined) return;
+    await bb.storage.kv.delete(key);
+    if (!(await args.isDismissalEnabled())) return;
+    bb.realtime.publish(CLIENT_NOTIFICATION_DISMISS_CHANNEL, {
+      threadId,
+    } satisfies ClientNotificationDismissal);
+    const rows = await subscriptions.list();
+    const serverUrl = bb.server.experimental_appUrl;
+    const deliveries: Delivery[] = rows.map((subscription) => ({
+      subscription,
+      message: {
+        to: subscription.expoPushToken,
+        data: {
+          kind: DISMISS_NOTIFICATION_KIND,
+          threadId,
+          subscriptionId: subscription.id,
+          ...(serverUrl === null ? {} : { serverUrl }),
+        },
+        _contentAvailable: true,
+        priority: "normal",
+      },
+    }));
+    for (const batch of chunks(deliveries, EXPO_PUSH_BATCH_SIZE)) {
+      await sendBatch(batch);
+    }
+  }
+
+  async function send(
+    input: SendNotificationInput,
+    caller: ExperimentalPluginRpcCaller,
+  ): Promise<DeliveryChannel[]> {
+    if (!running) {
+      throw new SendNotificationError(
+        "sender_stopped",
+        "Push notifications are not running",
+      );
+    }
+    let thread: OutgoingNotification["thread"] = null;
+    if (input.threadId !== undefined) {
+      const threadId = input.threadId;
+      const found = await bb.sdk.threads.get({ threadId }).catch(() => null);
+      if (found === null || found.deletedAt !== null) {
+        throw new SendNotificationError(
+          "thread_not_found",
+          `Thread not found: ${threadId}`,
+        );
+      }
+      thread = { id: found.id, projectId: found.projectId };
+    }
+    const delivery = deliver({
+      title: input.title,
+      body: input.body,
+      kind: SENT_NOTIFICATION_KIND,
+      thread,
+    });
+    const tracked = delivery.then(
+      () => undefined,
+      () => undefined,
+    );
+    inFlight.add(tracked);
+    void tracked.finally(() => inFlight.delete(tracked));
+    const channels = await delivery;
+    bb.log.info(
+      `Sent a notification from ${describeCaller(caller)} to ${channels.length === 0 ? "no channel" : channels.join(", ")}`,
+    );
+    return channels;
   }
 
   async function sendBatch(batch: readonly Delivery[]): Promise<BatchResult> {
@@ -481,22 +659,20 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
       );
     },
     onThreadFailed({ thread, error }) {
-      schedule(
-        thread.id,
-        "thread-error",
-        firstLine(error ?? "") || "The thread hit an error",
-      );
+      schedule(thread.id, "thread-error", firstLine(error ?? ""));
     },
     onThreadIdle({ thread, lastAssistantText }) {
-      if (thread.parentThreadId !== null || thread.visibility !== "visible") {
-        return;
-      }
-      schedule(
-        thread.id,
-        "turn-finished",
-        firstLine(lastAssistantText ?? "") || "Finished and waiting for you",
+      if (thread.visibility !== "visible") return;
+      schedule(thread.id, "turn-finished", lastAssistantText ?? "");
+    },
+    onThreadRead({ thread }) {
+      if (!running) return;
+      track(
+        dismissThread(thread.id),
+        `Push notification dismissal for thread ${thread.id}`,
       );
     },
+    send,
     settle,
     async start() {
       if (running) return;

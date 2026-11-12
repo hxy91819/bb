@@ -17,7 +17,7 @@ describe("bb guide command output", () => {
     const errorOutput = collectLogLines(vi.mocked(console.error)).join("\n");
     expect(errorOutput).toContain("Unknown guide chapter 'missing'");
     expect(errorOutput).toContain(
-      "Available: threads, environments, agent-configuration, providers, projects, machines, terminals, browser, customization, plugins, automations, json.",
+      "Available: threads, thread-inspection, thread-messaging, thread-lifecycle, environments, agent-configuration, providers, projects, machines, terminals, browser, customization, plugins, json.",
     );
   });
 
@@ -36,7 +36,7 @@ describe("bb guide command output", () => {
 
     const output = collectLogLines(vi.mocked(console.log)).join("\n");
     expect(output).toContain(
-      "bb terminal output|read <terminalId>  [--since-seq <n>] [--tail-bytes <n>] [--limit-chunks <n>] [--json]\n    Print terminal output",
+      "bb terminal output|read <terminalId>  [--since-seq <n>] [--tail-bytes <n>] [--limit-chunks <n>] [--plain] [--json]\n    Print terminal output",
     );
     expect(output).not.toContain("bb thread ");
   }, 30_000);

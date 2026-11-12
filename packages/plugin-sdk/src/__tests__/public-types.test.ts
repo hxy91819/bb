@@ -8,9 +8,15 @@ import type {
   PluginEnvironments,
   ReadonlyJsonValue,
 } from "../index.js";
-import type { PluginProviderIconRegistration } from "../app-contract.js";
+import type {
+  ComposerAttachment,
+  ComposerDraftReplacement,
+  ComposerDraftSnapshot,
+  PluginProviderIconRegistration,
+} from "../app-contract.js";
 
 type ExpectedBbPluginApiKey =
+  | "internal_DO_NOT_USE_recordPluginUse"
   | "agents"
   | "background"
   | "cli"
@@ -130,11 +136,16 @@ const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "PluginSettingsHandle",
   "PluginSettingsValues",
   "PluginSharedPortTunnelIdentity",
+  "InternalDoNotUsePluginNextTunnelServer",
+  "InternalDoNotUsePluginNextTunnelConfig",
+  "InternalDoNotUsePluginHostNextTunnelStatus",
   "PluginStatusApi",
   "PluginStorage",
   "PluginThreadEventHandler",
   "PluginThreadEventName",
   "PluginThreadEventPayloads",
+  "InternalDoNotUsePluginTunnelIngress",
+  "InternalDoNotUsePluginTunnelIngressOptions",
   "PluginTurnFailedEvent",
   "PluginUi",
   "PluginServerAccess",
@@ -150,6 +161,8 @@ const EXPECTED_RPC_ROOT_TYPE_EXPORTS = [
   "ExperimentalPluginRpcCaller",
   "ExperimentalPluginRpcHandlerContext",
   "ExperimentalPluginRpcHandlersWithContext",
+  "ExperimentalRpcKeyedMethod",
+  "ExperimentalRpcKeyedValue",
   "PluginRpcCallArgs",
   "PluginRpcContract",
   "PluginRpcError",
@@ -166,7 +179,11 @@ const EXPECTED_RPC_ROOT_TYPE_EXPORTS = [
   "StandardSchemaV1Result",
 ] as const;
 
-const EXPECTED_RPC_ROOT_VALUE_EXPORTS = ["defineRpcContract"] as const;
+const EXPECTED_RPC_ROOT_VALUE_EXPORTS = [
+  "defineRpcContract",
+  "experimental_PluginRpcCallError",
+  "experimental_PluginRpcRefusal",
+] as const;
 
 const EXPECTED_HOST_ROOT_TYPE_EXPORTS = [
   "ExperimentalHostCallOptions",
@@ -403,4 +420,22 @@ it("requires provider presentation fields in author-facing declarations", () => 
     description: string;
     icon: string;
   }>();
+});
+
+it("gives composer attachments one owner and round-trips draft snapshots", () => {
+  const base = {
+    type: "localFile",
+    path: "/tmp/a.txt",
+    name: "a.txt",
+  } as const;
+  expectTypeOf({
+    ...base,
+    hostId: "host_1",
+    sourceProjectId: "proj_1",
+  }).not.toMatchTypeOf<ComposerAttachment>();
+  expectTypeOf({
+    ...base,
+    hostId: "host_1",
+  }).toMatchTypeOf<ComposerAttachment>();
+  expectTypeOf<ComposerDraftSnapshot>().toMatchTypeOf<ComposerDraftReplacement>();
 });

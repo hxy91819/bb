@@ -20,6 +20,7 @@ import {
   experimental_webSearchPresentation as webSearchPresentation,
 } from "@get-bb/plugin-sdk/provider-bridge";
 import {
+  codexAsyncQuestionItemSchema,
   codexBridgeEnvelopeSchema,
   codexHandledEventSchema,
   codexHandledThreadItemSchema,
@@ -45,7 +46,9 @@ import {
   planStepsPresentation,
 } from "./presentation.js";
 import {
+  CODEX_ASYNC_QUESTION_EXTENSION_KIND,
   CODEX_GOAL_EXTENSION_KIND,
+  type CodexAsyncQuestionState,
   type CodexGoalState,
 } from "./extension-kinds.js";
 import { codexVisibilityMetadata } from "./visibility.js";
@@ -365,6 +368,9 @@ function getCodexErrorProviderCode(errorInfo: CodexErrorInfo): string {
   if ("activeTurnNotSteerable" in errorInfo) {
     return "activeTurnNotSteerable";
   }
+  if ("unrecognized" in errorInfo) {
+    return errorInfo.unrecognized;
+  }
   return assertNever(errorInfo);
 }
 
@@ -384,7 +390,7 @@ function getCodexErrorHttpStatusCode(errorInfo: CodexErrorInfo): number | null {
   if ("responseTooManyFailedAttempts" in errorInfo) {
     return errorInfo.responseTooManyFailedAttempts.httpStatusCode;
   }
-  if ("activeTurnNotSteerable" in errorInfo) {
+  if ("activeTurnNotSteerable" in errorInfo || "unrecognized" in errorInfo) {
     return null;
   }
   return assertNever(errorInfo);
@@ -400,11 +406,17 @@ function getProviderErrorCategory(
       case "sessionBudgetExceeded":
         return "budget-exceeded";
       case "usageLimitExceeded":
+      case "rateLimitExceeded":
         return "rate-limit";
       case "serverOverloaded":
+      case "flexUnavailable":
+      case "policyCapacityUnavailable":
         return "overloaded";
+      case "modelNotFound":
+        return "bad-request";
       case "cyberPolicy":
       case "misalignmentPolicyViolation":
+      case "tooManyDenials":
         return "policy";
       case "internalServerError":
         return "internal";
@@ -434,6 +446,9 @@ function getProviderErrorCategory(
   }
   if ("activeTurnNotSteerable" in errorInfo) {
     return "active-turn-not-steerable";
+  }
+  if ("unrecognized" in errorInfo) {
+    return "unknown";
   }
   return assertNever(errorInfo);
 }
@@ -760,6 +775,24 @@ function summarizeCollabAgentsStates(
     return `${agentThreadId}: ${rendered}`;
   });
   return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
+function translateCodexAsyncQuestion(item: unknown): ThreadDelta[] {
+  const parsed = codexAsyncQuestionItemSchema.safeParse(item);
+  if (!parsed.success) {
+    return [];
+  }
+  const state: CodexAsyncQuestionState = {
+    itemId: parsed.data.id,
+    questions: parsed.data.questions,
+  };
+  return [
+    {
+      kind: "extension.state",
+      extensionKind: CODEX_ASYNC_QUESTION_EXTENSION_KIND,
+      payload: state,
+    },
+  ];
 }
 
 function translateCodexItemShape(
@@ -1149,6 +1182,7 @@ export function translateCodexEventToDeltas(
           presentation: translation.presentation,
           providerTurnId: handledEvent.params.turnId,
         },
+        ...translateCodexAsyncQuestion(handledEvent.params.item),
       ];
     }
     case "item/agentMessage/delta":

@@ -49,9 +49,9 @@ import {
   realPathInside,
   runInstallCommand,
 } from "./install-sources.js";
-import { gitSelectorRefName } from "./git-source-intent.js";
 import { readPluginManifest, type PluginManifest } from "./manifest.js";
 import type { PluginServiceDeps } from "./plugin-service-internal.js";
+import { logPluginBuildWarnings } from "./plugin-log.js";
 import {
   createNpmResolverRun,
   evaluateCompatibility,
@@ -162,6 +162,18 @@ async function cloneGitCommit(
     "--detach",
     commit,
   ]);
+  const checkedOutCommit = await runInstallCommand("git", [
+    "-C",
+    stagingDir,
+    "rev-parse",
+    "HEAD",
+  ]);
+  if (!checkedOutCommit.startsWith(commit)) {
+    throw new Error(
+      `git resolved ${commit}, but checked out ${checkedOutCommit}`,
+    );
+  }
+  await rm(join(stagingDir, ".git"), { recursive: true, force: true });
 }
 
 function npmSourceString(intent: NpmSourceIntentForResolution): string {
@@ -275,22 +287,31 @@ export function createManagedPluginArtifacts(
           artifact: "app",
         })
       ) {
+        let app: Awaited<ReturnType<typeof buildPluginApp>>;
         try {
-          await buildPluginApp(
+          app = await buildPluginApp(
             args.rootDir,
             deps.appVersion,
             await getPluginBuildToolchain(deps),
+            { minify: true, hostProvidedZod: true },
           );
         } catch (error) {
           throw new Error(
             `install failed: frontend bundle build for "${manifest.id}" failed: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
+        logPluginBuildWarnings({
+          dataDir: deps.dataDir,
+          logger: deps.logger,
+          pluginId: manifest.id,
+          warnings: app.migrationWarnings,
+        });
       }
     }
     if (kind === "git") {
+      let server: Awaited<ReturnType<typeof buildPluginServer>>;
       try {
-        await buildPluginServer(
+        server = await buildPluginServer(
           args.rootDir,
           deps.appVersion,
           await getPluginBuildToolchain(deps),
@@ -300,6 +321,12 @@ export function createManagedPluginArtifacts(
           `install failed: server bundle build for "${manifest.id}" failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
+      logPluginBuildWarnings({
+        dataDir: deps.dataDir,
+        logger: deps.logger,
+        pluginId: manifest.id,
+        warnings: server.migrationWarnings,
+      });
       if (manifest.hostEntry !== undefined) {
         try {
           await buildPluginHost(
@@ -684,7 +711,6 @@ export function createManagedPluginArtifacts(
       );
     }
     const resolvedSelector = resolution.selector;
-    const checkoutRef = gitSelectorRefName(resolvedSelector);
     function identityFor(
       subdirectory: string | null,
     ): InstallRegistrationIdentity {
@@ -793,17 +819,6 @@ export function createManagedPluginArtifacts(
           stagedManifest.id,
         );
         refuseBuiltinShadow(stagedManifest.id);
-        const checkedOutCommit = await runInstallCommand("git", [
-          "-C",
-          stagingDir,
-          "rev-parse",
-          "HEAD",
-        ]);
-        if (!checkedOutCommit.startsWith(resolvedCommit)) {
-          throw new Error(
-            `git resolved ${checkoutRef} to ${resolvedCommit}, but checked out ${checkedOutCommit}`,
-          );
-        }
         await validateInstallDir({
           rootDir: stagedRealRoot,
           source,

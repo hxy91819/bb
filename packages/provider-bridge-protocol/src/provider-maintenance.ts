@@ -44,6 +44,12 @@ export const providerHealthSchema = z
     canInstall: z.boolean(),
     canUpdate: z.boolean(),
     loginCommand: z.string().min(1).nullable(),
+    localLoginCommand: z.string().min(1).nullable().optional(),
+    internal_DO_NOT_USE_setupGuidePlanLabel: z
+      .string()
+      .min(1)
+      .nullable()
+      .optional(),
   })
   .passthrough();
 

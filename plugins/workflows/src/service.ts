@@ -37,6 +37,7 @@ import {
   listPendingNotificationRuns,
   listRunningCalls,
   listTimedOutRuns,
+  nextMaintenanceDueAt,
   markCallReplayedSameRun,
   markNotificationSent,
   queueCallProviderRetry,
@@ -54,7 +55,7 @@ import {
   type WorkflowRunRow,
 } from "./data.js";
 import { parseWorkflowSource } from "./parser.js";
-import { WORKFLOW_RUNS_REALTIME_CHANNEL } from "./realtime-channel.js";
+import { resolveWorkflowReasoning } from "./reasoning-selection.js";
 import { executeWorkflowScript } from "./runtime.js";
 import {
   DEFAULT_WORKFLOW_SETTINGS,
@@ -76,16 +77,7 @@ import { prepareWorkflowSource } from "./workflow-input.js";
 
 const executionValuesSchema = z.object({
   model: z.string().min(1),
-  reasoningLevel: z.enum([
-    "none",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-    "ultracode",
-    "max",
-    "ultra",
-  ]),
+  reasoningLevel: z.string().min(1),
   permissionMode: z.enum(["accept-edits", "auto", "full"]),
 });
 
@@ -106,6 +98,8 @@ const NOTIFICATION_RETRY_BASE_MS = 1_000;
 const NOTIFICATION_RETRY_MAX_MS = 60 * 60 * 1_000;
 const PROVIDER_RETRY_DELAYS_MS = [1_000, 4_000] as const;
 const RETENTION_SWEEP_RUNS = 20;
+const MAINTENANCE_MIN_INTERVAL_MS = 1_000;
+const MAINTENANCE_SAFETY_INTERVAL_MS = 60_000;
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -403,6 +397,28 @@ export function createWorkflowService(
 ): WorkflowService {
   let shuttingDown = false;
   let currentSettings = initialSettings;
+  let workRequested = true;
+  let wakeWaiter: (() => void) | null = null;
+
+  function wakeWorker(): void {
+    workRequested = true;
+    wakeWaiter?.();
+  }
+
+  function waitForWork(ms: number, signal: AbortSignal): Promise<void> {
+    if (workRequested || signal.aborted) return Promise.resolve();
+    return new Promise((resolve) => {
+      const settle = () => {
+        clearTimeout(timeout);
+        signal.removeEventListener("abort", settle);
+        wakeWaiter = null;
+        resolve();
+      };
+      const timeout = setTimeout(settle, Math.max(0, ms));
+      wakeWaiter = settle;
+      signal.addEventListener("abort", settle, { once: true });
+    });
+  }
   const controllers = new Map<string, AbortController>();
   const idleHandlers = new Set<string>();
   const handlerTasks = new Set<Promise<void>>();
@@ -418,9 +434,8 @@ export function createWorkflowService(
   }
 
   function publishRunsChanged(originThreadId: string): void {
-    bb.realtime.publish(WORKFLOW_RUNS_REALTIME_CHANNEL, {
-      threadId: originThreadId,
-    });
+    bb.rpc.experimental_invalidate([`runs:${originThreadId}`]);
+    wakeWorker();
   }
 
   function publishRunProgress(runId: string): void {
@@ -632,6 +647,7 @@ export function createWorkflowService(
       settingsJson: JSON.stringify(currentSettings),
       resumedFromRunId: input.resumedFromRunId,
     });
+    wakeWorker();
     publishRunsChanged(created.originThreadId);
     return created;
   }
@@ -753,11 +769,12 @@ export function createWorkflowService(
         `Model ${JSON.stringify(requested.model)} is not available for provider ${requested.provider}`,
       );
     }
-    if (
-      !model.supportedReasoningEfforts.some(
-        (effort) => effort.reasoningEffort === requested.reasoningLevel,
-      )
-    ) {
+    const reasoningLevel = resolveWorkflowReasoning(
+      model,
+      requested.reasoningLevel,
+      inherited,
+    );
+    if (reasoningLevel === null) {
       throw new Error(
         `Reasoning level ${JSON.stringify(requested.reasoningLevel)} is not supported by ${requested.provider}/${requested.model}`,
       );
@@ -773,7 +790,7 @@ export function createWorkflowService(
     return selectedExecutionSchema.parse({
       providerId: requested.provider,
       model: model.model,
-      reasoningLevel: requested.reasoningLevel,
+      reasoningLevel,
       permissionMode,
     });
   }
@@ -993,6 +1010,7 @@ export function createWorkflowService(
         }
       } catch (error) {
         spawningCalls.delete(call.id);
+        wakeWorker();
         throwIfCancelled(signal);
         const delay = PROVIDER_RETRY_DELAYS_MS[call.providerRetryAttempts];
         if (delay === undefined || !isRetryableProviderFailure(error)) {
@@ -1339,6 +1357,7 @@ export function createWorkflowService(
     args: Parameters<typeof settleRun>[1],
   ): Promise<void> {
     const outstanding = settleRun(db, args);
+    wakeWorker();
     const settled = getRun(db, args.id);
     if (settled !== null) publishRunsChanged(settled.originThreadId);
     controllers.get(args.id)?.abort();
@@ -1638,9 +1657,14 @@ export function createWorkflowService(
       }
     }
     const active = new Set<Promise<void>>();
-    let nextMaintenanceAt = 0;
+    let maintenanceRequested = true;
+    let lastMaintenanceAt = -Infinity;
+    let dueAt = 0;
     while (!signal.aborted) {
-      while (active.size < currentSettings.maxActiveRuns) {
+      const shouldClaim = workRequested;
+      workRequested = false;
+      if (shouldClaim) maintenanceRequested = true;
+      while (shouldClaim && active.size < currentSettings.maxActiveRuns) {
         const run = claimQueuedRun(db, currentSettings.maxActiveRuns);
         if (run === null) break;
         publishRunsChanged(run.originThreadId);
@@ -1651,12 +1675,19 @@ export function createWorkflowService(
         const execution = executeRun(run, controller.signal).finally(() => {
           signal.removeEventListener("abort", abortRun);
           active.delete(execution);
+          wakeWorker();
         });
         active.add(execution);
       }
-      if (Date.now() >= nextMaintenanceAt) {
+      const now = Date.now();
+      if (
+        now >= dueAt ||
+        (maintenanceRequested &&
+          now >= lastMaintenanceAt + MAINTENANCE_MIN_INTERVAL_MS)
+      ) {
+        maintenanceRequested = false;
+        lastMaintenanceAt = now;
         await maintenanceTick();
-        nextMaintenanceAt = Date.now() + 1_000;
       }
       for (const pending of listPendingNotificationRuns(db, Date.now(), 100)) {
         try {
@@ -1667,7 +1698,19 @@ export function createWorkflowService(
           );
         }
       }
-      await sleep(active.size === 0 ? 250 : 50, signal);
+      dueAt = Math.min(
+        Math.max(
+          nextMaintenanceDueAt(db) ?? Infinity,
+          lastMaintenanceAt + MAINTENANCE_MIN_INTERVAL_MS,
+        ),
+        lastMaintenanceAt + MAINTENANCE_SAFETY_INTERVAL_MS,
+      );
+      await waitForWork(
+        (maintenanceRequested
+          ? lastMaintenanceAt + MAINTENANCE_MIN_INTERVAL_MS
+          : dueAt) - Date.now(),
+        signal,
+      );
     }
     shuttingDown = true;
     for (const controller of controllers.values()) controller.abort();
@@ -1680,6 +1723,7 @@ export function createWorkflowService(
   async function stop(runId: string): Promise<boolean> {
     const childThreadIds = activeChildThreadsForRun(db, runId);
     const stopped = cancelRun(db, runId);
+    wakeWorker();
     if (stopped) {
       const run = getRun(db, runId);
       if (run !== null) publishRunsChanged(run.originThreadId);
@@ -1700,6 +1744,7 @@ export function createWorkflowService(
     stop,
     updateSettings(settings) {
       currentSettings = settings;
+      wakeWorker();
     },
     runWorker,
     onThreadIdle,

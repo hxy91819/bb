@@ -1,24 +1,30 @@
+import type { PluginUpdateJob } from "@bb/server-contract";
+import { trackPluginUpdate } from "@/lib/plugin-update-tracking";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   pluginListQueryOptions,
   type PluginSettingsView,
 } from "../queries/plugin-settings-queries";
-import type { InstalledPlugin } from "@bb/server-contract";
+import type { InstalledPlugin, PluginInstallJob } from "@bb/server-contract";
 import {
   allPluginCatalogSearchQueryKeyPrefix,
   allPluginListQueryKeyPrefix,
+  pluginInstallJobsQueryKey,
+  pluginUpdateJobsQueryKey,
   pluginListQueryKey,
   pluginMarketplacesQueryKey,
   pluginSafeModeQueryKey,
   pluginSettingsViewQueryKey,
 } from "../queries/query-keys";
+import { setQueryDataOverInFlightFetch } from "./cache-effect-utils";
 
 export function applyPluginSettingsView(args: {
   queryClient: QueryClient;
   pluginId: string;
   view: PluginSettingsView;
 }): void {
-  args.queryClient.setQueryData(
+  setQueryDataOverInFlightFetch<PluginSettingsView>(
+    args.queryClient,
     pluginSettingsViewQueryKey(args.pluginId),
     args.view,
   );
@@ -41,6 +47,24 @@ export function applyInstalledPlugin(args: {
       return plugins.map((candidate, index) =>
         index === existingIndex ? args.plugin : candidate,
       );
+    },
+  );
+}
+
+export function applyPluginInstallJob(args: {
+  queryClient: QueryClient;
+  job: PluginInstallJob;
+}): void {
+  setQueryDataOverInFlightFetch<PluginInstallJob[]>(
+    args.queryClient,
+    pluginInstallJobsQueryKey(),
+    (current) => {
+      const jobs = current ?? [];
+      return jobs.some((candidate) => candidate.id === args.job.id)
+        ? jobs.map((candidate) =>
+            candidate.id === args.job.id ? args.job : candidate,
+          )
+        : [...jobs, args.job];
     },
   );
 }
@@ -78,12 +102,18 @@ export async function markEnabledPluginListStale(args: {
   });
 }
 
+export function refreshPluginCatalogSearch(args: {
+  queryClient: QueryClient;
+}): Promise<void> {
+  return args.queryClient.invalidateQueries({
+    queryKey: allPluginCatalogSearchQueryKeyPrefix(),
+  });
+}
+
 export function invalidatePluginCatalogSearch(args: {
   queryClient: QueryClient;
 }): void {
-  void args.queryClient.invalidateQueries({
-    queryKey: allPluginCatalogSearchQueryKeyPrefix(),
-  });
+  void refreshPluginCatalogSearch(args);
 }
 
 export function invalidatePluginMarketplaces(args: {
@@ -93,4 +123,21 @@ export function invalidatePluginMarketplaces(args: {
     queryKey: pluginMarketplacesQueryKey(),
   });
   invalidatePluginCatalogSearch(args);
+}
+
+export function applyPluginUpdateJob(args: {
+  queryClient: QueryClient;
+  job: PluginUpdateJob;
+}): void {
+  trackPluginUpdate(args.job.id, true);
+  setQueryDataOverInFlightFetch<PluginUpdateJob[]>(
+    args.queryClient,
+    pluginUpdateJobsQueryKey(),
+    (current) => {
+      const jobs = current ?? [];
+      return jobs.some((job) => job.id === args.job.id)
+        ? jobs.map((job) => (job.id === args.job.id ? args.job : job))
+        : [...jobs, args.job];
+    },
+  );
 }

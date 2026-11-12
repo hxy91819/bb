@@ -11,9 +11,10 @@ import {
   type ServerMoveStepId,
 } from "@bb/domain";
 import { writeServerMovedFile } from "@bb/server-archive";
-import type {
-  ServerMovedErrorDetails,
-  ServerMoveProgressMessage,
+import {
+  serverHealthUrl,
+  type ServerMovedErrorDetails,
+  type ServerMoveProgressMessage,
 } from "@bb/host-daemon-contract";
 import type {
   ServerMoveCheckItem,
@@ -220,10 +221,6 @@ export function serverMoveArchiveDownloadPath(moveId: string): string {
 
 export function serverMoveBbAppDownloadPath(moveId: string): string {
   return `/internal/server-move/${encodeURIComponent(moveId)}/bb-app.tgz`;
-}
-
-export function serverMoveDestinationStatusUrl(serverUrl: string): string {
-  return `${serverUrl.replace(/\/+$/u, "")}/health`;
 }
 
 function errorMessage(error: unknown): string {
@@ -542,6 +539,18 @@ export function createServerMoveCoordinator(
   }
 
   async function runStopWork(move: MoveRun): Promise<void> {
+    setStep(move, "stop-work", "running", "Resolving server access");
+    move.grant =
+      move.status.mode === "connect"
+        ? await untilCancelled(
+            move,
+            environment.resolveServerHostGrant(
+              move.sourceServerHost.id,
+              move.abort.signal,
+            ),
+          )
+        : { serverUrl: move.status.serverUrl, headers: {} };
+    assertNotCancelled(move);
     move.frozen = true;
     setServerMoveFrozen(deps.db, true);
     environment.plugins.setSchedulesPaused(true);
@@ -554,16 +563,6 @@ export function createServerMoveCoordinator(
         timeoutMs: timings.stopWorkTimeoutMs,
       }),
     );
-    move.grant =
-      move.status.mode === "connect"
-        ? await untilCancelled(
-            move,
-            environment.resolveServerHostGrant(
-              move.sourceServerHost.id,
-              move.abort.signal,
-            ),
-          )
-        : { serverUrl: move.status.serverUrl, headers: {} };
     assertNotCancelled(move);
     setStep(move, "stop-work", "running", "Pausing plugins");
     await suspendPlugins(move);
@@ -1511,9 +1510,7 @@ export function createServerMoveCoordinator(
               targetHostName: targetHost.name,
               serverUrl,
               destinationStatusUrl:
-                mode.mode === "direct"
-                  ? serverMoveDestinationStatusUrl(serverUrl)
-                  : null,
+                mode.mode === "direct" ? serverHealthUrl(serverUrl) : null,
               startedAt: environment.now(),
               finishedAt: null,
               error: null,
