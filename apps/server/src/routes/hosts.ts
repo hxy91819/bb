@@ -456,6 +456,7 @@ export function registerHostRoutes(
     const bridgeLaunch = resolveBridgeLaunchForProviderId(
       deps,
       payload.provider,
+      hostId,
     );
     if (bridgeLaunch === null) {
       throw new ApiError(
