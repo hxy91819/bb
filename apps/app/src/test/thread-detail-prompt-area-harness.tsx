@@ -217,7 +217,12 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
           {execution.providerRouting.environmentId}
         </div>
         <div data-testid="command-suggestions">
-          {`${typeahead.command.source.providerId}:${typeahead.command.source.commandScope}`}
+          {[
+            `${typeahead?.command.source.providerId}:${typeahead?.command.source.commandScope}`,
+            ...(typeahead?.command.source.panelCommands ?? []).map(
+              (command) => command.name,
+            ),
+          ].join(",")}
         </div>
         <div data-testid="selected-model">{execution.model.active?.model}</div>
         {execution.model.onChange ? (
