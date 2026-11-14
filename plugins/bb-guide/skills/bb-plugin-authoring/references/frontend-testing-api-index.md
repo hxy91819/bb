@@ -6,6 +6,9 @@ Read `testing.md` for examples and fidelity limits.
 
 ## `@get-bb/plugin-sdk/testing/app`
 
+- `experimental_createThreadCreationContextHost`
+- `experimental_ThreadCreationContextHost`
+- `RenderSlotOptions.experimental_threadCreationContextHost` — share a managed client among rendered slots
 - `RpcCall`
 - `SdkCall`
 - `PluginSdkTestFakes`
