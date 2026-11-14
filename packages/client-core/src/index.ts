@@ -5,6 +5,7 @@ export * from "./thread/thread-read-state.js";
 export * from "./codepoint-compare.js";
 export * from "./environment-providers.js";
 export * from "./sidebar/projectThreadGroups.js";
+export * from "./sidebar/newThreadProject.js";
 export * from "./sidebar/threadReadState.js";
 export * from "./sidebar/neighbor-reorder.js";
 
