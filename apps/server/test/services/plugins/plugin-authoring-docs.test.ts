@@ -46,6 +46,7 @@ import {
   type ExperimentalSidebarNavigationProps,
   type ExperimentalSidebarNavigationRegistration,
   type ExperimentalSidebarHeaderProps,
+  type experimental_ThreadListItemInput,
   type PluginSidebarFooterActionRegistration,
   type PluginThreadEventPayloads,
   type ExperimentalThreadActionTabProps,
@@ -286,6 +287,8 @@ type SlotPropsByName = {
   sidebarFooterAction: PluginSidebarFooterActionProps;
   experimental_threadList: PluginThreadListProps;
   experimental_sidebarNavigation: ExperimentalSidebarNavigationProps;
+  experimental_threadListGrouping: experimental_ThreadListItemInput<unknown>;
+  experimental_threadRowDecoration: experimental_ThreadListItemInput<unknown>;
   experimental_threadContextSegment: ExperimentalThreadContextSegmentProps;
   experimental_threadRowMetadata: ExperimentalThreadRowMetadataProps;
   experimental_threadInfoRow: ExperimentalThreadInfoProps;
@@ -319,6 +322,7 @@ const _assertAllSlotsListed: MissingSlot extends never ? true : never = true;
 void _assertAllSlotsListed;
 
 const APP_BUILDER_FIELDS = [
+  "experimental_threadListContributionVersion",
   "commands",
   "experimental_icons",
   "slots",
@@ -383,6 +387,8 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "onNavigate",
     "searchQuery",
   ],
+  experimental_threadListGrouping: ["thread", "data", "groupingKey"],
+  experimental_threadRowDecoration: ["thread", "data", "groupingKey"],
   experimental_threadContextSegment: [
     "threadId",
     "projectId",

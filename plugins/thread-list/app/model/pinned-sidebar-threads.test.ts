@@ -207,6 +207,16 @@ describe("buildPinnedSidebarState", () => {
       group: { environmentId: "env_worktree" },
     });
     expect(rootIds(grouped)).toEqual(["first", "second"]);
+    const partitioned = buildPinnedSidebarState({
+      groupEnvironmentThreads: true,
+      threads,
+      rootGroupKey: (thread) => thread.id,
+    });
+    expect(partitioned.rootItems.map((item) => item.kind)).toEqual([
+      "thread",
+      "thread",
+    ]);
+    expect(rootIds(partitioned)).toEqual(["first", "second"]);
     expect(flat.rootItems.map((item) => item.kind)).toEqual([
       "thread",
       "thread",
