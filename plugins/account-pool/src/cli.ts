@@ -300,7 +300,7 @@ export function registerPoolCli(
           summary:
             "Sign in to a Claude or Codex account, or add an Anthropic API key",
           description:
-            "--login prints the browser or device step and exits; finish it with `bb pool account login-complete` (Claude) or `bb pool account login-poll` (Codex).\nThe pool keeps its own login, separate from this machine's Claude Code or Codex login, so neither signs the other out.",
+            "--login prints the browser or device step and exits; finish it with `bb pool account login-complete` (Claude) or `bb pool account login-poll` (Codex).\n--import reads the provider's existing login on this bb server host (~/.claude or ~/.codex). Codex --auth-file overrides the server-side auth.json path and follows symlinks.",
           unexpectedPositionalHint:
             "the provider belongs in --provider <claude|codex>, not a bare argument",
           options: {
@@ -310,6 +310,18 @@ export function registerPoolCli(
               aliases: ["signin", "sign-in"],
               description:
                 "Start a browser (Claude) or device-code (Codex) login and print the next command",
+            },
+            import: {
+              type: "boolean",
+              aliases: ["import-local", "local"],
+              description:
+                "Import the provider's existing login from this bb server host",
+            },
+            "auth-file": {
+              type: "string",
+              placeholder: "path",
+              description:
+                "Codex auth.json on the bb server host: absolute path or ~/ path; requires --import and follows symlinks",
             },
             "api-key": {
               type: "string",
@@ -338,7 +350,10 @@ export function registerPoolCli(
             },
             json: JSON_OPTION,
           },
-          constraints: [{ kind: "exactly-one", options: ["login", "api-key"] }],
+          constraints: [
+            { kind: "exactly-one", options: ["login", "import", "api-key"] },
+            { kind: "requires", option: "auth-file", needs: ["import"] },
+          ],
           run: (input) =>
             attempt(async () => {
               const provider = input.options.provider;
@@ -353,7 +368,8 @@ export function registerPoolCli(
                   input.options.json === true,
                 );
               }
-              if (provider !== "claude") {
+              const imported = input.options.import;
+              if (!imported && provider !== "claude") {
                 throw new PluginCliError(
                   "Anthropic API keys require --provider claude.",
                   { code: "invalid_value" },
@@ -361,7 +377,12 @@ export function registerPoolCli(
               }
               const parsed = accountAddInputSchema.parse({
                 provider,
-                apiKey: input.options["api-key"],
+                source: imported
+                  ? {
+                      kind: "import",
+                      authFile: input.options["auth-file"] ?? null,
+                    }
+                  : { kind: "api-key", apiKey: input.options["api-key"] },
                 label: input.options.label ?? null,
                 priority: input.options.priority,
               });

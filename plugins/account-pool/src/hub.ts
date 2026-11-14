@@ -1,3 +1,4 @@
+import type { ImportedProviderAccount } from "./provider-adapter.js";
 import {
   retryAvailabilitySchema,
   type RetryAvailability,
@@ -177,6 +178,13 @@ export class AccountPoolHub {
       request.headers.get("x-bb-account-pool-token") ??
       readBearer(request.headers.get("authorization"));
     return this.options.hubTokens.authenticate(token);
+  }
+
+  async importAccount(
+    provider: PoolProvider,
+    authFile: string | null,
+  ): Promise<ImportedProviderAccount> {
+    return this.adapter(provider).importAccount(authFile);
   }
 
   async replaceSecret(accountId: string, secret: AccountSecret): Promise<void> {

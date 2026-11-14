@@ -486,7 +486,7 @@ describe("Account Pooler logins", () => {
 
     await pool.host.harness.behavior.callRpc("account.add", {
       provider: "claude",
-      apiKey: "sk-ant-key",
+      source: { kind: "api-key", apiKey: "sk-ant-key" },
       label: "Metered",
       priority: 200,
     });
