@@ -110,3 +110,11 @@ Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
 recognized without a local subscription login. A failed probe returns structured health and waits for its child process to exit.
 Startup and authentication share a ten-second health probe deadline. Successful
 launcher-managed authentication clears unrelated local account and login hints.
+
+For additional workspace sandbox directories, set
+`[sandbox_workspace_write].writable_roots` in the selected `CODEX_HOME/config.toml`
+to an array of absolute paths. BB merges these with its workspace support roots,
+removes duplicates, and keeps workspace-write sandboxing enabled. Each session
+reads its own home; a missing setting preserves the existing roots. Invalid TOML,
+non-array values, and non-absolute entries fail the request with the config path.
+Changes apply on the next turn or session construction, not to a running command.
