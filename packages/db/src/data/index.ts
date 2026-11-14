@@ -477,6 +477,7 @@ export {
   deleteClaimedQueuedThreadMessageBatchInTransaction,
   deleteCoalescedQueuedThreadMessageInTransaction,
   deleteQueuedThreadMessage,
+  deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction,
   getPendingCoalescedQueuedThreadMessage,
   getQueuedThreadMessage,
   getQueuedThreadStartMessage,

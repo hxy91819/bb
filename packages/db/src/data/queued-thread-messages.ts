@@ -2522,6 +2522,22 @@ export function hasQueuedRetryOfTurnRequest(
   );
 }
 
+export function deleteUnclaimedQueuedThreadMessagesBySystemNoticeKindInTransaction(
+  db: DbTransaction,
+  args: { threadId: string; kind: QueuedMessageSystemNotice["kind"] },
+): number {
+  return db
+    .delete(queuedThreadMessages)
+    .where(
+      and(
+        eq(queuedThreadMessages.threadId, args.threadId),
+        liveQueuedThreadMessage(),
+        sql`json_extract(${queuedThreadMessages.systemNotice}, '$.kind') = ${args.kind}`,
+      ),
+    )
+    .run().changes;
+}
+
 export function hasLiveQueuedRetry(
   db: DbQueryConnection,
   threadId: string,
