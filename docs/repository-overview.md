@@ -23,6 +23,10 @@ This monorepo contains the packaged app plus the runtime services it bundles:
 `import { BBSdk } from "bb-app"`. See
 [`packages/bb-app`](../packages/bb-app/README.md#scripting-with-the-sdk).
 
+## Steward workbooks
+
+- [BB team collaboration](steward/team-collaboration.md): delivery status and decisions for the generic BB extension and the independent team plugin.
+
 ## Pinned Dependencies
 
 Some dependencies are pinned to an exact version for reasons that are not
