@@ -114,7 +114,9 @@ const claudeCodeCommandSchema = z.discriminatedUnion("method", [
   }),
   z.object({
     method: z.literal("model/list"),
-    params: z.object({}),
+    params: z.object({
+      providerOptions: z.record(z.string(), z.unknown()).optional(),
+    }),
   }),
   z.object({
     method: z.literal("commands/list"),
