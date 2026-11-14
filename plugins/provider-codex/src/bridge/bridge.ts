@@ -2,6 +2,9 @@
 
 import { experimental_selectedSkillMentions as selectedSkillMentions } from "@get-bb/plugin-sdk/provider-bridge";
 import { createHash } from "node:crypto";
+import { homedir } from "node:os";
+import { readCodexWorkspaceWriteRoots } from "../workspace-write-roots.js";
+import { resolveCodexHome } from "../codex-home.js";
 import { isDeepStrictEqual } from "node:util";
 import {
   isStandaloneBuiltinCompactCommand,
@@ -581,6 +584,17 @@ function decodeCodexOptions(
 function requestedDaybreak(options: BridgeExecutionOptions): boolean | null {
   const requested = options.sessionOptions?.[CODEX_DAYBREAK_OPTION_ID];
   return typeof requested === "boolean" ? requested : null;
+}
+
+function workspaceWriteRootsForOptions(decoded: DecodedCodexOptions): string[] {
+  if (decoded.sessionOptions.permissionScope !== "workspace") {
+    return decoded.additionalWorkspaceWriteRoots;
+  }
+  const env = appServerLaunchEnv(decoded.sessionOptions.envVars);
+  return [
+    ...decoded.additionalWorkspaceWriteRoots,
+    ...readCodexWorkspaceWriteRoots(resolveCodexHome(homedir(), env)),
+  ];
 }
 
 function environmentHash(
@@ -1223,8 +1237,10 @@ async function constructThreadSession(
   const decoded = decodeCodexOptions(args.options);
   sessionSerialCounter += 1;
   const serial = sessionSerialCounter;
+  const launchEnv = appServerLaunchEnv(decoded.sessionOptions.envVars);
+  const additionalWorkspaceWriteRoots = workspaceWriteRootsForOptions(decoded);
   const translator = createCodexEventTranslator({
-    additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
+    additionalWorkspaceWriteRoots,
   });
   translator.configureInjectedTools(
     (args.dynamicTools ?? []).map((tool) => ({
@@ -1234,7 +1250,6 @@ async function constructThreadSession(
         : { presentation: tool.presentation }),
     })),
   );
-  const launchEnv = appServerLaunchEnv(decoded.sessionOptions.envVars);
   const envHash = environmentHash(decoded.sessionOptions.envVars);
   const session: CodexBridgeSession = {
     bbThreadId: args.threadId,
@@ -1255,7 +1270,7 @@ async function constructThreadSession(
     ),
     environmentHash: envHash,
     turnPermissionSettings: toCodexPermissionSettings({
-      additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
+      additionalWorkspaceWriteRoots,
       gitWritableRoots: [],
       options: decoded.sessionOptions,
     }),
@@ -1410,7 +1425,7 @@ async function constructThreadSession(
       threadId: args.threadId,
     });
     session.turnPermissionSettings = toCodexPermissionSettings({
-      additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
+      additionalWorkspaceWriteRoots: workspaceWriteRootsForOptions(decoded),
       gitWritableRoots: translator.getThreadGitWritableRoots(args.threadId),
       options: decoded.sessionOptions,
     });
@@ -2070,7 +2085,7 @@ async function handleTurnStart(
       });
     } else {
       const permissionSettings = toCodexPermissionSettings({
-        additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
+        additionalWorkspaceWriteRoots: workspaceWriteRootsForOptions(decoded),
         gitWritableRoots: session.translator.getThreadGitWritableRoots(
           params.threadId,
         ),
@@ -2150,7 +2165,7 @@ async function handleTurnSteer(
   try {
     const decoded = decodeCodexOptions(params.options);
     const permissionSettings = toCodexPermissionSettings({
-      additionalWorkspaceWriteRoots: decoded.additionalWorkspaceWriteRoots,
+      additionalWorkspaceWriteRoots: workspaceWriteRootsForOptions(decoded),
       gitWritableRoots: session.translator.getThreadGitWritableRoots(
         params.threadId,
       ),

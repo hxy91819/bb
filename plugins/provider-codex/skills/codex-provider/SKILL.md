@@ -82,3 +82,11 @@ only on threads that already use them.
 
 Use the core CLI skill for command syntax and official Codex guidance for
 upstream product behavior.
+
+For additional workspace sandbox directories, set
+`[sandbox_workspace_write].writable_roots` in the selected `CODEX_HOME/config.toml`
+to an array of absolute paths. BB merges these with its workspace support roots,
+removes duplicates, and keeps workspace-write sandboxing enabled. Each session
+reads its own home; a missing setting preserves the existing roots. Invalid TOML,
+non-array values, and non-absolute entries fail the request with the config path.
+Changes apply on the next turn or session construction, not to a running command.
