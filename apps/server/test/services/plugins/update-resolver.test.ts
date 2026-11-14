@@ -264,6 +264,8 @@ describe("git update resolution", () => {
     cleanup.push(repo);
     await mkdir(repo, { recursive: true });
     await run("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+    await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
     await run("git", ["config", "user.email", "test@example.com"], {
       cwd: repo,
     });
@@ -343,6 +345,8 @@ describe("git semver tag resolution", () => {
     template = await mkdtemp(join(tmpdir(), "bb-git-tags-template-"));
     const repo = template;
     await run("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+    await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
     await run("git", ["config", "user.email", "test@example.com"], {
       cwd: repo,
     });
@@ -423,6 +427,8 @@ describe("git semver tag resolution", () => {
     const repo = await mkdtemp(join(tmpdir(), "bb-git-many-tags-"));
     cleanup.push(repo);
     await run("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+    await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
     await run("git", ["config", "user.email", "test@example.com"], {
       cwd: repo,
     });
