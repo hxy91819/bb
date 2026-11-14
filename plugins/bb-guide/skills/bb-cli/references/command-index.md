@@ -234,6 +234,7 @@ Use `--selected-model <model-id>` to discover its reasoning choices and include 
 ## file
 
 - `bb file`
+- `bb file vscode-url`
 - `bb file read`
 - `bb file write`
 - `bb file list`
