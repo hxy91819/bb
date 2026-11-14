@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { OverflowFade } from "@bb/shared-ui/overflow-fade";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { PAGE_SHELL_CONTENT_STYLE } from "@/components/ui/page-shell-content-style.js";
 import { ComposerMaxHeightContext } from "@/components/promptbox/composer-max-height";
 import { composerRootWithin } from "@/lib/pane-composer-focus";
 import {
@@ -137,7 +136,6 @@ export function RootComposeHome({
           ? "@container/page flex min-h-0 flex-1 flex-col"
           : "@container/page min-h-0 flex-1 overflow-y-auto"
       }
-      style={isCompact ? PAGE_SHELL_CONTENT_STYLE : undefined}
     >
       <div
         ref={regionRef}
@@ -151,7 +149,6 @@ export function RootComposeHome({
                 wideContentClassName,
               )
         }
-        style={isCompact ? undefined : PAGE_SHELL_CONTENT_STYLE}
       >
         {isCompact ? (
           <div
