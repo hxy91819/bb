@@ -61,3 +61,4 @@ fix/retry-parent-notifications              needs-feedback                      
 fix/server-worker-budget                    needs-feedback                                             # server 测试按 VITEST_MAX_WORKERS 应用有效 CPU/内存容量，保留隔离分类与完整范围；资源模块进入测试缓存输入
 fix/codex-ai-proxy                          needs-feedback                                             # Codex 标题、提交信息与转录请求遵守代理环境及 NO_PROXY，独立连接池随 host 插件释放
 fix/dependency-security-20261113            reported        https://github.com/get-bb/bb/pull/7478   # @hono/node-server 2.1.7 / hono 4.13.16 / minimatch 11.0.4 + glob 14.0.3 overrides；已合入 security/baseline；PR 因贡献者准入可能自动关闭
+fix/codex-writable-roots                    needs-feedback                                             # Codex 合并所选 CODEX_HOME 原生 writable_roots 与 BB roots，校验绝对路径并覆盖会话及每轮权限；未向上游反馈
