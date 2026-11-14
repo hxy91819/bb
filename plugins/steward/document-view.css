@@ -1,0 +1,86 @@
+.steward-markdown {
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+:where(.steward-markdown) :where(p, ul, ol, blockquote, pre, table) {
+  margin-block: 0 1em;
+}
+:where(.steward-markdown) :where(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.5em 0.5em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+:where(.steward-markdown) h1 {
+  font-size: var(--text-xl);
+}
+:where(.steward-markdown) h2 {
+  font-size: var(--text-lg);
+}
+:where(.steward-markdown) h3 {
+  font-size: var(--text-base);
+}
+:where(.steward-markdown) :first-child {
+  margin-top: 0;
+}
+:where(.steward-markdown) ul {
+  list-style: disc;
+  padding-inline-start: 1.5em;
+}
+:where(.steward-markdown) ol {
+  list-style: decimal;
+  padding-inline-start: 1.5em;
+}
+:where(.steward-markdown) li > :where(ul, ol) {
+  margin-block: 0.25em;
+}
+:where(.steward-markdown) .contains-task-list {
+  list-style: none;
+}
+:where(.steward-markdown) input[type="checkbox"] {
+  margin-inline-end: 0.5em;
+}
+:where(.steward-markdown) a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+:where(.steward-markdown) :where(code, pre) {
+  font-family: var(--font-mono, monospace);
+  background: var(--muted);
+  border-radius: 0.25rem;
+}
+:where(.steward-markdown) code {
+  padding: 0.1em 0.3em;
+}
+:where(.steward-markdown) pre {
+  padding: 0.75em;
+  overflow-x: auto;
+}
+:where(.steward-markdown) pre code {
+  padding: 0;
+}
+:where(.steward-markdown) blockquote {
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 1em;
+  color: var(--muted-foreground);
+}
+:where(.steward-markdown) table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+:where(.steward-markdown) :where(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.75em;
+  text-align: start;
+}
+:where(.steward-markdown) th {
+  background: var(--muted);
+  font-weight: 600;
+}
+:where(.steward-markdown) hr {
+  margin-block: 1.5em;
+  border-top: 1px solid var(--border);
+}
+:where(.steward-markdown) img {
+  max-width: 100%;
+  height: auto;
+}
