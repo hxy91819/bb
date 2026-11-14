@@ -1,5 +1,5 @@
 import "../../../.ladle/composer-plugin";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   Environment,
   Host,
@@ -69,6 +69,12 @@ import type {
   ExecutionPermissionConfig,
 } from "@/components/promptbox/ExecutionControls";
 import { PageShell } from "@/components/ui/page-shell.js";
+import { getProviderIconInfo } from "@/lib/provider-icon";
+import {
+  removePluginSlotRegistrations,
+  setPluginSlotRegistrations,
+} from "@/lib/plugin-slots";
+import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 import {
   promptDraftToInput,
   type PromptDraftState,
@@ -862,6 +868,67 @@ function InteractiveRow() {
   return (
     <ModelPickerStoryQueryProvider>
       <Row submitMode={{ kind: "ready" }} execution={execution} />
+    </ModelPickerStoryQueryProvider>
+  );
+}
+
+const customAcpProviderId = "acp-wide-logo-story";
+const customAcpPluginId = "story-wide-acp-logo";
+const customAcpExecution = makeExecutionControlsProps({
+  provider: {
+    options: [
+      {
+        value: customAcpProviderId,
+        label: "Custom ACP",
+        icon: getProviderIconInfo("agent", customAcpProviderId).icon,
+      },
+    ],
+    selectedId: customAcpProviderId,
+    hasMultiple: false,
+  },
+  model: {
+    active: { model: "high" },
+    selected: "high",
+    options: [{ value: "high", label: "High" }],
+    moreOptions: [],
+    isLoading: false,
+    loadFailed: false,
+    onChange: noop,
+  },
+});
+
+function IntrinsicWideAcpIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" data-testid="wide-acp-icon">
+      <rect width="24" height="24" rx="5" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function CustomAcpLogo() {
+  useEffect(() => {
+    setPluginSlotRegistrations(
+      customAcpPluginId,
+      makePluginRegistrationSet({
+        providerIcons: [
+          {
+            providerKind: "agent",
+            providerId: customAcpProviderId,
+            icon: IntrinsicWideAcpIcon,
+          },
+        ],
+      }),
+    );
+    return () => removePluginSlotRegistrations(customAcpPluginId);
+  }, []);
+
+  return (
+    <ModelPickerStoryQueryProvider>
+      <Row
+        submitMode={{ kind: "queue", onStop: noop }}
+        threadRuntimeDisplayStatus="active"
+        execution={customAcpExecution}
+      />
     </ModelPickerStoryQueryProvider>
   );
 }
