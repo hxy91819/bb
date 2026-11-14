@@ -175,6 +175,7 @@ Use `--selected-model <model-id>` to discover its reasoning choices and include 
 - `bb thread read`
 - `bb thread unread`
 - `bb thread reorder-pinned`
+- `bb thread experimental-activity`
 - `bb thread count`
 - `bb thread queue`
 - `bb thread queue list`
