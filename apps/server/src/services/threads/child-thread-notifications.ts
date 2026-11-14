@@ -1,4 +1,11 @@
 import {
+  emitPluginMessageCancelled,
+  pluginTurnFailureDeadline,
+  waitForPluginTurnFailed,
+} from "../plugins/plugin-thread-events.js";
+import { loadFailedTurn, retryChain } from "./turn-failed.js";
+import { isParentNotifiableChildThread } from "./thread-parent.js";
+import {
   childThreadOutcomeSchema,
   threadEventTurnStatusSchema,
   type ClientTurnRequestId,
@@ -7,9 +14,14 @@ import {
   type ThreadEventTurnStatus,
   type ChildThreadOutcome,
   type TurnRequestEventData,
+  type ThreadQueuedMessage,
 } from "@bb/domain";
 import {
   getThread,
+  getPendingCoalescedQueuedThreadMessage,
+  updateCoalescedQueuedThreadMessageInTransaction,
+  deleteCoalescedQueuedThreadMessageInTransaction,
+  getQueuedRetryOfTurnRequest,
   listActiveBackgroundTaskCountsByThreadIds,
   listStoredClientTurnRequestRowsByKeys,
   listStoredTurnRequestEventsForTurn,
@@ -19,6 +31,7 @@ import { z } from "zod";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { requestQueuedMessageDispatchAt } from "./queued-message-dispatch.js";
 import { buildExecutionOptions } from "./thread-commands.js";
+import { toThreadQueuedMessage } from "./thread-queued-messages.js";
 import { postCoalescedSystemNotice } from "./coalesced-system-notices.js";
 import {
   buildParentSystemInputFromTemplateSlot,
@@ -160,9 +173,20 @@ const childThreadTurnNotificationBatchItemSchema = z.object({
   failureContext: z.string().optional(),
   interruption: childThreadOutcomeSchema.shape.interruption,
 });
+const storedChildThreadTurnNotificationSchema =
+  childThreadTurnNotificationBatchItemSchema.extend({
+    sendAfter: z.number().default(0),
+    retryDecision: z
+      .object({ deadline: z.number(), requestId: z.string().nullable() })
+      .nullable()
+      .default(null),
+  });
 const childThreadTurnNotificationBatchSchema = z.array(
-  childThreadTurnNotificationBatchItemSchema,
+  storedChildThreadTurnNotificationSchema,
 );
+type StoredChildThreadTurnNotification = z.infer<
+  typeof storedChildThreadTurnNotificationSchema
+>;
 export type ChildThreadTurnNotificationBatchItem = z.infer<
   typeof childThreadTurnNotificationBatchItemSchema
 >;
@@ -580,10 +604,9 @@ function childThreadTurnNotificationLogMessage(
   }
 }
 
-function mergeChildThreadTurnNotificationItem(
-  items: readonly ChildThreadTurnNotificationBatchItem[],
-  item: ChildThreadTurnNotificationBatchItem,
-): ChildThreadTurnNotificationBatchItem[] {
+function mergeChildThreadTurnNotificationItem<
+  T extends ChildThreadTurnNotificationBatchItem,
+>(items: readonly T[], item: T): T[] {
   const existingIndex = items.findIndex(
     (entry) =>
       entry.childThread.id === item.childThread.id &&
@@ -605,10 +628,99 @@ function mergeChildThreadTurnNotificationItem(
   );
 }
 
+function shouldNotifyChildFailure(
+  deps: Pick<LoggedPendingInteractionWorkSessionDeps, "db">,
+  threadId: string,
+  failedRequestId: string | null,
+): boolean {
+  if (getThread(deps.db, threadId) === null) return false;
+  const failed = loadFailedTurn(deps.db, threadId);
+  if ((failed?.request.requestId ?? null) !== failedRequestId) return false;
+  if (!failed) return true;
+  const retry = getQueuedRetryOfTurnRequest(deps.db, {
+    threadId,
+    retryOfTurnRequestId: retryChain(failed.request).originalRequestId,
+  });
+  return retry === null || retry.state === "failed_exhausted";
+}
+
+export function reconcileChildThreadRetryNotifications(
+  deps: Pick<LoggedPendingInteractionWorkSessionDeps, "db" | "hub">,
+  parentThreadId: string,
+): void {
+  const change = deps.db.transaction(
+    (tx) => {
+      const row = getPendingCoalescedQueuedThreadMessage(tx, {
+        coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
+        threadId: parentThreadId,
+      });
+      if (row?.coalesceState == null) return null;
+      const previous = childThreadTurnNotificationBatchSchema.parse(
+        JSON.parse(row.coalesceState),
+      );
+      let changed = false;
+      const items = previous.flatMap((entry) => {
+        const decision = entry.retryDecision;
+        if (decision === null || decision.deadline > Date.now()) return [entry];
+        changed = true;
+        return shouldNotifyChildFailure(
+          deps,
+          entry.childThread.id,
+          decision.requestId,
+        )
+          ? [{ ...entry, retryDecision: null }]
+          : [];
+      });
+      if (!changed) return null;
+      if (items.length === 0) {
+        const deleted = deleteCoalescedQueuedThreadMessageInTransaction(
+          tx,
+          row,
+        );
+        return deleted === null ? null : { cancelled: true, row: deleted };
+      }
+      const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
+      const updated = updateCoalescedQueuedThreadMessageInTransaction(tx, {
+        id: row.id,
+        threadId: parentThreadId,
+        coalesceState: JSON.stringify(items),
+        content: buildChildThreadTurnStatusBatchInput({ items }),
+        systemNotice: {
+          kind: taxonomy.systemMessageKind,
+          subject: taxonomy.systemMessageSubject,
+        },
+        windowEndsAt: row.sendAt ?? Date.now(),
+      });
+      return updated === null ? null : { cancelled: false, row: updated };
+    },
+    { behavior: "immediate" },
+  );
+  if (change === null) return;
+  if (change.cancelled)
+    emitPluginMessageCancelled(toThreadQueuedMessage(change.row));
+  deps.hub.notifyThread(parentThreadId, ["queue-changed"]);
+}
+
 async function queueChildThreadTurnNotificationBatchItem(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: QueueChildThreadTurnNotificationArgs,
 ): Promise<void> {
+  const failedRequestId =
+    args.turnStatus === "failed" && !args.failureContext
+      ? (loadFailedTurn(deps.db, args.childThread.id)?.request.requestId ??
+        null)
+      : null;
+  const deadline =
+    args.turnStatus === "failed" && !args.failureContext
+      ? pluginTurnFailureDeadline(args.childThread.id)
+      : null;
+  if (
+    args.turnStatus === "failed" &&
+    !args.failureContext &&
+    deadline === null &&
+    !shouldNotifyChildFailure(deps, args.childThread.id, failedRequestId)
+  )
+    return;
   const parentThread = getThread(deps.db, args.parentThreadId);
   if (
     !parentThread ||
@@ -617,7 +729,10 @@ async function queueChildThreadTurnNotificationBatchItem(
   ) {
     return;
   }
-  const item: ChildThreadTurnNotificationBatchItem = {
+  const item: StoredChildThreadTurnNotification = {
+    sendAfter: Date.now() + CHILD_THREAD_TURN_NOTIFICATION_BATCH_DELAY_MS,
+    retryDecision:
+      deadline === null ? null : { deadline, requestId: failedRequestId },
     activeWorkflowCount: getChildThreadActiveWorkflowCount(deps, args),
     author: args.author ?? null,
     childThread: args.childThread,
@@ -631,34 +746,82 @@ async function queueChildThreadTurnNotificationBatchItem(
     {},
     { threadId: parentThread.id },
   );
-  const row = postCoalescedSystemNotice<ChildThreadTurnNotificationBatchItem[]>(
-    deps,
-    {
-      coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
-      execution,
-      merge: (previous) => {
-        const items = mergeChildThreadTurnNotificationItem(
-          previous ?? [],
-          item,
-        );
-        const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
-        return {
-          input: buildChildThreadTurnStatusBatchInput({ items }),
-          notice: {
-            kind: taxonomy.systemMessageKind,
-            subject: taxonomy.systemMessageSubject,
-          },
-          state: items,
-        };
+  const settlement =
+    deadline === null ? null : waitForPluginTurnFailed(args.childThread.id);
+  const post = (
+    merge: (
+      previous: StoredChildThreadTurnNotification[] | null,
+    ) => StoredChildThreadTurnNotification[] | null,
+  ) => {
+    const row = postCoalescedSystemNotice<StoredChildThreadTurnNotification[]>(
+      deps,
+      {
+        coalesceKey: CHILD_THREAD_TURN_NOTIFICATION_COALESCE_KEY,
+        execution,
+        merge: (previous) => {
+          const items = merge(previous);
+          if (items === null || items.length === 0) return null;
+          const taxonomy = childThreadTurnStatusBatchTaxonomy(items);
+          return {
+            input: buildChildThreadTurnStatusBatchInput({ items }),
+            notice: {
+              kind: taxonomy.systemMessageKind,
+              subject: taxonomy.systemMessageSubject,
+            },
+            state: items,
+            sendAt: Math.max(
+              Date.now(),
+              ...items.map((entry) =>
+                Math.max(entry.sendAfter, entry.retryDecision?.deadline ?? 0),
+              ),
+            ),
+          };
+        },
+        parseState: (stored) =>
+          childThreadTurnNotificationBatchSchema.parse(JSON.parse(stored)),
+        threadId: parentThread.id,
+        windowMs: 0,
       },
-      parseState: (stored) =>
-        childThreadTurnNotificationBatchSchema.parse(JSON.parse(stored)),
-      threadId: parentThread.id,
-      windowMs: CHILD_THREAD_TURN_NOTIFICATION_BATCH_DELAY_MS,
-    },
+    );
+    if (row !== null && row.state === "scheduled" && row.sendAt !== null)
+      requestQueuedMessageDispatchAt(deps, row.sendAt);
+  };
+  post((previous) =>
+    mergeChildThreadTurnNotificationItem(previous ?? [], item),
   );
-  if (row !== null && row.state === "scheduled" && row.sendAt !== null) {
-    requestQueuedMessageDispatchAt(deps, row.sendAt);
+  if (settlement !== null) {
+    void settlement
+      .then(() => {
+        post((previous) =>
+          previous === null
+            ? null
+            : previous.flatMap((entry) => {
+                if (
+                  entry.childThread.id !== args.childThread.id ||
+                  entry.retryDecision?.deadline !== deadline ||
+                  entry.retryDecision.requestId !== failedRequestId
+                )
+                  return [entry];
+                return shouldNotifyChildFailure(
+                  deps,
+                  args.childThread.id,
+                  failedRequestId,
+                )
+                  ? [{ ...entry, retryDecision: null }]
+                  : [];
+              }),
+        );
+      })
+      .catch((error) => {
+        deps.logger.error(
+          {
+            err: error,
+            childThreadId: args.childThread.id,
+            parentThreadId: args.parentThreadId,
+          },
+          "Failed to settle child retry notification",
+        );
+      });
   }
 }
 
@@ -707,4 +870,32 @@ export async function queueChildThreadNeedsAttentionNotificationBestEffort(
       "Failed to queue parent needs-attention notification",
     );
   }
+}
+
+export async function queueChildThreadRetryCancelledNotificationBestEffort(
+  deps: LoggedPendingInteractionWorkSessionDeps,
+  entry: ThreadQueuedMessage,
+): Promise<void> {
+  if (entry.payload.kind !== "retry" || entry.state === "failed_exhausted")
+    return;
+  const thread = getThread(deps.db, entry.threadId);
+  if (
+    !thread ||
+    thread.status !== "error" ||
+    !isParentNotifiableChildThread(thread, "failed")
+  )
+    return;
+  const failed = loadFailedTurn(deps.db, thread.id);
+  if (
+    !failed ||
+    retryChain(failed.request).originalRequestId !==
+      entry.payload.retryOfTurnRequestId
+  )
+    return;
+  await queueChildThreadTurnNotificationBestEffort(deps, {
+    childThread: thread,
+    parentThreadId: thread.parentThreadId,
+    turnStatus: "failed",
+    turnId: null,
+  });
 }
