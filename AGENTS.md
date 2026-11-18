@@ -11,7 +11,7 @@
 
 本波修复汇总、聚合发布、本机安装或耗时复盘先读 [管家工作簿](docs/steward/bb-consolidated-delivery.md)，只报未完成的用户待办。
 
-修改功能、排查问题、调整插件或升级 BB 环境前，先读 [功能维护与插件更新索引](docs/feature-index.md)，按维护边界进入对应仓库。新增功能、改变职责、插件 ID 或迁仓时同步索引；环境升级须执行其中的外置插件更新与验收流程。
+升级 BB 环境时，按 [功能索引中的外置插件更新流程](docs/feature-index.md#升级时同步外置插件) 核对安装来源、更新与验收。
 
 BB 团队协作的管家工作簿在 [docs/steward/team-collaboration.md](docs/steward/team-collaboration.md)，推进此目标时存在则先读，只报未完成的用户待办。
 
@@ -80,7 +80,7 @@ Steward 插件本机安装的工作簿在 [docs/steward/steward-plugin-install.m
 本仓库是个人 fork（远端 `origin` = hxy91819/bb，上游 `upstream` = get-bb/bb）。目标只有三个：每个改动是独立、可直接提给上游的分支；方便本机聚合打包；能纳入上游稳定版。完整流程见 [docs/fork-maintenance.md](docs/fork-maintenance.md)，不要引入领域分支、补丁登记表或冻结清单；`security/baseline` 是唯一的安全基线例外。维护脚本与完整文档以 `origin/fork-tooling` 为准；安全入口未包含文档时用 `git show origin/fork-tooling:docs/fork-maintenance.md` 读取，在 tooling worktree 中执行维护脚本。
 
 - 根目录永远检出 `main`，个人 fork 的默认分支也设为 `main`：它等于 `fork-base/<tag>`（上游稳定 tag + `security/baseline`），普通 clone 和 BB 默认 worktree 因此包含安全修复。`origin/HEAD` 指向 `origin/main`；`scripts/fork-base` 同步远端 main 与干净的本地 main。不在根目录写产品代码；可以从已同步的 main 拉独立分支。
-- 业务优先使用公开插件扩展点；迁移旧插件或核对淘汰决定时读 [插件迁出说明](docs/steward/plugin-extraction.md)，日常维护位置以功能索引为准。
+- **功能路由**：修改功能或排查问题前，先查[功能维护与插件更新索引](https://github.com/hxy91819/bb/blob/fork-tooling/docs/feature-index.md)，按症状找到维护仓库、插件 ID 和源码入口，再进入对应目录。默认 `main` 可用 `git show origin/fork-tooling:docs/feature-index.md` 读取。新增功能、改变职责、插件 ID 或迁仓时同步索引。业务定制优先使用公开插件扩展点。
 - 新功能/修复：在 `fork-tooling` 的 worktree 中用 `scripts/fork-worktree <name>`，从 `fork-base/<base>`（基线 tag + `security/baseline`）拉 `feature/<name>` 或 `fix/<name>`；只有依赖另一 fork 分支时才叠在它上面。完成后推送到 `origin`，并在 `fork-tooling` 分支的 `.fork/branches` 登记一行。
 - 安全基线：`security/baseline` 是所有 worktree 与聚合的唯一安全祖先，收纳已验收的安全修复及其必需的代码/测试适配；修复分支仍作为上游 PR 材料保留。安全修复完成后先合入 `security/baseline`、推送并运行 `scripts/fork-base --base <tag>` 更新 `fork-base/<tag>` 和 main；main 换 tag 可 force-with-lease，其他分支普通推送。新 worktree 默认从 main / origin/main 创建，也可显式选 fork-base；禁止从裸 tag、aggregate 或上游默认分支创建。已有 worktree 用 `git merge fork-base/<tag>` 后重新 `pnpm install --frozen-lockfile && pnpm prune`。
 - 聚合打包：在 `fork-tooling` 的独立 worktree 中运行 `scripts/fork-package`，一条命令完成聚合、验证、提升、构建、发布 tag，串行执行，不要手工拆开并行；聚合只提升到 `aggregate` / `origin/aggregate`，根目录 main 保持安全基线。分支与上游冲突 → 回该分支 rebase 修复；分支之间冲突 → 在聚合 worktree 里只合并两边，rerere 记住。产品修复不写进聚合的 merge 提交。
