@@ -114,7 +114,7 @@ Agent 只需要在它停下时处理冲突或失败，不要自己把步骤拆�
 6. 按 `config/local-aggregate-web.json` 的 Node 做运行时构建和原生模块检查（`--no-build` 跳过）。
 7. 按第 3 节给聚合 SHA 打 `fork-v*` tag 并推送；同一 SHA 已有 tag 则复用。
 8. 删除被取代的 `aggregate-deploy-*` 检出：只删干净且既不是本次结果、也不是服务运行目录或上一次 `aggregate` 的那些。
-9. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
+9. 打印聚合 SHA、部署检出路径和只读 cutover 计划生成命令。安装包服务先下载、校验并解压同一 SHA 的 Release，再生成计划；不把源码检出当成已安装包。实际切换走部署 skill，同步机级 CLI 和 shim 并核对干净 PATH 下的 CLI 版本；允许从 BB 内发起，由独立 systemd 任务完成停服、启动及失败回退，线程恢复后核验结果。
 
 修改分支后重新运行 `fork-package`，生成新候选并记录新的 previous 和测试范围；只有 `--resume <sha>` 保留原来的基线、输入快照、比较起点、测试范围和部署检出。Git common directory 的 `fork-package/` 保存阶段成功回执、日志和每轮 `runs/run.*` 记录，不写入产品 Git。旧格式缺少快照的记录须重新运行入口。
 
@@ -290,7 +290,7 @@ tar -xzf "$asset" -C "$HOME/.local/opt/bb"
 
 历史 Release 的其他平台包继续保留；今后新增平台需明确修改 workflow 和资产校验，不加入默认发布依赖。保持解压目录完整，直接调用其中的 `bin/bb-app`、`bin/bb-server`、`bin/bb-host-daemon`、`bin/bb`；可以把该目录的 `bin` 加入 `PATH`，不要把启动脚本软链接到别处。脚本始终用包内的 Node，因此不受系统 Node 版本影响。
 
-升级时下载并解压新包，停下旧实例，再让现有 service 的启动命令指向新包的 `bin/bb-app`（或原先使用的单独 server/host-daemon 启动入口）。默认仍使用 `~/.bb`；原有启动参数、数据目录和 service 环境变量应保留。包不会安装或重启服务。数据库 schema 变化时沿用部署流程的备份与迁移规则，同一个数据目录只运行一个实例。本机现有服务的切换仍按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 执行。
+升级时下载并解压新包，停下旧实例，再让现有 service 的启动命令指向新包的 `bin/bb-app`（或原先使用的单独 server/host-daemon 启动入口）。默认仍使用 `~/.bb`；原有启动参数、数据目录和 service 环境变量应保留。包不会安装或重启服务，也不会更新已有的机器注册 CLI；切换时由部署流程处理。数据库 schema 变化时沿用部署流程的备份与迁移规则，同一个数据目录只运行一个实例。本机现有服务的切换仍按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 执行。
 
 ### 失败后重跑
 

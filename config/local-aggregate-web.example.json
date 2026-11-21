@@ -9,6 +9,10 @@
     "serverPort": 38886,
     "hostDaemonPort": 38887
   },
+  "machineCli": {
+    "home": "/home/<cli-user>",
+    "dataDir": "/home/<cli-user>/.bb-machines/<server-host>"
+  },
   "tailscale": {
     "serveUrl": "https://<machine>.<tailnet>.ts.net",
     "serveTarget": "http://127.0.0.1:38886"

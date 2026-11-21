@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFileSync, statSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export function replacementDropIn({ dropIn, oldDirectory, target, release }) {
   const starts = dropIn
@@ -61,7 +61,7 @@ if (
     throw new Error(
       "Usage: node scripts/fork-cutover.mjs <config.json> <target-directory> <source-sha>",
     );
-  const { service } = JSON.parse(readFileSync(configPath, "utf8"));
+  const { service, machineCli } = JSON.parse(readFileSync(configPath, "utf8"));
   for (const key of ["systemdUnit", "systemdDropInPath"])
     if (typeof service?.[key] !== "string" || /[\r\n]/.test(service[key]))
       throw new Error(`Invalid service.${key}`);
@@ -72,6 +72,10 @@ if (
       service[key] > 65535
     )
       throw new Error(`Invalid service.${key}`);
+  for (const key of ["home", "dataDir"])
+    if (typeof machineCli?.[key] !== "string" || !isAbsolute(machineCli[key]))
+      throw new Error(`Configure machineCli.${key} with an absolute path`);
+  const cliUid = statSync(machineCli.home).uid;
   const target = resolve(targetArg);
   const show = (property) =>
     execFileSync(
@@ -118,7 +122,17 @@ if (
     );
   const unit = quote(service.systemdUnit);
   const path = quote(service.systemdDropInPath);
+  const cliScript = fileURLToPath(
+    new URL("./fork-machine-cli.mjs", import.meta.url),
+  );
+  const cliNode = release
+    ? resolve(target, "bin/node")
+    : service.nodeExecutable;
+  if (typeof cliNode !== "string" || !isAbsolute(cliNode))
+    throw new Error("Configure service.nodeExecutable with an absolute path");
+  const cliCommand = (action) =>
+    `sudo -u '#${cliUid}' -- ${quote(cliNode)} ${quote(cliScript)} ${action} ${quote(resolve(configPath))} ${quote(target)}`;
   process.stdout.write(
-    `Read-only plan; this command does not apply it. A BB thread may initiate cutover through an independent systemd task after preparing upgrade-resume. Follow .bb/skills/local-aggregate-deploy/SKILL.md; the task must finish stop, backup, start, verification and rollback without BB.\nExpected source: ${source}\nNew drop-in:\n${replacement}\nApply after backup:\nprintf %s ${quote(replacement)} | sudo tee ${path} >/dev/null\nsudo systemctl daemon-reload\nsudo systemctl start ${unit}\nsystemctl show ${unit} -p ExecStart -p WorkingDirectory -p ActiveState -p NRestarts\ncurl -fsS http://127.0.0.1:${service.serverPort}/health\ncurl -fsS http://127.0.0.1:${service.hostDaemonPort}/health\ncurl -fsS http://127.0.0.1:${service.serverPort}/api/v1/system/version\nRollback after stopping the new unit:\nprintf %s ${quote(dropIn)} | sudo tee ${path} >/dev/null\nsudo systemctl daemon-reload\nsudo systemctl start ${unit}\n`,
+    `Read-only plan; this command does not apply it. A BB thread may initiate cutover through an independent systemd task after preparing upgrade-resume. Follow .bb/skills/local-aggregate-deploy/SKILL.md; the task must finish stop, backup, start, verification and rollback without BB.\nExpected source: ${source}\nBefore stopping the unit (set CLI_BACKUP to an unused absolute path under a private directory writable by the CLI account):\n${cliCommand("check")}\nNew drop-in:\n${replacement}\nApply after backup:\nprintf %s ${quote(replacement)} | sudo tee ${path} >/dev/null\nsudo systemctl daemon-reload\nsudo systemctl start ${unit}\nsystemctl show ${unit} -p ExecStart -p WorkingDirectory -p ActiveState -p NRestarts\ncurl -fsS http://127.0.0.1:${service.serverPort}/health\ncurl -fsS http://127.0.0.1:${service.hostDaemonPort}/health\n${cliCommand("install")} "$CLI_BACKUP"\n${cliCommand("verify")}\nRollback after stopping the new unit (restore both CLI entries and the old drop-in):\n${cliCommand("restore")} "$CLI_BACKUP"\nprintf %s ${quote(dropIn)} | sudo tee ${path} >/dev/null\nsudo systemctl daemon-reload\nsudo systemctl start ${unit}\n`,
   );
 }

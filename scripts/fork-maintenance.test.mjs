@@ -1,15 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { replacementDropIn } from "./fork-cutover.mjs";
 import {
   latestStable,
@@ -821,4 +826,83 @@ test("aggregate rebuild retains push history while dropping removed product file
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("a cutover updates the clean-PATH machine CLI, rejects server drift, and restores the old entries", async (t) => {
+  const home = mkdtempSync(join(tmpdir(), "bb-fork-machine-cli-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const dataDir = join(home, ".bb-machines/server");
+  const machineBin = join(dataDir, "npm/bin");
+  const shimBin = join(home, ".local/bin");
+  const target = join(home, "release");
+  const targetBin = join(target, "bin");
+  for (const dir of [machineBin, shimBin, targetBin])
+    mkdirSync(dir, { recursive: true });
+  const machine = join(machineBin, "bb");
+  const shim = join(shimBin, "bb");
+  const oldShim = `#!/bin/sh
+PATH='/old/runtime/bin':"$PATH"
+export PATH
+if [ -x '${machine}' ]; then exec '${machine}' "$@"; fi
+printf '%s\n' 'No installed bb machine CLI is available.' >&2
+exit 1
+`;
+  const executable = (path, body) =>
+    writeFileSync(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  executable(join(machineBin, "old"), "echo 0.46.1");
+  symlinkSync("old", machine);
+  writeFileSync(shim, oldShim, { mode: 0o755 });
+  executable(
+    join(targetBin, "bb"),
+    `test "$(dirname "$0")" = '${targetBin}' || exit 1; echo 0.49.0`,
+  );
+  writeFileSync(join(target, "release.json"), '{"version":"0.49.0"}');
+
+  let currentVersion = "0.46.1";
+  const server = createServer((request, response) => {
+    if (request.url !== "/api/v1/system/version") {
+      response.writeHead(404).end();
+      return;
+    }
+    response.end(JSON.stringify({ currentVersion }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const config = join(home, "config.json");
+  writeFileSync(
+    config,
+    JSON.stringify({
+      machineCli: { home, dataDir },
+      service: { serverPort: server.address().port },
+    }),
+  );
+  const backup = join(home, "previous");
+  const script = fileURLToPath(
+    new URL("./fork-machine-cli.mjs", import.meta.url),
+  );
+  const run = (...args) =>
+    promisify(execFile)(process.execPath, [script, ...args]);
+  const env = { HOME: home, PATH: `${shimBin}:/usr/bin:/bin` };
+  const version = () =>
+    execFileSync("bb", ["--version"], { env, encoding: "utf8" }).trim();
+
+  assert.equal(version(), "0.46.1");
+  await run("check", config, target);
+  await run("install", config, target, backup);
+  assert.equal(version(), "0.49.0");
+  await assert.rejects(
+    run("verify", config, target),
+    /Server version mismatch/,
+  );
+
+  currentVersion = "0.49.0";
+  assert.match(
+    (await run("verify", config, target)).stdout,
+    /Clean PATH bb --version: 0.49.0/,
+  );
+  await run("restore", config, target, backup);
+  assert.equal(readFileSync(shim, "utf8"), oldShim);
+  assert.equal(readlinkSync(machine), "old");
+  assert.equal(version(), "0.46.1");
+  await assert.rejects(run("verify", config, target), /CLI version mismatch/);
 });

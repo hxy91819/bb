@@ -33,6 +33,8 @@ git check-ignore -v config/local-aggregate-web.json
 `config/local-aggregate-web.<target>.json`。每个目标必须有独立的数据目录和
 服务单元，不得共享正在使用的数据目录。
 
+在 `machineCli.home` 填写运行系统级 `bb` 的账号 home，在 `machineCli.dataDir` 填写该 shim 默认指向的机器注册目录（通常为 `~/.bb-machines/<server-host>`，与 service.dataDir 分开）。部署任务用该账号更新 `npm/bin/bb` 和 `~/.local/bin/bb`，并用干净 PATH 核验版本。
+
 ## 服务模型
 
 - 先检查实际 unit 的 ExecStart 和 WorkingDirectory，区分源码运行与 Release 包运行。源码服务从通过隔离构建的聚合 worktree 启动 `packages/bb-app/src/bin/bb-app.ts`；Release 服务使用校验和安装 smoke 通过的包内 `bin/bb-app`。切换计划必须同时核对两个指针，按 [local-aggregate-deploy](../.bb/skills/local-aggregate-deploy/SKILL.md) 生成。`scripts/start-bb.mjs` 会重新构建，不用于这个常驻服务入口。
