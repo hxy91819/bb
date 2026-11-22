@@ -780,8 +780,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         bullets: [
           "Bring any CLI agent into bb, with its own models and icon",
           "Run every thread started with it through a bridge the plugin ships",
-          "Report context usage, service tiers, and install status",
-          "Distinguish unknown reasoning from confirmed models with no selectable levels",
+          "Report context usage, service tiers, install status, and whether reasoning capabilities are known",
         ],
         apiSymbols: [
           "contextSnapshotSchema",
