@@ -68,6 +68,21 @@ export function createDesktopReleaseConfig(channel) {
   };
 }
 
-export function createDesktopUpdateReleaseBaseUrl(releaseTag) {
-  return `https://github.com/get-bb/bb/releases/download/${releaseTag}/`;
+export function createDesktopUpdateReleaseBaseUrl(releaseTag, override) {
+  if (!override?.trim()) {
+    return `https://github.com/get-bb/bb/releases/download/${releaseTag}/`;
+  }
+  const url = new URL(override.trim());
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      "Desktop update base URL must be HTTPS without credentials, query or fragment",
+    );
+  }
+  return `${url.href.replace(/\/+$/u, "")}/`;
 }
