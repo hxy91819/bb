@@ -29,6 +29,12 @@ export type {
 
 export type * from "./machine-bootstrap.js";
 
+export type {
+  ExperimentalThreadActivityArgs,
+  ExperimentalThreadActivityResult,
+} from "@bb/sdk";
+export type { ExperimentalActivityEvidence } from "@bb/server-contract";
+
 export {
   normalizeHostPath as experimental_normalizeHostPath,
   resolveHostPath as experimental_resolveHostPath,
