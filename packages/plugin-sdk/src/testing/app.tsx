@@ -25,6 +25,13 @@ import {
 } from "react";
 import { act, render, type RenderResult } from "@testing-library/react";
 import {
+  ThreadListContributionProvider,
+  type ThreadGroupingRecord,
+  type ThreadDecorationRecord,
+  useThreadListContributions,
+  useThreadRowDecorations,
+} from "../internal/thread-contribution-runtime.js";
+import {
   type ExperimentalPageTitle,
   type BbContext,
   type BbNavigate,
@@ -122,6 +129,8 @@ import {
   type ExperimentalInfoListRowProps,
   type PluginThreadActionEntry,
   type PluginThreadActionRegistration,
+  type experimental_ThreadListGroupingRegistration,
+  type experimental_ThreadRowDecorationRegistration,
   type PluginThreadActionRegistrationInfo,
   type PluginThreadActionsContextMenuProps,
   type PluginThreadActionsMenuProps,
@@ -1483,7 +1492,10 @@ function TestVoiceInputTextarea({
  * the target path, with the plugin's Preview body drawn from the file the
  * `filePreview` option returns for the target (nothing when it returns null).
  */
-function TestFilePreview({ target, renderPreview }: ExperimentalFilePreviewProps) {
+function TestFilePreview({
+  target,
+  renderPreview,
+}: ExperimentalFilePreviewProps) {
   const file = useSlotEnv("experimental_FilePreview").filePreview(target);
   return (
     <div data-testid="bb-file-preview" data-path={target.path}>
@@ -1982,6 +1994,8 @@ const testPluginSdkApp = {
     return useSlotEnv("experimental_useThreadActionRegistrations")
       .threadActionRegistrations;
   },
+  experimental_useThreadListContributions: useThreadListContributions,
+  experimental_useThreadRowDecorations: useThreadRowDecorations,
   experimental_ThreadActionsMenu: TestThreadActionsMenu,
   experimental_ThreadActionsContextMenu: TestThreadActionsContextMenu,
   experimental_PluginRpcCallError,
@@ -2192,6 +2206,8 @@ export interface CapturedPluginApp {
   threadContextCardRows: ExperimentalThreadContextCardRowRegistration[];
   threadContextCardSections: ExperimentalThreadContextCardSectionRegistration[];
   threadActions: PluginThreadActionRegistration<unknown>[];
+  threadListGroupings: experimental_ThreadListGroupingRegistration<unknown>[];
+  threadRowDecorations: experimental_ThreadRowDecorationRegistration<unknown>[];
   browserToolbarActions: ExperimentalPluginBrowserToolbarActionRegistration[];
   fileOpeners: PluginFileOpenerRegistration[];
   sourceCodeRenderers: PluginSourceCodeRendererRegistration[];
@@ -2417,6 +2433,15 @@ export interface RenderSlotOptions<
   /** `experimental_usePluginId()` value; defaults to `test-plugin`. */
   pluginId?: string;
   experimental_threadCreationContextHost?: experimental_ThreadCreationContextHost;
+  /** Real collected registrations, run by the same app-wide host as production. */
+  experimental_threadListPlugins?: readonly {
+    pluginId: string;
+    generation?: number;
+    registrations: Pick<
+      CapturedPluginApp,
+      "threadListGroupings" | "threadRowDecorations"
+    >;
+  }[];
   /** Initial `useRealtimeConnectionState()` value; defaults to `connected`. */
   realtimeConnectionState?: PluginRealtimeConnectionState;
   /** Initial state for this render's isolated composer scope and view. */
@@ -3538,13 +3563,57 @@ export function renderSlot<
     }, [value]);
     return <>{children}</>;
   }
-  const renderSlotTree = (ui: ReactNode): ReactElement => (
-    <SlotEnvContext.Provider value={env}>
-      <SlotLifecycleGuard onUnmount={releaseComposerOwnership}>
-        <SlotPageTitle>{ui}</SlotPageTitle>
-      </SlotLifecycleGuard>
-    </SlotEnvContext.Provider>
-  );
+  let contributionPlugins: typeof options.experimental_threadListPlugins;
+  let contributionGroupings: ThreadGroupingRecord[] = [];
+  let contributionDecorations: ThreadDecorationRecord[] = [];
+  const renderSlotTree = (ui: ReactNode): ReactElement => {
+    const plugins = options.experimental_threadListPlugins ?? [];
+    if (
+      !contributionPlugins ||
+      plugins.length !== contributionPlugins.length ||
+      plugins.some((plugin, index) => {
+        const previous = contributionPlugins?.[index];
+        return (
+          plugin.pluginId !== previous?.pluginId ||
+          plugin.generation !== previous?.generation ||
+          plugin.registrations !== previous?.registrations
+        );
+      })
+    ) {
+      contributionPlugins = plugins.map((plugin) => ({ ...plugin }));
+      contributionGroupings = plugins.flatMap((plugin) =>
+        plugin.registrations.threadListGroupings.map((registration) => ({
+          ...registration,
+          pluginId: plugin.pluginId,
+          generation: plugin.generation ?? 1,
+        })),
+      );
+      contributionDecorations = plugins.flatMap((plugin) =>
+        plugin.registrations.threadRowDecorations.map((registration) => ({
+          ...registration,
+          pluginId: plugin.pluginId,
+          generation: plugin.generation ?? 1,
+        })),
+      );
+    }
+    return (
+      <SlotEnvContext.Provider value={env}>
+        <SlotLifecycleGuard onUnmount={releaseComposerOwnership}>
+          <ThreadListContributionProvider
+            groupings={contributionGroupings}
+            decorations={contributionDecorations}
+            wrapCollector={(pluginId, child) => (
+              <SlotEnvContext.Provider value={{ ...env, pluginId }}>
+                {child}
+              </SlotEnvContext.Provider>
+            )}
+          >
+            <SlotPageTitle>{ui}</SlotPageTitle>
+          </ThreadListContributionProvider>
+        </SlotLifecycleGuard>
+      </SlotEnvContext.Provider>
+    );
+  };
   const Component = registration.component;
   const element = renderSlotTree(<Component {...props} />);
   const result = render(element);

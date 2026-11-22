@@ -82,6 +82,7 @@ describe("guide fixture boundaries", () => {
 
   it("renders the anchor labels of the configuration and recovery fixtures", () => {
     for (const [id, component] of [
+      ["thread-list", AppShellWireframe],
       ["declarative-settings", SettingsWireframe],
       ["plugin-status", ExtensionsPluginPageWireframe],
     ] as const) {
