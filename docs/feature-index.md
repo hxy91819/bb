@@ -101,7 +101,7 @@ bb plugin install 'git:https://github.com/hxy91819/bb-plugin-account-limits.git@
 
 ### 与服务切换一起收尾
 
-- 旧 BB 能加载的新插件在停服前完成更新；`upgrade-resume` 先更新并确认后台服务运行，最后才 `prepare` 恢复批次。只兼容新 BB 的插件先准备好源码和构建，在新服务可用后继续更新；未完成时保留明确的待办原因。
+- 旧 BB 能加载的新插件在停服前完成更新；`upgrade-resume` 的持久安装目录、停服前检查和重启后批次核验按[部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md#3-cutover-from-bb-or-an-external-agent)执行。只兼容新 BB 的插件先准备好源码和构建，在新服务可用后继续更新；未完成时保留明确的待办原因。
 - 更换或重载 `acp-extensions` 前确认 ACP 会话空闲，避免中断正在执行的任务。保持 `acp-*` provider ID、customAgents 和其余配置；旧内置 `provider-acp`、`thread-list` 的停用状态不因升级而恢复。
 - 更新失败时回到已保存的源码 commit 或原路径并按原启停状态加载，保留迁移回执和用户数据；若版本含数据库迁移，按插件自己的迁移/回退契约处理。
 - 验收读回插件状态、关键配置、书签数据、侧栏偏好和 ACP provider，核对恢复批次实际结果。交付各仓库/插件的更新前后 commit/版本、更新结果及尚未完成的项目。只有 BB 包已换新、插件源码仍旧，不能宣称整个环境更新完成。
