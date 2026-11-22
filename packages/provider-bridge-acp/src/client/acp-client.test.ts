@@ -400,6 +400,7 @@ describe("agent capabilities", () => {
         },
       ],
       meta: { "x.ai/fs_notify": true },
+      initializeMeta: {},
     });
   });
 

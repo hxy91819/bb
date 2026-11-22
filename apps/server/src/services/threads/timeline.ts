@@ -96,6 +96,7 @@ import {
   listTodoSnapshotEventRowsForThread,
   listStoredDelegatingItemRowsByItemIds,
   listStoredTurnInputAcceptedRowsByClientRequestIds,
+  listStoredTurnInputDeliveryRowsByClientRequestIds,
   listStoredTurnRejectedRowsByClientRequestIds,
   listStoredTurnStartedRowsByTurnIdsUpToSequence,
   listTimelineWindowHintsDescending,
@@ -332,6 +333,7 @@ interface SelectClientRequestContextRowsArgs {
 
 interface SelectedClientRequestContextRows {
   acceptedRows: StoredEventRow[];
+  deliveryRows: StoredEventRow[];
   rejectedRows: StoredEventRow[];
 }
 
@@ -647,17 +649,26 @@ function selectClientRequestContextRows(
   const clientRequestIds = collectSteerClientRequestIdsNeedingContext(
     args.rows,
   );
-  if (clientRequestIds.length === 0) {
-    return { acceptedRows: [], rejectedRows: [] };
+  const deliveryClientRequestIds = args.rows.flatMap((row) => {
+    const id = tryReadSteerClientTurnRequestedRequestId(row);
+    return id === null ? [] : [id];
+  });
+  if (clientRequestIds.length === 0 && deliveryClientRequestIds.length === 0) {
+    return { acceptedRows: [], deliveryRows: [], rejectedRows: [] };
   }
   const afterSequence = minSequenceOfClientRequests(
     args.rows,
-    new Set(clientRequestIds),
+    new Set([...clientRequestIds, ...deliveryClientRequestIds]),
   );
   return {
     acceptedRows: listStoredTurnInputAcceptedRowsByClientRequestIds(db, {
       afterSequence,
       clientRequestIds,
+      threadId: args.threadId,
+    }),
+    deliveryRows: listStoredTurnInputDeliveryRowsByClientRequestIds(db, {
+      afterSequence,
+      clientRequestIds: deliveryClientRequestIds,
       threadId: args.threadId,
     }),
     rejectedRows: listStoredTurnRejectedRowsByClientRequestIds(db, {
@@ -1206,6 +1217,18 @@ function selectStandardTimelineEventRows(
             clientRequestIds: unresolvedRequests,
           }),
         ].filter((row) => row.sequence <= maxSeq);
+  const steerRequestIds = requestContext.flatMap((row) => {
+    const id = tryReadSteerClientTurnRequestedRequestId(row);
+    return id === null ? [] : [id];
+  });
+  const deliveryContext =
+    steerRequestIds.length === 0
+      ? []
+      : listStoredTurnInputDeliveryRowsByClientRequestIds(db, {
+          threadId: thread.id,
+          afterSequence: contextStart - 1,
+          clientRequestIds: steerRequestIds,
+        }).filter((row) => row.sequence <= maxSeq);
   const interruptionRows = listTimelineInterruptionRows(db, {
     threadId: thread.id,
     sequenceStart: epochSequenceStart,
@@ -1248,6 +1271,7 @@ function selectStandardTimelineEventRows(
         rows: mergeStoredEventRowsById([
           ...interruptionRows,
           ...terminalContext,
+          ...deliveryContext,
           ...contextRows,
           ...requestedRows,
           ...rows,
@@ -1509,6 +1533,7 @@ function buildThreadTimelineInternal(
   );
   const acceptedClientRequestContext: AcceptedClientRequestContext = {
     acceptedClientRequestEvents: [],
+    deliveryClientRequestEvents: [],
     rejectedClientRequestEvents: [],
   };
   const timelineOptions = {
@@ -1807,6 +1832,9 @@ function buildThreadConversationRows(
       acceptedClientRequestEvents: clientRequestContextRows.acceptedRows.map(
         (row) => toThreadEventWithMeta(row),
       ),
+      deliveryClientRequestEvents: clientRequestContextRows.deliveryRows.map(
+        (row) => toThreadEventWithMeta(row),
+      ),
       rejectedClientRequestEvents: clientRequestContextRows.rejectedRows.map(
         (row) => toThreadEventWithMeta(row),
       ),
@@ -1867,6 +1895,9 @@ function selectThreadConversationOutline(
   });
   const acceptedClientRequestContext: AcceptedClientRequestContext = {
     acceptedClientRequestEvents: clientRequestContextRows.acceptedRows.map(
+      (row) => toThreadEventWithMeta(row),
+    ),
+    deliveryClientRequestEvents: clientRequestContextRows.deliveryRows.map(
       (row) => toThreadEventWithMeta(row),
     ),
     rejectedClientRequestEvents: clientRequestContextRows.rejectedRows.map(
