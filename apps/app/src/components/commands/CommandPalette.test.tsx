@@ -2275,7 +2275,27 @@ describe("CommandPalette", () => {
     },
   );
 
-  it("only includes Files settings when local helper access is available", async () => {
+  it("opens a specific settings page", async () => {
+    renderPalette();
+    openPalette();
+    await waitFor(() => expect(searchField()).toBeTruthy());
+
+    fireEvent.change(searchField(), {
+      target: { value: "keyboard settings" },
+    });
+    await waitFor(() =>
+      expect(selectedOption()?.textContent).toContain("Keyboard settings"),
+    );
+    fireEvent.keyDown(searchField(), { key: "Enter" });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/settings/keyboard",
+      ),
+    );
+  });
+
+  it("includes Files settings without local helper access", async () => {
     renderPalette();
     openPalette();
     await waitFor(() => expect(searchField()).toBeTruthy());
@@ -2283,19 +2303,6 @@ describe("CommandPalette", () => {
     fireEvent.change(searchField(), {
       target: { value: "files settings" },
     });
-    await waitFor(() =>
-      expect(screen.queryAllByRole("option")).toHaveLength(0),
-    );
-
-    fireEvent.keyDown(searchField(), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
-    testState.filesAvailable = true;
-    openPalette();
-    await waitFor(() => expect(searchField()).toBeTruthy());
-    fireEvent.change(searchField(), {
-      target: { value: "files settings" },
-    });
-
     await waitFor(() =>
       expect(selectedOption()?.textContent).toContain("Files settings"),
     );
