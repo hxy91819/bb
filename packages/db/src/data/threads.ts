@@ -39,6 +39,7 @@ import type { DbQueryConnection } from "../connection.js";
 import type { DbNotifier } from "../notifier.js";
 import {
   environments,
+  events,
   pendingInteractions,
   projects,
   terminalSessions,
@@ -1009,14 +1010,23 @@ export function searchThreadMessages(
   const rows = db
     .select({
       text: threadSearchSegments.text,
+      timestamp: events.createdAt,
       sourceKind: sql<
         "user_message" | "assistant_message"
       >`${threadSearchSegments.sourceKind}`,
       sourceSeq: sql<number>`${threadSearchSegments.sourceSeq}`,
     })
     .from(threadSearchSegments)
+    .leftJoin(events, and(
+      eq(events.threadId, threadSearchSegments.threadId),
+      eq(events.sequence, threadSearchSegments.sourceSeq),
+    ))
     .where(where)
-    .orderBy(asc(threadSearchSegments.sourceSeq), asc(threadSearchSegments.id))
+    .orderBy(
+      desc(events.createdAt),
+      desc(threadSearchSegments.sourceSeq),
+      asc(threadSearchSegments.id),
+    )
     .limit(args.limit)
     .offset(args.offset)
     .all();
@@ -1025,6 +1035,7 @@ export function searchThreadMessages(
     matches: rows.map((row) => ({
       sourceKind: row.sourceKind,
       sourceSeq: row.sourceSeq,
+      timestamp: row.timestamp,
       ...buildThreadSearchSnippet({
         text: row.text,
         tokens: [args.query],

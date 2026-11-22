@@ -22,8 +22,9 @@ messages in one thread, including unloaded history. Core CLI `bb thread search
 --thread` and plugin UIs use this same SDK method and route, backed by the existing
 search segments. System messages, tool output and agent-only input are excluded.
 Matching is a literal substring with case and accent normalization; `total` counts
-messages. Results are ordered by sequence and contain snippets with UTF-16 highlight
-ranges and `sourceSeq` for navigation. The server defaults limit/offset to 50/0;
+messages. Results are ordered by descending event timestamp, then descending message
+sequence. Matches contain UTF-16 snippet highlight ranges, `sourceSeq` for
+navigation, and `timestamp` in Unix milliseconds (null when the event is unavailable). The server defaults limit/offset to 50/0;
 limit is 1-100 and query length 1-1000 after trimming.
 
 Before stabilization, audit substring/Unicode normalization, edited/deleted history,

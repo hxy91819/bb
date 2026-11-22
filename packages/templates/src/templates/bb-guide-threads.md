@@ -213,9 +213,10 @@ Searching one conversation:
 Thread-scoped search uses a literal substring, ignoring case and accents, and
 supports single characters and punctuation. It searches persisted user messages
 and assistant replies, including unloaded history; titles, system notices,
-agent-only input and tool output are excluded. Results are ordered by message
-sequence. `total` counts matching messages, not occurrences. The default page
-contains 50 messages. Snippets include UTF-16 `highlightRanges` and `sourceSeq`
-for message navigation. SDK: `threads.experimental_searchMessages({ threadId, query, limit,
+agent-only input and tool output are excluded. Results are ordered newest first,
+with message sequence breaking ties. `total` counts matching messages, not
+occurrences. The default page contains 50 messages. Snippets include UTF-16
+`highlightRanges`, `sourceSeq` for navigation, and `timestamp` (Unix milliseconds,
+or null when the original event is unavailable). SDK: `threads.experimental_searchMessages({ threadId, query, limit,
 offset })`; HTTP: `GET /api/v1/threads/:id/search`. Query length is 1-1000
 characters after trimming. `--offset` requires `--thread`.

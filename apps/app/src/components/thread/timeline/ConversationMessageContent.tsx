@@ -260,6 +260,7 @@ function CollapsibleMessageText({
     <>
       {prefixText !== null ? (
         <span
+          data-thread-search-text=""
           className="line-clamp-1 text-muted-foreground"
           title={prefixText.trimEnd()}
         >
@@ -268,6 +269,7 @@ function CollapsibleMessageText({
       ) : null}
       <div
         ref={bodyRef}
+        data-thread-search-text=""
         data-image-gallery-clipped={!isExpanded ? "" : undefined}
         className={cn(
           "break-words overflow-x-auto",
@@ -616,7 +618,7 @@ function AssistantConversationMessage({
       )}
       data-message-column=""
     >
-      <SelectableMessageProse onSelect={onSelectProse}>
+      <SelectableMessageProse onSelect={onSelectProse} searchable={!streaming}>
         {codeFenceRendererRegistry === null ? (
           markdown
         ) : (

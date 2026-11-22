@@ -1,4 +1,9 @@
-import { archiveThread, threadSearchSegments, markThreadDeleted } from "@bb/db";
+import {
+  archiveThread,
+  events,
+  threadSearchSegments,
+  markThreadDeleted,
+} from "@bb/db";
 import {
   threadSearchResponseSchema,
   threadMessageSearchResponseSchema,
@@ -135,16 +140,40 @@ describe("public thread search route", () => {
           })),
         )
         .run();
+      harness.deps.db
+        .insert(events)
+        .values(
+          [100, 400, 200, 200].map(
+            (createdAt, index): typeof events.$inferInsert => ({
+              id: `message-event-${index}`,
+              threadId: thread.id,
+              scopeKind: "thread",
+              sequence: index + 1,
+              type:
+                index % 2 === 0 ? "client/turn/requested" : "item/completed",
+              createdAt,
+            }),
+          ),
+        )
+        .run();
       for (const query of ["中", "文会", "%_", "sql()", "cafe", "😀"]) {
         const response = await harness.app.request(
-          `/api/v1/threads/${thread.id}/search?${new URLSearchParams({ query, limit: "2", offset: "1" })}`,
+          `/api/v1/threads/${thread.id}/search?${new URLSearchParams({ query, limit: "2", offset: "0" })}`,
         );
         expect(response.status).toBe(200);
         const body = threadMessageSearchResponseSchema.parse(
           await readJson(response),
         );
         expect(body.total).toBe(4);
-        expect(body.matches.map((match) => match.sourceSeq)).toEqual([2, 3]);
+        expect(
+          body.matches.map(({ sourceSeq, timestamp }) => [
+            sourceSeq,
+            timestamp,
+          ]),
+        ).toEqual([
+          [2, 400],
+          [4, 200],
+        ]);
         for (const match of body.matches) {
           expect(match.text.length).toBeLessThan(200);
           expect(match.highlightRanges.length).toBeGreaterThan(0);
@@ -155,6 +184,14 @@ describe("public thread search route", () => {
           }
         }
       }
+      const olderPage = await harness.app.request(
+        `/api/v1/threads/${thread.id}/search?query=中&limit=2&offset=2`,
+      );
+      expect(
+        threadMessageSearchResponseSchema
+          .parse(await readJson(olderPage))
+          .matches.map((match) => match.sourceSeq),
+      ).toEqual([3, 1]);
       const empty = await harness.app.request(
         `/api/v1/threads/${thread.id}/search?query=missing`,
       );

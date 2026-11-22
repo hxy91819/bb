@@ -545,6 +545,7 @@ export const threadMessageSearchResponseSchema = z.object({
     threadSearchMatchSchema.extend({
       sourceKind: z.enum(["user_message", "assistant_message"]),
       sourceSeq: z.number().int().nonnegative(),
+      timestamp: z.number().int().nonnegative().nullable(),
     }),
   ),
 });
