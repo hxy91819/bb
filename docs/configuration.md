@@ -1253,6 +1253,35 @@ Two host-daemon environment variables reach the Claude Code bridge:
 such as a CI runner (mint it with `claude setup-token`). See the
 `claude-code-provider` skill.
 
+#### Named Claude Code homes
+
+`homeBindings` is a JSON list, default `[]`, configured through the same
+plugin settings interface:
+
+```sh
+bb plugin config provider-claude-code set homeBindings '[{"id":"work","displayName":"Work","claudeConfigDir":"~/.claude-work"}]'
+bb provider models claude-code-work
+bb thread spawn --provider claude-code-work --prompt 'Inspect this repository'
+```
+
+Each binding adds `Claude Code · <displayName>` to the provider picker. Its
+`claudeConfigDir` is an absolute path or `~/` expression on the execution
+machine. Endpoint, credentials, model aliases and context settings belong in
+that directory's native `settings.json`. Existing Claude settings are not
+copied. The binding uses the same installed CLI and native bridge, with its
+own session history, plugins and native skills; it bypasses Account Pooler.
+Labels can change, but a previously used ID retains its directory identity
+even after removal. Restore the same ID and directory to resume old threads.
+
+Optional `reasoningLevels` overrides the advertised effort ladder;
+`defaultReasoningLevel` must be included in that ladder. Set
+`supportsFastMode: false` for endpoints that do not support Claude's Fast
+service tier. These fields configure BB's controls, not the remote model.
+For example, Ollama GLM-5.3-Flash uses `low`, `high`, and `max`. Credentials
+remain host-local; the binding contains no key or token. A ready health check
+confirms local CLI authentication, not remote model availability. Bound providers
+do not publish Anthropic subscription quota readings.
+
 ### Account Pooler [Experimental]
 
 The builtin Account Pooler plugin pools Claude and Codex accounts behind the bb

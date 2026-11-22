@@ -77,3 +77,30 @@ Automatic context breakdowns run in a separate, non-persisted fork of the saved
 conversation. Reporting never sends prompts or control requests to the live
 Claude session. A timeout, replacement, or thread stop closes the reporter;
 the live conversation does not wait for reporting or restart because of it.
+
+For a separate Claude account or Anthropic-compatible endpoint, configure
+`homeBindings` with a JSON list of `id`, `displayName`, and `claudeConfigDir`:
+
+```sh
+bb plugin config provider-claude-code set homeBindings '[{"id":"work","displayName":"Work","claudeConfigDir":"~/.claude-work"}]'
+bb provider models claude-code-work
+```
+
+Paths resolve on the execution machine. Put endpoint credentials and model
+settings in that directory's `settings.json`; BB stores only the binding,
+never the credential. Bound providers reuse the native Claude bridge, use their
+own history and skills, and bypass Account Pooler. Removing a binding preserves
+its threads; restore the same ID and directory to resume them. Renaming the
+label is supported; use a new ID to change its directory.
+
+For a custom endpoint, optional `reasoningLevels` and `defaultReasoningLevel`
+override its advertised effort controls. `supportsFastMode: false` hides
+Claude's paid Fast mode. For example, Ollama GLM-5.3-Flash supports
+`["low","high","max"]`, with default `"max"`. These declarations describe
+capabilities; configure Claude's own effort support in `settings.json` as well.
+Use `CLAUDE_CODE_MAX_CONTEXT_TOKENS` for an unknown model's real window and
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW` for the user's chosen compaction threshold.
+The bound health check inspects local CLI authentication; it does not prove
+that the endpoint accepts a particular model.
+
+Bound Claude providers do not publish Anthropic subscription quota readings.
