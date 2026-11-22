@@ -123,7 +123,12 @@ const codexBridgeCommandSchema = z.discriminatedUnion("method", [
     method: z.literal("initialize"),
     params: initializeParamsSchema,
   }),
-  z.object({ method: z.literal("model/list"), params: modelListParamsSchema }),
+  z.object({
+    method: z.literal("model/list"),
+    params: modelListParamsSchema.extend({
+      envVars: z.record(z.string(), z.string()).optional(),
+    }),
+  }),
   z.object({
     method: z.literal("provider/health"),
     params: providerMaintenanceParamsSchema,
@@ -320,6 +325,7 @@ const CODEX_INITIALIZE_PARAMS = {
 };
 
 const CHILD_REQUEST_TIMEOUT_MS = 60_000;
+const LAUNCHER_HEALTH_TIMEOUT_MS = 10_000;
 const RATE_LIMIT_RECOVERY_TIMEOUT_MS = 5_000;
 const INTERRUPT_SETTLEMENT_TIMEOUT_MS = 5_000;
 const CODEX_ARCHIVED_SESSION_ERROR_PATTERN =
@@ -1040,21 +1046,28 @@ function spawnChildConnection(callbacks: {
 
 const ignoredChildResultSchema = z.unknown();
 
+function childRequestTimeout(deadline?: number): number {
+  return deadline === undefined
+    ? CHILD_REQUEST_TIMEOUT_MS
+    : Math.max(1, deadline - Date.now());
+}
+
 async function initializeChild(
   connection: CodexAppServerConnection,
+  deadline?: number,
 ): Promise<void> {
   await connection.request({
     method: "initialize",
     params: CODEX_INITIALIZE_PARAMS,
     resultSchema: ignoredChildResultSchema,
-    timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+    timeoutMs: childRequestTimeout(deadline),
   });
   if (configuredSkillExtraRoots !== null) {
     await connection.request({
       method: "skills/extraRoots/set",
       params: { extraRoots: configuredSkillExtraRoots },
       resultSchema: ignoredChildResultSchema,
-      timeoutMs: CHILD_REQUEST_TIMEOUT_MS,
+      timeoutMs: childRequestTimeout(deadline),
     });
   }
 }
@@ -1578,6 +1591,7 @@ async function rebuildThreadSession(
 async function withMaintenanceChild<T>(
   fn: (connection: CodexAppServerConnection) => Promise<T>,
   execution: CodexExecutionContext,
+  deadline?: number,
   envVars?: Readonly<Record<string, string>>,
 ): Promise<T> {
   const connection = spawnChildConnection({
@@ -1595,7 +1609,7 @@ async function withMaintenanceChild<T>(
   });
   maintenanceConnections.add(connection);
   try {
-    await initializeChild(connection);
+    await initializeChild(connection, deadline);
     return await fn(connection);
   } finally {
     maintenanceConnections.delete(connection);
@@ -1659,7 +1673,7 @@ async function handleModelList(
         models,
         selectedOnlyModels,
       });
-    }, execution, envVars);
+    }, execution, undefined, envVars);
   } catch (error) {
     sendError(
       id,
@@ -2666,6 +2680,39 @@ async function handleRequest(
           result.health.loginCommand = codexHomeLoginCommand(
             execution.codexHome,
           );
+        if (execution.command !== undefined && result.supported) {
+          const deadline = Date.now() + LAUNCHER_HEALTH_TIMEOUT_MS;
+          try {
+            const account = await withMaintenanceChild(
+              (child) =>
+                child.request({
+                  method: "account/read",
+                  params: {},
+                  timeoutMs: childRequestTimeout(deadline),
+                  resultSchema: z.object({ requiresOpenaiAuth: z.boolean() }),
+                }),
+              execution,
+              deadline,
+            );
+            if (!account.requiresOpenaiAuth) {
+              result.health.status = "ready";
+              result.health.accountEmail = null;
+              result.health.planLabel = null;
+              result.health.loginCommand = null;
+              result.health.localLoginCommand = null;
+              result.health.installedVersion = null;
+              result.health.canInstall = false;
+              result.health.canUpdate = false;
+              result.health.statusMessage =
+                "Authentication managed by the configured Codex launcher.";
+            }
+          } catch {
+            if (result.health.status === "ready")
+              result.health.status = "unknown";
+            result.health.statusMessage =
+              "The configured Codex launcher could not be verified.";
+          }
+        }
         sendResult(request.id, result);
       }
       break;
