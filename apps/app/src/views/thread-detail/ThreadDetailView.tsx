@@ -1525,6 +1525,7 @@ function ThreadDetailViewInternal(
         onCreateNewThreadInEnvironment,
         onOpenThreadInfo: openThreadInfo,
         permissionPolicy: "editable",
+        sideChatAvailable: isForkAvailable,
       }}
       environment={environment ?? null}
       presentation={THREAD_DETAIL_SCREEN_PRESENTATION}

@@ -57,6 +57,7 @@ import {
   ThreadDetailPromptArea,
   type ThreadDetailSentMessageEdit,
 } from "./ThreadDetailPromptArea";
+import { PluginThreadPanelNavigationProvider } from "@/test/fixtures/thread-panel-navigation";
 import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
 
 vi.mock("@/hooks/usePromptDraftStorage", async (importOriginal) => ({
@@ -130,6 +131,7 @@ function makePendingInteraction(): PendingInteraction {
 }
 
 interface RenderPromptAreaOptions {
+  isForkAvailable?: boolean;
   activePromptMode?: ThreadTimelineActivePromptMode | null;
   activeWorkflows?: TimelineWorkflowWorkRow[];
   childThreadsSection?: ComponentProps<
@@ -152,6 +154,7 @@ interface RenderPromptAreaOptions {
 let testQueryClient: QueryClient;
 
 function buildPromptAreaElement({
+  isForkAvailable = false,
   activePromptMode = null,
   activeWorkflows = [],
   childThreadsSection = null,
@@ -167,6 +170,7 @@ function buildPromptAreaElement({
   return (
     <QueryClientProvider client={testQueryClient}>
       <ThreadDetailPromptArea
+        isForkAvailable={isForkAvailable}
         activeBackgroundCommands={[]}
         activePromptMode={activePromptMode}
         activeWorkflows={activeWorkflows}
@@ -2199,5 +2203,57 @@ describe("ThreadDetailPromptArea", () => {
     );
     expect(mocks.sendMessageMutateAsync).not.toHaveBeenCalled();
     expect(mocks.promptDraft.clearIfCurrentMatches).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("side-chat composer command", () => {
+  it("offers the side-chat panel command in the main composer when the thread is forkable", () => {
+    setPluginSlotRegistrations(
+      "side-chat",
+      makePluginRegistrationSet({
+        threadPanelActions: [
+          {
+            id: "side-chat",
+            title: "Start side chat",
+            component: () => null,
+            run: vi.fn(),
+          },
+        ],
+      }),
+    );
+    render(
+      <PluginThreadPanelNavigationProvider openThreadPanel={vi.fn(() => true)}>
+        {buildPromptAreaElement({ isForkAvailable: true })}
+      </PluginThreadPanelNavigationProvider>,
+    );
+
+    expect(
+      screen.getByTestId("command-suggestions").textContent?.split(",") ?? [],
+    ).toContain("side");
+  });
+
+  it("omits the side-chat panel command when the thread is not forkable", () => {
+    setPluginSlotRegistrations(
+      "side-chat",
+      makePluginRegistrationSet({
+        threadPanelActions: [
+          {
+            id: "side-chat",
+            title: "Start side chat",
+            component: () => null,
+            run: vi.fn(),
+          },
+        ],
+      }),
+    );
+    render(
+      <PluginThreadPanelNavigationProvider openThreadPanel={vi.fn(() => true)}>
+        {buildPromptAreaElement()}
+      </PluginThreadPanelNavigationProvider>,
+    );
+
+    expect(screen.getByTestId("command-suggestions").textContent).not.toContain(
+      "side",
+    );
   });
 });
