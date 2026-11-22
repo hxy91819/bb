@@ -904,7 +904,7 @@ describe("thread runtime config", () => {
         expect.objectContaining({
           name: "update_environment_directory",
           inputSchema: expect.objectContaining({
-            required: ["path"],
+            required: ["path", "continueCurrentTask"],
           }),
         }),
       ]);
