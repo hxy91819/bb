@@ -1619,8 +1619,12 @@ async function selectAcpNativeModel(args: {
           resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
           timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
         });
+        setModel = false;
       } catch (error) {
-        if (!sessionModelsIncludeSelection) {
+        if (
+          !(error instanceof AcpAgentResponseError) ||
+          error.code !== -32601
+        ) {
           throw error;
         }
         setModel = true;
