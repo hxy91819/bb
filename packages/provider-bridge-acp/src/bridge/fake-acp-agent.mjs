@@ -139,6 +139,7 @@ const failResume = process.env.FAKE_ACP_FAIL_RESUME === "1";
 const resumeSession = process.env.FAKE_ACP_RESUME_SESSION === "1" || failResume;
 const forkSession = process.env.FAKE_ACP_FORK_SESSION === "1";
 const deleteSession = process.env.FAKE_ACP_DELETE_SESSION === "1";
+const checkpointFork = process.env.FAKE_ACP_CHECKPOINT_FORK === "1";
 const additionalDirectories =
   process.env.FAKE_ACP_ADDITIONAL_DIRECTORIES === "1";
 const forkReuseSourceId = process.env.FAKE_ACP_FORK_REUSE_SOURCE_ID === "1";
@@ -466,7 +467,13 @@ function configOptions() {
 
 function sessionCapabilities() {
   const capabilities = {
-    ...(forkSession ? { fork: {} } : {}),
+    ...(forkSession
+      ? {
+          fork: checkpointFork
+            ? { _meta: { "cursor-acp/checkpoint": true } }
+            : {},
+        }
+      : {}),
     ...(resumeSession ? { resume: {} } : {}),
     ...(deleteSession ? { delete: {} } : {}),
     ...(additionalDirectories ? { additionalDirectories: {} } : {}),
@@ -974,6 +981,9 @@ async function handlePrompt(message) {
       id: message.id,
       result: {
         stopReason,
+        ...(checkpointFork
+          ? { _meta: { "cursor-acp/checkpoint": "fake-checkpoint" } }
+          : {}),
         ...(grokContext
           ? { _meta: { usage: { inputTokens: 17_504, totalTokens: 17_531 } } }
           : {}),
