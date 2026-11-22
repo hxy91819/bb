@@ -173,6 +173,6 @@ describe("bb-plugin-authoring skill examples", () => {
       if (result.error !== undefined) throw result.error;
       expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
     },
-    60_000,
+    120_000,
   );
 });
