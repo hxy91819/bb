@@ -483,6 +483,11 @@ The removed `BB_INFERENCE`, `BB_INFERENCE_FALLBACK`, and `BB_TRANSCRIPTION`
 keys are ignored with a warning in `~/.bb/config.json`, and `bb-app config set`
 refuses them.
 
+Codex AI services use the primary machine's `HTTP_PROXY`, `HTTPS_PROXY`, and
+`NO_PROXY` environment variables (lowercase variants take precedence). This
+applies to thread titles, commit messages, and transcription. The host daemon
+must inherit these variables when it starts.
+
 bb accepts voice recordings up to 25 MB; a service may set a lower limit, and
 Codex transcribes up to 20 MB and bb cloud up to 10 MB. With a ChatGPT
 subscription login, Codex transcription can be blocked by Cloudflare bot
