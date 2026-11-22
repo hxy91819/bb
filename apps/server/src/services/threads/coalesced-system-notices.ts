@@ -21,6 +21,7 @@ export interface CoalescedNotice<State> {
   input: PromptInput[];
   notice: QueuedMessageSystemNotice;
   state: State;
+  sendAt?: number;
 }
 
 export interface PostCoalescedSystemNoticeArgs<State> {
@@ -72,7 +73,7 @@ export function postCoalescedSystemNotice<State>(
               id: pending.id,
               systemNotice: next.notice,
               threadId: args.threadId,
-              windowEndsAt: sendAt,
+              windowEndsAt: next.sendAt ?? sendAt,
             });
       if (merged !== null) return { kind: "merged", row: merged };
       return {
@@ -86,7 +87,7 @@ export function postCoalescedSystemNotice<State>(
           permissionMode: args.execution.permissionMode,
           serviceTier: args.execution.serviceTier,
           waitingOn: { kind: "time" },
-          sendAt,
+          sendAt: next.sendAt ?? sendAt,
           payload: { kind: "inline" },
           systemNotice: next.notice,
           deliveryMode: "steer",

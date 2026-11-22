@@ -1,4 +1,5 @@
 import { cancelEnvironmentSwitchContinuationInTransaction } from "./environment-switch-continuation.js";
+import { reconcileChildThreadRetryNotifications } from "./child-thread-notifications.js";
 import {
   isAppUpdateSendHoldSet,
   claimNextQueuedThreadMessageGroup,
@@ -661,6 +662,7 @@ export async function sendNextQueuedMessageIfPresent(
     return false;
   }
 
+  reconcileChildThreadRetryNotifications(deps, args.threadId);
   const nextQueuedMessages = claimNextQueuedThreadMessageGroup(
     deps.db,
     deps.hub,
