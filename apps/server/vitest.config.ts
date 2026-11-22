@@ -1,3 +1,4 @@
+import { serverTestWorkers } from "./scripts/server-test-workers.mjs";
 import {
   defineWorkspaceTestConfig,
   sharedWorkerProjects,
@@ -5,7 +6,7 @@ import {
 
 export default defineWorkspaceTestConfig({
   test: {
-    maxWorkers: 1,
+    maxWorkers: serverTestWorkers(),
     silent: "passed-only",
     testTimeout: 15_000,
     globalSetup: ["test/setup/migrated-db-template.ts"],
