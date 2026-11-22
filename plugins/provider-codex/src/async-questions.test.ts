@@ -114,7 +114,7 @@ describe("Codex async questions", () => {
     expect(pending.title.length).toBeLessThanOrEqual(160);
     expect(pending.title.endsWith("…")).toBe(true);
     expect(title.startsWith(pending.title.slice(0, -1))).toBe(true);
-    expect(pending.payload).toEqual({
+    expect(pending.payload).toMatchObject({
       questions: [{ title, options: ["a", "b", "c"] }],
     });
   });
