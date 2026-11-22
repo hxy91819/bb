@@ -24,6 +24,7 @@ export interface MessageProseSelection {
 
 interface SelectableMessageProseProps {
   children: ReactNode;
+  searchable?: boolean;
   className?: string;
   onSelect?: (selection: MessageProseSelection | null) => void;
 }
@@ -684,6 +685,7 @@ export function SelectableMessageProse({
   children,
   className,
   onSelect,
+  searchable,
 }: SelectableMessageProseProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
@@ -717,7 +719,12 @@ export function SelectableMessageProse({
   }, []);
 
   return (
-    <div ref={nodeRef} className={className} data-sidebar-swipe-selectable>
+    <div
+      ref={nodeRef}
+      className={className}
+      data-sidebar-swipe-selectable
+      data-thread-search-text={searchable ? "" : undefined}
+    >
       {children}
     </div>
   );
