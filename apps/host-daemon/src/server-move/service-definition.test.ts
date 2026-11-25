@@ -223,6 +223,7 @@ describe("service definition rewrites", () => {
       }),
       { mode: 0o644 },
     );
+    const originalMode = (await stat(unitPath)).mode & 0o777;
     const definition = await findServiceDefinition({
       dataDir,
       homeDir,
@@ -251,7 +252,7 @@ describe("service definition rewrites", () => {
     expect(content).toContain("Restart=always");
     expect(content).toContain("WantedBy=default.target");
     if (process.platform !== "win32") {
-      expect((await stat(unitPath)).mode & 0o777).toBe(0o644);
+      expect((await stat(unitPath)).mode & 0o777).toBe(originalMode);
     }
     const reparsed = parseSystemdUnit(content, "bb-host-daemon-x.service");
     expect(reparsed?.programArguments.at(-1)).toBe("https://new.example.test");

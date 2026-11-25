@@ -42,11 +42,11 @@ import {
 import { LazyQueuedMessagesList } from "@/components/promptbox/banner/LazyQueuedMessagesList";
 import { workflowRow } from "@/test/fixtures/thread-timeline-rows";
 import type { PromptDraftAttachment } from "@bb/client-core";
+import { BbHttpError, sdk } from "@/lib/sdk";
 import {
   getPromptDraftAccessor,
   usePromptDraftStorage,
 } from "@/hooks/usePromptDraftStorage";
-import { BbHttpError } from "@/lib/sdk";
 import type { ExperimentalComposerSelection } from "@get-bb/plugin-sdk";
 import { setComposerTextEffect } from "@/lib/composer-text-effects";
 import {
@@ -366,6 +366,14 @@ describe("shared draft submission ownership", () => {
 });
 
 beforeEach(() => {
+  vi.spyOn(
+    sdk.threads.queuedMessages,
+    "experimental_holdForEdit",
+  ).mockResolvedValue({ leaseMs: 60_000 });
+  vi.spyOn(
+    sdk.threads.queuedMessages,
+    "experimental_releaseEditHold",
+  ).mockResolvedValue({ ok: true } as const);
   vi.mocked(usePromptDraftStorage).mockImplementation(() => ({
     ...mocks.promptDraft,
     value: mocks.promptDraft.text,
