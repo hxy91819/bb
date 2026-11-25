@@ -1,3 +1,4 @@
+import { reconcileChildThreadRetryNotifications } from "./child-thread-notifications.js";
 import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
 import { isMachineWaitingForExecution } from "../machines/lifecycle.js";
 import { isServerMoveFrozen } from "../server-move/freeze-state.js";
@@ -455,6 +456,7 @@ async function attemptAutomaticQueuedMessage(
 ): Promise<void> {
   if (args.respectRequeuePacing && isDispatchRequeuedRecently(row.threadId))
     return;
+  reconcileChildThreadRetryNotifications(deps, row.threadId);
   if (getQueuedThreadMessage(deps.db, row.id) === null) return;
   const thread = getThread(deps.db, row.threadId);
   if (!thread || thread.deletedAt !== null) return;
