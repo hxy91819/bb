@@ -124,7 +124,11 @@ describe("runtime recovery hints", () => {
 
     expect(record.read()).toContainEqual({
       method: "thread/unarchive",
-      params: { threadId: "t-archived", providerThreadId },
+      params: {
+        threadId: "t-archived",
+        providerThreadId,
+        providerOptions: { scripted: { archivedSession: true } },
+      },
     });
     expect(countRequests(record, "turn/start")).toBe(2);
     await waitForThreadAgentMessageText({
@@ -246,7 +250,7 @@ describe("runtime recovery hints", () => {
   });
 
   it("sessionArchived at the end of a rateLimited ladder: unarchives and retries", async () => {
-    const { record, runtime } = createRecoveryRuntime({
+    const scripted: ScriptedEchoLaunchScript = {
       failMethods: [
         {
           method: "thread/resume",
@@ -261,7 +265,8 @@ describe("runtime recovery hints", () => {
           recovery: { kind: "sessionArchived", retryable: true },
         },
       ],
-    });
+    };
+    const { record, runtime } = createRecoveryRuntime(scripted);
     const providerThreadId = await startThread(runtime, "t-ladder-archived");
     await runtime.stopThread({ threadId: "t-ladder-archived" });
 
@@ -277,7 +282,11 @@ describe("runtime recovery hints", () => {
     ).resolves.toEqual({ providerThreadId });
     expect(record.read()).toContainEqual({
       method: "thread/unarchive",
-      params: { threadId: "t-ladder-archived", providerThreadId },
+      params: {
+        threadId: "t-ladder-archived",
+        providerThreadId,
+        providerOptions: { scripted },
+      },
     });
     expect(countRequests(record, "thread/resume")).toBe(3);
     expect(runtime.hasThread("t-ladder-archived")).toBe(true);
@@ -1261,6 +1270,7 @@ describe("runtime recovery hints", () => {
       params: {
         threadId: "t-rewind:rewind:lease-1",
         providerThreadId: "prov-source",
+        providerOptions: { scripted: { archivedSession: true } },
       },
     });
     expect(countRequests(record, "thread/fork")).toBe(2);
@@ -1281,7 +1291,11 @@ describe("runtime recovery hints", () => {
     });
     expect(record.read()).toContainEqual({
       method: "thread/unarchive",
-      params: { threadId: "t-forked", providerThreadId: "prov-source" },
+      params: {
+        threadId: "t-forked",
+        providerThreadId: "prov-source",
+        providerOptions: { scripted: { archivedSession: true } },
+      },
     });
     expect(countRequests(record, "thread/fork")).toBe(2);
     await runtime.runTurn({

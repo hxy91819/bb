@@ -59,7 +59,11 @@ async function getProviderState(
       "This provider does not report readiness.",
     );
   }
-  const bridgeLaunch = resolveBridgeLaunchForProviderId(deps, args.provider.id);
+  const bridgeLaunch = resolveBridgeLaunchForProviderId(
+    deps,
+    args.provider.id,
+    args.hostId,
+  );
   if (bridgeLaunch === null) {
     return unknownProviderState(
       deps,
