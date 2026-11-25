@@ -62,16 +62,20 @@ export function resolveLink(from: string, target: string) {
       .replace(/\/$/, ""),
   );
 }
+const historyLabels = new Set([
+  "Requirements ledger (history log)",
+  "要求帐（历史流水账）",
+]);
 export function ledgerEntry(text: string) {
   const header = text.split(/^## /m)[0];
   for (const match of header.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
     if (
-      /要求[帳帐]/.test(match[1]) ||
-      /-要求[帳帐]\.md(?:[#?]|$)/.test(match[2])
+      /要求[帳帐]|requirements? ledger/i.test(match[1]) ||
+      /-(?:要求[帳帐]|requirements)\.md(?:[#?]|$)/.test(match[2])
     )
       return {
         target: match[2],
-        kind: match[1] === "要求帐（历史流水账）" ? "history" : "standard",
+        kind: historyLabels.has(match[1]) ? "history" : "standard",
       };
   }
   throw new Error("工作簿标头缺少要求帐入口；check 通过不代表入口齐全。");

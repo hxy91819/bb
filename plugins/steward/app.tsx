@@ -319,11 +319,11 @@ function FloatingCard({
                     進行中：
                     {checks.ledger.applicable === false
                       ? "不适用"
-                      : (checks.ledger.summary?.["進行中"] ?? "未取得")}
+                      : (checks.ledger.summary?.["In progress"] ?? checks.ledger.summary?.["進行中"] ?? "未取得")}
                     　待使用者：
                     {checks.ledger.applicable === false
                       ? "不适用"
-                      : (checks.ledger.summary?.["待使用者"] ?? "未取得")}
+                      : (checks.ledger.summary?.["Awaiting user"] ?? checks.ledger.summary?.["待使用者"] ?? "未取得")}
                   </p>
                   {checks.snapshot && (
                     <p className="break-all">

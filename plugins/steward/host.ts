@@ -221,7 +221,14 @@ export default experimental_defineHostEntry({
         const docs = await documents(registration, signal);
         const run = async (mode: string, file: string) => {
           try {
-            const args = [registration.checker, "--mode", mode, "--file", file];
+            const args = [
+              registration.checker,
+              "--mode",
+              mode,
+              "--file",
+              file,
+              "--json",
+            ];
             if (docs.snapshot)
               args.push(
                 "--repo",

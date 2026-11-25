@@ -181,3 +181,38 @@ it("keeps standard local files and reports missing header entries explicitly", a
     "工作簿标头缺少要求帐入口；check 通过不代表入口齐全。",
   );
 });
+
+it("accepts English workbook headers and asks the checker for JSON", async () => {
+  const f = await fixture();
+  const checker = join(f.repo, "..", "summary-checker.py");
+  await writeFile(
+    checker,
+    'import json, sys\nif "--json" in sys.argv:\n    print(json.dumps({"ok": True, "errors": [], "summary": {"In progress": 2, "Awaiting user": 1}}))\nelse:\n    print("ledger-check ok, 0 problems, 0 warnings")\n',
+  );
+  const local = registerInput.parse({
+    ...f.registration,
+    source: { kind: "local" },
+    checker,
+    workbook: join(f.repo, "docs/workbook.md"),
+    ledger: join(f.repo, "docs/goal-requirements.md"),
+    ledgerKind: "standard",
+  });
+  await writeFile(local.ledger, "# Goal: user requirement ledger\n");
+  await writeFile(
+    local.workbook,
+    "# Goal\nUpdated: 2026-11-25; see [Requirements ledger](goal-requirements.md).\n## Route\n",
+  );
+  const checks = await f.call("check", local);
+  expect(checks.workbook.ok).toBe(true);
+  expect(checks.ledger).toMatchObject({
+    ok: true,
+    summary: { "In progress": 2, "Awaiting user": 1 },
+  });
+  await writeFile(
+    local.workbook,
+    "# Goal\n[Requirements ledger (history log)](goal-requirements.md)\n## Route\n",
+  );
+  expect((await f.call("check", local)).workbook.errors[0]).toContain(
+    "要求帐来源或格式已改变",
+  );
+});
