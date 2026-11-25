@@ -106,6 +106,7 @@ export interface ThreadScreenTimelineHost {
 }
 
 export interface ThreadScreenComposerHost {
+  sideChatAvailable?: boolean;
   environmentCheckout: WorkspaceCheckoutDisplay | undefined;
   environmentChrome: EnvironmentSummaryChrome | undefined;
   contextEnvironmentId: string | null;
@@ -556,6 +557,7 @@ export function ThreadScreen({
       }
       isPrimaryComposer={presentation.kind === "page"}
       permissionPolicy={composer.permissionPolicy}
+      isForkAvailable={composer.sideChatAvailable ?? false}
       contextWindowUsage={timeline.contextWindowUsage}
       environmentCheckout={composer.environmentCheckout}
       environmentCompactLabel={chrome?.environmentCompactLabel}
