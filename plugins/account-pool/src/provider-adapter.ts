@@ -70,9 +70,20 @@ export interface AdapterUsageContext {
   now: () => number;
 }
 
+export interface ImportedProviderAccount {
+  label: string;
+  email: string | null;
+  accountUuid?: string;
+  codexAccountId?: string;
+  subscriptionType: string | null;
+  rateLimitTier: string | null;
+  secret: Extract<AccountSecret, { kind: "oauth" }>;
+}
+
 export interface ProviderAdapter {
   provider: PoolProvider;
   upstreamName: string;
+  importAccount(authFile: string | null): Promise<ImportedProviderAccount>;
   parseRequest(
     body: Uint8Array,
     headers: Headers,
