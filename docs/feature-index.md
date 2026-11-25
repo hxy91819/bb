@@ -45,7 +45,7 @@
 | 插件扩展点、创建上下文、列表贡献、活动查询、消息定位、常驻插件标签 | 本仓库 [`packages/plugin-sdk`](../packages/plugin-sdk)、[`packages/sdk`](../packages/sdk)、[`apps/server`](../apps/server)、[`apps/app`](../apps/app)、[`apps/cli`](../apps/cli) | 公共扩展及 CLI/SDK/UI 共用实现；API 契约与用法以 Plugin Guide 为准 |
 | Codex/Claude/Pi provider 本身、provider 选择器、公共额度接口 | 本仓库 [`plugins`](../plugins) 及实际公共界面 | 在既有 provider 插件和公共实现修复；独立 ACP 适配器本身的登录、模型和技能注入归适配器仓库，如 [cursor-acp](https://github.com/hxy91819/cursor-acp) |
 | Mermaid、Markdown、依赖漏洞、server/daemon、wire 协议、环境切换后继续 | 本仓库对应 `apps/`、`packages/` 与 `.fork/branches` 分支 | “切换环境后继续”属于核心，与上面的“升级重启后续跑”分开维护 |
-| AGY ACP 执行、模型列表预热、同轮 steer、原生 hook 插件 | [`hxy91819/antigravity-acp`](https://github.com/hxy91819/antigravity-acp)，第三方 ACP 的个人 fork | 启动预热入口及锁定依赖由集合 [`tools/agy-launch`](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch) 管理；适配器源码 `src/acp/adapter.ts`、`src/acp/steering.ts`、`plugin/`；通过官方 PreInvocation/PostInvocation hook 注入同轮输入，SQLite 实际用户行确认回执；`acp-agy` 注册、模型和用量桥接仍由集合 `plugins/provider-acp` 持有，不属于账号反代池 |
+| AGY ACP 执行、模型列表预热、同轮 steer、原生 hook 插件 | [`hxy91819/antigravity-acp`](https://github.com/hxy91819/antigravity-acp)，第三方 ACP 的个人 fork | 启动预热入口及锁定依赖由集合 [`tools/agy-launch`](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch) 管理；适配器源码 `src/acp/adapter.ts`、`src/acp/steering.ts`、`plugin/`；通过 PreInvocation/PostInvocation 注入同轮输入，以 SQLite 用户行确认回执。PreToolUse 拦截 BB 会话中的原生 `schedule`；`acp-agy` 注册、模型和用量桥接仍由集合 `plugins/provider-acp` 持有，不属于账号反代池 |
 | 账号池对外调用、香港 Responses 入口、外部 Codex Key | 运维仓库 `workspace/docs/operations/bb-pool-gateway/` | 复用现有 Caddy 与内置账号池；只开放模型目录及 Responses，OAuth 仍由 BB 管理，不导入到 Magpie 或其他服务 |
 | Windows 桌面安装包、fork 桌面自动更新 | 本仓库 `fork-tooling` 的 `.github/workflows/fork-release.yml`、`scripts/fork-release/`；核心 `feature/desktop-release-feed` | 每次 fork tag 经 Windows x64 runner 构建和 Electron smoke，发布 NSIS 安装器与来源哈希；只更新本 fork 的 `fork-desktop-latest`，保留上游默认构建行为 |
 | fork 分支、聚合、SDK 供应、打包发布、部署规则、本索引 | 本仓库 `fork-tooling` 的 [`docs/fork-maintenance.md`](fork-maintenance.md)、[`scripts`](../scripts)、[部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md) | 根目录 `main` 保存安全基线，聚合产物在 `aggregate`；维护分支是规则与索引的源；其他机器读取远端 `fork-tooling`，避免使用旧聚合里的旧规则 |
@@ -62,7 +62,7 @@
 
 本波近期修复的统一发布、安装验收与耗时复盘见[管家工作簿](steward/bb-consolidated-delivery.md)。
 
-跨环境复用 AGY 的安装、完整 provider 模板及模型目录排查见 [AGY ACP 配置](agy-acp.md)。该方案使用个人 fork 的 CLI 桥，与 `agy acp` 原生 server 分开验收。
+AGY 启动器、hook、完整 provider 模板、定时续办与模型目录排查见 [AGY ACP 配置](agy-acp.md)。BB 内使用指向原线程的 agent automation 定时续办。
 
 ## 聚合环境中的 Account Limits
 

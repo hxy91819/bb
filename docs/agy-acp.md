@@ -1,31 +1,12 @@
 # AGY 在 BB 中的可复用配置
 
-需要复用本机已能显示 Claude 的接法时，使用个人 fork 的 `antigravity-acp` 桥：`BB → bun agy-entry.mjs → agy CLI`。桥通过 `agy models` 发现模型，通过 `agy --model <id> -p <prompt>` 执行请求。`agy acp` 是另一套原生 ACP server，不能把两套接法的模型发现结果混为一谈。
+在 BB 中使用 [bb-plugins 的 AGY 启动器](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch)及其锁定的 antigravity-acp。调用链是 `BB → Bun → tools/agy-launch/agy-entry.mjs → antigravity-acp → agy -p`。模型预热和执行使用同一个 AGY，登录状态由执行机提供。原生 `agy acp` 有独立的模型发现与轮次行为。
 
-本文和[配置模板](../config/agy-acp.example.json)维护在 BB fork 的 `fork-tooling` 分支；其他环境从该分支读取，无需等 BB 发布或重启服务。模板不包含账号凭据，目标机器使用自己的 AGY 登录状态。
-
-## 已核实的配置与证据
-
-2026-11-04 当前环境为 Linux，AGY `1.5.0`，桥版本 `1.2.0`，源码为 [`hxy91819/antigravity-acp@3b4b7bde3d003b7400c4601e4579dbbb7c8a2967`](https://github.com/hxy91819/antigravity-acp/tree/3b4b7bde3d003b7400c4601e4579dbbb7c8a2967)。BB 的 `acp-extensions.customAgents` 中，`agy` 条目由 Bun 启动桥的 `agy-entry.mjs`，没有启动 `agy acp`。`agy-acp-steer` 原生 hook 插件已安装并启用。
-
-本轮实时查询 `agy models` 和 `bb provider models acp-agy --json`，两边均返回以下六个模型：
-
-| ID                         | 显示名                       |
-| -------------------------- | ---------------------------- |
-| `gemini-3.8-flash-high`    | Gemini 3.8 Flash (High)      |
-| `gemini-3.8-flash-medium`  | Gemini 3.8 Flash (Medium)    |
-| `gemini-3.8-flash-low`     | Gemini 3.8 Flash (Low)       |
-| `claude-sonnet-4-6`        | Claude Sonnet 4.6 (Thinking) |
-| `claude-opus-4-6-thinking` | Claude Opus 4.6 (Thinking)   |
-| `gpt-oss-120b-medium`      | GPT-OSS 120B (Medium)        |
-
-这是该账号当时的目录快照，不是其他账号的固定模型清单，也不证明每个模型已完成推理验证。本轮没有另发付费模型请求。另一环境报告的 `claude-opus-5-5-high` 不在本机目录中，不应直接照抄该 ID。
-
-另一环境（Linux，AGY `1.5.0`，同一桥 commit）按本文配置后，`agy models` 与 `bb provider models acp-agy --json` 均返回 13 个 ID，包含 `claude-opus-5-5-*`、`claude-sonnet-5-5-*`、`gpt-oss-120b-medium`。真实请求各跑一轮：`gemini-3.8-flash-low` 与 `claude-sonnet-5-5-low` 均返回预期文本；同轮 steer 在 8.1s 投递、20.7s 结束，未出现第二个 `turn/started`。该环境另外补了 `bun` 的 PATH 软链和 `HOME`，见第 1 节。
+本文与[配置模板](../config/agy-acp.example.json)维护在 BB fork 的 `fork-tooling` 分支。Linux 上已用 AGY `1.5.16` 验证了模型选择、同轮 steer、晚到 steer 沿用原会话及原生定时器拦截。安装及更新以集合中的 lockfile 为准，使用包含[定时续办修复](https://github.com/hxy91819/bb-plugins/commit/b72f1f7549aaf635e164113e9fc9076d28d819fd)的已验收版本。
 
 ## 1. 准备执行机器
 
-以下命令适用于 Linux/macOS，在 BB host daemon 所在机器、以其运行用户执行。该用户需要能运行 `bb`、`agy`、Bun、Git 和 Python 3，并已完成 AGY 登录。
+以下命令适用于 Linux/macOS，在 BB host daemon 所在机器、以其运行用户执行。该用户需要能运行 `bb`、`agy`、Bun、Git、npm 和 Python 3，并已完成 AGY 登录。
 
 ```sh
 bb status --json
@@ -33,7 +14,6 @@ agy --version
 agy models
 bun --version
 bb plugin list --json
-bb plugin config acp-extensions --json
 ```
 
 `acp-extensions` 由 [bb-plugins 集合](https://github.com/hxy91819/bb-plugins)的 `acp` 成员提供。尚未安装时执行以下命令；已有插件时保留其来源及配置，按其安装方式更新，不要为了改启动项删除插件。
@@ -42,41 +22,37 @@ bb plugin config acp-extensions --json
 bb plugin install git:https://github.com/hxy91819/bb-plugins --plugin acp --yes
 ```
 
-在新目录安装已核实版本的桥；已有 checkout 时先检查其分支和未提交改动，不要直接覆盖：
+从 `bb-plugins` checkout 安装启动器依赖和配套 hook。更新已有 checkout 前先检查分支与未提交改动。以下命令在执行机运行。
 
 ```sh
 mkdir -p "$HOME/.local/share"
-git clone https://github.com/hxy91819/antigravity-acp.git "$HOME/.local/share/antigravity-acp"
-git -C "$HOME/.local/share/antigravity-acp" checkout --detach 3b4b7bde3d003b7400c4601e4579dbbb7c8a2967
-cd "$HOME/.local/share/antigravity-acp"
-AGY_SKIP_DOWNLOAD=1 AGY_BIN="$(command -v agy)" bun install --frozen-lockfile
-agy plugin install "$PWD/plugin"
+git clone https://github.com/hxy91819/bb-plugins.git "$HOME/.local/share/bb-plugins"
+git -C "$HOME/.local/share/bb-plugins" checkout --detach b72f1f7549aaf635e164113e9fc9076d28d819fd
+agy_launcher="$HOME/.local/share/bb-plugins/tools/agy-launch"
+npm ci --prefix "$agy_launcher" --ignore-scripts
+agy plugin install "$agy_launcher/node_modules/antigravity-acp/plugin"
 agy plugin list --json
 ```
 
-应看到启用的 `agy-acp-steer`。缺少 hook 时桥仍可执行普通请求，但不通告同轮 steer；Windows 也不通告此能力。
+应看到已启用的 `agy-acp-steer`。切换到新版 checkout 后，重装锁定的依赖，再运行 `agy plugin install` 更新主机上的 hook。这个 hook 同时负责同轮 steer 和定时续办的引导。
 
-hook 由 agy 以 `sh -c bun …` 启动，所以 `bun` 必须能被 agy 进程的 PATH 解析，只把 Bun 的绝对路径写进 `customAgents.command` 不够。bun 装在 `$HOME/.bun/bin` 且该目录不在 PATH 时，先建立软链再验证：
+AGY 通过 PATH 查找 hook 使用的 `bun`。若 Bun 不在 daemon 的 PATH 中，可在 PATH 已包含的目录中建立软链。例如：
 
 ```sh
-ln -sf "$HOME/.bun/bin/bun" "$HOME/.local/bin/bun"
+ln -s "$HOME/.bun/bin/bun" "$HOME/.local/bin/bun"
 bun --version
 ```
 
-缺这一步时 hook 以 127 退出，agy 日志出现 `sh: 1: bun: not found`，BB 侧整轮静默：只有 `turn/started` 和 `turn/completed`，没有任何消息，也没有错误事件。
+缺少 PATH 配置时，日志可能出现 `sh: 1: bun: not found`。若日志报 `$HOME is not defined`，在 `agy` 条目的 `env` 中填入执行用户的主目录绝对路径。
 
-同一类静默失败还来自缺失的 `HOME`：agy 是 Go 程序，`HOME` 未定义时直接以 `$HOME is not defined` 退出，桥只能回报空结果。host daemon 的进程环境不含 `HOME` 时，在 `agy` 条目的 `env` 里补 `"HOME": "<用户主目录绝对路径>"`；模板为保持通用未写死该值。
-
-桥的 binary resolver 优先使用 checkout 下的 `bin/agy`，然后才使用 `AGY_BIN`，最后使用 `PATH`。因此安装时就设置 `AGY_SKIP_DOWNLOAD=1`，以免 postinstall 下载另一版本。复用旧目录时如有 `bin/agy`，先核实其版本和用途；仅设置 `AGY_BIN` 不足以覆盖它。`agy-entry.mjs` 的目录预热使用 `AGY_BIN`，两者指向不同版本会再次造成目录与执行不一致。
+用 `--ignore-scripts` 跳过依赖的 AGY 下载脚本。启动器预热时使用 `AGY_BIN`。桥会优先使用依赖目录中的 `bin/agy`，复用旧目录时应核实该位置是否存在旧 binary，确保预热与执行使用同一版本。
 
 ## 2. 注册完整配置，保留其他 provider
 
-[模板](../config/agy-acp.example.json)中的三个占位符分别是执行机器的 Bun 绝对路径、桥目录绝对路径和 AGY 绝对路径。不要把模板直接作为整个 `customAgents` 设置覆盖已有配置；只替换同 ID 的 `agy` 条目。
-
-在本 BB 仓库的 `fork-tooling` checkout 根目录运行以下命令。第一个参数是模板路径，第二个是上一步安装的桥目录。脚本通过 BB CLI 读取现有设置、保留其他条目，再写回；不会打印其他条目的环境变量。
+[模板](../config/agy-acp.example.json)提供新建 `agy` 条目的默认值。以下脚本在 BB 仓库的 `fork-tooling` checkout 中运行。第二个参数是已安装的启动器目录。脚本只更新现有 `agy` 条目的启动路径和 binary 配置，保留其余设置及其他 provider。
 
 ```sh
-python3 - config/agy-acp.example.json "$HOME/.local/share/antigravity-acp" <<'PY'
+python3 - config/agy-acp.example.json "$HOME/.local/share/bb-plugins/tools/agy-launch" <<'PY'
 import json
 from pathlib import Path
 import shutil
@@ -84,39 +60,50 @@ import subprocess
 import sys
 
 template = json.loads(Path(sys.argv[1]).read_text())
-bridge = Path(sys.argv[2]).expanduser().resolve(strict=True)
-if not (bridge / "agy-entry.mjs").is_file():
-    raise SystemExit("Bridge entry not found")
+launcher = Path(sys.argv[2]).expanduser().resolve(strict=True)
+if not (launcher / "agy-entry.mjs").is_file():
+    raise SystemExit("AGY launcher entry not found")
+if not (launcher / "node_modules/antigravity-acp/index.ts").is_file():
+    raise SystemExit("Install the AGY launcher dependencies first")
+
 bun = shutil.which("bun")
 agy = shutil.which("agy")
 if not bun or not agy:
     raise SystemExit("bun and agy must be on PATH")
-entry = template[0]
-entry["command"] = str(Path(bun).absolute())
-entry["args"] = [str(bridge / "agy-entry.mjs")]
-entry["env"]["AGY_BIN"] = str(Path(agy).absolute())
+
 result = subprocess.run(
     ["bb", "plugin", "config", "acp-extensions", "--json"],
     check=True, capture_output=True, text=True,
 )
 raw = json.loads(result.stdout)["values"].get("customAgents", "[]")
-existing = json.loads(raw) if isinstance(raw, str) and raw.strip() else (raw or [])
-if not isinstance(existing, list) or any(not isinstance(x, dict) for x in existing):
+agents = json.loads(raw) if isinstance(raw, str) and raw.strip() else (raw or [])
+if not isinstance(agents, list) or any(not isinstance(item, dict) for item in agents):
     raise SystemExit("customAgents must be an array of objects")
-merged = [x for x in existing if x.get("id") != "agy"] + [entry]
+
+entry = next((item for item in agents if item.get("id") == "agy"), None)
+if entry is None:
+    entry = template[0]
+    agents.append(entry)
+
+entry["command"] = str(Path(bun).absolute())
+entry["args"] = [str(launcher / "agy-entry.mjs")]
+entry["env"] = {
+    **(entry.get("env") or {}),
+    "AGY_BIN": str(Path(agy).absolute()),
+    "AGY_SKIP_DOWNLOAD": "1",
+}
 subprocess.run(
     ["bb", "plugin", "config", "acp-extensions", "set", "customAgents",
-     json.dumps(merged, ensure_ascii=False)],
+     json.dumps(agents, ensure_ascii=False)],
     check=True, stdout=subprocess.DEVNULL,
 )
-print("Updated agy; preserved other custom agents")
+print("Updated the AGY launch configuration")
 PY
-bb plugin reload acp-extensions
 ```
 
-路径由启动配置提供，不依赖交互 shell 的 PATH。多执行机器需要分别准备可用的路径、桥及登录状态；设置路径应对运行该 provider 的机器成立。
+启动路径须在执行该 provider 的机器上有效。ACP 进程使用启动时加载的版本。等当前任务结束后，可用 `bb thread stop "$thread_id"` 释放空闲线程的旧进程，下一轮会用新版启动器。
 
-字段含义：`dialect: "agy"` 和 `providerUsage: true` 启用 AGY 额度采集；`permissionModes: ["full"]` 对应当前桥的 Full Access 执行；`reasoningLevels: ["medium"]` 是 BB 的兼容占位，桥不会据此传 `--effort`，推理档位由模型 ID 表达；不声明 Fast tier 和 fork。`AGY_EXTRA_ARGS: "--print-timeout 2h"` 显式保留已用配置，AGY 1.5.0 当前帮助显示默认超时为 0；它不是当前版本的必需修复，旧版曾有五分钟超时问题。
+`dialect: "agy"` 与 `providerUsage: true` 启用 AGY 额度采集。`permissionModes: ["full"]` 对应桥的 Full Access。`reasoningLevels: ["medium"]` 用于 BB 兼容，实际推理档位由模型 ID 表达。`AGY_EXTRA_ARGS` 用于已有的额外启动参数。若设置了 `--print-timeout 2h`，它是整轮的时间上限。
 
 `nativeSkillRoots` 声明用户技能位置，但不会创建目录或软链。要复用已有共享技能，可将 AGY 的 `~/.gemini/config/skills` 和 `~/.gemini/config/AGENTS.md` 分别链接到 `~/.agents/skills` 和 `~/.agents/AGENTS.md`；已有目标先核实，不要覆盖。项目技能是否生效仍取决于 AGY 自身的发现规则。
 
@@ -128,14 +115,31 @@ bb provider list --json
 bb provider models acp-agy --json
 ```
 
-BB 连接多台机器时，为后两条命令添加 `--machine <目标机器ID>`。比较完整模型 ID，确认 BB 返回当前账号中所需的 Claude/非 Gemini 模型，然后在 BB 新建 AGY 线程，选该目录里的模型发送“只回复 OK”。目录查询成功与真实执行成功分别验收，不以能显示模型代替执行验证。
+BB 连接多台机器时，为后两条命令添加 `--machine <目标机器ID>`。比较模型 ID，以目标账号的当前目录为准。选一个模型实发“只回复 OK”，需要 Claude 时也验证一次实际推理。再验证同轮 steer 确实插入原轮，以及错过最后一个 hook 且尚未被领取的 steer 沿用原会话续跑。
 
 入口会在 `~/.agy-acp/models.json` 缺失或为空时，用 `agy models` 预填缓存，避免 BB 在 `session/new` 后立刻查询却只拿到 `Agent default`。桥还会在后台重新发现并更新目录。换账号、升级后若旧目录不刷新，先保留缓存用于对比，并在没有活跃 AGY 请求时将它改名备份，再新建会话触发预热；不要把旧机器的模型缓存复制过来当成账号权限目录。
 
-## 4. 另一环境只显示 Gemini 时
+## 4. 定时续办与 Working 卡住
+
+在 BB 内需要到点自动续跑时，创建指向当前线程的 **agent automation**。下方的 `project_id`、`thread_id` 和 `model_id` 分别使用实际项目、线程和目标机器模型 ID。
+
+```sh
+bb automation create --project "$project_id" --name "定时续办" \
+  --in 10m --target-thread "$thread_id" \
+  --provider acp-agy --model "$model_id" \
+  --prompt "检查额度和原任务进度，条件满足时继续推进。" --json
+```
+
+只执行 `echo` 的 script automation 会把提醒写入运行记录。需要让原线程继续工作时，使用上面的 agent 方式。创建后用 `bb automation show <自动化ID> --project <项目ID>` 核对触发时间和目标线程。
+
+BB 启动器设置进程内标记 `AGY_ACP_USE_BB_AUTOMATIONS=1`。配套的 `PreToolUse` hook 仅匹配 `schedule`，在 AGY 创建原生定时器前拦截，并提示 agent 使用 BB agent automation。对照实测中，普通回复后 AGY 约 1 秒退出。创建 30 秒原生定时器时，AGY 在回复后等了约 30 秒才退出，BB 也会一直等这轮结算。升级后在测试会话验证 `schedule` 被拦截，检查 BB 日志是否记录 `turn/completed` 以及队列是否继续推进。
+
+旧版本出现这类卡顿时，先核对 AGY 是否已写完回复且仍有原生定时任务处于 `RUNNING`。确认后可停止旧轮次并查看队列。若队列仍待派发，按原顺序用 `bb thread queue send "$thread_id" "$message_id" --mode auto` 推进。
+
+## 5. 另一环境只显示 Gemini 时
 
 先比较两个环境的 `agy --version` 和 `customAgents` 中的 `command`、`args`、`AGY_BIN`；配置输出可能带其他 provider 的凭据，对外只摘录 AGY 所需字段。
 
 若启动的是 `agy acp`，其 `server.go` 日志显示 `Advertising available models ... count=6`，只能说明它广播六个模型，数量本身不能说明模型种类。应检查真实 ACP 返回的 ID。若 CLI 可执行某 Claude ID，而同一账号、同一 binary 的原生 ACP 在 `session/set_model` 拒绝该 ID，可定位到原生 ACP 暴露或接收的目录与 CLI 不一致；仍需比对版本、启动参数、运行用户及登录目录，才能判断具体原因。
 
-当前已核实的可复用接法是本文的桥。无需先改 BB 的 `provider-acp` 或等待 AGY 升级，即可在另一环境安装并验收这条路径；成功与否以目标环境实测为准。本次没有在当前机器调用原生 `agy acp` 复现目录缺失，也没有访问另一环境，不能断言原生 ACP 永远只支持 Gemini。
+使用本文的桥时，以目标环境的 `agy models`、BB 模型目录和真实请求结果为准。不同账号实测过不同的 Claude 模型 ID。
