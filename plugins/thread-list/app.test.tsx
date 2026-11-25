@@ -313,7 +313,6 @@ describe("thread-list plugin", () => {
     expect(inspection.navigateCalls).toContainEqual({
       method: "toCompose",
       options: {
-        projectId: PERSONAL_PROJECT_ID,
         hostId: "host_laptop",
         placement: { sectionId: null, pinned: false },
         focusPrompt: true,
