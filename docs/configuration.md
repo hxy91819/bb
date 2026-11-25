@@ -1731,3 +1731,23 @@ update message. Web browsers control their own handoff and may show a second
 prompt; BB cannot reliably detect missing apps in a browser. Executable web
 schemes, local-file launch schemes, and reserved editor-action schemes remain
 blocked.
+
+## Codex Workspace Sandbox Directories
+
+BB preserves the selected Codex home's native writable directories. In that
+home's `config.toml`, configure an array of absolute paths:
+
+```toml
+[sandbox_workspace_write]
+writable_roots = ["/var/cache/example-build", "/var/cache/example-lint"]
+```
+
+In workspace permission scope, the Codex provider merges these paths with BB's
+workspace support roots, normalizes paths, and removes duplicates. No BB setting
+or permission-mode change is required. With no native writable roots configured,
+BB's existing behavior is unchanged. Each session uses its own `CODEX_HOME`,
+falling back to the execution user's `.codex`.
+Invalid TOML, unreadable configuration, non-array values, and non-absolute entries
+fail the request with an error naming the config file. A missing file is allowed.
+The provider reads this setting at session construction and before subsequent
+turns; edits do not change commands already executing. Full access is unaffected.

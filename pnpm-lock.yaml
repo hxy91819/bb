@@ -5575,6 +5575,9 @@ importers:
       '@get-bb/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      smol-toml:
+        specifier: ^1.9.1
+        version: 1.9.1
       undici:
         specifier: 7.30.2
         version: 7.30.2
