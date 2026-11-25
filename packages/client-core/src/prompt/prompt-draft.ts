@@ -108,7 +108,8 @@ export function appendQuoteToDraftText<Draft extends { text: string }>(
     .map((line) => (line.length > 0 ? `> ${line}` : ">"))
     .join("\n");
 
-  const text = state.text === "" ? `${block}\n` : `${state.text}\n${block}\n`;
+  const separator = state.text === "" || state.text.endsWith("\n") ? "" : "\n";
+  const text = `${state.text}${separator}${block}\n\n`;
 
   return { ...state, text };
 }
