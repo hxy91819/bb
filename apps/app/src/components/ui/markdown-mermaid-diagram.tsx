@@ -188,6 +188,7 @@ function buildMermaidConfig(preferredTheme: Theme): MermaidConfig {
     suppressErrorRendering: true,
     theme: MERMAID_THEME,
     themeVariables: resolveMermaidThemePalette(),
+    layout: "elk",
   };
 }
 
