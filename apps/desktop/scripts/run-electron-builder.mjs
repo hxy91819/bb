@@ -201,7 +201,10 @@ function resolveElectronBuilderConfig(baseConfig, env, electronBuilderArgs) {
     {
       channel: releaseChannel,
       provider: "generic",
-      url: createDesktopUpdateReleaseBaseUrl(releaseConfig.releaseTag),
+      url: createDesktopUpdateReleaseBaseUrl(
+        releaseConfig.releaseTag,
+        env.BB_DESKTOP_UPDATE_BASE_URL,
+      ),
     },
   ];
 
