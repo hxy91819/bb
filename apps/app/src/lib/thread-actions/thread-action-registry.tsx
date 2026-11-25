@@ -1,6 +1,6 @@
 import {
-  Component,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -31,6 +31,12 @@ import {
 import { useBbNavigate, useSdk } from "@/lib/plugin-navigation-hooks";
 import { compareGroupedPlacement } from "@/lib/grouped-placement";
 import { usePluginSlots } from "@/lib/plugin-slots";
+import {
+  ContributionCollectorBoundary,
+  ContributionDataCollector,
+  ThreadDemand,
+  ThreadListContributionVisibility,
+} from "@get-bb/plugin-sdk/internal/thread-contribution-runtime";
 
 export const CORE_THREAD_ACTION_OWNER = "bb--core";
 
@@ -120,86 +126,7 @@ function publishRecords(
   setSnapshot({ ...snapshot, records });
 }
 
-type SubscribedThreadIds = Readonly<
-  Record<PluginThreadActionPlacement, readonly string[]>
->;
-
-const subscribedThreadCounts: Record<
-  PluginThreadActionPlacement,
-  Map<string, number>
-> = { menu: new Map(), header: new Map() };
-const NO_SUBSCRIBED_THREAD_IDS: SubscribedThreadIds = { menu: [], header: [] };
-let subscribedThreadIds = NO_SUBSCRIBED_THREAD_IDS;
-const threadIdListeners = new Set<() => void>();
-
-function subscribeThreadIds(listener: () => void): () => void {
-  threadIdListeners.add(listener);
-  return () => {
-    threadIdListeners.delete(listener);
-  };
-}
-
-function getSubscribedThreadIds(): SubscribedThreadIds {
-  return subscribedThreadIds;
-}
-
-const THREAD_IDS_QUIET_MS = 32;
-const THREAD_IDS_MAX_WAIT_MS = 100;
-let threadIdsFlushTimer: ReturnType<typeof setTimeout> | null = null;
-let threadIdsPendingSince: number | null = null;
-
-function cancelThreadIdsFlush(): void {
-  if (threadIdsFlushTimer !== null) clearTimeout(threadIdsFlushTimer);
-  threadIdsFlushTimer = null;
-  threadIdsPendingSince = null;
-}
-
-function flushSubscribedThreadIds(): void {
-  cancelThreadIdsFlush();
-  const settle = (placement: PluginThreadActionPlacement) => {
-    const current = subscribedThreadIds[placement];
-    const next = [...subscribedThreadCounts[placement].keys()].sort();
-    return next.length === current.length &&
-      next.every((id, index) => id === current[index])
-      ? current
-      : next;
-  };
-  const next = { menu: settle("menu"), header: settle("header") };
-  if (
-    next.menu === subscribedThreadIds.menu &&
-    next.header === subscribedThreadIds.header
-  ) {
-    return;
-  }
-  subscribedThreadIds = next;
-  for (const listener of threadIdListeners) listener();
-}
-
-function scheduleSubscribedThreadIdsFlush(): void {
-  const now = performance.now();
-  threadIdsPendingSince ??= now;
-  if (threadIdsFlushTimer !== null) clearTimeout(threadIdsFlushTimer);
-  const remaining = THREAD_IDS_MAX_WAIT_MS - (now - threadIdsPendingSince);
-  threadIdsFlushTimer = setTimeout(
-    flushSubscribedThreadIds,
-    Math.max(0, Math.min(THREAD_IDS_QUIET_MS, remaining)),
-  );
-}
-
-function retainThreadId(
-  threadId: string,
-  placement: PluginThreadActionPlacement,
-): () => void {
-  const counts = subscribedThreadCounts[placement];
-  counts.set(threadId, (counts.get(threadId) ?? 0) + 1);
-  scheduleSubscribedThreadIdsFlush();
-  return () => {
-    const count = counts.get(threadId) ?? 0;
-    if (count <= 1) counts.delete(threadId);
-    else counts.set(threadId, count - 1);
-    scheduleSubscribedThreadIdsFlush();
-  };
-}
+let threadDemand = { menu: new ThreadDemand(), header: new ThreadDemand() };
 
 const ThreadActionSurfaceVisibleContext = createContext(true);
 
@@ -212,17 +139,16 @@ export function ThreadActionSurfaceVisibility({
 }) {
   return (
     <ThreadActionSurfaceVisibleContext.Provider value={visible}>
-      {children}
+      <ThreadListContributionVisibility visible={visible}>
+        {children}
+      </ThreadListContributionVisibility>
     </ThreadActionSurfaceVisibleContext.Provider>
   );
 }
 
 export function resetThreadActionRegistryForTest(): void {
   reportedFailures.clear();
-  subscribedThreadCounts.menu.clear();
-  subscribedThreadCounts.header.clear();
-  subscribedThreadIds = NO_SUBSCRIBED_THREAD_IDS;
-  cancelThreadIdsFlush();
+  threadDemand = { menu: new ThreadDemand(), header: new ThreadDemand() };
   setSnapshot({
     records: [],
     collected: new Map(),
@@ -271,41 +197,24 @@ function ThreadActionCollector({
 }: {
   record: ThreadActionRegistrationRecord;
 }) {
-  const threadIds = useSyncExternalStore(
-    subscribeThreadIds,
-    getSubscribedThreadIds,
-  )[record.placement];
-  const data = record.registration.useData?.({ threadIds });
   const sdk = useSdk();
-  const [panel] = useState(() =>
-    createPluginPanelController(record.pluginId, getFocusedAppPanelController),
-  );
+  const [panel] = useState(() => createPluginPanelController(record.pluginId, getFocusedAppPanelController));
   const navigate = useLatestNavigate(useBbNavigate(), panel);
-  useLayoutEffect(() => {
-    publishCollected(record.key, { data, sdk, navigate, panel });
-  }, [data, navigate, panel, record.key, sdk]);
-  useLayoutEffect(() => () => dropCollected(record.key), [record.key]);
-  return null;
-}
-
-class ThreadActionCollectorBoundary extends Component<
-  { registrationKey: string; children: ReactNode },
-  { crashed: boolean }
-> {
-  override state = { crashed: false };
-
-  static getDerivedStateFromError(): { crashed: boolean } {
-    return { crashed: true };
-  }
-
-  override componentDidCatch(error: Error): void {
-    reportFailure(this.props.registrationKey, "useData", error);
-    dropCollected(this.props.registrationKey);
-  }
-
-  override render(): ReactNode {
-    return this.state.crashed ? null : this.props.children;
-  }
+  const publish = useCallback(
+    (data: unknown) => {
+      publishCollected(record.key, { data, sdk, navigate, panel });
+    },
+    [navigate, panel, record.key, sdk],
+  );
+  const clear = useCallback(() => dropCollected(record.key), [record.key]);
+  return (
+    <ContributionDataCollector
+      useData={record.registration.useData}
+      demand={threadDemand[record.placement]}
+      publish={publish}
+      clear={clear}
+    />
+  );
 }
 
 function useThreadActionRecords(
@@ -368,9 +277,14 @@ export function ThreadActionCollectors({
   }, []);
   return records.map((record) => (
     <PluginContext.Provider key={record.instanceKey} value={record.pluginId}>
-      <ThreadActionCollectorBoundary registrationKey={record.key}>
+      <ContributionCollectorBoundary
+        onError={(error) => {
+          reportFailure(record.key, "useData", error);
+          dropCollected(record.key);
+        }}
+      >
         <ThreadActionCollector record={record} />
-      </ThreadActionCollectorBoundary>
+      </ContributionCollectorBoundary>
     </PluginContext.Provider>
   ));
 }
@@ -540,7 +454,7 @@ function useThreadEntries(
   );
   const surfaceVisible = useContext(ThreadActionSurfaceVisibleContext);
   useEffect(
-    () => (surfaceVisible ? retainThreadId(thread.id, placement) : undefined),
+    () => (surfaceVisible ? threadDemand[placement].retain([thread.id]) : undefined),
     [placement, surfaceVisible, thread.id],
   );
   return entries;
@@ -569,7 +483,7 @@ export function useThreadBulkActionEntries(
     if (!surfaceVisible || threadIdsKey === "") return undefined;
     const releases = threadIdsKey
       .split("\n")
-      .map((threadId) => retainThreadId(threadId, "menu"));
+      .map((threadId) => threadDemand.menu.retain([threadId]));
     return () => {
       for (const release of releases) release();
     };
