@@ -1639,6 +1639,17 @@ Each entry adds `codex-<id>` to the provider picker, CLI and SDK. The local Code
 
 Display names may change. A binding ID retains its directory expression after deletion and restart; use a new ID for a different directory. Removal preserves history and Codex data; restoring the same binding permits continuation. Fork and Side chat use the source binding. Fixed bindings bypass Account Pooler, including inherited pool variables. Default `codex` and the Codex AI service keep their existing behavior. See the [Codex plugin overview](../plugins/provider-codex/PLUGIN_OVERVIEW.md) for preparation and examples.
 
+A binding may also set `command` to an absolute executable path or a `~/` path
+on the execution machine. BB invokes it with `app-server`, without a shell, and
+sets that binding's `CODEX_HOME` and `CODEX_SQLITE_HOME`. Use a wrapper when the
+Codex process needs credentials from a local credential store; the wrapper must
+preserve stdio and forward arguments. Store only its path in BB settings, never
+keys or tokens. Bindings without `command` keep the normal Codex launch path.
+Launcher-managed custom providers that report `requiresOpenaiAuth: false` are
+recognized without a local subscription login. A failed probe returns structured health and waits for its child process to exit.
+Startup and authentication share a ten-second health probe deadline. Successful
+launcher-managed authentication clears unrelated local account and login hints.
+
 The desktop stores `showBuiltinServer: false` in `<userData>/server-target.json`;
 missing means shown, and saving the default omits the field. Other top-level
 metadata is preserved. This is a desktop-local preference, with no server
