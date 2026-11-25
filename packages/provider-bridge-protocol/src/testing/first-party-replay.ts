@@ -88,8 +88,8 @@ export function resolveReplayProfile(
       dialect: "json-rpc",
       bridgeFamily: "acp",
       env: () => ({}),
-      rewriteRuntimeLine: (line, { replayCommand }) =>
-        rewriteAcpLaunchSpec(line, replayCommand),
+      rewriteRuntimeLine: (line, { replayCommand, recording }) =>
+        rewriteAcpLaunchSpec(line, replayCommand, recording),
     };
   }
   if (providerId === "pi") {
@@ -203,7 +203,11 @@ function seedClaudeForkTranscripts(args: {
   }
 }
 
-function rewriteAcpLaunchSpec(line: string, replayCommand: string[]): string {
+function rewriteAcpLaunchSpec(
+  line: string,
+  replayCommand: string[],
+  recording: BridgeRecording,
+): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -232,6 +236,17 @@ function rewriteAcpLaunchSpec(line: string, replayCommand: string[]): string {
     args: replayCommand.slice(1),
     env: {},
   };
+  if (
+    recording.manifest?.provider === "acp-cursor" &&
+    recording.manifest.cell === "steer" &&
+    recording.entries.some(
+      (entry) =>
+        entry.dir === "bridge→provider" &&
+        parseWire(entry.line)?.method === "session/cancel",
+    )
+  ) {
+    providerOptions.acpSteeringMode ??= "interrupt";
+  }
   return JSON.stringify(parsed);
 }
 
