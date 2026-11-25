@@ -12,7 +12,7 @@
 
 | 遇到的问题 | 维护仓库或目录 | 从这里查起 |
 | --- | --- | --- |
-| Todo 待办、标题与备注布局、待办扫描、会话胶囊、Agent 建议、`bb todo` | 集合 [`plugins/todo`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/todo)，插件 ID 与 collection 名均为 `todo` | 界面看 `app.tsx`，命令与存储看 `server.ts`，RPC 与实时更新看 `contract.ts`。原生任务和 Work Map 各自维护。 |
+| Todo 待办、标题与备注布局、拖动排序、Shift 批量选择、Tab 进入备注、待办扫描、会话胶囊、Agent 建议、`bb todo` | 集合 [`plugins/todo`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/todo)，插件 ID 与 collection 名均为 `todo` | 界面看 `app.tsx`，命令与存储看 `server.ts`，RPC 与实时更新看 `contract.ts`。原生任务和 Work Map 各自维护。 |
 | 会话书签、选中文字、收藏、右侧常驻书签、书签界面 | 集合 [`plugins/bookmarks`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/bookmarks)，ID `bookmarks` | `server.ts`、`app.tsx`、`contract.ts`、`messages.ts`；界面统一英文，历史验收见[书签工作簿](steward/message-bookmarks.md) |
 | 侧栏项目名、日期分组、项目标签宽度、移动端列表、父会话独立未读提示、side chat 未读与浏览、父子行操作、侧栏偏好 | 集合 [`plugins/thread-list`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/thread-list)，安装名 `thread-list`，ID `thread-list-extras` | `app/rows/ThreadRow.tsx`、`app/model/`、`shared/preferences.ts`；新定制先用贡献插槽，避免继续复制列表 |
 | 会话内全文搜索、消息时间、倒序分页、正文高亮、搜索快捷键 | 集合 [`plugins/thread-search`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/thread-search)，ID `thread-search`；核心 `feature/thread-content-search` | 插件提供搜索面板、快捷键、消息定位与正文高亮；核心 `threads.experimental_searchMessages`、`bb thread search --thread` 共用按会话查询与现有搜索索引，以原消息事件时间倒序分页；`feature/thread-message-navigation` 提供消息锚点，`fix/thread-message-reveal` 负责折叠详情展开、分页与精确定位 |
