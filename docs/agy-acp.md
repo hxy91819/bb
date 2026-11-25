@@ -2,7 +2,7 @@
 
 在 BB 中使用 [bb-plugins 的 AGY 启动器](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch)及其锁定的 antigravity-acp。调用链是 `BB → Bun → tools/agy-launch/agy-entry.mjs → antigravity-acp → agy -p`。模型预热和执行使用同一个 AGY，登录状态由执行机提供。原生 `agy acp` 有独立的模型发现与轮次行为。
 
-本文与[配置模板](../config/agy-acp.example.json)维护在 BB fork 的 `fork-tooling` 分支。Linux 上已用 AGY `1.5.16` 验证了模型选择、同轮 steer、晚到 steer 沿用原会话及原生定时器拦截。安装及更新以集合中的 lockfile 为准，使用包含[定时续办修复](https://github.com/hxy91819/bb-plugins/commit/b72f1f7549aaf635e164113e9fc9076d28d819fd)的已验收版本。
+本文与[配置模板](../config/agy-acp.example.json)维护在 BB fork 的 `fork-tooling` 分支。安装及更新以集合中的 lockfile 为准。
 
 ## 1. 准备执行机器
 
@@ -115,7 +115,9 @@ bb provider list --json
 bb provider models acp-agy --json
 ```
 
-BB 连接多台机器时，为后两条命令添加 `--machine <目标机器ID>`。比较模型 ID，以目标账号的当前目录为准。选一个模型实发“只回复 OK”，需要 Claude 时也验证一次实际推理。再验证同轮 steer 确实插入原轮，以及错过最后一个 hook 且尚未被领取的 steer 沿用原会话续跑。
+BB 连接多台机器时，为后两条命令添加 `--machine <目标机器ID>`。比较模型 ID，以目标账号的当前目录为准。选一个模型实发“只回复 OK”，需要 Claude 时也验证一次实际推理。
+
+在有界的运行中发送一条带图 steer，确认 AGY 通过执行机本地文件读取图片、原轮正常结束。Linux 上已用 AGY `1.5.17` 验证这条路径。错过最后一个 hook 且尚未被领取的 steer 沿用原会话续跑。保持 BB 的默认 steering 配置，让共享 ACP 桥在无法同轮插入时等待当前 prompt 完成，再按顺序发送。缺少插入回执时检查会话告警。
 
 入口会在 `~/.agy-acp/models.json` 缺失或为空时，用 `agy models` 预填缓存，避免 BB 在 `session/new` 后立刻查询却只拿到 `Agent default`。桥还会在后台重新发现并更新目录。换账号、升级后若旧目录不刷新，先保留缓存用于对比，并在没有活跃 AGY 请求时将它改名备份，再新建会话触发预热；不要把旧机器的模型缓存复制过来当成账号权限目录。
 
