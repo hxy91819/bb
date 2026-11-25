@@ -191,7 +191,6 @@ interface AcpPendingTurnInput {
   input: PromptInput[];
   requestId: AcpBridgeRequestId | null;
   options: BridgeExecutionOptions;
-  seq: number;
   isSteer: boolean;
   acceptedEmitted: boolean;
   delivery: AcpInputDelivery | undefined;
@@ -200,12 +199,10 @@ interface AcpPendingTurnInput {
 interface AcpTurnContext {
   inFlight: number;
   primarySubmitted: boolean;
+  nativeSteerInFlight: AcpPendingTurnInput | undefined;
   everCancelled: boolean;
   failedMessage: string | undefined;
   finished: boolean;
-  maxDeliveredSteerSeq: number;
-  rejectedSteers: AcpPendingTurnInput[];
-  steerOrderWarned: boolean;
   drainWaiters: (() => void)[];
 }
 
@@ -238,9 +235,9 @@ interface AcpThreadSession {
   compactionAgentMessage: string;
   queuedInputs: AcpPendingTurnInput[];
   turn: AcpTurnContext | undefined;
-  nextInputSeq: number;
   steeringNative: boolean;
   steeringTextOnly: boolean;
+  steeringInterrupt: boolean;
   nativeSteerRejected: boolean;
   cancelRequested: boolean;
   turnStartedAtMs: number | undefined;
@@ -2440,9 +2437,9 @@ async function startAgentSession(
     compactionAgentMessage: "",
     queuedInputs: [],
     turn: undefined,
-    nextInputSeq: 0,
     steeringNative: false,
     steeringTextOnly: false,
+    steeringInterrupt: false,
     nativeSteerRejected: false,
     cancelRequested: false,
     turnStartedAtMs: undefined,
@@ -2476,6 +2473,7 @@ async function startAgentSession(
     });
     session.steeringNative = steering.native;
     session.steeringTextOnly = steering.textOnly;
+    session.steeringInterrupt = params.steeringMode === "interrupt";
     await authenticateAcpAgent({
       connection,
       env: childEnv,
@@ -2692,7 +2690,7 @@ async function stopSession(
     return;
   }
   session.stopping = true;
-  dropQueuedTurnInputs(
+  rejectUnsettledSteers(
     session,
     "ACP session stopped before the steer was sent",
   );
@@ -3006,7 +3004,7 @@ async function releaseSession(session: AcpThreadSession): Promise<void> {
   }
   session.stopping = true;
   clearAgentTurnQuietTimer(session);
-  dropQueuedTurnInputs(
+  rejectUnsettledSteers(
     session,
     "ACP session released before the steer was sent",
   );
@@ -3110,6 +3108,7 @@ function canInjectSteer(
     ctx.failedMessage === undefined &&
     !session.cancelRequested &&
     ctx.primarySubmitted &&
+    ctx.nativeSteerInFlight === undefined &&
     ctx.inFlight > 0 &&
     session.steeringNative &&
     !session.nativeSteerRejected &&
@@ -3163,6 +3162,7 @@ function submitTurnPrompt(
   delivery: AcpInputDelivery | undefined,
 ): Promise<z.infer<typeof acpPromptResultSchema>> {
   const prompt = buildPromptContentBlocks(session, pending.input);
+  const nativeSteer = delivery === "steer";
   ctx.inFlight += 1;
   let request: Promise<z.infer<typeof acpPromptResultSchema>>;
   try {
@@ -3179,21 +3179,25 @@ function submitTurnPrompt(
             },
             resultSchema: acpPromptResultSchema,
             onSubmitted: () => {
+              if (nativeSteer) return;
               acceptTurnInput(session, pending);
               if (delivery !== undefined) {
                 emitInputDelivery(session, pending, delivery);
               }
+              ctx.primarySubmitted = true;
+              drainQueuedInputs(session, ctx);
             },
           });
         } catch (error) {
           if (
-            delivery === "steer" ||
+            nativeSteer ||
             !isSessionBusyError(error) ||
             busyRetries >= SESSION_BUSY_MAX_RETRIES ||
             session.stopping ||
             session.cancelRequested
           )
             throw error;
+          ctx.primarySubmitted = false;
           busyRetries += 1;
           if (!(await waitForAgentQuiet(session))) throw error;
         }
@@ -3207,6 +3211,9 @@ function submitTurnPrompt(
   return request;
 
   function noteTurnPromptSettled(): void {
+    if (!nativeSteer) {
+      ctx.primarySubmitted = false;
+    }
     noteInFlightSettled(ctx);
   }
 }
@@ -3216,18 +3223,40 @@ function dispatchNativeSteer(
   ctx: AcpTurnContext,
   pending: AcpPendingTurnInput,
 ): void {
-  const request = submitTurnPrompt(session, ctx, pending, "steer");
+  let request: ReturnType<typeof submitTurnPrompt>;
+  try {
+    request = submitTurnPrompt(session, ctx, pending, "steer");
+  } catch (error) {
+    dropTurnInput(
+      session,
+      pending,
+      error instanceof Error ? error.message : String(error),
+    );
+    return;
+  }
+  ctx.nativeSteerInFlight = pending;
   void request.then(
-    () => {
-      if (session.turn !== ctx) {
-        return;
+    ({ stopReason }) => {
+      if (session.turn !== ctx || ctx.nativeSteerInFlight !== pending) return;
+      ctx.nativeSteerInFlight = undefined;
+      if (stopReason === "cancelled") {
+        onInjectedPromptFailed(
+          session,
+          pending,
+          "The agent cancelled the steer",
+        );
+      } else {
+        acceptTurnInput(session, pending);
+        emitInputDelivery(session, pending, "steer");
       }
-      ctx.maxDeliveredSteerSeq = Math.max(
-        ctx.maxDeliveredSteerSeq,
-        pending.seq,
-      );
+      drainQueuedInputs(session, ctx);
     },
-    (error) => onInjectedPromptFailed(session, ctx, pending, error),
+    (error) => {
+      if (session.turn !== ctx || ctx.nativeSteerInFlight !== pending) return;
+      ctx.nativeSteerInFlight = undefined;
+      onInjectedPromptFailed(session, pending, error);
+      drainQueuedInputs(session, ctx);
+    },
   );
 }
 
@@ -3241,82 +3270,43 @@ function isConcurrentPromptRejection(error: unknown): boolean {
 
 function onInjectedPromptFailed(
   session: AcpThreadSession,
-  ctx: AcpTurnContext,
   pending: AcpPendingTurnInput,
   error: unknown,
 ): void {
-  if (session.turn !== ctx || ctx.finished || ctx.failedMessage !== undefined) {
-    return;
-  }
-  if (!isConcurrentPromptRejection(error)) {
-    ctx.failedMessage = error instanceof Error ? error.message : String(error);
-    requestSteerCancel(session, ctx);
+  if (!isConcurrentPromptRejection(error) && !isSessionBusyError(error)) {
+    const message =
+      (error instanceof Error ? error.message : String(error)) ||
+      "The agent did not confirm steer delivery";
+    rejectSteerInput(session, pending, "steer_unconfirmed", message);
+    sendThreadDeltas(session.bbThreadId, [
+      {
+        kind: "provider.warning",
+        summary: "ACP agent did not confirm the steer",
+        details: message,
+        vouchedTurn: true,
+      },
+    ]);
     return;
   }
   session.nativeSteerRejected = true;
-  ctx.rejectedSteers.push(pending);
-  requestSteerCancel(session, ctx);
-}
-
-function warnSteerOutOfOrder(
-  session: AcpThreadSession,
-  ctx: AcpTurnContext,
-): void {
-  if (ctx.steerOrderWarned) {
-    return;
-  }
-  ctx.steerOrderWarned = true;
-  sendThreadDeltas(session.bbThreadId, [
-    {
-      kind: "provider.warning",
-      summary:
-        "ACP agent rejected an earlier steer after accepting a later one. The earlier input was not replayed, and native steering is disabled for this connection.",
-      vouchedTurn: true,
-    },
-  ]);
-}
-
-function requeueTurnInput(
-  session: AcpThreadSession,
-  pending: AcpPendingTurnInput,
-): void {
-  const index = session.queuedInputs.findIndex(
-    (queued) => queued.seq > pending.seq,
-  );
-  if (index === -1) {
-    session.queuedInputs.push(pending);
-  } else {
-    session.queuedInputs.splice(index, 0, pending);
-  }
-}
-
-function reconcileRejectedSteers(
-  session: AcpThreadSession,
-  ctx: AcpTurnContext,
-): void {
-  const rejected = ctx.rejectedSteers.splice(0).sort((a, b) => a.seq - b.seq);
-  for (const pending of rejected) {
-    if (ctx.maxDeliveredSteerSeq > pending.seq) {
-      warnSteerOutOfOrder(session, ctx);
-      continue;
-    }
-    requeueTurnInput(session, pending);
-  }
+  session.queuedInputs.unshift(pending);
 }
 
 function drainQueuedInputs(
   session: AcpThreadSession,
   ctx: AcpTurnContext,
 ): void {
-  while (session.queuedInputs.length > 0) {
+  for (;;) {
     const head = session.queuedInputs[0];
-    if (head === undefined || !canInjectSteer(session, ctx, head)) {
-      break;
-    }
+    if (head === undefined || !canInjectSteer(session, ctx, head)) break;
     session.queuedInputs.shift();
     dispatchNativeSteer(session, ctx, head);
   }
-  if (session.queuedInputs.length > 0) {
+  if (
+    session.steeringInterrupt &&
+    ctx.primarySubmitted &&
+    session.queuedInputs.length > 0
+  ) {
     requestSteerCancel(session, ctx);
   }
 }
@@ -3338,10 +3328,33 @@ function acceptTurnInput(
   }
 }
 
-function dropTurnInput(pending: AcpPendingTurnInput, reason: string): void {
+function rejectSteerInput(
+  session: AcpThreadSession,
+  pending: AcpPendingTurnInput,
+  reason: "steer_not_sent" | "steer_unconfirmed",
+  message: string,
+): void {
+  sendThreadDeltas(session.bbThreadId, [
+    {
+      kind: "input.rejected",
+      clientRequestId: pending.clientRequestId,
+      reason,
+      message,
+    },
+  ]);
+}
+
+function dropTurnInput(
+  session: AcpThreadSession,
+  pending: AcpPendingTurnInput,
+  reason: string,
+): void {
   const requestId = takeTurnInputRequestId(pending);
   if (requestId !== null) {
     sendError(requestId, -32000, reason);
+  }
+  if (pending.isSteer && !pending.acceptedEmitted) {
+    rejectSteerInput(session, pending, "steer_not_sent", reason);
   }
 }
 
@@ -3353,9 +3366,19 @@ function takeTurnInputRequestId(
   return requestId;
 }
 
-function dropQueuedTurnInputs(session: AcpThreadSession, reason: string): void {
+function rejectUnsettledSteers(session: AcpThreadSession, reason: string): void {
   for (const pending of session.queuedInputs.splice(0)) {
-    dropTurnInput(pending, reason);
+    dropTurnInput(session, pending, reason);
+  }
+  const ctx = session.turn;
+  if (ctx?.nativeSteerInFlight !== undefined) {
+    rejectSteerInput(
+      session,
+      ctx.nativeSteerInFlight,
+      "steer_unconfirmed",
+      "ACP session ended before the agent confirmed the steer",
+    );
+    ctx.nativeSteerInFlight = undefined;
   }
 }
 
@@ -3370,9 +3393,9 @@ function finishTurn(
   session.turnStartedAtMs = undefined;
   for (const controller of session.pendingToolCalls) controller.abort();
   ctx.finished = true;
+  rejectUnsettledSteers(session, "ACP turn ended before the steer was sent");
   session.turn = undefined;
   setActivePromptKind(session, null);
-  dropQueuedTurnInputs(session, "ACP turn ended before the steer was sent");
   session.cancelRequested = false;
   emitForSession(session, ACP_TURN_COMPLETED_METHOD, {
     threadId: session.bbThreadId,
@@ -3430,8 +3453,8 @@ function failTurn(session: AcpThreadSession, ctx: AcpTurnContext): void {
     return;
   }
   ctx.finished = true;
+  rejectUnsettledSteers(session, "ACP turn failed before the steer was sent");
   session.turn = undefined;
-  dropQueuedTurnInputs(session, "ACP turn failed before the steer was sent");
   session.cancelRequested = false;
   if (!session.stopping) {
     const message = ctx.failedMessage ?? "ACP turn failed";
@@ -3455,12 +3478,10 @@ function runTurn(
   const ctx: AcpTurnContext = {
     inFlight: 0,
     primarySubmitted: false,
+    nativeSteerInFlight: undefined,
     everCancelled: false,
     failedMessage: undefined,
     finished: false,
-    maxDeliveredSteerSeq: -1,
-    rejectedSteers: [],
-    steerOrderWarned: false,
     drainWaiters: [],
   };
   session.turn = ctx;
@@ -3477,7 +3498,7 @@ function runTurn(
     let pending = firstInput;
     for (;;) {
       if (session.stopping) {
-        dropTurnInput(pending, "ACP session is stopping");
+        dropTurnInput(session, pending, "ACP session is stopping");
         finishTurn(session, ctx, "cancelled");
         return;
       }
@@ -3491,7 +3512,7 @@ function runTurn(
         const reconciled = reconcileExecutionSettings(session, pending.options);
         session = reconciled instanceof Promise ? await reconciled : reconciled;
         if (session.stopping) {
-          dropTurnInput(pending, "ACP session is stopping");
+          dropTurnInput(session, pending, "ACP session is stopping");
           finishTurn(session, ctx, "cancelled");
           return;
         }
@@ -3506,12 +3527,14 @@ function runTurn(
             : "queued"
           : undefined;
         promptResult = submitTurnPrompt(session, ctx, pending, replayDelivery);
-        ctx.primarySubmitted = true;
-        drainQueuedInputs(session, ctx);
       } catch (error) {
         ctx.failedMessage ??=
           error instanceof Error ? error.message : String(error);
-        dropTurnInput(pending, "ACP turn failed before the prompt was sent");
+        dropTurnInput(
+          session,
+          pending,
+          "ACP turn failed before the prompt was sent",
+        );
         requestSteerCancel(session, ctx);
         await whenTurnGroupDrained(ctx);
         failTurn(session, ctx);
@@ -3535,10 +3558,9 @@ function runTurn(
       }
 
       await whenTurnGroupDrained(ctx);
-      reconcileRejectedSteers(session, ctx);
 
       if (ctx.failedMessage !== undefined) {
-        dropTurnInput(pending, "ACP turn failed");
+        dropTurnInput(session, pending, "ACP turn failed");
         failTurn(session, ctx);
         return;
       }
@@ -3729,6 +3751,9 @@ async function rebuildAgentSession(
       continuesTurn: continuingTurn,
     });
   } catch (error) {
+    for (const pending of queuedInputs) {
+      dropTurnInput(session, pending, "ACP session could not be rebuilt before the steer was sent");
+    }
     if (continuingTurn) {
       const message = error instanceof Error ? error.message : String(error);
       emitForSession(session, "error", {
@@ -3739,7 +3764,6 @@ async function rebuildAgentSession(
     }
     throw error;
   }
-  replacement.nextInputSeq = session.nextInputSeq;
   replacement.queuedInputs.push(...queuedInputs);
   sendNotification(BRIDGE_NOTIFICATION_METHODS.sessionReplaced, {
     threadId: session.bbThreadId,
@@ -4326,12 +4350,10 @@ async function handleRequest(
         input: params.input,
         requestId: request.id,
         options: params.options,
-        seq: session.nextInputSeq,
         isSteer: false,
         acceptedEmitted: false,
         delivery: undefined,
       };
-      session.nextInputSeq += 1;
       if (isStandaloneBuiltinCompactCommand(params.input)) {
         startCompaction(session, pending);
       } else {
@@ -4356,7 +4378,6 @@ async function handleRequest(
             input: params.input,
             requestId: null,
             options: params.options,
-            seq: session.nextInputSeq++,
             isSteer: true,
             acceptedEmitted: false,
             delivery: undefined,
@@ -4378,12 +4399,10 @@ async function handleRequest(
         input: params.input,
         requestId: null,
         options: params.options,
-        seq: session.nextInputSeq,
         isSteer: true,
         acceptedEmitted: false,
         delivery: undefined,
       };
-      session.nextInputSeq += 1;
       session.queuedInputs.push(pending);
       drainQueuedInputs(session, ctx);
       sendResult(request.id, { threadId: params.threadId });

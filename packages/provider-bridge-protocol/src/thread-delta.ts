@@ -236,6 +236,13 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
   }),
 
   z.object({
+    kind: z.literal("input.rejected"),
+    clientRequestId: clientTurnRequestIdSchema,
+    reason: z.string().min(1),
+    message: z.string().min(1),
+  }),
+
+  z.object({
     kind: z.literal("turn.open"),
     providerTurnId: providerTurnIdSchema.optional(),
     parentRef: deltaKeyPartSchema.optional(),

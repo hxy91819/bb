@@ -760,7 +760,7 @@ async function handlePrompt(message) {
     notifyUpdate(
       messageChunk(JSON.stringify({ wrote, args: process.argv.slice(2) })),
     );
-    if (text.includes("hold")) return;
+    if (text.includes("hold")) await sleep(750);
   } else if (text.includes("write-file")) {
     try {
       const result = await requestClient("fs/write_text_file", {
@@ -904,6 +904,9 @@ async function handlePrompt(message) {
     return;
   } else if (text.includes("die")) {
     process.exit(7);
+  } else if (text === "slow before first reply") {
+    await sleep(300);
+    notifyUpdate(messageChunk(`echo:${text}`));
   } else if (text.includes("slow")) {
     notifyUpdate(messageChunk(`echo:${text}`));
     await sleep(300);

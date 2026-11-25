@@ -1,6 +1,16 @@
 # ACP mid-turn steering design
 
-Status: agreed design direction; no product implementation or provider compatibility claim from tests yet. The user accepts next-iteration semantics and narrowed the visibility change: retain the existing send action and automatic fallback behavior, but label interrupt delivery as “降级为中断并发送” instead of Steer. The oracle review thread ended in an error after this narrowing; the label mechanism below is the concrete form of that decision.
+## Current delivery policy
+
+The shared BB ACP bridge buffers follow-ups while the primary prompt is starting. It uses native steering when the agent and the input support it. If the agent cannot steer that input or explicitly rejects concurrent prompts, BB waits for the active prompts to finish and sends the buffered input in order. A separate prompt uses the existing provider session when its execution settings allow it. Steer remains a follow-up action for clients such as the BB composer and `bb thread tell`.
+
+An acknowledged native request receives the `steer` delivery label. A buffered input receives `queued` when its separate prompt is sent. If the active turn ends before delivery, BB settles pending messages with a reason that distinguishes an unsent input from an unconfirmed native request. BB avoids replaying an unconfirmed request. Explicit stop and an operator's explicit `acpSteeringMode: "interrupt"` keep their cancellation behavior.
+
+Adapters can turn supported attachments into text references. AGY saves images to host-local files and sends their paths to the native run. The adapter can also consume an unclaimed input in the same conversation after the active AGY process completes. Amp and Cursor can reject a concurrent prompt when their active session cannot accept it, so they use the same BB fallback.
+
+## Original design
+
+The following sections record the original implementation design, including the former automatic interrupt fallback.
 
 Reviewed source: local aggregate `a4923f542`. This document lives on the independent `fix/acp-mid-turn-steering-design` worktree, based on `desktop-v0.43.1` (`267938526`). The aggregate includes additional ACP service-tier, goal, and DSH work beyond that tag; an implementation must account for those dependencies explicitly rather than use the aggregate as an upstream PR base.
 

@@ -2036,7 +2036,7 @@ describe("acp bridge", () => {
       model: "fake/default",
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
     });
     await waitForResponse(turnId);
 
@@ -2051,10 +2051,12 @@ describe("acp bridge", () => {
     expect((await waitForResponse(steer)).error).toBeUndefined();
     await waitForTurnCompleted();
 
-    expect(agentMessageTexts()).toContain("selected-model:fake/strong");
+    expect(agentMessageTexts().join("")).toContain(
+      "selected-model:fake/strong",
+    );
     expect(notifications("session/replaced")).toHaveLength(0);
     expect(turnInputDeliveries(CLIENT_REQUEST_ID)).toMatchObject([
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
@@ -3567,7 +3569,7 @@ describe("acp bridge", () => {
     });
     await waitForResponse(
       sendTurnRequest("turn/start", providerThreadId, {
-        input: [{ type: "text", text: "hang", mentions: [] }],
+        input: [{ type: "text", text: "slow primary", mentions: [] }],
       }),
     );
     const first = sendTurnRequest("turn/steer", providerThreadId, {
@@ -3593,7 +3595,7 @@ describe("acp bridge", () => {
       "both permission steers",
     );
     expect(loggedPrompts(promptLog)).toEqual([
-      "hang",
+      "slow primary",
       "echo-argv first",
       "echo-argv second",
     ]);
@@ -3604,7 +3606,7 @@ describe("acp bridge", () => {
     ).toEqual([CLIENT_REQUEST_ID, "creq_abcdefghjm", "creq_abcdefghjn"]);
     for (const requestId of ["creq_abcdefghjm", "creq_abcdefghjn"]) {
       expect(turnInputDeliveries(requestId)).toMatchObject([
-        { delivery: "interrupted" },
+        { delivery: "queued" },
       ]);
     }
     expect(threadEventsOfType("turn/started")).toHaveLength(1);
@@ -3625,11 +3627,12 @@ describe("acp bridge", () => {
     });
     await waitForResponse(
       sendTurnRequest("turn/start", providerThreadId, {
-        input: [{ type: "text", text: "hang", mentions: [] }],
+        input: [{ type: "text", text: "slow primary", mentions: [] }],
       }),
     );
     const steer = sendTurnRequest("turn/steer", providerThreadId, {
       expectedTurnId: "turn-1",
+      clientRequestId: "creq_reb2222222",
       input: [{ type: "text", text: "echo-argv", mentions: [] }],
       options: executionOptions({
         permissionMode: "accept-edits",
@@ -3637,6 +3640,13 @@ describe("acp bridge", () => {
       }),
     });
     expect((await waitForResponse(steer)).error).toBeUndefined();
+    await waitForResponse(
+      sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        clientRequestId: "creq_reb2222223",
+        input: [{ type: "text", text: "still queued during restart", mentions: [] }],
+      }),
+    );
     await waitFor(
       () =>
         notifications("error").find(
@@ -3647,8 +3657,12 @@ describe("acp bridge", () => {
         ),
       "replacement error",
     );
-    expect(agentMessageTexts()).toEqual([]);
+    expect(agentMessageTexts()).toEqual(["echo:slow primary"]);
     expect(threadEventsOfType("turn/input/accepted")).toHaveLength(1);
+    expect(threadEventsOfType("client/turn/rejected")).toMatchObject([
+      { requestId: "creq_reb2222223", reason: "steer_not_sent" },
+      { requestId: "creq_reb2222222", reason: "steer_not_sent" },
+    ]);
     expect(
       threadEventsOfType("turn/completed").map((event) => event.status),
     ).toEqual(["failed"]);
@@ -3768,6 +3782,7 @@ describe("acp bridge", () => {
     async (loadSession) => {
       const promptLog = join(workspaceDir, "prompts.jsonl");
       const { providerThreadId } = await startThread({
+        steeringMode: "interrupt",
         envVars: {
           FAKE_ACP_LOAD_SESSION: loadSession,
           FAKE_ACP_CANCEL_ERROR: "1",
@@ -3827,7 +3842,7 @@ describe("acp bridge", () => {
   it("delivers stacked steers on the same turn", async () => {
     const { providerThreadId } = await startThread();
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
     });
     await waitForResponse(turnId);
 
@@ -3851,7 +3866,9 @@ describe("acp bridge", () => {
   });
 
   it("closes a command left open by a steered-away prompt as interrupted", async () => {
-    const { providerThreadId } = await startThread();
+    const { providerThreadId } = await startThread({
+      steeringMode: "interrupt",
+    });
     await waitForResponse(
       sendTurnRequest("turn/start", providerThreadId, {
         input: [{ type: "text", text: "hang-with-open-command", mentions: [] }],
@@ -3883,7 +3900,9 @@ describe("acp bridge", () => {
   });
 
   it("cancels a stacked steer prompt that also hangs", async () => {
-    const { providerThreadId } = await startThread();
+    const { providerThreadId } = await startThread({
+      steeringMode: "interrupt",
+    });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
       input: [{ type: "text", text: "hang", mentions: [] }],
     });
@@ -3982,16 +4001,18 @@ describe("acp bridge", () => {
     ]);
   });
 
-  it("labels the legacy cancel-and-reprompt steer as interrupted", async () => {
-    const requestLog = join(workspaceDir, "steer-interrupt-requests.jsonl");
+  it("queues a steer sent before the first reply when the agent lacks native steering", async () => {
+    const requestLog = join(workspaceDir, "steer-queued-requests.jsonl");
     const { providerThreadId } = await startThread({
       envVars: { FAKE_ACP_REQUEST_LOG: requestLog },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow before first reply", mentions: [] }],
       clientRequestId: "creq_primint222",
     });
     await waitForResponse(turnId);
+
+    expect(agentMessageTexts()).toEqual([]);
 
     const steerId = sendTurnRequest("turn/steer", providerThreadId, {
       expectedTurnId: "turn-1",
@@ -4002,17 +4023,20 @@ describe("acp bridge", () => {
 
     const completed = await waitForTurnCompleted();
     expect(completed).toMatchObject({ status: "completed" });
+    expect(agentMessageTexts().join("")).toBe(
+      "echo:slow before first replyecho:steered",
+    );
     expect(
       loggedAcpRequests(requestLog).filter(
         (entry) => entry.method === "session/cancel",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(turnInputDeliveries("creq_sterint222")).toMatchObject([
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
-  it("falls back to cancel-and-reprompt when the agent rejects the in-flight prompt", async () => {
+  it("queues without cancelling when the agent rejects the in-flight prompt", async () => {
     const requestLog = join(workspaceDir, "steer-busy-requests.jsonl");
     const promptLog = join(workspaceDir, "steer-busy-prompts.jsonl");
     const { providerThreadId } = await startThread({
@@ -4024,7 +4048,7 @@ describe("acp bridge", () => {
       },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
       clientRequestId: "creq_primbusy22",
     });
     await waitForResponse(turnId);
@@ -4038,110 +4062,19 @@ describe("acp bridge", () => {
 
     const completed = await waitForTurnCompleted();
     expect(completed).toMatchObject({ status: "completed" });
-    expect(loggedPrompts(promptLog)).toEqual(["hang", "steered"]);
+    expect(loggedPrompts(promptLog)).toEqual(["slow primary", "steered"]);
     expect(
       loggedAcpRequests(requestLog).filter(
         (entry) => entry.method === "session/cancel",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(turnInputDeliveries("creq_sterbusy22")).toMatchObject([
-      { delivery: "steer" },
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
-    expect(agentMessageTexts()).toContain("echo:steered");
+    expect(agentMessageTexts().join("")).toContain("echo:steered");
     expect(threadEventsOfType("turn/started")).toHaveLength(1);
     expect(threadEventsOfType("turn/completed")).toHaveLength(1);
   });
-
-  it.each([
-    ["after", "a", "slow second-steer"],
-    ["before", "b", "second-steer"],
-  ])(
-    "does not replay an earlier rejected steer when a later steer is accepted %s the rejection",
-    async (responseOrder, requestSuffix, secondSteerText) => {
-      const requestLog = join(
-        workspaceDir,
-        `steer-mixed-${responseOrder}-requests.jsonl`,
-      );
-      const promptLog = join(
-        workspaceDir,
-        `steer-mixed-${responseOrder}-prompts.jsonl`,
-      );
-      const { providerThreadId } = await startThread({
-        envVars: {
-          FAKE_ACP_MID_TURN_STEERING: "1",
-          FAKE_ACP_BUSY_PROMPT: "1",
-          FAKE_ACP_BUSY_PROMPT_TEXT: "first-steer",
-          FAKE_ACP_BUSY_PROMPT_DELAY_MS: "100",
-          FAKE_ACP_IGNORE_CANCEL: "1",
-          FAKE_ACP_REQUEST_LOG: requestLog,
-          FAKE_ACP_PROMPT_LOG: promptLog,
-        },
-      });
-      const turnId = sendTurnRequest("turn/start", providerThreadId, {
-        input: [{ type: "text", text: "slow primary", mentions: [] }],
-      });
-      await waitForResponse(turnId);
-
-      const firstSteerId = sendTurnRequest("turn/steer", providerThreadId, {
-        expectedTurnId: "turn-1",
-        input: [{ type: "text", text: "first-steer", mentions: [] }],
-        clientRequestId: `creq_mxfst${requestSuffix}2345`,
-      });
-      const secondSteerId = sendTurnRequest("turn/steer", providerThreadId, {
-        expectedTurnId: "turn-1",
-        input: [{ type: "text", text: secondSteerText, mentions: [] }],
-        clientRequestId: `creq_mxsnd${requestSuffix}2345`,
-      });
-      await waitForResponse(firstSteerId);
-      await waitForResponse(secondSteerId);
-      await waitForTurnCompleted();
-
-      expect(loggedPrompts(promptLog)).toEqual([
-        "slow primary",
-        secondSteerText,
-      ]);
-      expect(agentMessageTexts().join("")).toContain(`echo:${secondSteerText}`);
-      expect(threadEventsOfType("provider/warning").at(-1)).toMatchObject({
-        summary:
-          "ACP agent rejected an earlier steer after accepting a later one. The earlier input was not replayed, and native steering is disabled for this connection.",
-      });
-
-      const completedTurnCount = threadEventsOfType("turn/completed").length;
-      const nextTurnId = sendTurnRequest("turn/start", providerThreadId, {
-        input: [{ type: "text", text: "slow next primary", mentions: [] }],
-      });
-      await waitForResponse(nextTurnId);
-      const nextSteerId = sendTurnRequest("turn/steer", providerThreadId, {
-        expectedTurnId: "turn-1",
-        input: [{ type: "text", text: "after-mixed", mentions: [] }],
-        clientRequestId: `creq_mxaft${requestSuffix}2345`,
-      });
-      await waitForResponse(nextSteerId);
-      await waitFor(
-        () =>
-          threadEventsOfType("turn/completed").length > completedTurnCount
-            ? threadEventsOfType("turn/completed").at(-1)
-            : undefined,
-        "the post-rejection turn to complete",
-      );
-
-      expect(loggedPrompts(promptLog)).toEqual([
-        "slow primary",
-        secondSteerText,
-        "slow next primary",
-        "after-mixed",
-      ]);
-      expect(
-        turnInputDeliveries(`creq_mxaft${requestSuffix}2345`),
-      ).toMatchObject([{ delivery: "interrupted" }]);
-      expect(
-        loggedAcpRequests(requestLog).filter(
-          (entry) => entry.method === "session/cancel",
-        ),
-      ).toHaveLength(2);
-    },
-  );
 
   it("cancels an in-flight steer when the primary prompt fails", async () => {
     const requestLog = join(workspaceDir, "steer-fail-requests.jsonl");
@@ -4174,20 +4107,89 @@ describe("acp bridge", () => {
         (entry) => entry.method === "session/cancel",
       ),
     ).toHaveLength(1);
+    expect(threadEventsOfType("provider/warning")).toContainEqual(
+      expect.objectContaining({
+        summary: "ACP agent did not confirm the steer",
+      }),
+    );
+    expect(threadEventsOfType("client/turn/rejected")).toMatchObject([
+      { requestId: "creq_strfa22222", reason: "steer_unconfirmed" },
+    ]);
     expect(threadEventsOfType("turn/completed")).toHaveLength(1);
   });
 
-  it("keeps interrupt delivery after a busy rejection for the rest of the session", async () => {
+  it("reports an unconfirmed steer without replaying it or cancelling the primary", async () => {
+    const requestLog = join(workspaceDir, "steer-unconfirmed-requests.jsonl");
+    const promptLog = join(workspaceDir, "steer-unconfirmed-prompts.jsonl");
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_MID_TURN_STEERING: "1",
+        FAKE_ACP_CONCURRENT_PROMPTS: "1",
+        FAKE_ACP_REQUEST_LOG: requestLog,
+        FAKE_ACP_PROMPT_LOG: promptLog,
+        FAKE_ACP_PROMPT_FAIL_TEXT: "unconfirmed-steer",
+      },
+    });
+    await waitForResponse(
+      sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "slow primary", mentions: [] }],
+      }),
+    );
+    await waitForResponse(
+      sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        input: [{ type: "text", text: "unconfirmed-steer", mentions: [] }],
+        clientRequestId: "creq_strfa22223",
+      }),
+    );
+
+    await waitFor(
+      () => threadEventsOfType("client/turn/rejected").at(-1),
+      "the unconfirmed steer to settle",
+    );
+    await waitForResponse(
+      sendTurnRequest("turn/steer", providerThreadId, {
+        expectedTurnId: "turn-1",
+        clientRequestId: "creq_strfa22224",
+        input: [{ type: "text", text: "later steer", mentions: [] }],
+      }),
+    );
+    expect(await waitForTurnCompleted()).toMatchObject({ status: "completed" });
+    expect(loggedPrompts(promptLog)).toEqual([
+      "slow primary",
+      "unconfirmed-steer",
+      "later steer",
+    ]);
+    expect(
+      loggedAcpRequests(requestLog).some(
+        (entry) => entry.method === "session/cancel",
+      ),
+    ).toBe(false);
+    expect(turnInputDeliveries("creq_strfa22223")).toEqual([]);
+    expect(turnInputDeliveries("creq_strfa22224")).toMatchObject([{ delivery: "steer" }]);
+    expect(threadEventsOfType("provider/warning")).toContainEqual(
+      expect.objectContaining({
+        summary: "ACP agent did not confirm the steer",
+        details: "Fake prompt failure",
+      }),
+    );
+  });
+
+  it("keeps later steers behind an earlier input with a delayed busy rejection", async () => {
+    const requestLog = join(workspaceDir, "steer-busy-sticky-requests.jsonl");
     const promptLog = join(workspaceDir, "steer-busy-sticky-prompts.jsonl");
     const { providerThreadId } = await startThread({
       envVars: {
         FAKE_ACP_MID_TURN_STEERING: "1",
         FAKE_ACP_BUSY_PROMPT: "1",
+        FAKE_ACP_BUSY_PROMPT_TEXT: "first-steer",
+        FAKE_ACP_BUSY_PROMPT_DELAY_MS: "100",
+        FAKE_ACP_REQUEST_LOG: requestLog,
         FAKE_ACP_PROMPT_LOG: promptLog,
       },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
       clientRequestId: "creq_primstck22",
     });
     await waitForResponse(turnId);
@@ -4207,18 +4209,21 @@ describe("acp bridge", () => {
 
     const completed = await waitForTurnCompleted();
     expect(completed).toMatchObject({ status: "completed" });
+    expect(
+      loggedAcpRequests(requestLog).some(
+        (entry) => entry.method === "session/cancel",
+      ),
+    ).toBe(false);
     expect(loggedPrompts(promptLog)).toEqual([
-      "hang",
+      "slow primary",
       "first-steer",
       "second-steer",
     ]);
     expect(turnInputDeliveries("creq_sterstcky2")).toMatchObject([
-      { delivery: "steer" },
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
     expect(turnInputDeliveries("creq_sterstcky3")).toMatchObject([
-      { delivery: "steer" },
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
@@ -4311,7 +4316,7 @@ describe("acp bridge", () => {
       },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
     });
     await waitForResponse(turnId);
 
@@ -4328,9 +4333,9 @@ describe("acp bridge", () => {
       loggedAcpRequests(requestLog).filter(
         (entry) => entry.method === "session/cancel",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(turnInputDeliveries("creq_sterdecf22")).toMatchObject([
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
@@ -4344,7 +4349,7 @@ describe("acp bridge", () => {
       },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
     });
     await waitForResponse(turnId);
 
@@ -4361,13 +4366,13 @@ describe("acp bridge", () => {
       loggedAcpRequests(requestLog).filter(
         (entry) => entry.method === "session/cancel",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(turnInputDeliveries("creq_stermafx22")).toMatchObject([
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
-  it("uses the interrupt path for steers carrying commands even on steering agents", async () => {
+  it("queues steers carrying commands even on steering agents", async () => {
     const requestLog = join(workspaceDir, "steer-command-requests.jsonl");
     const { providerThreadId } = await startThread({
       envVars: {
@@ -4377,7 +4382,7 @@ describe("acp bridge", () => {
       },
     });
     const turnId = sendTurnRequest("turn/start", providerThreadId, {
-      input: [{ type: "text", text: "hang", mentions: [] }],
+      input: [{ type: "text", text: "slow primary", mentions: [] }],
     });
     await waitForResponse(turnId);
 
@@ -4394,9 +4399,9 @@ describe("acp bridge", () => {
       loggedAcpRequests(requestLog).filter(
         (entry) => entry.method === "session/cancel",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(turnInputDeliveries("creq_stercmd222")).toMatchObject([
-      { delivery: "interrupted" },
+      { delivery: "queued" },
     ]);
   });
 
@@ -4668,6 +4673,7 @@ describe("acp bridge", () => {
 
     const steerId = sendTurnRequest("turn/steer", providerThreadId, {
       expectedTurnId: "turn-1",
+      clientRequestId: "creq_sternsv223",
       input: [{ type: "text", text: "never sent", mentions: [] }],
     });
     await waitForResponse(steerId);
@@ -4681,6 +4687,9 @@ describe("acp bridge", () => {
     await waitForTurnCompleted();
 
     expect(threadEventsOfType("turn/input/accepted")).toHaveLength(1);
+    expect(threadEventsOfType("client/turn/rejected")).toMatchObject([
+      { requestId: "creq_sternsv223", reason: "steer_not_sent" },
+    ]);
   });
 
   it("rejects steers when no turn is active", async () => {

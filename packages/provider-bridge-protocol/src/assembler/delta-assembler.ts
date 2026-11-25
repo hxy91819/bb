@@ -1282,6 +1282,18 @@ export function createDeltaAssembler(
     events: EventSink,
   ): void {
     switch (delta.kind) {
+      case "input.rejected": {
+        events.push({
+          type: "client/turn/rejected",
+          threadId: UNSTAMPED_THREAD_ID,
+          scope: threadScope(),
+          requestId: delta.clientRequestId,
+          reason: delta.reason,
+          message: delta.message,
+        });
+        return;
+      }
+
       case "input.accepted": {
         if (delta.providerTurnId !== undefined) {
           events.push({
