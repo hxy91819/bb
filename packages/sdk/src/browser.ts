@@ -46,6 +46,10 @@ export function createBrowserBbSdk(
 }
 
 export { BbHttpError, BbRequestTimeoutError } from "./response.js";
+export {
+  buildVsCodeRemoteUrl,
+  type VsCodeRemoteUrlArgs,
+} from "./vscode-remote-url.js";
 export type { BbHttpErrorArgs } from "./response.js";
 export { createBbSdk, createBuiltinPlanCommandTextInput, createHttpTransport };
 export type { BbSdk, BbSdkAreas, BbSdkContext, BbSdkTransport };
