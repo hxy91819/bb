@@ -63,7 +63,7 @@ const logger = testLogger as unknown as Logger;
 const run = promisify(execFile);
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  return (await run("git", args, { cwd })).stdout.trim();
+  return (await run("git", ["-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", ...args], { cwd })).stdout.trim();
 }
 
 async function commitPlugin(
