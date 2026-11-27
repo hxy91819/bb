@@ -1,4 +1,5 @@
 import { experimentalThreadActivityRequestSchema, type ExperimentalThreadActivityInput, type ExperimentalThreadActivityResponse } from "./api/thread-activity.js";
+import { type ThreadMessageSearchQuery, type ThreadMessageSearchResponse } from "./api/threads.js";
 import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
@@ -376,6 +377,7 @@ import {
   threadOpenRequestSchema,
   threadPaneActionRequestSchema,
   threadSearchQuerySchema,
+  threadMessageSearchQuerySchema,
   threadStorageFilesQuerySchema,
   threadStoragePathsQuerySchema,
   terminalInputRequestSchema,
@@ -1308,6 +1310,14 @@ export const publicApiRoutes = {
         threadSearchQuerySchema,
       ),
       response: jsonResponse<ThreadSearchResponse>(),
+    }),
+    searchMessages: defineRoute({
+      path: "/threads/:id/search",
+      method: "get",
+      request: queryRequest<PathId, ThreadMessageSearchQuery>(
+        threadMessageSearchQuerySchema,
+      ),
+      response: jsonResponse<ThreadMessageSearchResponse>(),
     }),
     resolveMentions: defineRoute({
       path: "/threads/resolve-mentions",

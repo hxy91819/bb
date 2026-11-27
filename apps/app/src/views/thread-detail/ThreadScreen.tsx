@@ -600,7 +600,7 @@ export function ThreadScreen({
     case "page":
       return (
         <div
-          data-thread-window=""
+          data-thread-window={thread.id}
           className="flex h-full min-h-0 min-w-0 flex-col overflow-clip"
         >
           <PageShell
@@ -683,7 +683,7 @@ function ThreadScreenPanelShell({
     return (
       <div
         key={threadId}
-        data-thread-window=""
+        data-thread-window={threadId}
         data-surface-tone={tone}
         className={cn("flex min-w-0 flex-col", surfaceClassName)}
       >
@@ -702,7 +702,7 @@ function ThreadScreenPanelShell({
   }
   return (
     <div
-      data-thread-window=""
+      data-thread-window={threadId}
       data-surface-tone={tone}
       className="flex min-h-0 flex-1 flex-col"
     >
