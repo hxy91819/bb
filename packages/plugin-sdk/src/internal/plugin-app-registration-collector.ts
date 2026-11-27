@@ -163,6 +163,7 @@ class SidebarFooterCollector implements ExperimentalSidebarFooter {
 }
 
 export interface LegacyThreadPanelActionRegistration {
+  experimental_pinned?: boolean;
   id: string;
   title: string;
   icon?: string;
@@ -666,6 +667,21 @@ export function collectPluginAppRegistrations(
     ) {
       throw new Error(`${kind}: run and params require action availability`);
     }
+    const pinned =
+      "experimental_pinned" in registration
+        ? registration.experimental_pinned
+        : undefined;
+    if (pinned !== undefined && typeof pinned !== "boolean") {
+      throw new Error(`${kind}: "experimental_pinned" must be a boolean`);
+    }
+    if (
+      pinned !== undefined &&
+      (availability !== "action" || context.kind !== "thread")
+    ) {
+      throw new Error(
+        `${kind}: experimental_pinned requires a thread action tab`,
+      );
+    }
     const target = registration.experimental_target;
     if (
       target !== undefined &&
@@ -768,6 +784,7 @@ export function collectPluginAppRegistrations(
         collectTab(
           {
             ...action,
+            experimental_pinned: registration.experimental_pinned ?? false,
             icon: action.icon ?? "",
             context: { kind: "thread" },
             availability: "action",
