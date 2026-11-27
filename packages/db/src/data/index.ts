@@ -484,6 +484,7 @@ export {
   getPendingCoalescedQueuedThreadMessage,
   getQueuedThreadMessage,
   getQueuedThreadStartMessage,
+  getQueuedRetryOfTurnRequest,
   getFirstUnclaimedQueuedRetry,
   hasLiveQueuedRetry,
   hasQueuedRetryOfTurnRequest,

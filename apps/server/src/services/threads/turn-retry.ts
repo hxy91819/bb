@@ -1,6 +1,6 @@
+import { getQueuedRetryOfTurnRequest } from "@bb/db";
 import {
   getFirstUnclaimedQueuedRetry,
-  hasQueuedRetryOfTurnRequest,
   updateQueuedThreadMessage,
   type QueuedThreadMessageRow,
 } from "@bb/db";
@@ -41,10 +41,12 @@ function hasQueuedRetryFor(
   deps: Pick<TurnRetryDeps, "db">,
   args: { threadId: string; originalRequestId: string },
 ): boolean {
-  return hasQueuedRetryOfTurnRequest(deps.db, {
-    threadId: args.threadId,
-    retryOfTurnRequestId: args.originalRequestId,
-  });
+  return (
+    getQueuedRetryOfTurnRequest(deps.db, {
+      threadId: args.threadId,
+      retryOfTurnRequestId: args.originalRequestId,
+    }) !== null
+  );
 }
 
 /**
