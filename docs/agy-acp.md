@@ -27,7 +27,7 @@ bb plugin install git:https://github.com/hxy91819/bb-plugins --plugin acp --yes
 ```sh
 mkdir -p "$HOME/.local/share"
 git clone https://github.com/hxy91819/bb-plugins.git "$HOME/.local/share/bb-plugins"
-git -C "$HOME/.local/share/bb-plugins" checkout --detach b72f1f7549aaf635e164113e9fc9076d28d819fd
+git -C "$HOME/.local/share/bb-plugins" checkout --detach bbd12ab6dd0aedb54f8532f53b87c2bc8b802cd5
 agy_launcher="$HOME/.local/share/bb-plugins/tools/agy-launch"
 npm ci --prefix "$agy_launcher" --ignore-scripts
 agy plugin install "$agy_launcher/node_modules/antigravity-acp/plugin"
@@ -119,7 +119,13 @@ BB 连接多台机器时，为后两条命令添加 `--machine <目标机器ID>`
 
 在有界的运行中发送一条带图 steer，确认 AGY 通过执行机本地文件读取图片、原轮正常结束。Linux 上已用 AGY `1.5.17` 验证这条路径。错过最后一个 hook 且尚未被领取的 steer 沿用原会话续跑。保持 BB 的默认 steering 配置，让共享 ACP 桥在无法同轮插入时等待当前 prompt 完成，再按顺序发送。缺少插入回执时检查会话告警。
 
-入口会在 `~/.agy-acp/models.json` 缺失或为空时，用 `agy models` 预填缓存，避免 BB 在 `session/new` 后立刻查询却只拿到 `Agent default`。桥还会在后台重新发现并更新目录。换账号、升级后若旧目录不刷新，先保留缓存用于对比，并在没有活跃 AGY 请求时将它改名备份，再新建会话触发预热；不要把旧机器的模型缓存复制过来当成账号权限目录。
+入口会在 `~/.agy-acp/models.json`（或 `AGY_ACP_STATE_DIR/models.json`）缺失或为空时，用 `agy models` 预填缓存，避免 BB 在 `session/new` 后立刻查询却只拿到 `Agent default`。桥还会在后台重新发现并更新目录。换账号、升级后若旧目录不刷新，先保留缓存用于对比，并在没有活跃 AGY 请求时将它改名备份，再新建会话触发预热；不要把旧机器的模型缓存复制过来当成账号权限目录。
+
+### 显式模型强制契约（Fail-Fast）与状态隔离
+
+- **用户已确认契约**：BB 核心（`fix/acp-explicit-model-enforcement`）在每次会话创建、恢复和 fork 时都显式下发所选模型。当明确请求了模型而 ACP agent 未声明模型选项、不接受该模型或返回值不匹配时，直接报错阻止运行（Fail-Fast），不静默回退到本机默认配置。
+- **状态隔离与回读**：`antigravity-acp` 在 `newSession`/`loadSession`/`resumeSession`/`prompt` 均保持显式模型绑定，缺模型时直接拒绝执行，并支持 `AGY_ACP_STATE_DIR` 隔离缓存目录。每轮结束后按优先级从 `transcript.jsonl` 的 `PLANNER_RESPONSE.model`、`~/.gemini/antigravity-cli/conversations/<cid>.db` 的 `steps.metadata` 模型枚举、以及完整小数点匹配的 `Model Selection` 回读实际执行模型；若与请求模型发生漂移，通过 `provider.modelFallback` 上报。
+- **反向验收**：可保留 `~/.gemini/antigravity-cli/settings.json` 指向另一默认模型（例如旧 Flash 模型），分别验证两件事：（1）在 BB 选择目标模型时，会话状态与 transcript/SQLite 确认以所选模型执行；（2）传入不存在的模型 ID 时立即 Fail-Fast 报错且不产生新对话。
 
 ## 4. 定时续办与 Working 卡住
 

@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | 管家会话、工作簿、要求帐、管家浮窗与检查 | BB 仓库 `plugins/steward`，ID `steward`；技能在 `mason-skills/common-skills/bb-steward` | 用户指定在 BB 仓库维护；独立 path 安装，不列官方商店。看门狗 register/unregister 自动同步；Git-ref 入口在插件内按 SHA 只读展示，历史流水账统计不适用，标准摘要读取 Python 检查结果 |
 | 订阅额度看板、Account Limits、多来源/账号池额度展示、重置预测、每周节奏 | [`bb-plugin-account-limits`](https://github.com/hxy91819/bb-plugin-account-limits)，ID `account-limits` | 该仓库 README 与架构说明；读取公共额度接口，不注册可执行 agent，也不改变账号或模型路由 |
-| 本地 token 用量、费用估算、Usage 采集与报表 | [`bb-plugin-usage`](https://github.com/hxy91819/bb-plugin-usage)，ID `usage` | 使用个人 fork 的安装来源与发布说明；token/费用与订阅剩余额度是两个不同 owner |
+| 本地 token 用量、费用估算、Usage 采集与报表 | [`bb-plugin-usage`](https://github.com/hxy91819/bb-plugin-usage)，ID `usage` | 使用个人 fork 的安装来源与发布说明；AGY 采集支持 `transcript.jsonl` 与 `conversations/<cid>.db` 的 `steps.metadata` 回退；token/费用与订阅剩余额度是两个不同 owner |
 | fork 服务部署后机器级 `bb` 版本落后、shim 指向旧包 | 本仓库 `fork-tooling` | [部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md)、`scripts/fork-cutover.mjs` 和 `scripts/fork-machine-cli.mjs`；机器注册安装入口为 `apps/server/src/assets/install-machine.sh` |
 | BB 升级、重启后恢复线程、升级继续消息、恢复批次 | [`bb-plugin-upgrade-resume`](https://github.com/hxy91819/bb-plugin-upgrade-resume)，ID `upgrade-resume` | `src/recovery.ts`、`src/store.ts`、`src/server.ts`；插件记录与续跑，实际服务替换走[部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md) |
 | 账号池、Codex 凭据文件导入、`--auth-file`、额度路由、AI fallback | 本仓库 [`plugins/account-pool`](../plugins/account-pool) | `src/cli.ts`、`src/credentials.ts`、`src/operations.ts`、`src/hub.ts`；这是随 BB 打包的现有插件，随 BB 升级 |
@@ -40,12 +40,12 @@
 
 | 遇到的问题 | 维护仓库或目录 | 从这里查起 |
 | --- | --- | --- |
-| ACP resume/config、steer 投递、checkpoint/history、协议翻译、模型错误 | 本仓库 [`packages/provider-bridge-acp`](../packages/provider-bridge-acp)、[`packages/agent-runtime`](../packages/agent-runtime)、[`apps/server`](../apps/server) | 多个 agent 和原生界面共用的协议与状态修复；在 `.fork/branches` 对应核心分支维护，外置插件调用公共路径 |
+| ACP resume/config、steer 投递、checkpoint/history、协议翻译、模型错误 | 本仓库 [`packages/provider-bridge-acp`](../packages/provider-bridge-acp)、[`packages/agent-runtime`](../packages/agent-runtime)、[`apps/server`](../apps/server) | 多个 agent 和原生界面共用的协议与状态修复；`fix/acp-explicit-model-enforcement` 强制显式模型 Fail-Fast 与运行中漂移 `provider.modelFallback` 上报；在 `.fork/branches` 对应核心分支维护，外置插件调用公共路径 |
 | 原生触屏导航、持续阅读自动已读、输入框焦点、Add to chat、Queue/Steer、overlay 生命周期 | 本仓库 [`apps/app`](../apps/app) 及集合的 [`plugins/thread-list`](https://github.com/hxy91819/bb-plugins/tree/main/plugins/thread-list) | 核心 `fix/focused-thread-read` 维护持续聚焦阅读的自动已读；只影响外置列表定制的布局与偏好时回到集合 |
 | 插件扩展点、创建上下文、列表贡献、活动查询、消息定位、常驻插件标签 | 本仓库 [`packages/plugin-sdk`](../packages/plugin-sdk)、[`packages/sdk`](../packages/sdk)、[`apps/server`](../apps/server)、[`apps/app`](../apps/app)、[`apps/cli`](../apps/cli) | 公共扩展及 CLI/SDK/UI 共用实现；API 契约与用法以 Plugin Guide 为准 |
 | Codex/Claude/Pi provider 本身、provider 选择器、公共额度接口 | 本仓库 [`plugins`](../plugins) 及实际公共界面 | 在既有 provider 插件和公共实现修复；独立 ACP 适配器本身的登录、模型和技能注入归适配器仓库，如 [cursor-acp](https://github.com/hxy91819/cursor-acp) |
 | Mermaid、Markdown、依赖漏洞、server/daemon、wire 协议、环境切换后继续 | 本仓库对应 `apps/`、`packages/` 与 `.fork/branches` 分支 | “切换环境后继续”属于核心，与上面的“升级重启后续跑”分开维护 |
-| AGY ACP 执行、模型列表预热、同轮 steer、原生 hook 插件 | [`hxy91819/antigravity-acp`](https://github.com/hxy91819/antigravity-acp)，第三方 ACP 的个人 fork | 启动预热入口及锁定依赖由集合 [`tools/agy-launch`](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch) 管理；适配器源码 `src/acp/adapter.ts`、`src/acp/steering.ts`、`plugin/`；通过 PreInvocation/PostInvocation 注入同轮输入，以 SQLite 用户行确认回执。PreToolUse 拦截 BB 会话中的原生 `schedule`；`acp-agy` 注册、模型和用量桥接仍由集合 `plugins/provider-acp` 持有，不属于账号反代池 |
+| AGY ACP 执行、模型列表预热、同轮 steer、原生 hook 插件 | [`hxy91819/antigravity-acp`](https://github.com/hxy91819/antigravity-acp)，第三方 ACP 的个人 fork | 启动预热入口及锁定依赖由集合 [`tools/agy-launch`](https://github.com/hxy91819/bb-plugins/tree/main/tools/agy-launch) 管理；适配器源码 `src/acp/agent.ts`、`src/acp/adapter.ts`、`src/acp/steering.ts`、`plugin/`；显式模型绑定、`AGY_ACP_STATE_DIR` 隔离及 `conversations/<cid>.db` 的 `steps.metadata` 模型回读见 [AGY ACP 配置](agy-acp.md)；通过 PreInvocation/PostInvocation 注入同轮输入，以 SQLite 用户行确认回执。PreToolUse 拦截 BB 会话中的原生 `schedule`；`acp-agy` 注册、模型和用量桥接仍由集合 `plugins/provider-acp` 持有，不属于账号反代池 |
 | 账号池对外调用、香港 Responses 入口、外部 Codex Key | 运维仓库 `workspace/docs/operations/bb-pool-gateway/` | 复用现有 Caddy 与内置账号池；只开放模型目录及 Responses，OAuth 仍由 BB 管理，不导入到 Magpie 或其他服务 |
 | Windows 桌面安装包、fork 桌面自动更新 | 本仓库 `fork-tooling` 的 `.github/workflows/fork-release.yml`、`scripts/fork-release/`；核心 `feature/desktop-release-feed` | 每次 fork tag 经 Windows x64 runner 构建和 Electron smoke，发布 NSIS 安装器与来源哈希；只更新本 fork 的 `fork-desktop-latest`，保留上游默认构建行为 |
 | fork 分支、聚合、SDK 供应、打包发布、部署规则、本索引 | 本仓库 `fork-tooling` 的 [`docs/fork-maintenance.md`](fork-maintenance.md)、[`scripts`](../scripts)、[部署技能](../.bb/skills/local-aggregate-deploy/SKILL.md) | 根目录 `main` 保存安全基线，聚合产物在 `aggregate`；维护分支是规则与索引的源；其他机器读取远端 `fork-tooling`，避免使用旧聚合里的旧规则 |
@@ -83,7 +83,7 @@ bb plugin install 'git:https://github.com/hxy91819/bb-plugin-account-limits.git@
 ### 先辨认来源与更新内容
 
 1. 用 `bb status --json`、`bb plugin list --json` 和 `bb plugin source <id> --json` 确认目标实例、实际来源和启停状态。私有保存更新前的源码 commit、配置、ACP provider ID、侧栏选择与偏好、书签数量和首条 ID，以及可回退的源码位置。运行路径和用户数据不写入本索引或 Git。
-2. 按实际安装通道查询涉及仓库的远端 `main` 或最新兼容 Release 及对应 CI。比较 commit 与插件目录的实际差异，不能只看 `package.json.version`；同一版本号可能已有新的修复。集合只拉取一次，再处理其中已安装且有变化的成员；只有文档变化时记录已核对，无需重载业务插件。
+2. 按实际安装通道查询涉及仓库的远端 `main` 或最新兼容 Release 及对应 CI。若外置插件属于私有仓库且 GitHub Actions 因私有仓库额度/账单无法启动，以目标提交在本地跑完该仓库完整检查与构建（如 `npm ci && npm run check && npm run build`）作为验证门禁，并在交付中注明远端 CI 因私有额度跳过，不因账单阻塞更新。比较 commit 与插件目录的实际差异，不能只看 `package.json.version`；同一版本号可能已有新的修复。集合只拉取一次，再处理其中已安装且有变化的成员；只有文档变化时记录已核对，无需重载业务插件。
 3. 按目标 BB 的版本、实际 SDK 和插件 `engines`、README、供应记录确认兼容性。集合的 `bb-runtime.json` 是构建基线，可能早于待部署 BB；保留各插件 lockfile 的 SDK URL/integrity，使用匹配本机平台、tag 和 source 的基线包构建。不要把构建基线自动改成最新 BB 包，也不要用同版本的上游 npm SDK 替换 fork SDK。
 
 ### 按安装类型执行
