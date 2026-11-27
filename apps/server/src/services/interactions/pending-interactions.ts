@@ -35,6 +35,7 @@ import {
   type PendingInteractionCreate,
   type PendingInteractionResolution,
   type ThreadChangeMetadata,
+  type Thread,
 } from "@bb/domain";
 import type { HostDaemonCommand } from "@bb/host-daemon-contract";
 import type { CommandResultReportForType } from "../../internal/command-result-side-effects.js";
@@ -66,6 +67,7 @@ import {
   pendingInteractionResolutionEquals,
   validatePendingInteractionResolution,
 } from "./pending-interaction-validation.js";
+import { requestChildThreadNeedsAttentionNotification } from "./pending-interaction-notifications.js";
 import { emitPluginInteractionPending } from "../plugins/plugin-thread-events.js";
 import { requireConnectedHostSession } from "../lib/entity-lookup.js";
 import {
@@ -408,12 +410,6 @@ export class PendingInteractionLifecycle {
     return interaction;
   }
 
-  /**
-   * Whether a pending interaction holds this thread's turn. A provider's
-   * question or approval does: the provider is blocked on it, so nothing
-   * else can be sent until it settles. A plugin's card has no turn and never
-   * blocks a send; whatever answers it later steers or starts a turn.
-   */
   hasTurnBoundPendingThreadInteraction(threadId: string): boolean {
     return hasTurnBoundActivePendingInteractionForThread(
       this.deps.db,
@@ -509,18 +505,29 @@ export class PendingInteractionLifecycle {
     const pendingInteraction = toPendingInteraction(registered.row);
 
     if (registered.outcome === "created") {
-      appendPendingInteractionTimelineEvent(this.deps, pendingInteraction);
-      notifyInteractionChanged({
-        deps: this.deps,
-        threadId: pendingInteraction.threadId,
-      });
-      emitPluginInteractionPending(thread, pendingInteraction);
+      this.publishPendingInteraction(thread, pendingInteraction);
     }
 
     return {
       outcome: registered.outcome,
       interaction: pendingInteraction,
     };
+  }
+
+  private publishPendingInteraction(
+    thread: Thread,
+    interaction: PendingInteraction,
+  ): void {
+    appendPendingInteractionTimelineEvent(this.deps, interaction);
+    notifyInteractionChanged({
+      deps: this.deps,
+      threadId: interaction.threadId,
+    });
+    emitPluginInteractionPending(thread, interaction);
+    requestChildThreadNeedsAttentionNotification(
+      { ...this.deps, pendingInteractions: this },
+      interaction,
+    );
   }
 
   requestPluginInteraction(
@@ -595,12 +602,7 @@ export class PendingInteractionLifecycle {
       return pending;
     }
     try {
-      appendPendingInteractionTimelineEvent(this.deps, interaction);
-      notifyInteractionChanged({
-        deps: this.deps,
-        threadId: interaction.threadId,
-      });
-      emitPluginInteractionPending(thread, interaction);
+      this.publishPendingInteraction(thread, interaction);
     } catch (error) {
       try {
         setPendingInteractionInterrupted(this.deps.db, {
