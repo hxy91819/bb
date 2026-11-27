@@ -114,7 +114,7 @@ export function createThreadRecord(
       lifecycleOwnerThreadId: args.request.lifecycleOwnerThreadId,
       originKind: args.request.originKind,
       originPluginId: args.request.originPluginId ?? null,
-      pluginMetadata: args.request.pluginMetadata,
+      initialPluginMetadata: args.request.pluginMetadata,
       visibility: args.request.visibility,
       parentNotifications: args.request.parentNotifications,
       // Every thread starts `pending`, with no exception to parameterise.
