@@ -1,0 +1,23 @@
+[
+  {
+    "id": "agy",
+    "displayName": "Antigravity (AGY)",
+    "command": "__BUN_BIN__",
+    "args": ["__AGY_LAUNCH_DIR__/agy-entry.mjs"],
+    "env": {
+      "AGY_BIN": "__AGY_BIN__",
+      "AGY_SKIP_DOWNLOAD": "1"
+    },
+    "icon": "Zap",
+    "dialect": "agy",
+    "providerUsage": true,
+    "permissionModes": ["full"],
+    "reasoningLevels": ["medium"],
+    "supportsServiceTier": false,
+    "fork": "none",
+    "nativeSkillRoots": {
+      "user": [".gemini/config/skills"],
+      "project": []
+    }
+  }
+]

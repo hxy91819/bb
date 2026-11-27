@@ -5,6 +5,7 @@ import {
 
 export default defineWorkspaceTestConfig({
   test: {
+    maxWorkers: 1,
     silent: "passed-only",
     testTimeout: 15_000,
     globalSetup: ["test/setup/migrated-db-template.ts"],
