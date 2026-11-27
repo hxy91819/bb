@@ -1,4 +1,8 @@
 import os from "node:os";
+import {
+  codexExecutionEnv,
+  resolveCodexExecution,
+} from "./execution-context.js";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import {
   experimental_defineHostEntry,
@@ -36,8 +40,16 @@ async function textResult(work: Promise<string>): Promise<CodexAiTextResult> {
 export default experimental_defineHostEntry({
   contract: codexHostContract,
   handlers: {
-    resolveNativeRoots: (): Promise<ExperimentalNativeRootsResolveAnswer> =>
-      resolveCodexNativeRoots({ homeDir: os.homedir(), env: process.env }),
+    resolveNativeRoots: (
+      input,
+    ): Promise<ExperimentalNativeRootsResolveAnswer> =>
+      resolveCodexNativeRoots({
+        homeDir: os.homedir(),
+        env: codexExecutionEnv(
+          resolveCodexExecution(input.experimental_providerOptions),
+          process.env,
+        ),
+      }),
     "codex.ai.complete": (input, context) =>
       textResult(completeCodexInference(input, context.signal)),
     "codex.ai.transcribe": (input, context) =>
