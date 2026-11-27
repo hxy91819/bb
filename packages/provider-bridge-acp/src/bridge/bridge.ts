@@ -212,6 +212,7 @@ interface AcpThreadSession {
   capabilities: AcpAgentCapabilities | undefined;
   supportsImageInput: boolean;
   supportsLoadSession: boolean;
+  supportsResume: boolean;
   policy: AcpSessionPolicy;
   pendingInstructions: string | undefined;
   activePromptKind: "turn" | "compaction" | "agent" | null;
@@ -234,6 +235,10 @@ interface AcpThreadSession {
   deferStartEmit: AcpDeferredStartEmitter | undefined;
   awaitingFirstPrompt: boolean;
   turnOutputCount: number;
+}
+
+function acpSessionRestorable(session: AcpThreadSession): boolean {
+  return session.supportsLoadSession || session.supportsResume;
 }
 
 type AcpDeferredStartEmitter = (
@@ -2402,6 +2407,7 @@ async function startAgentSession(
     capabilities: undefined,
     supportsImageInput: false,
     supportsLoadSession: false,
+    supportsResume: false,
     policy: {
       permissionMode: params.permissionMode,
       workspaceWriteRoots: params.workspaceWriteRoots,
@@ -2443,14 +2449,15 @@ async function startAgentSession(
     });
     session.supportsImageInput = capabilities.prompt.image;
     const supportsLoadSession = capabilities.session.load;
+    const supportsResume = capabilities.session.resume;
     const supportsFork = capabilities.session.fork;
     if (request.kind === "fork" && !supportsFork) {
       throw new Error(
         `ACP agent "${agentLabel}" does not advertise session/fork support.`,
       );
     }
-    session.supportsLoadSession =
-      supportsLoadSession || capabilities.session.resume;
+    session.supportsLoadSession = supportsLoadSession;
+    session.supportsResume = supportsResume;
     const mcpServers = await buildSessionMcpServers(params);
     const mcpServer = mcpServers[0];
     if (mcpServer) {
@@ -2495,41 +2502,39 @@ async function startAgentSession(
       loadedConfigOptions = forkedSession.configOptions;
       loadedModels = forkedSession.models;
       rememberGrokContextWindow(session, forkedSession.models);
-    } else if (
-      request.kind === "resume" &&
-      (capabilities.session.resume || supportsLoadSession)
-    ) {
-      const restoreMethod = capabilities.session.resume
-        ? "session/resume"
-        : "session/load";
+    } else if (request.kind === "resume") {
       session.loading = true;
       session.loadingSessionId = request.resumeProviderThreadId;
       session.pendingLoadUsageUpdate = undefined;
       session.model.beginReplay();
       try {
-        const configState = await connection.request({
-          method: restoreMethod,
-          params: {
-            sessionId: request.resumeProviderThreadId,
-            cwd: params.cwd,
-            mcpServers,
-            ...additionalSessionDirectories(params, capabilities),
-          },
-          resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
-          timeoutMs: ACP_SESSION_SETUP_TIMEOUT_MS,
-        });
-        loadedConfigOptions = configState?.configOptions;
-        loadedModels = configState?.models;
-        rememberGrokContextWindow(session, configState?.models);
-        sessionId = request.resumeProviderThreadId;
-      } catch (error) {
-        if (isAcpAuthRequiredResponse(error)) {
-          throw error;
+        const restoreMethods = [
+          ...(supportsResume ? ["session/resume"] : []),
+          ...(supportsLoadSession ? ["session/load"] : []),
+        ];
+        for (const method of restoreMethods) {
+          try {
+            const configState = await connection.request({
+              method,
+              params: {
+                sessionId: request.resumeProviderThreadId,
+                cwd: params.cwd,
+                mcpServers,
+                ...additionalSessionDirectories(params, capabilities),
+              },
+              resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
+              timeoutMs: ACP_SESSION_SETUP_TIMEOUT_MS,
+            });
+            loadedConfigOptions = configState?.configOptions;
+            loadedModels = configState?.models;
+            rememberGrokContextWindow(session, configState?.models);
+            sessionId = request.resumeProviderThreadId;
+            break;
+          } catch (error) {
+            if (isAcpAuthRequiredResponse(error)) throw error;
+            session.pendingLoadUsageUpdate = undefined;
+          }
         }
-        sessionId = undefined;
-        session.loading = false;
-        session.loadingSessionId = undefined;
-        session.pendingLoadUsageUpdate = undefined;
       } finally {
         session.model.endReplay();
       }
@@ -2602,7 +2607,7 @@ async function startAgentSession(
     sendNotification(BRIDGE_NOTIFICATION_METHODS.threadIdentity, {
       threadId: bbThreadId,
       providerThreadId: sessionId,
-      sessionRestorable: session.supportsLoadSession,
+      sessionRestorable: acpSessionRestorable(session),
     });
     if (request.kind !== "resume" || !request.continuesTurn) {
       sendThreadDeltas(bbThreadId, [{ kind: "session.reset" }]);
@@ -3924,7 +3929,7 @@ async function handleRequest(
       );
       sendResult(request.id, {
         providerThreadId: session.providerThreadId,
-        sessionRestorable: session.supportsLoadSession,
+        sessionRestorable: acpSessionRestorable(session),
       });
       return;
     }
