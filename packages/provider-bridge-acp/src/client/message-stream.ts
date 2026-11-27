@@ -14,6 +14,7 @@ export interface AcpMessageStreamOptions {
   closeOnInputEnd: boolean;
   onSessionUpdate(params: unknown): void;
   onNotification?(method: string, params: unknown): void;
+  onRequestSubmitted?(method: string, params: unknown): void;
   onDiscard(reason: AcpDiscardReason, line: string): void;
 }
 
@@ -115,6 +116,9 @@ export function createAcpMessageStream(
         }
       }
       options.output.write(`${JSON.stringify(message)}\n`);
+      if ("method" in message && "id" in message) {
+        options.onRequestSubmitted?.(message.method, message.params);
+      }
     },
   });
 

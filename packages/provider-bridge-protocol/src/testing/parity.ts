@@ -126,7 +126,10 @@ export interface ReplayProviderProfile {
     wrapperPath: string;
     stateDir: string;
   }): Record<string, string>;
-  rewriteRuntimeLine?(line: string, args: { replayCommand: string[] }): string;
+  rewriteRuntimeLine?(
+    line: string,
+    args: { replayCommand: string[]; recording: BridgeRecording },
+  ): string;
   prepareState?(args: {
     recording: BridgeRecording;
     stateDir: string;
@@ -741,7 +744,7 @@ async function replayRecordingAttempt(
       const line =
         profile.rewriteRuntimeLine === undefined
           ? rewritten
-          : profile.rewriteRuntimeLine(rewritten, { replayCommand });
+          : profile.rewriteRuntimeLine(rewritten, { replayCommand, recording });
       lastSentRuntimeEntry = {
         run: step.entry.run,
         seq: step.entry.seq,

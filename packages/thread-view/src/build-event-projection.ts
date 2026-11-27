@@ -38,6 +38,7 @@ export type { ThreadEventWithMeta } from "./group-event-projection-turns.js";
 import { shouldSuppressLowValueToolCall } from "./tool-call-suppression.js";
 import {
   buildAcceptedClientRequestById,
+  buildDeliveryByClientRequestId,
   EMPTY_ACCEPTED_CLIENT_REQUEST_CONTEXT,
   type AcceptedClientRequest,
   type AcceptedClientRequestContext,
@@ -573,6 +574,7 @@ function getCompactionTurnFinalization(
 }
 
 interface ProjectionFoldLookups {
+  deliveryByClientRequestId: ReturnType<typeof buildDeliveryByClientRequestId>;
   acceptedClientRequestById: ReturnType<typeof buildAcceptedClientRequestById>;
   acceptedRootClientTurnIds: ReadonlySet<string>;
   clientRequestById: Map<string, ClientTurnRequestedWithMeta>;
@@ -585,6 +587,7 @@ const PROJECTION_FOLD_LOOKUP_EVENT_TYPES: ReadonlySet<ThreadEvent["type"]> =
     "client/turn/requested",
     "client/turn/rejected",
     "turn/input/accepted",
+    "turn/input/delivery",
     "turn/started",
   ]);
 
@@ -598,6 +601,7 @@ function createProjectionFoldLookups(
     events: orderedEvents,
   });
   return {
+    deliveryByClientRequestId: buildDeliveryByClientRequestId({ context, events: orderedEvents }),
     acceptedClientRequestById,
     acceptedRootClientTurnIds: buildAcceptedRootClientTurnIds(
       orderedEvents,
@@ -619,6 +623,7 @@ function foldProjectionEvent(
   { event: decoded, meta }: ThreadEventWithMeta,
 ): void {
   const {
+    deliveryByClientRequestId,
     acceptedClientRequestById,
     acceptedRootClientTurnIds,
     clientRequestById,
@@ -743,11 +748,17 @@ function foldProjectionEvent(
             options: options,
           })
         : [];
+    const acceptedSteerDelivery = deliveryByClientRequestId.get(decoded.clientRequestId);
     for (const acceptedSteer of acceptedSteers) {
+      if (acceptedSteerDelivery !== undefined && acceptedSteer.turnRequest.kind === "steer") {
+        acceptedSteer.turnRequest = { ...acceptedSteer.turnRequest, delivery: acceptedSteerDelivery };
+      }
       appendProjectedUserMessage(state, acceptedSteer);
     }
     return;
   }
+
+  if (decoded.type === "turn/input/delivery") return;
 
   if (decoded.type === "client/turn/rejected") {
     const clientRequest = clientRequestById.get(decoded.requestId);
@@ -792,7 +803,11 @@ function foldProjectionEvent(
     options: options,
   });
   if (usersFromClientRequest.length > 0) {
+    const requestDelivery = decoded.type === "client/turn/requested" ? deliveryByClientRequestId.get(decoded.requestId) : undefined;
     for (const userFromClientRequest of usersFromClientRequest) {
+      if (requestDelivery !== undefined && userFromClientRequest.turnRequest.kind === "steer") {
+        userFromClientRequest.turnRequest = { ...userFromClientRequest.turnRequest, delivery: requestDelivery };
+      }
       appendProjectedUserMessage(state, userFromClientRequest);
     }
     return;

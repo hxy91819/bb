@@ -35,10 +35,22 @@
       "clientRequestId": "required",
       "providerTurnId": "optional"
     },
+    "input.delivery": {
+      "kind": "required",
+      "clientRequestId": "required",
+      "delivery": "required",
+      "providerTurnId": "optional"
+    },
     "input.provider": {
       "kind": "required",
       "text": "required",
       "parentRef": "optional"
+    },
+    "input.rejected": {
+      "kind": "required",
+      "clientRequestId": "required",
+      "reason": "required",
+      "message": "required"
     },
     "item.close": {
       "kind": "required",
