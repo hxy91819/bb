@@ -100,7 +100,10 @@ import {
   type AcpSkillRoot,
   type AcpSteeringMode,
 } from "../session-params.js";
-import { buildCursorParameterizedModelCatalog } from "../cursor-model-selection.js";
+import {
+  buildCursorParameterizedModelCatalog,
+  cursorParameterizedSelection,
+} from "../cursor-model-selection.js";
 import {
   getAcpProviderHealth,
   getAcpProviderInstallationRun,
@@ -1579,6 +1582,43 @@ async function resolveAgentLaunchArgs(
   };
 }
 
+function acpConfirmedModelMatches(
+  session: Pick<AcpThreadSession, "construction" | "dialect">,
+  requestedModelId: string,
+  confirmedModelId: string,
+): boolean {
+  if (confirmedModelId === requestedModelId) {
+    return true;
+  }
+  if (
+    session.construction.parameterizedModelPicker &&
+    session.dialect.id === "cursor"
+  ) {
+    return (
+      cursorParameterizedSelection(confirmedModelId, undefined).modelId ===
+      requestedModelId
+    );
+  }
+  return false;
+}
+
+function emitSessionWarning(
+  session: AcpThreadSession,
+  summary: string,
+  details?: string,
+): void {
+  const params = {
+    threadId: session.bbThreadId,
+    summary,
+    ...(details ? { details } : {}),
+  };
+  if (session.deferStartEmit) {
+    session.deferStartEmit(ACP_WARNING_METHOD, params);
+    return;
+  }
+  emitForSession(session, ACP_WARNING_METHOD, params);
+}
+
 async function selectAcpNativeModel(args: {
   session: AcpThreadSession;
   sessionId: string;
@@ -1596,62 +1636,70 @@ async function selectAcpNativeModel(args: {
   const sessionModelsIncludeSelection = availableSessionModels.some(
     (model) => model.modelId === selection.modelId,
   );
-  const shouldSetModel =
-    (modelOption && modelOption.currentValue !== selection.modelId) ||
-    (!modelOption &&
-      sessionModelsIncludeSelection &&
-      models?.currentModelId !== selection.modelId);
-  if (shouldSetModel) {
-    let configState: AcpConfigStateResult | null = null;
-    let setModel = !modelOption;
-    if (modelOption) {
-      try {
-        configState = await session.connection.request({
-          method: "session/set_config_option",
-          params: {
-            sessionId: args.sessionId,
-            configId: modelOption.id,
-            value: selection.modelId,
-          },
-          resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
-          timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
-        });
-        setModel = false;
-      } catch (error) {
-        if (
-          !(error instanceof AcpAgentResponseError) ||
-          error.code !== -32601
-        ) {
-          throw error;
-        }
-        setModel = true;
-      }
-    }
-    if (setModel) {
+  if (!modelOption && !sessionModelsIncludeSelection) {
+    throw new Error(
+      availableSessionModels.length > 0
+        ? `ACP agent did not advertise requested model "${selection.modelId}"; refusing to run with an implicit default model.`
+        : `ACP agent did not expose a model selection option for requested model "${selection.modelId}"; refusing to run with an implicit default model.`,
+    );
+  }
+  let configState: AcpConfigStateResult | null = null;
+  let setModel = !modelOption;
+  if (modelOption) {
+    try {
       configState = await session.connection.request({
-        method: "session/set_model",
-        params: { sessionId: args.sessionId, modelId: selection.modelId },
+        method: "session/set_config_option",
+        params: {
+          sessionId: args.sessionId,
+          configId: modelOption.id,
+          value: selection.modelId,
+        },
         resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
         timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
       });
+      setModel = false;
+    } catch (error) {
+      if (!(error instanceof AcpAgentResponseError) || error.code !== -32601) {
+        throw error;
+      }
+      setModel = true;
     }
-    const current = session.nativeConfig;
-    session.nativeConfig = {
-      configOptions:
-        configState?.configOptions ??
-        withAcpConfigValue(
-          current.configOptions,
-          modelOption?.id,
-          selection.modelId,
-        ),
-      models:
-        configState?.models ??
-        (current.models && {
-          ...current.models,
-          currentModelId: selection.modelId,
-        }),
-    };
   }
+  if (setModel) {
+    configState = await session.connection.request({
+      method: "session/set_model",
+      params: { sessionId: args.sessionId, modelId: selection.modelId },
+      resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
+      timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
+    });
+  }
+  const confirmedModelId =
+    findAcpModelConfigOption(configState?.configOptions)?.currentValue ??
+    configState?.models?.currentModelId;
+  if (
+    confirmedModelId !== undefined &&
+    !acpConfirmedModelMatches(session, selection.modelId, confirmedModelId)
+  ) {
+    throw new Error(
+      `ACP agent kept model "${confirmedModelId}" after requesting "${selection.modelId}"; refusing to run with a mismatched model.`,
+    );
+  }
+  const current = session.nativeConfig;
+  session.nativeConfig = {
+    configOptions:
+      configState?.configOptions ??
+      withAcpConfigValue(
+        current.configOptions,
+        modelOption?.id,
+        selection.modelId,
+      ),
+    models:
+      configState?.models ??
+      (current.models && {
+        ...current.models,
+        currentModelId: selection.modelId,
+      }),
+  };
   await selectAcpNativeReasoning({
     session,
     sessionId: args.sessionId,
@@ -1692,6 +1740,7 @@ function recordAcpConfigValue(
 function acpNativeModelDrifted(
   nativeConfig: AcpNativeConfigState,
   modelSelection: AcpSessionParams["modelSelection"],
+  session?: Pick<AcpThreadSession, "construction" | "dialect">,
 ): boolean {
   if (!modelSelection || !("modelId" in modelSelection)) {
     return false;
@@ -1699,9 +1748,12 @@ function acpNativeModelDrifted(
   const currentModelId =
     findAcpModelConfigOption(nativeConfig.configOptions)?.currentValue ??
     nativeConfig.models?.currentModelId;
-  return (
-    currentModelId !== undefined && currentModelId !== modelSelection.modelId
-  );
+  if (currentModelId === undefined) {
+    return false;
+  }
+  return session
+    ? !acpConfirmedModelMatches(session, modelSelection.modelId, currentModelId)
+    : currentModelId !== modelSelection.modelId;
 }
 
 async function selectAcpNativeReasoning(args: {
@@ -1742,7 +1794,12 @@ async function selectAcpNativeReasoning(args: {
       resultSchema: z.union([acpConfigStateResultSchema, z.null()]),
       timeoutMs: ACP_SESSION_CONFIG_TIMEOUT_MS,
     });
-  } catch {
+  } catch (error) {
+    emitSessionWarning(
+      args.session,
+      `The agent did not apply reasoning level "${reasoningLevel}"`,
+      error instanceof Error ? error.message : String(error),
+    );
     return;
   }
   recordAcpConfigValue(args.session, configState, thoughtLevelOption.id, value);
@@ -3716,7 +3773,11 @@ function reconcileExecutionSettings(
       construction.modelSelection,
       session.construction.modelSelection,
     ) &&
-    !acpNativeModelDrifted(session.nativeConfig, construction.modelSelection)
+    !acpNativeModelDrifted(
+      session.nativeConfig,
+      construction.modelSelection,
+      session,
+    )
   ) {
     session.construction = construction;
     return session;
@@ -3963,10 +4024,37 @@ function handleAgentNotification(
       parsed.data.update,
     );
     if (configState.success && configState.data.configOptions) {
+      const previousModelId =
+        findAcpModelConfigOption(session.nativeConfig.configOptions)
+          ?.currentValue ?? session.nativeConfig.models?.currentModelId;
       session.nativeConfig = {
         ...session.nativeConfig,
         configOptions: configState.data.configOptions,
       };
+      const nextModelId = findAcpModelConfigOption(
+        configState.data.configOptions,
+      )?.currentValue;
+      const requestedModelId =
+        session.construction.modelSelection &&
+        "modelId" in session.construction.modelSelection
+          ? session.construction.modelSelection.modelId
+          : undefined;
+      if (
+        requestedModelId !== undefined &&
+        nextModelId !== undefined &&
+        !acpConfirmedModelMatches(session, requestedModelId, nextModelId) &&
+        nextModelId !== previousModelId
+      ) {
+        sendThreadDeltas(session.bbThreadId, [
+          {
+            kind: "provider.modelFallback",
+            originalModel: requestedModelId,
+            fallbackModel: nextModelId,
+            reason: "provider",
+            message: `ACP agent switched from ${requestedModelId} to ${nextModelId}.`,
+          },
+        ]);
+      }
     }
   }
   if (session.activePromptKind === "compaction") {

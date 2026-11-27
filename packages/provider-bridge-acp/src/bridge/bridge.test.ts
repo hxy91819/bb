@@ -1271,7 +1271,9 @@ describe("acp bridge", () => {
           .filter((request) => request.method === "session/set_config_option")
           .map((request) => request.params?.["value"]),
       ).toEqual(
-        selectedModel === "default" ? [] : [selectedModel, "high", "true"],
+        selectedModel === "default"
+          ? ["default"]
+          : [selectedModel, "high", "true"],
       );
       const providerThreadId = providerThreadIdOf(response);
       bbThreadIdByProviderThreadId.set(providerThreadId, threadId);
@@ -2080,6 +2082,11 @@ describe("acp bridge", () => {
         turnOptions,
       ),
     ).toBe("selected-model:fake/strong");
+    expect(threadEventsOfType("provider/modelFallback").at(-1)).toMatchObject({
+      originalModel: "fake/default",
+      fallbackModel: "fake/strong",
+      reason: "provider",
+    });
     expect(
       await completeTurnWith(
         providerThreadId,
@@ -2087,6 +2094,95 @@ describe("acp bridge", () => {
         turnOptions,
       ),
     ).toBe("selected-model:fake/default");
+  });
+
+  it.each<{
+    label: string;
+    env: Record<string, string>;
+    expectedMethod: string;
+  }>([
+    {
+      label: "model config option",
+      env: { FAKE_ACP_MODEL_CONFIG: "1" },
+      expectedMethod: "session/set_config_option",
+    },
+    {
+      label: "session models state",
+      env: { FAKE_ACP_MODELS_FIELD: "1" },
+      expectedMethod: "session/set_model",
+    },
+  ])(
+    "explicitly selects the requested ACP-native model even when it matches the agent's advertised default ($label)",
+    async ({ env, expectedMethod }) => {
+      const requestLog = join(
+        workspaceDir,
+        `explicit-default-${expectedMethod.replace(/\//gu, "-")}.jsonl`,
+      );
+      await startThread({
+        envVars: { ...env, FAKE_ACP_REQUEST_LOG: requestLog },
+        model: "fake/default",
+      });
+
+      const selectionRequests = loggedAcpRequests(requestLog).filter(
+        (request) => request.method === expectedMethod,
+      );
+      expect(selectionRequests).toHaveLength(1);
+      expect(selectionRequests[0]?.params).toMatchObject(
+        expectedMethod === "session/set_config_option"
+          ? { configId: "model", value: "fake/default" }
+          : { modelId: "fake/default" },
+      );
+    },
+  );
+
+  it("fails fast when an explicit model is requested but the agent exposes no model selection option", async () => {
+    await expect(
+      startThread({
+        model: "fake/strong",
+      }),
+    ).rejects.toThrow(/did not expose a model selection option/u);
+  });
+
+  it("fails fast when an explicit model is not advertised in session models state", async () => {
+    await expect(
+      startThread({
+        envVars: { FAKE_ACP_MODELS_FIELD: "1" },
+        model: "fake/missing",
+      }),
+    ).rejects.toThrow(/did not advertise requested model "fake\/missing"/u);
+  });
+
+  it("fails fast when the agent keeps a different model after session/set_config_option", async () => {
+    await expect(
+      startThread({
+        envVars: {
+          FAKE_ACP_MODEL_CONFIG: "1",
+          FAKE_ACP_MODEL_CONFIG_REPLY: "stale",
+        },
+        model: "fake/strong",
+      }),
+    ).rejects.toThrow(
+      /kept model "fake\/default" after requesting "fake\/strong"/u,
+    );
+  });
+
+  it("emits a warning when ACP-native reasoning selection is rejected", async () => {
+    await startThread({
+      envVars: {
+        FAKE_ACP_MODEL_CONFIG: "1",
+      },
+      model: "fake/strong",
+      reasoningLevel: "high",
+      nativeReasoning: {
+        configId: "reasoning_effort",
+        supportedLevels: ["low", "medium", "high"],
+        defaultLevel: "medium",
+      },
+    });
+
+    expect(threadEventsOfType("provider/warning").at(-1)).toMatchObject({
+      summary: 'The agent did not apply reasoning level "high"',
+    });
   });
 
   it("tracks an acknowledged ACP-native model when a later tier update fails", async () => {
