@@ -34,10 +34,42 @@ const rootComposeStoredProjectIdAtom = atomWithStorage<string | null>(
   { getOnInit: true },
 );
 
+const rememberedProjectIdAtom = atomWithStorage<string>(
+  "bb.last-selected-project-id",
+  PERSONAL_PROJECT_ID,
+  createTabScopedStorage<string>(
+    {
+      parse: (storedValue, initialValue) =>
+        parseStoredProjectId(storedValue, initialValue) ?? initialValue,
+      serialize: (value) => value,
+    },
+    { persistInitialValue: true },
+  ),
+  { getOnInit: true },
+);
+
+const lastSelectedProjectIdAtom = atom((get) => {
+  const rememberedProjectId = get(rememberedProjectIdAtom);
+  return rememberedProjectId !== PERSONAL_PROJECT_ID
+    ? rememberedProjectId
+    : (get(rootComposeStoredProjectIdAtom) ?? PERSONAL_PROJECT_ID);
+});
+
+export function useLastSelectedProjectId() {
+  return useAtomValue(lastSelectedProjectIdAtom);
+}
+
 const rootComposeProjectChosenAtom = atom(false);
 const rootComposeProjectIdAtom = atom(
   (get) => get(rootComposeStoredProjectIdAtom) ?? PERSONAL_PROJECT_ID,
-  (_get, set, projectId: string) => {
+  (get, set, projectId: string) => {
+    const remembered =
+      projectId !== PERSONAL_PROJECT_ID
+        ? projectId
+        : get(rootComposeStoredProjectIdAtom);
+    if (remembered && remembered !== PERSONAL_PROJECT_ID) {
+      set(rememberedProjectIdAtom, remembered);
+    }
     set(rootComposeProjectChosenAtom, true);
     set(rootComposeStoredProjectIdAtom, projectId);
   },
