@@ -1,5 +1,9 @@
 import os from "node:os";
 import {
+  claudeExecutionEnv,
+  resolveClaudeExecution,
+} from "./execution-context.js";
+import {
   experimental_defineHostEntry,
   experimental_nativeRootsHostContract,
 } from "@get-bb/plugin-sdk/host";
@@ -14,7 +18,10 @@ export default experimental_defineHostEntry({
       resolveClaudeNativeRoots({
         cwd: input.cwd,
         homeDir: os.homedir(),
-        env: process.env,
+        env: claudeExecutionEnv(
+          resolveClaudeExecution(input.experimental_providerOptions),
+          process.env,
+        ),
       }),
   },
 });
