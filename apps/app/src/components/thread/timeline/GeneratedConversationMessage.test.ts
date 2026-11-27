@@ -119,6 +119,19 @@ describe("generatedConversationTitle — system source", () => {
     expect(title.segments[2]?.text).toBe("result");
   });
 
+  it("renders an environment switch as a workspace update", () => {
+    const title = systemTitle({
+      systemMessageKind: "environment-directory-updated",
+      systemMessageSubject: { kind: "directory", path: "/workspace/next" },
+    });
+
+    expect(title.plain).toBe("Continued in /workspace/next");
+    expect(title.segments).toEqual([
+      expect.objectContaining({ text: "Continued in" }),
+      expect.objectContaining({ text: "/workspace/next" }),
+    ]);
+  });
+
   it("falls back to the generic System Message title for unlabeled rows", () => {
     const title = systemTitle({
       systemMessageKind: "unlabeled",
