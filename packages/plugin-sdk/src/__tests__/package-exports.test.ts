@@ -42,6 +42,7 @@ describe("packed plugin SDK exports", () => {
       "./internal/file-navigation-validation",
       "./internal/host-policy",
       "./internal/plugin-app-collector",
+      "./internal/thread-contribution-runtime",
       "./testing",
       "./testing/app",
       "./testing/host",
