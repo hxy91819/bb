@@ -7,11 +7,14 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { makeHost } from "@bb/test-helpers/domain-fixtures";
+import { BROWSER_SSH_HOSTS_KEY } from "@/lib/browser-ssh-hosts";
 import { LocalOpenTargetSettingsSection } from "./SettingsView";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  localStorage.removeItem(BROWSER_SSH_HOSTS_KEY);
 });
 
 function renderSection({
@@ -34,6 +37,10 @@ function renderSection({
       directoryTargetId={null}
       fileTargetId={null}
       hasDaemon={hasDaemon}
+      hosts={[
+        makeHost({ id: "host-a", name: "Workstation" }),
+        makeHost({ id: "host-b", name: "Laptop" }),
+      ]}
       onDirectoryTargetChange={vi.fn()}
       onFileTargetChange={vi.fn()}
       onRequestAccess={onRequestAccess}
@@ -95,4 +102,35 @@ describe("LocalOpenTargetSettingsSection", () => {
     expect(screen.queryByText("File default")).not.toBeNull();
     expect(screen.queryByText("Local editor integration")).toBeNull();
   });
+
+  it.each(["denied", "unsupported", "unavailable"] as const)(
+    "saves and clears SSH aliases despite %s helper access",
+    (accessState) => {
+      const { onRequestAccess } = renderSection({ accessState });
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Workstation SSH Host" }),
+        { target: { value: "devbox" } },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect(
+        JSON.parse(localStorage.getItem(BROWSER_SSH_HOSTS_KEY) ?? "{}"),
+      ).toEqual({ "host-a": "devbox" });
+      expect(onRequestAccess).not.toHaveBeenCalled();
+      expect(
+        (
+          screen.getByRole("textbox", {
+            name: "Laptop SSH Host",
+          }) as HTMLInputElement
+        ).value,
+      ).toBe("");
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Workstation SSH Host" }),
+        { target: { value: "" } },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+      expect(
+        JSON.parse(localStorage.getItem(BROWSER_SSH_HOSTS_KEY) ?? "{}"),
+      ).toEqual({});
+    },
+  );
 });
