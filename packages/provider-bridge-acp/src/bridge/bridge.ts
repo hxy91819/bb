@@ -1562,7 +1562,7 @@ async function resolveAgentLaunchArgs(
 }
 
 function acpConfirmedModelMatches(
-  session: AcpThreadSession,
+  session: Pick<AcpThreadSession, "construction" | "dialect">,
   requestedModelId: string,
   confirmedModelId: string,
 ): boolean {
@@ -1717,9 +1717,9 @@ function recordAcpConfigValue(
 }
 
 function acpNativeModelDrifted(
-  session: AcpThreadSession,
   nativeConfig: AcpNativeConfigState,
   modelSelection: AcpSessionParams["modelSelection"],
+  session?: Pick<AcpThreadSession, "construction" | "dialect">,
 ): boolean {
   if (!modelSelection || !("modelId" in modelSelection)) {
     return false;
@@ -1727,10 +1727,12 @@ function acpNativeModelDrifted(
   const currentModelId =
     findAcpModelConfigOption(nativeConfig.configOptions)?.currentValue ??
     nativeConfig.models?.currentModelId;
-  return (
-    currentModelId !== undefined &&
-    !acpConfirmedModelMatches(session, modelSelection.modelId, currentModelId)
-  );
+  if (currentModelId === undefined) {
+    return false;
+  }
+  return session
+    ? !acpConfirmedModelMatches(session, modelSelection.modelId, currentModelId)
+    : currentModelId !== modelSelection.modelId;
 }
 
 async function selectAcpNativeReasoning(args: {
@@ -3373,9 +3375,9 @@ function reconcileExecutionSettings(
       session.construction.modelSelection,
     ) &&
     !acpNativeModelDrifted(
-      session,
       session.nativeConfig,
       construction.modelSelection,
+      session,
     )
   ) {
     session.construction = construction;
